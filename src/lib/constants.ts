@@ -26,7 +26,8 @@ export const NAVIGATION_ITEMS = [
 export const COMPANY_INFO = {
     name: "Easy Sales Export",
     tagline: "Export & Agri",
-    fullName: "Rated Rolling Rab-World Nig Ltd",
+    fullName: "EASY SALES EXPORT & AGRICULTURE",
     rc: "RC: 763845",
-    copyright: `© ${new Date().getFullYear()} Rated Rolling Rab-World Nig Ltd. All rights reserved.`,
+    copyright: `© ${new Date().getFullYear()} EASY SALES EXPORT & AGRICULTURE. All rights reserved.`,
 } as const;
+

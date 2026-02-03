@@ -1,265 +1,341 @@
-import { User, Wallet, TrendingUp, Calendar, DollarSign } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { Users, TrendingUp, DollarSign, Calendar, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { Modal } from "@/components/ui/Modal";
+import { AreaChartComponent } from "@/components/ui/Chart";
 
 export default function CooperativesPage() {
-    // Mock member data
-    const memberData = {
-        membershipNumber: "ESE-2024-00142",
-        name: "John Doe",
-        tier: "Gold",
-        joinDate: "January 15, 2024",
-        totalSavings: 450000,
-        totalExports: 8,
-        totalRevenue: 1250000,
-        availableBalance: 75000,
-    };
+    const [transactionFilter, setTransactionFilter] = useState("all");
+    const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+    const [withdrawAmount, setWithdraw
 
-    // Mock transactions
-    const transactions = [
+Amount] = useState("");
+
+    // Savings growth data for chart
+    const savingsData = [
+        { month: "Jan", savings: 50000 },
+        { month: "Feb", savings: 65000 },
+        { month: "Mar", savings: 82000 },
+        { month: "Apr", savings: 98000 },
+        { month: "May", savings: 125000 },
+        { month: "Jun", savings: 155000 },
+    ];
+
+    // Transaction filters
+    const filterOptions = [
+        { value: "all", label: "All Transactions" },
+        { value: "deposits", label: "Deposits Only" },
+        { value: "withdrawals", label: "Withdrawals Only" },
+        { value: "earnings", label: "Earnings Only" },
+    ];
+
+    //  Transactions
+    const allTransactions = [
         {
             id: "1",
             type: "deposit",
-            amount: 50000,
-            description: "Monthly savings contribution",
-            date: "Feb 1, 2024",
-            status: "completed",
+            amount: 15000,
+            date: "2024-02-01",
+            description: "Monthly Savings Contribution",
         },
         {
             id: "2",
-            type: "export_profit",
-            amount: 125000,
-            description: "Yam Tubers Export - Phase 2 Profit",
-            date: "Jan 28, 2024",
-            status: "completed",
+            type: "earning",
+            amount: 2500,
+            date: "2024-02-05",
+            description: "Cooperative Interest (5% APY)",
         },
         {
             id: "3",
-            type: "withdrawal",
-            amount: 30000,
-            description: "Withdrawal to bank account",
-            date: "Jan 25, 2024",
-            status: "completed",
+            type: "deposit",
+            amount: 15000,
+            date: "2024-02-15",
+            description: "Group Export Contribution",
         },
         {
             id: "4",
+            type: "withdrawal",
+            amount: 10000,
+            date: "2024-02-20",
+            description: "Emergency Withdrawal",
+        },
+        {
+            id: "5",
+            type: "earning",
+            amount: 3000,
+            date: "2024-02-25",
+            description: "Export Profit Share",
+        },
+        {
+            id: "6",
             type: "deposit",
-            amount: 50000,
-            description: "Monthly savings contribution",
-            date: "Jan 1, 2024",
-            status: "completed",
+            amount: 15000,
+            date: "2024-03-01",
+            description: "Monthly Savings Contribution",
         },
     ];
 
-    const getTierColor = (tier: string) => {
-        switch (tier) {
-            case "Gold":
-                return "bg-gradient-to-r from-yellow-500 to-yellow-600";
-            case "Premium":
-                return "bg-gradient-to-r from-purple-500 to-purple-600";
-            default:
-                return "bg-gradient-to-r from-slate-500 to-slate-600";
-        }
-    };
+    // Filter transactions
+    const filteredTransactions = allTransactions.filter((transaction) => {
+        if (transactionFilter === "all") return true;
+        if (transactionFilter === "deposits") return transaction.type === "deposit";
+        if (transactionFilter === "withdrawals")
+            return transaction.type === "withdrawal";
+        if (transactionFilter === "earnings") return transaction.type === "earning";
+        return true;
+    });
 
-    const getTransactionIcon = (type: string) => {
-        switch (type) {
-            case "deposit":
-                return "↓";
-            case "withdrawal":
-                return "↑";
-            case "export_profit":
-                return "★";
-            default:
-                return "•";
-        }
-    };
-
-    const getTransactionColor = (type: string) => {
-        switch (type) {
-            case "deposit":
-                return "text-green-600 dark:text-green-400";
-            case "withdrawal":
-                return "text-red-600 dark:text-red-400";
-            case "export_profit":
-                return "text-primary";
-            default:
-                return "text-slate-600 dark:text-slate-400";
-        }
+    // Handle withdrawal
+    const handleWithdrawal = () => {
+        // TODO: Implement actual withdrawal logic
+        console.log("Withdrawing:", withdrawAmount);
+        setIsWithdrawModalOpen(false);
+        setWithdrawAmount("");
     };
 
     return (
-        <div className="p-8">
-            {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-                    Cooperative Membership
-                </h1>
-                <p className="text-slate-600 dark:text-slate-400">
-                    Your membership profile, savings, and transaction history
-                </p>
-            </div>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            <div className="p-8">
+                {/* Header */}
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                        Cooperatives
+                    </h1>
+                    <p className="text-slate-600 dark:text-slate-400">
+                        Manage your cooperative savings and transactions
+                    </p>
+                </div>
 
-            {/* Member Profile Card */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-3 mb-8 animate-[slideInUp_0.6s_cubic-bezier(0.4,0,0.2,1)_both]">
-                <div className="flex items-start gap-6">
-                    {/* Avatar */}
-                    <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-white text-3xl font-bold shrink-0">
-                        {memberData.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                    </div>
-
-                    {/* Member Info */}
-                    <div className="flex-1">
-                        <div className="flex items-start justify-between mb-4">
+                {/* Member Profile & Quick Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Users className="w-6 h-6 text-primary" />
+                            </div>
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
-                                    {memberData.name}
-                                </h2>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">
-                                    Member ID: {memberData.membershipNumber}
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Member Since
                                 </p>
-                            </div>
-                            <span
-                                className={`px-4 py-2 ${getTierColor(
-                                    memberData.tier
-                                )} text-white font-bold rounded-xl elevation-2`}
-                            >
-                                {memberData.tier} Member
-                            </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Wallet className="w-4 h-4 text-slate-500" />
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Total Savings
-                                    </p>
-                                </div>
-                                <p className="text-xl font-bold text-slate-900 dark:text-white">
-                                    {formatCurrency(memberData.totalSavings)}
-                                </p>
-                            </div>
-                            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <TrendingUp className="w-4 h-4 text-slate-500" />
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Total Revenue
-                                    </p>
-                                </div>
-                                <p className="text-xl font-bold text-slate-900 dark:text-white">
-                                    {formatCurrency(memberData.totalRevenue)}
-                                </p>
-                            </div>
-                            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Calendar className="w-4 h-4 text-slate-500" />
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Member Since
-                                    </p>
-                                </div>
-                                <p className="text-xl font-bold text-slate-900 dark:text-white">
-                                    {memberData.joinDate}
+                                <p className="font-bold text-slate-900 dark:text-white">
+                                    January 2023
                                 </p>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Two Column Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Transaction History */}
-                <div className="lg:col-span-2">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                        Transaction History
-                    </h2>
-                    <div className="space-y-4">
-                        {transactions.map((transaction, index) => (
-                            <div
-                                key={transaction.id}
-                                className="bg-white dark:bg-slate-800 rounded-xl p-5 elevation-1 hover-lift animate-[slideInUp_0.6s_cubic-bezier(0.4,0,0.2,1)_both]"
-                                style={{ animationDelay: `${200 + index * 50}ms` }}
-                            >
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-start gap-4">
-                                        <div
-                                            className={`w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xl font-bold ${getTransactionColor(
-                                                transaction.type
-                                            )}`}
-                                        >
-                                            {getTransactionIcon(transaction.type)}
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-slate-900 dark:text-white mb-1">
-                                                {transaction.description}
-                                            </p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                                                {transaction.date}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p
-                                            className={`text-lg font-bold ${getTransactionColor(
-                                                transaction.type
-                                            )}`}
-                                        >
-                                            {transaction.type === "withdrawal" ? "-" : "+"}
-                                            {formatCurrency(transaction.amount)}
-                                        </p>
-                                        <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full">
-                                            {transaction.status}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Savings Summary */}
-                <div className="lg:col-span-1">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                        Savings Summary
-                    </h2>
-                    <div className="bg-gradient-to-br from-primary to-blue-700 rounded-2xl p-6 text-white elevation-3 mb-6">
-                        <p className="text-sm text-blue-100 mb-2">Available Balance</p>
-                        <p className="text-3xl font-bold mb-6">
-                            {formatCurrency(memberData.availableBalance)}
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Member ID: COOP-2023-001
                         </p>
-                        <button className="w-full py-3 bg-white text-primary font-semibold rounded-xl hover:scale-105 transition-transform">
-                            Withdraw Funds
-                        </button>
                     </div>
 
                     <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <h3 className="font-bold text-slate-900 dark:text-white mb-4">
-                            Membership Benefits
-                        </h3>
-                        <ul className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
-                            <li className="flex items-start gap-2">
-                                <span className="text-green-500 mt-1">✓</span>
-                                <span>Access to exclusive export windows</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-green-500 mt-1">✓</span>
-                                <span>Monthly savings with competitive interest</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-green-500 mt-1">✓</span>
-                                <span>Cooperative profit sharing</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-green-500 mt-1">✓</span>
-                                <span>Priority marketplace access</span>
-                            </li>
-                        </ul>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                                <DollarSign className="w-6 h-6 text-green-500" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Total Savings
+                                </p>
+                                <p className="font-bold text-slate-900 dark:text-white text-xl">
+                                    {formatCurrency(155000)}
+                                </p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-green-600 dark:text-green-400 font-semibold">
+                            +₦5,500 this month
+                        </p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                                <TrendingUp className="w-6 h-6 text-blue-500" />
+                            </div>
+                            <div>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Total Earnings
+                                </p>
+                                <p className="font-bold text-slate-900 dark:text-white text-xl">
+                                    {formatCurrency(5500)}
+                                </p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            5% APY
+                        </p>
+                    </div>
+                </div>
+
+                {/* Savings Growth Chart */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 mb-8">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                                Savings Growth
+                            </h2>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                Track your cooperative savings over time
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setIsWithdrawModalOpen(true)}
+                            className="px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors flex items-center gap-2"
+                        >
+                            <Download className="w-4 h-4" />
+                            Withdraw
+                        </button>
+                    </div>
+                    <AreaChartComponent
+                        data={savingsData}
+                        xKey="month"
+                        yKey="savings"
+                        color="#2E519F"
+                    />
+                </div>
+
+                {/* Transaction History */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                                Transaction History
+                            </h2>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                View all your cooperative transactions
+                            </p>
+                        </div>
+                        <select
+                            value={transactionFilter}
+                            onChange={(e) => setTransactionFilter(e.target.value)}
+                            className="px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                            {filterOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="space-y-3">
+                        {filteredTransactions.length > 0 ? (
+                            filteredTransactions.map((transaction) => (
+                                <div
+                                    key={transaction.id}
+                                    className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center ${transaction.type === "deposit"
+                                                    ? "bg-green-500/10"
+                                                    : transaction.type === "withdrawal"
+                                                        ? "bg-red-500/10"
+                                                        : "bg-blue-500/10"
+                                                }`}
+                                        >
+                                            {transaction.type === "deposit" ? (
+                                                <TrendingUp
+                                                    className={`w-5 h-5 ${transaction.type === "deposit"
+                                                            ? "text-green-500"
+                                                            : ""
+                                                        }`}
+                                                />
+                                            ) : transaction.type === "withdrawal" ? (
+                                                <Download className="w-5 h-5 text-red-500" />
+                                            ) : (
+                                                <DollarSign className="w-5 h-5 text-blue-500" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-slate-900 dark:text-white">
+                                                {transaction.description}
+                                            </p>
+                                            <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                                                <Calendar className="w-3 h-3" />
+                                                {new Date(transaction.date).toLocaleDateString("en-US", {
+                                                    year: "numeric",
+                                                    month: "long",
+                                                    day: "numeric",
+                                                })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p
+                                        className={`font-bold text-lg ${transaction.type === "withdrawal"
+                                                ? "text-red-500"
+                                                : "text-green-500"
+                                            }`}
+                                    >
+                                        {transaction.type === "withdrawal" ? "-" : "+"}
+                                        {formatCurrency(transaction.amount)}
+                                    </p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-12">
+                                <p className="text-slate-500 dark:text-slate-400">
+                                    No transactions match your filter
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
+
+            {/* Withdrawal Modal */}
+            <Modal
+                isOpen={isWithdrawModalOpen}
+                onClose={() => setIsWithdrawModalOpen(false)}
+                title="Withdraw from Savings"
+            >
+                <div className="space-y-4">
+                    <div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                            Available Balance: <strong>{formatCurrency(155000)}</strong>
+                        </p>
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            Withdrawal Amount
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                                ₦
+                            </span>
+                            <input
+                                type="number"
+                                value={withdrawAmount}
+                                onChange={(e) => setWithdrawAmount(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full pl-8 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
+                        <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                            <strong>Note:</strong> Withdrawals will be processed within 3-5
+                            business days. A 2% processing fee applies to all withdrawals.
+                        </p>
+                    </div>
+
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setIsWithdrawModalOpen(false)}
+                            className="flex-1 px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleWithdrawal}
+                            disabled={!withdrawAmount || parseFloat(withdrawAmount) <= 0}
+                            className="flex-1 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                        >
+                            Confirm Withdrawal
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }

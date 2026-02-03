@@ -16,10 +16,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navigationItems = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Export Windows", href: "/export", icon: Truck },
     { name: "Marketplace", href: "/marketplace", icon: Store },
     { name: "Cooperatives", href: "/cooperatives", icon: Users },
@@ -31,11 +31,43 @@ const navigationItems = [
 export function Sidebar() {
     const pathname = usePathname();
     const [darkMode, setDarkMode] = useState(false);
+    const [mounted, setMounted] = useState(false);
+
+    // Initialize dark mode on mount
+    useEffect(() => {
+        setMounted(true);
+
+        // Check localStorage first, then system preference
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+        const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
+
+        setDarkMode(shouldBeDark);
+        if (shouldBeDark) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, []);
 
     const toggleDarkMode = () => {
-        setDarkMode(!darkMode);
-        document.documentElement.classList.toggle("dark");
+        const newDarkMode = !darkMode;
+        setDarkMode(newDarkMode);
+
+        if (newDarkMode) {
+            document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        }
     };
+
+    // Prevent hydration mismatch by not rendering until mounted
+    if (!mounted) {
+        return null;
+    }
 
     return (
         <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
