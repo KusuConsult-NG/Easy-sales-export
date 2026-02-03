@@ -31,12 +31,9 @@ const navigationItems = [
 export function Sidebar() {
     const pathname = usePathname();
     const [darkMode, setDarkMode] = useState(false);
-    const [mounted, setMounted] = useState(false);
 
     // Initialize dark mode on mount
     useEffect(() => {
-        setMounted(true);
-
         // Check localStorage first, then system preference
         const savedTheme = localStorage.getItem('theme');
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -63,11 +60,6 @@ export function Sidebar() {
             localStorage.setItem('theme', 'light');
         }
     };
-
-    // Prevent hydration mismatch by not rendering until mounted
-    if (!mounted) {
-        return null;
-    }
 
     return (
         <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
