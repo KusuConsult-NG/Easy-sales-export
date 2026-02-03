@@ -146,7 +146,9 @@ export default function RegisterPage() {
         });
         // Clear error when user starts typing
         if (errors[name]) {
-            setErrors({ ...errors, [name]: undefined });
+            const newErrors = { ...errors };
+            delete newErrors[name];
+            setErrors(newErrors);
         }
     };
 

@@ -37,14 +37,23 @@ export function AccordionItem({ title, children }: AccordionItemProps) {
     );
 }
 
-interface AccordionProps {
-    children: ReactNode;
+interface AccordionItem {
+    question: string;
+    answer: string;
 }
 
-export default function Accordion({ children }: AccordionProps) {
+interface AccordionProps {
+    items: AccordionItem[];
+}
+
+export default function Accordion({ items }: AccordionProps) {
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2">
-            {children}
+        <div className="space-y-px">
+            {items.map((item, index) => (
+                <AccordionItem key={index} title={item.question}>
+                    {item.answer}
+                </AccordionItem>
+            ))}
         </div>
     );
 }

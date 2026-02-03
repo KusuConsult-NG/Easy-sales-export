@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Heart, CheckCircle, Send } from "lucide-react";
-import { Modal } from "@/components/ui/Modal";
-import { Accordion } from "@/components/ui/Accordion";
+import Modal from "@/components/ui/Modal";
+import Accordion from "@/components/ui/Accordion";
 import { COMPANY_INFO } from "@/lib/constants";
 
 export default function WAVEProgramPage() {

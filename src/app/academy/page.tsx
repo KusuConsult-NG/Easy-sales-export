@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { GraduationCap, Clock, Users, Star, BookOpen } from "lucide-react";
-import { Modal } from "@/components/ui/Modal";
+import Modal from "@/components/ui/Modal";
 
 interface Course {
     id: string;
@@ -204,10 +204,10 @@ export default function AcademyPage() {
                                 <div className="flex items-center justify-between mb-4">
                                     <span
                                         className={`px-3 py-1 rounded-full text-xs font-bold ${course.level === "beginner"
-                                                ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                                : course.level === "intermediate"
-                                                    ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                                                    : "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
+                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                            : course.level === "intermediate"
+                                                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                                                : "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
                                             }`}
                                     >
                                         {course.level.charAt(0).toUpperCase() + course.level.slice(1)}

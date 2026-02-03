@@ -3,15 +3,13 @@
 import { useState } from "react";
 import { Users, TrendingUp, DollarSign, Calendar, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { Modal } from "@/components/ui/Modal";
+import Modal from "@/components/ui/Modal";
 import { AreaChartComponent } from "@/components/ui/Chart";
 
 export default function CooperativesPage() {
     const [transactionFilter, setTransactionFilter] = useState("all");
     const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
-    const [withdrawAmount, setWithdraw
-
-Amount] = useState("");
+    const [withdrawAmount, setWithdrawAmount] = useState("");
 
     // Savings growth data for chart
     const savingsData = [
@@ -188,9 +186,9 @@ Amount] = useState("");
                         </button>
                     </div>
                     <AreaChartComponent
-                        data={savingsData}
-                        xKey="month"
-                        yKey="savings"
+                        data={savingsData.map(d => ({ name: d.month, value: d.savings }))}
+                        dataKey="value"
+                        xAxisKey="name"
                         color="#2E519F"
                     />
                 </div>
@@ -229,17 +227,17 @@ Amount] = useState("");
                                     <div className="flex items-center gap-4">
                                         <div
                                             className={`w-10 h-10 rounded-full flex items-center justify-center ${transaction.type === "deposit"
-                                                    ? "bg-green-500/10"
-                                                    : transaction.type === "withdrawal"
-                                                        ? "bg-red-500/10"
-                                                        : "bg-blue-500/10"
+                                                ? "bg-green-500/10"
+                                                : transaction.type === "withdrawal"
+                                                    ? "bg-red-500/10"
+                                                    : "bg-blue-500/10"
                                                 }`}
                                         >
                                             {transaction.type === "deposit" ? (
                                                 <TrendingUp
                                                     className={`w-5 h-5 ${transaction.type === "deposit"
-                                                            ? "text-green-500"
-                                                            : ""
+                                                        ? "text-green-500"
+                                                        : ""
                                                         }`}
                                                 />
                                             ) : transaction.type === "withdrawal" ? (
@@ -264,8 +262,8 @@ Amount] = useState("");
                                     </div>
                                     <p
                                         className={`font-bold text-lg ${transaction.type === "withdrawal"
-                                                ? "text-red-500"
-                                                : "text-green-500"
+                                            ? "text-red-500"
+                                            : "text-green-500"
                                             }`}
                                     >
                                         {transaction.type === "withdrawal" ? "-" : "+"}
