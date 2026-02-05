@@ -17,6 +17,7 @@ import {
     Star,
 } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";
+import ImageSlider from "@/components/ui/ImageSlider";
 
 export default function LandingPage() {
     const services = [
@@ -204,35 +205,39 @@ export default function LandingPage() {
                             </div>
                         </div>
                         <div className="hidden lg:block animate-[fadeIn_1s_ease-out]">
-                            <div className="relative">
+                            <div className="relative h-[400px]">
                                 <div className="absolute inset-0 bg-linear-to-br from-white/20 to-transparent rounded-3xl blur-3xl" />
-                                <div className="relative bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl p-8">
-                                    <h3 className="text-lg font-bold mb-4">
-                                        Platform Highlights
-                                    </h3>
-                                    <div className="space-y-3">
-                                        <div className="flex items-center gap-3">
-                                            <CheckCircle className="w-5 h-5 text-green-400" />
-                                            <span>Escrow-Protected Payments</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <CheckCircle className="w-5 h-5 text-green-400" />
-                                            <span>Global Export Opportunities</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <CheckCircle className="w-5 h-5 text-green-400" />
-                                            <span>Cooperative Membership</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <CheckCircle className="w-5 h-5 text-green-400" />
-                                            <span>Free Training & Mentorship</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <CheckCircle className="w-5 h-5 text-green-400" />
-                                            <span>Land Investment Options</span>
-                                        </div>
-                                    </div>
-                                </div>
+                                <ImageSlider
+                                    className="relative h-full"
+                                    images={[
+                                        {
+                                            src: "/images/platform/dashboard.png",
+                                            alt: "Easy Sales Export Dashboard",
+                                            caption: "Track your exports and earnings in real-time",
+                                        },
+                                        {
+                                            src: "/images/platform/marketplace.png",
+                                            alt: "Agricultural Marketplace",
+                                            caption: "Global marketplace for Nigerian agricultural products",
+                                        },
+                                        {
+                                            src: "/images/platform/yam-tubers.png",
+                                            alt: "Premium Yam Tubers for Export",
+                                            caption: "Premium yam tubers ready for export",
+                                        },
+                                        {
+                                            src: "/images/platform/sesame-seeds.png",
+                                            alt: "High-Quality Sesame Seeds",
+                                            caption: "High-quality sesame seeds for international markets",
+                                        },
+                                        {
+                                            src: "/images/platform/hibiscus-flowers.png",
+                                            alt: "Dried Hibiscus Flowers",
+                                            caption: "Premium dried hibiscus flowers (Zobo)",
+                                        },
+                                    ]}
+                                    autoPlayInterval={4000}
+                                />
                             </div>
                         </div>
                     </div>

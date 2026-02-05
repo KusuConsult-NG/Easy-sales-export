@@ -1,0 +1,167 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
+    }
+    
+    // Helper: Check if content is approved
+    function isApproved(status) {
+      return status in ['approved', 'verified', 'active'];
+    }
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+    
+    match /cooperatives/{coopId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Loans: Only admins can approve, users can only see their own pending loans
+    match /loans/{loanId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.status == 'pending';
+      allow update: if isAdmin(); // Only admins can change status
+    }
+    
+    // Export Windows: Admin only
+    match /export_windows/{windowId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Export Bookings: Must be approved before public visibility
+    match /export_bookings/{bookingId} {
+      allow read: if isOwner(resource.data.userId) || 
+                    (resource.data.status in ['confirmed', 'paid', 'shipped']) ||
+                    isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+    }
+    
+    // Land Listings: STRICT - Only verified listings are public
+    match /land_listings/{listingId} {
+      allow read: if (resource.data.status == 'verified') || 
+                    isOwner(resource.data.userId) || 
+                    isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.status == 'pending_verification';
+      allow update: if isOwner(resource.data.userId) && resource.data.status != 'verified' || isAdmin();
+      // Users can only edit their own pending listings, not verified ones
+    }
+    
+    // Marketplace Products: Only approved/active products are publicly visible
+    match /marketplace_products/{productId} {
+      allow read: if (resource.data.status == 'approved' && resource.data.active == true) || 
+                    isOwner(resource.data.vendorId) || 
+                    isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.status == 'pending';
+      allow update: if (isOwner(resource.data.vendorId) && resource.data.status != 'approved') || isAdmin();
+      // Vendors can only edit pending products, not approved ones (prevents post-approval changes)
+    }
+    
+    // Marketplace Orders: Both parties and admin can view
+    match /marketplace_orders/{orderId} {
+      allow read: if isOwner(resource.data.buyerId) || isOwner(resource.data.sellerId) || isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if isOwner(resource.data.buyerId) || isOwner(resource.data.sellerId) || isAdmin();
+    }
+    
+    // Escrow: Only parties involved and admins
+    match /escrow_transactions/{escrowId} {
+      allow read: if isOwner(resource.data.buyerId) || isOwner(resource.data.sellerId) || isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+    }
+    
+    // Disputes: Only parties and admins
+    match /disputes/{disputeId} {
+      allow read: if isOwner(resource.data.buyerId) || isOwner(resource.data.sellerId) || isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+    }
+    
+    // Academy Courses: Admin managed
+    match /academy_courses/{courseId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if isAdmin();
+      
+      match /modules/{moduleId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+    
+    // Academy Enrollments: User can view their own
+    match /academy_enrollments/{enrollmentId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if isOwner(resource.data.userId);
+    }
+    
+    // WAVE Applications: Must be approved before user gets access
+    match /wave_applications/{appId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.status == 'pending';
+      allow update: if isAdmin(); // Only admin can approve/reject
+    }
+    
+    // WAVE Resources: Only approved resources visible to members
+    match /wave_resources/{resourceId} {
+      allow read: if (resource.data.status == 'approved' && isAuthenticated()) || isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    // Announcements: Only active/approved announcements are visible
+    match /announcements/{announcementId} {
+      allow read: if (resource.data.active == true && resource.data.status == 'approved');
+      allow write: if isAdmin();
+    }
+    
+    // Notifications: User-specific
+    match /notifications/{notificationId} {
+      allow read: if isOwner(resource.data.userId);
+      allow update: if isOwner(resource.data.userId);
+      allow create: if isAdmin();
+    }
+    
+    // Audit Logs: Admin read-only
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+    }
+    
+    // MFA Codes: User-specific temporary codes
+    match /mfa_codes/{codeId} {
+      allow read: if isOwner(resource.data.userId);
+      allow write: if isOwner(resource.data.userId);
+    }
+    
+    // Certificates: Must be approved before visible
+    match /certificates/{certId} {
+      allow read: if isOwner(resource.data.userId) || 
+                    (resource.data.status == 'approved' && isAuthenticated()) ||
+                    isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.status == 'pending';
+      allow update: if isAdmin(); // Only admins can approve certificates
+    }
+    
+    // Transactions: User can view their own
+    match /transactions/{txnId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated();
+    }
+  }
+}

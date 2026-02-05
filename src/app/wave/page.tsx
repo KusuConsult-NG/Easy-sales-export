@@ -1,22 +1,72 @@
 "use client";
 
-import { useState } from "react";
-import { Heart, CheckCircle, Send } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useFormState } from "react-dom";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { Heart, CheckCircle, Send, AlertCircle, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Accordion from "@/components/ui/Accordion";
 import { COMPANY_INFO } from "@/lib/constants";
+import { submitWaveApplicationAction, type WaveApplicationState } from "@/app/actions/platform";
+import { checkWaveEligibilityAction } from "@/app/actions/wave";
+
+const initialState: WaveApplicationState = { error: "Initializing...", success: false };
 
 export default function WAVEProgramPage() {
+    const router = useRouter();
+    const { data: session, status: sessionStatus } = useSession();
+    const [checking, setChecking] = useState(true);
     const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
     const [formData, setFormData] = useState({
         fullName: "",
         email: "",
         phone: "",
-        location: "",
+        gender: "female" as const, // WAVE is female-only
+        businessName: "",
         businessType: "",
-        businessDescription: "",
-        fundingNeeded: "",
+        yearsInBusiness: "",
+        reasonForApplying: "",
     });
+    const [state, formAction, isPending] = useFormState(submitWaveApplicationAction, initialState);
+
+    // Check gender eligibility on mount
+    useEffect(() => {
+        async function checkEligibility() {
+            if (sessionStatus === "loading") return;
+
+            if (!session?.user?.id) {
+                router.push("/auth/login");
+                return;
+            }
+
+            const result = await checkWaveEligibilityAction(session.user.id);
+
+            if (!result.eligible) {
+                router.push("/wave/access-denied");
+                return;
+            }
+
+            setChecking(false);
+        }
+
+        checkEligibility();
+    }, [session, sessionStatus, router]);
+
+    // Handle successful submission
+    if (state.success && !isPending) {
+        setIsApplicationModalOpen(false);
+        setFormData({
+            fullName: "",
+            email: "",
+            phone: "",
+            gender: "female" as const,
+            businessName: "",
+            businessType: "",
+            yearsInBusiness: "",
+            reasonForApplying: "",
+        });
+    }
 
     const faqs = [
         {
@@ -83,22 +133,6 @@ export default function WAVEProgramPage() {
             icon: "🤝",
         },
     ];
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // TODO: Implement actual form submission
-        console.log("Application submitted:", formData);
-        setIsApplicationModalOpen(false);
-        setFormData({
-            fullName: "",
-            email: "",
-            phone: "",
-            location: "",
-            businessType: "",
-            businessDescription: "",
-            fundingNeeded: "",
-        });
-    };
 
     const handleInputChange = (
         e: React.ChangeEvent<
@@ -221,7 +255,23 @@ export default function WAVEProgramPage() {
                 onClose={() => setIsApplicationModalOpen(false)}
                 title="Apply to WAVE Program"
             >
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form action={formAction} className="space-y-4">
+                    {/* Server error display */}
+                    {state.error && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-red-300 shrink-0 mt-0.5" />
+                            <p className="text-sm text-red-200">{state.error}</p>
+                        </div>
+                    )}
+
+                    {/* Success message */}
+                    {state.success && state.message && (
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
+                            <CheckCircle className="w-5 h-5 text-green-300 shrink-0 mt-0.5" />
+                            <p className="text-sm text-green-200">{state.message}</p>
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Full Name *
@@ -269,16 +319,44 @@ export default function WAVEProgramPage() {
 
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Location (State) *
+                            Gender Confirmation *
+                        </label>
+                        <div className="bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 rounded-xl p-4">
+                            <input
+                                type="hidden"
+                                name="gender"
+                                value="female"
+                            />
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="radio"
+                                    id="gender-female"
+                                    checked={true}
+                                    readOnly
+                                    className="w-4 h-4 accent-pink-600"
+                                />
+                                <label htmlFor="gender-female" className="text-sm font-medium text-slate-900 dark:text-white">
+                                    I confirm I am a female entrepreneur
+                                </label>
+                            </div>
+                            <p className="text-xs text-pink-600 dark:text-pink-400 mt-2">
+                                ℹ️ WAVE Program is exclusively for women agripreneurs
+                            </p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            Business Name *
                         </label>
                         <input
                             type="text"
-                            name="location"
-                            value={formData.location}
+                            name="businessName"
+                            value={formData.businessName}
                             onChange={handleInputChange}
                             required
                             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
-                            placeholder="e.g., Lagos, Kaduna, Plateau"
+                            placeholder="e.g., Amina's Organic Farms"
                         />
                     </div>
 
@@ -296,46 +374,48 @@ export default function WAVEProgramPage() {
                             <option value="">Select business type</option>
                             <option value="farming">Farming/Crop Production</option>
                             <option value="processing">Food Processing</option>
-                            <option value="export">Export Trading</option>
-                            <option value="livestock">Livestock/Poultry</option>
-                            <option value="services">Agricultural Services</option>
+                            <option value="trading">Agricultural Trading</option>
                             <option value="other">Other</option>
                         </select>
                     </div>
 
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Business Description *
+                            Years in Business *
                         </label>
-                        <textarea
-                            name="businessDescription"
-                            value={formData.businessDescription}
+                        <input
+                            type="number"
+                            name="yearsInBusiness"
+                            value={formData.yearsInBusiness}
                             onChange={handleInputChange}
                             required
-                            rows={4}
+                            min="0"
+                            max="100"
                             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
-                            placeholder="Briefly describe your agricultural business, what you produce, and your current challenges..."
+                            placeholder="0"
                         />
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Enter 0 if just starting
+                        </p>
                     </div>
 
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Funding Needed *
+                            Why are you applying to the WAVE Program? *
                         </label>
-                        <select
-                            name="fundingNeeded"
-                            value={formData.fundingNeeded}
+                        <textarea
+                            name="reasonForApplying"
+                            value={formData.reasonForApplying}
                             onChange={handleInputChange}
                             required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-pink-600"
-                        >
-                            <option value="">Select funding range</option>
-                            <option value="50-100k">₦50,000 - ₦100,000</option>
-                            <option value="100-500k">₦100,000 - ₦500,000</option>
-                            <option value="500k-1m">₦500,000 - ₦1,000,000</option>
-                            <option value="1m-2m">₦1,000,000 - ₦2,000,000</option>
-                            <option value="2m-5m">₦2,000,000 - ₦5,000,000</option>
-                        </select>
+                            rows={5}
+                            minLength={50}
+                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
+                            placeholder="Please explain your business goals, challenges you face, and how WAVE Program support would help you grow... (minimum 50 characters)"
+                        />
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {formData.reasonForApplying.length}/50 characters minimum
+                        </p>
                     </div>
 
                     <div className="flex gap-3 pt-4">
@@ -348,10 +428,20 @@ export default function WAVEProgramPage() {
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 px-6 py-3 bg-pink-600 text-white font-semibold rounded-xl hover:bg-pink-700 transition-colors flex items-center justify-center gap-2"
+                            disabled={isPending}
+                            className="flex-1 px-6 py-3 bg-pink-600 text-white font-semibold rounded-xl hover:bg-pink-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Send className="w-4 h-4" />
-                            Submit Application
+                            {isPending ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    Submitting...
+                                </>
+                            ) : (
+                                <>
+                                    <Send className="w-4 h-4" />
+                                    Submit Application
+                                </>
+                            )}
                         </button>
                     </div>
                 </form>

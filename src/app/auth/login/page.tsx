@@ -1,65 +1,43 @@
 "use client";
 
 import { useState } from "react";
+import { useActionState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";
+import { loginAction } from "@/app/actions/auth";
+
+const initialState = { error: null, success: false };
 
 export default function LoginPage() {
     const [formData, setFormData] = useState({
         email: "",
         password: "",
-        rememberMe: false,
     });
-    const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
-    const [isLoading, setIsLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const [showPassword, setShowPassword] = useState(false);
+    const [state, formAction, isPending] = useActionState(loginAction, initialState);
+    const router = useRouter();
 
-    const validateForm = () => {
-        const newErrors: { email?: string; password?: string } = {};
-
-        // Email validation
-        if (!formData.email) {
-            newErrors.email = "Email is required";
-        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-            newErrors.email = "Please enter a valid email address";
-        }
-
-        // Password validation
-        if (!formData.password) {
-            newErrors.password = "Password is required";
-        } else if (formData.password.length < 6) {
-            newErrors.password = "Password must be at least 6 characters";
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!validateForm()) {
-            return;
-        }
-
-        setIsLoading(true);
-        // TODO: Implement actual authentication logic
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulate API call
-        console.log("Login with:", formData);
-        setIsLoading(false);
-    };
+    // Handle successful login
+    if (state.success && !isPending) {
+        router.push("/dashboard");
+    }
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, type, checked } = e.target;
+        const { name, value } = e.target;
         setFormData({
             ...formData,
-            [name]: type === "checkbox" ? checked : value,
+            [name]: value,
         });
         // Clear error when user starts typing
-        if (errors[name as keyof typeof errors]) {
-            setErrors({ ...errors, [name]: undefined });
+        if (errors[name]) {
+            const newErrors = { ...errors };
+            delete newErrors[name];
+            setErrors(newErrors);
         }
     };
 
@@ -89,7 +67,15 @@ export default function LoginPage() {
 
                 {/* Login Form */}
                 <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 elevation-3">
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form action={formAction} className="space-y-6">
+                        {/* Server error display */}
+                        {state.error && (
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-300 shrink-0 mt-0.5" />
+                                <p className="text-sm text-red-200">{state.error}</p>
+                            </div>
+                        )}
+
                         {/* Email Field */}
                         <div>
                             <label className="block text-sm font-semibold text-white mb-2">
@@ -105,7 +91,7 @@ export default function LoginPage() {
                                     className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.email ? "border-red-400" : "border-white/20"
                                         } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
                                     placeholder="your.email@example.com"
-                                    disabled={isLoading}
+                                    disabled={isPending}
                                 />
                                 {errors.email && (
                                     <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-400" />
@@ -131,16 +117,16 @@ export default function LoginPage() {
                                     name="password"
                                     value={formData.password}
                                     onChange={handleInputChange}
-                                    className={`w-full pl-11 pr-11 py-3 bg-white/10 border ${errors.password ? "border-red-400" : "border-white/20"
+                                    className={`w-full pl-11 pr-12 py-3 bg-white/10 border ${errors.password ? "border-red-400" : "border-white/20"
                                         } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
                                     placeholder="••••••••"
-                                    disabled={isLoading}
+                                    disabled={isPending}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-300 hover:text-white transition-colors"
-                                    disabled={isLoading}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-200 hover:text-white transition-colors"
+                                    disabled={isPending}
                                 >
                                     {showPassword ? (
                                         <EyeOff className="w-5 h-5" />
@@ -157,16 +143,14 @@ export default function LoginPage() {
                             )}
                         </div>
 
-                        {/* Remember Me & Forgot Password */}
                         <div className="flex items-center justify-between">
                             <label className="flex items-center gap-2 text-sm text-blue-200 cursor-pointer">
                                 <input
                                     type="checkbox"
-                                    name="rememberMe"
-                                    checked={formData.rememberMe}
-                                    onChange={handleInputChange}
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
                                     className="w-4 h-4 rounded accent-blue-500"
-                                    disabled={isLoading}
+                                    disabled={isPending}
                                 />
                                 Remember me
                             </label>
@@ -181,10 +165,10 @@ export default function LoginPage() {
                         {/* Submit Button */}
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isPending}
                             className="w-full px-6 py-4 bg-linear-to-r from-blue-600 to-blue-700 text-white font-bold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all elevation-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            {isLoading ? (
+                            {isPending ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
                                     Signing in...

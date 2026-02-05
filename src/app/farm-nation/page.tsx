@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
-import { MapPin, DollarSign, Maximize, Heart, Filter } from "lucide-react";
+import { MapPin, DollarSign, Maximize, Heart, Filter, Lock, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { getUserTierAction } from "@/app/actions/cooperative";
+import { useRouter } from "next/navigation";
 
 interface Property {
     id: string;
@@ -18,10 +21,21 @@ interface Property {
 }
 
 export default function FarmNationPage() {
+    const router = useRouter();
+    const { data: session, status } = useSession();
     const [selectedState, setSelectedState] = useState("all");
     const [priceRange, setPriceRange] = useState("all");
     const [sizeRange, setSizeRange] = useState("all");
     const [favorites, setFavorites] = useState<string[]>([]);
+    const [userTier, setUserTier] = useState<"Basic" | "Premium" | null>(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+    // Load user tier
+    useEffect(() => {
+        if (status === "authenticated") {
+            getUserTierAction().then(({ tier }) => setUserTier(tier));
+        }
+    }, [status]);
 
     const properties: Property[] = [
         {
@@ -244,8 +258,8 @@ export default function FarmNationPage() {
                                     <div className="absolute top-3 right-3 flex gap-2">
                                         <span
                                             className={`px-3 py-1 ${property.type === "sale"
-                                                    ? "bg-green-500"
-                                                    : "bg-blue-500"
+                                                ? "bg-green-500"
+                                                : "bg-blue-500"
                                                 } text-white text-xs font-bold rounded-full`}
                                         >
                                             For {property.type === "sale" ? "Sale" : "Lease"}
@@ -253,8 +267,8 @@ export default function FarmNationPage() {
                                         <button
                                             onClick={() => toggleFavorite(property.id)}
                                             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${favorites.includes(property.id)
-                                                    ? "bg-red-500 text-white"
-                                                    : "bg-white/90 text-slate-600 hover:bg-white"
+                                                ? "bg-red-500 text-white"
+                                                : "bg-white/90 text-slate-600 hover:bg-white"
                                                 }`}
                                         >
                                             <Heart
@@ -289,9 +303,19 @@ export default function FarmNationPage() {
                                             <span className="font-semibold">{property.size} ha</span>
                                         </div>
                                     </div>
-                                    <button className="w-full px-4 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors">
-                                        View Details
-                                    </button>
+                                    {userTier === "Premium" || userTier === null ? (
+                                        <button className="w-full px-4 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors">
+                                            View Details
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => setShowUpgradeModal(true)}
+                                            className="w-full px-4 py-3 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 font-semibold rounded-xl flex items-center justify-center gap-2"
+                                        >
+                                            <Lock className="w-4 h-4" />
+                                            Upgrade to Premium
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))
@@ -314,6 +338,48 @@ export default function FarmNationPage() {
                     </div>
                 )}
             </div>
+
+            {/* Upgrade Modal */}
+            {showUpgradeModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 max-w-md w-full">
+                        <div className="text-center">
+                            <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <TrendingUp className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
+                                Premium Tier Required
+                            </h2>
+                            <p className="text-slate-600 dark:text-slate-400 mb-6">
+                                To purchase or lease farmland, you need to upgrade to Premium tier by contributing at least ₦20,000 to the cooperative.
+                            </p>
+                            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 mb-6 text-left">
+                                <h3 className="font-semibold text-slate-900 dark:text-white mb-2">Premium Benefits:</h3>
+                                <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
+                                    <li>✓ Full Farm Nation access</li>
+                                    <li>✓ 3x contribution loan limit</li>
+                                    <li>✓ Lower interest rates (2%)</li>
+                                    <li>✓ Priority support</li>
+                                </ul>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowUpgradeModal(false)}
+                                    className="flex-1 px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => router.push("/cooperatives/contribute")}
+                                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition"
+                                >
+                                    Contribute Now
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { GraduationCap, Clock, Users, Star, BookOpen } from "lucide-react";
+import { useFormState } from "react-dom";
+import { GraduationCap, Clock, Users, Star, BookOpen, AlertCircle, CheckCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { enrollInCourseAction, type EnrollmentActionState } from "@/app/actions/platform";
 
 interface Course {
     id: string;
@@ -17,6 +19,8 @@ interface Course {
     description: string;
 }
 
+const initialState: EnrollmentActionState = { error: "Initializing...", success: false };
+
 export default function AcademyPage() {
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [selectedLevel, setSelectedLevel] = useState("all");
@@ -27,6 +31,13 @@ export default function AcademyPage() {
         email: "",
         phone: "",
     });
+    const [state, formAction, isPending] = useFormState(enrollInCourseAction, initialState);
+
+    // Handle successful enrollment
+    if (state.success && !isPending) {
+        setIsEnrollModalOpen(false);
+        setEnrollmentData({ fullName: "", email: "", phone: "" });
+    }
 
     const courses: Course[] = [
         {
@@ -131,14 +142,6 @@ export default function AcademyPage() {
     const handleEnroll = (course: Course) => {
         setSelectedCourse(course);
         setIsEnrollModalOpen(true);
-    };
-
-    const handleEnrollmentSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // TODO: Implement actual enrollment logic
-        console.log("Enrolling", enrollmentData, "in", selectedCourse?.title);
-        setIsEnrollModalOpen(false);
-        setEnrollmentData({ fullName: "", email: "", phone: "" });
     };
 
     return (
@@ -275,7 +278,26 @@ export default function AcademyPage() {
                 onClose={() => setIsEnrollModalOpen(false)}
                 title={`Enroll in ${selectedCourse?.title || "Course"}`}
             >
-                <form onSubmit={handleEnrollmentSubmit} className="space-y-4">
+                <form action={formAction} className="space-y-4">
+                    {/* Hidden courseId field */}
+                    <input type="hidden" name="courseId" value={selectedCourse?.id || ""} />
+
+                    {/* Server error display */}
+                    {state.error && (
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-red-300 shrink-0 mt-0.5" />
+                            <p className="text-sm text-red-200">{state.error}</p>
+                        </div>
+                    )}
+
+                    {/* Success message */}
+                    {state.success && state.message && (
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
+                            <CheckCircle className="w-5 h-5 text-green-300 shrink-0 mt-0.5" />
+                            <p className="text-sm text-green-200">{state.message}</p>
+                        </div>
+                    )}
+
                     <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 mb-4">
                         <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
                             Course Fee
@@ -291,6 +313,7 @@ export default function AcademyPage() {
                         </label>
                         <input
                             type="text"
+                            name="fullName"
                             value={enrollmentData.fullName}
                             onChange={(e) =>
                                 setEnrollmentData({ ...enrollmentData, fullName: e.target.value })
@@ -351,9 +374,17 @@ export default function AcademyPage() {
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors"
+                            disabled={isPending}
+                            className="flex-1 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Confirm Enrollment
+                            {isPending ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
+                                    Enrolling...
+                                </>
+                            ) : (
+                                "Confirm Enrollment"
+                            )}
                         </button>
                     </div>
                 </form>

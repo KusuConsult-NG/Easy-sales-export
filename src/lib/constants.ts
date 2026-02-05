@@ -25,9 +25,8 @@ export const NAVIGATION_ITEMS = [
 // Company Info
 export const COMPANY_INFO = {
     name: "Easy Sales Export",
-    tagline: "Export & Agri",
+    tagline: "Export & Agriculture",
     fullName: "EASY SALES EXPORT & AGRICULTURE",
     rc: "RC: 763845",
     copyright: `© ${new Date().getFullYear()} EASY SALES EXPORT & AGRICULTURE. All rights reserved.`,
 } as const;
-

@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
 import { useState, useEffect } from "react";
+import NotificationCenter from "./NotificationCenter";
 
 const navigationItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -63,30 +64,35 @@ export function Sidebar() {
 
     return (
         <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
-            {/* Logo Section */}
-            <Link
-                href="/"
-                className="p-6 flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
-            >
-                <Image
-                    src="/images/logo.jpg"
-                    alt={COMPANY_INFO.name}
-                    width={40}
-                    height={40}
-                    className="w-10 h-10 rounded-full border border-slate-200 shadow-sm"
-                />
-                <div>
-                    <h1 className="text-primary font-bold text-sm leading-tight uppercase tracking-wider">
-                        {COMPANY_INFO.name.split(" ")[0]} {COMPANY_INFO.name.split(" ")[1]}
-                    </h1>
-                    <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase">
-                        {COMPANY_INFO.tagline}
-                    </p>
+            {/* Logo Section with Notification */}
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-4">
+                    <Link
+                        href="/"
+                        className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
+                    >
+                        <Image
+                            src="/images/logo.jpg"
+                            alt={COMPANY_INFO.name}
+                            width={40}
+                            height={40}
+                            className="w-10 h-10 rounded-full border border-slate-200 shadow-sm"
+                        />
+                        <div>
+                            <h1 className="text-primary font-bold text-sm leading-tight uppercase tracking-wider">
+                                {COMPANY_INFO.name.split(" ")[0]} {COMPANY_INFO.name.split(" ")[1]}
+                            </h1>
+                            <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase">
+                                Export & Agri
+                            </p>
+                        </div>
+                    </Link>
+                    <NotificationCenter />
                 </div>
-            </Link>
+            </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto">
+            <nav className="flex-1 px-4 space-y-1 py-4 overflow-y-auto">
                 {navigationItems.map((item) => {
                     const isActive = pathname === item.href;
                     const Icon = item.icon;

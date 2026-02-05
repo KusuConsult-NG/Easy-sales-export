@@ -137,7 +137,7 @@ export interface WAVEApplication {
 // ===========================
 
 export interface LandListing {
-    id: string;
+    id?: string;
     title: string;
     description: string;
     location: {
@@ -146,15 +146,30 @@ export interface LandListing {
         address: string;
     };
     size: number; // in hectares
+    sizeInAcres: number; // for display
     pricePerHectare: number;
+    pricePerAcre: number; // for display
     totalPrice: number;
-    soilType?: string;
+    soilType: string;
     waterSource?: string;
+    waterAccess: boolean;
     accessibility: string;
     images: string[];
+    documents?: {
+        titleDeed?: string;
+        survey?: string;
+        photos?: string[];
+    };
     ownerId: string;
+    ownerEmail?: string;
     status: "available" | "reserved" | "sold";
+    verificationStatus: "pending" | "approved" | "rejected";
+    rejectionReason?: string;
+    verifiedBy?: string;
+    verifiedAt?: Date;
     listedDate: Date;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 // ===========================
