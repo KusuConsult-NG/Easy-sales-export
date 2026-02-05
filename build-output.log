@@ -1,0 +1,42 @@
+
+> easy-sales-export-nextjs@0.1.0 build
+> next build
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 15.6s
+  Running TypeScript ...
+  Collecting page data using 9 workers ...
+  Generating static pages using 9 workers (0/45) ...
+  Generating static pages using 9 workers (11/45) 
+  Generating static pages using 9 workers (22/45) 
+⨯ useSearchParams() should be wrapped in a suspense boundary at page "/loans/success". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+    at Q (/Users/mac/Easy sales Export/easy-sales-export-nextjs/.next/server/chunks/ssr/node_modules_next_f2865b38._.js:2:2111)
+    at o (/Users/mac/Easy sales Export/easy-sales-export-nextjs/.next/server/chunks/ssr/node_modules_next_f2865b38._.js:4:5314)
+    at i (/Users/mac/Easy sales Export/easy-sales-export-nextjs/.next/server/chunks/ssr/_cb9dd409._.js:1:981)
+    at an (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84360)
+    at ai (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86179)
+    at al (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:107953)
+    at as (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:105368)
+    at aa (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84712)
+    at ai (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86228)
+    at ai (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:104708)
+Error occurred prerendering page "/loans/success". Read more: https://nextjs.org/docs/messages/prerender-error
+Export encountered an error on /loans/success/page: /loans/success, exiting the build.
+⨯ useSearchParams() should be wrapped in a suspense boundary at page "/cooperatives/verify-payment". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+    at Q (/Users/mac/Easy sales Export/easy-sales-export-nextjs/.next/server/chunks/ssr/node_modules_next_f2865b38._.js:2:2111)
+    at o (/Users/mac/Easy sales Export/easy-sales-export-nextjs/.next/server/chunks/ssr/node_modules_next_f2865b38._.js:4:5314)
+    at m (/Users/mac/Easy sales Export/easy-sales-export-nextjs/.next/server/chunks/ssr/_c2e34f51._.js:1:1158)
+    at an (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84360)
+    at ai (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86179)
+    at al (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:107953)
+    at as (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:105368)
+    at aa (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84712)
+    at ai (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86228)
+    at ai (/Users/mac/Easy sales Export/easy-sales-export-nextjs/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:104708)
+Error occurred prerendering page "/cooperatives/verify-payment". Read more: https://nextjs.org/docs/messages/prerender-error
+Export encountered an error on /cooperatives/verify-payment/page: /cooperatives/verify-payment, exiting the build.
+⨯ Next.js build worker exited with code: 1 and signal: null
