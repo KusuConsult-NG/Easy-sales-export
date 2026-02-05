@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase-admin';
 
+// Force dynamic execution - don't try to statically generate this route
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/users/[userId]
  * Fetch user profile data

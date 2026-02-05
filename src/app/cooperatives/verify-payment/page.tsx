@@ -6,6 +6,10 @@ import { CheckCircle, XCircle, Loader2, TrendingUp, ArrowRight } from 'lucide-re
 import Link from 'next/link';
 import { verifyContributionPaymentAction } from '@/app/actions/cooperative-payment';
 
+// Force dynamic rendering - page uses useSearchParams()
+export const dynamic = 'force-dynamic';
+
+
 export default function VerifyPaymentPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
