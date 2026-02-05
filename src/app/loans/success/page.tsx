@@ -5,6 +5,10 @@ import { motion } from "framer-motion";
 import { CheckCircle, FileText, Clock } from "lucide-react";
 import Link from "next/link";
 
+// Force dynamic rendering - page uses useSearchParams()
+export const dynamic = 'force-dynamic';
+
+
 export default function LoanSuccessPage() {
     const searchParams = useSearchParams();
     const loanId = searchParams.get('id');
