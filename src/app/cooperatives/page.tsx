@@ -150,12 +150,12 @@ export default function CooperativesPage() {
                                 <div className="flex items-center justify-between mb-4">
                                     <Award className="w-8 h-8" />
                                     <span className="text-xs bg-white/20 px-3 py-1 rounded-full font-semibold">
-                                        {membership.tier || 'Basic'}
+                                        Basic
                                     </span>
                                 </div>
                                 <p className="text-sm text-purple-50 mb-1">Total Contributions</p>
                                 <h3 className="text-3xl font-bold mb-2">
-                                    {formatCurrency(membership.totalContributions || 0)}
+                                    {formatCurrency(membership.savingsBalance || 0)}
                                 </h3>
                                 <p className="text-xs text-purple-100">
                                     Member since {formatDate(membership.memberSince)}

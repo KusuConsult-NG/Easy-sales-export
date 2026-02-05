@@ -10,8 +10,7 @@ export default function ApplyForLoanPage() {
         if (result.success) {
             redirect(`/loans/success?id=${result.loanId}`);
         }
-
-        return result;
+        // If not success, error handling should be done in the component
     }
 
     return (

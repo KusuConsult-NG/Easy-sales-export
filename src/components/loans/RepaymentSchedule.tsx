@@ -26,7 +26,7 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
 
                     if (inst.status === "paid") return inst;
 
-                    if (now > dueDate && inst.status !== "paid") {
+                    if (now > dueDate) {
                         return { ...inst, status: "overdue" as const };
                     }
 

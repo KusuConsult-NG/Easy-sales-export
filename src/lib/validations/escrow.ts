@@ -8,7 +8,7 @@ export const escrowTransactionSchema = z.object({
     productId: z.string().min(1, 'Product ID is required'),
     amount: z.number().min(1, 'Amount must be greater than 0'),
     description: z.string().optional(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type EscrowTransactionInput = z.infer<typeof escrowTransactionSchema>;

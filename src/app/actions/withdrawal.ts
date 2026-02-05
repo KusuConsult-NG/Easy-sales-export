@@ -80,7 +80,7 @@ export async function submitWithdrawalRequestAction(
 
         // Create audit log
         await createAuditLog({
-            action: 'withdrawal_request',
+            action: 'payment_initiated', // Using existing audit action type
             userId,
             userEmail,
             targetId: withdrawalRef.id,

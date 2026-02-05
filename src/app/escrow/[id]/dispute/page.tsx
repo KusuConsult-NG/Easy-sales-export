@@ -32,13 +32,10 @@ export default function CreateDisputePage({ params }: DisputePageProps) {
 
             const result = await getEscrowTransactionByIdAction(escrowId);
             if (result.success && result.data) {
-                const transaction = result.data.find(t => t.id === escrowId);
-                if (transaction) {
-                    setEscrowData(transaction);
-                } else {
-                    alert("Escrow transaction not found");
-                    router.push("/escrow");
-                }
+                setEscrowData(result.data);
+            } else {
+                alert("Escrow transaction not found");
+                router.push("/escrow");
             }
             setLoadingEscrow(false);
         }

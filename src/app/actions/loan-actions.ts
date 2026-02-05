@@ -62,7 +62,7 @@ export async function submitLoanApplication(
             return {
                 success: false,
                 error: "Validation error",
-                details: error.errors.map(e => e.message),
+                details: (error as z.ZodError).issues.map(e => e.message),
             };
         }
         return { success: false, error: "Failed to submit loan application" };
@@ -236,7 +236,7 @@ export async function approveLoanApplication(
             return {
                 success: false,
                 error: "Validation error",
-                details: error.errors.map(e => e.message),
+                details: (error as z.ZodError).issues.map(e => e.message),
             };
         }
         return { success: false, error: "Failed to process loan approval" };

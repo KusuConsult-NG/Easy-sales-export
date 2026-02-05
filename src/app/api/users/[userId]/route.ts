@@ -8,9 +8,10 @@ import { db } from '@/lib/firebase-admin';
  */
 export async function GET(
     request: NextRequest,
-    { params }: { params: { userId: string } }
+    { params }: { params: Promise<{ userId: string }> }
 ) {
     try {
+        const { userId } = await params;
         // Verify authentication
         const session = await auth();
         if (!session?.user) {
@@ -20,7 +21,7 @@ export async function GET(
             );
         }
 
-        const userId = params.userId;
+
 
         // Users can only access their own profile (unless admin)
         if (session.user.id !== userId && session.user.role !== 'admin' && session.user.role !== 'super_admin') {

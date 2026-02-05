@@ -21,7 +21,7 @@ export default async function LandMapPage() {
                 {/* Map */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
                     <LandMap
-                        listings={sampleListings}
+                        listings={listings}
                         height="600px"
                         onListingClick={(listing) => {
                             console.log("Clicked listing:", listing);
@@ -32,7 +32,7 @@ export default async function LandMapPage() {
 
                 {/* Listings Grid */}
                 <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {sampleListings.map((listing) => (
+                    {listings.map((listing) => (
                         <div
                             key={listing.id}
                             className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow"

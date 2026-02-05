@@ -70,7 +70,7 @@ export async function updateFeatureToggle(
 
         // Audit log
         await createAuditLog({
-            action: "feature_toggle_updated",
+            action: "feature_toggled",
             userId: session.user.id,
             userEmail: session.user.email!,
             targetId: featureName,

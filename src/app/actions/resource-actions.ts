@@ -128,7 +128,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
 
         // Create audit log
         await createAuditLog({
-            action: "resource_upload",
+            action: "resource_uploaded",
             userId: session.user.id,
             targetId: docRef.id,
             targetType: "wave_resource",

@@ -1,3 +1,6 @@
+// Use Node.js runtime for crypto operations
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from "next/server";
 import { verifyDigitalIDQR } from "@/lib/digital-id";
 import { createAuditLog } from "@/lib/audit-log";

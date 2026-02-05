@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import { getToken } from "next-auth/jwt";
 
 /**
  * Enhanced Next.js Middleware for Route Protection
@@ -62,8 +62,9 @@ const SESSION_TIMEOUT_MS = parseInt(process.env.SESSION_TIMEOUT_MINUTES || "30",
 export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
 
-    // Get session
-    const session = await auth();
+    // Get session using getToken (Edge Runtime compatible)
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    const session = token ? { user: token } : null;
 
     // Check session timeout
     if (session) {
