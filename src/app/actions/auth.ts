@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { User as FirestoreUser } from "@/lib/types/firestore";
+import { logger } from "@/lib/logger";
 
 /**
  * Server Actions for Authentication
@@ -35,7 +36,7 @@ export async function loginAction(prevState: any, formData: FormData) {
         // Success - return null error
         return { error: null, success: true };
     } catch (error) {
-        console.error("Login error:", error);
+        logger.error("Login error", error);
 
         if (error instanceof AuthError) {
             switch (error.type) {
@@ -104,7 +105,7 @@ export async function registerAction(prevState: any, formData: FormData) {
 
         return { error: null, success: true };
     } catch (error: any) {
-        console.error("Registration error:", error);
+        logger.error("Registration error", error);
 
         // Handle Firebase auth errors
         if (error.code === "auth/email-already-in-use") {
