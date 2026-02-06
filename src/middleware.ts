@@ -138,14 +138,6 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    // Check registration toggle
-    if (pathname === "/auth/register") {
-        const registrationEnabled = process.env.NEXT_PUBLIC_USER_REGISTRATION_ENABLED === "true";
-        if (!registrationEnabled) {
-            return NextResponse.redirect(new URL("/auth/login?error=registration_disabled", request.url));
-        }
-    }
-
     // Create response
     const response = NextResponse.next();
 
