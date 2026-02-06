@@ -3,7 +3,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { verifyTOTPToken } from "@/lib/mfa";
+
+// Force server-side execution
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/auth/mfa/verify
@@ -48,6 +51,9 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
+
+        // Lazy-load crypto-dependent function
+        const { verifyTOTPToken } = await import("@/lib/mfa");
 
         // Verify the TOTP code
         const isValid = verifyTOTPToken(code, userData.mfaSecret);

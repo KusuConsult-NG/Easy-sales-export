@@ -3,13 +3,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import {
-    generateTOTPSecret,
-    generateTOTPQRCode,
-    generateBackupCodes,
-    storeBackupCodes
-} from "@/lib/mfa";
-import { encryptData } from "@/lib/security";
+
+// Force server-side execution (prevents build-time crypto errors)
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * Setup MFA - Generate QR code and recovery codes
@@ -24,6 +21,15 @@ export async function POST(request: NextRequest) {
                 { status: 401 }
             );
         }
+
+        // Lazy-load crypto-dependent functions to prevent build-time execution
+        const {
+            generateTOTPSecret,
+            generateTOTPQRCode,
+            generateBackupCodes,
+            storeBackupCodes
+        } = await import("@/lib/mfa");
+        const { encryptData } = await import("@/lib/security");
 
         // Generate TOTP secret
         const secret = generateTOTPSecret();
