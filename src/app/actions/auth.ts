@@ -26,24 +26,17 @@ export async function loginAction(prevState: any, formData: FormData) {
         // Validate with Zod
         const validatedData = loginSchema.parse({ email, password });
 
-        // Sign in with NextAuth - redirectTo will trigger redirect on success
+        // Sign in with NextAuth - redirect: false so we can handle success client-side
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
-            redirectTo: "/dashboard",
+            redirect: false,
         });
 
-        // This won't be reached due to redirect, but needed for TypeScript
+        // Return success - client will handle redirect
         return { error: "", success: true };
 
     } catch (error) {
-        // Re-throw redirect errors to allow Next.js to handle navigation
-        if (error && typeof error === 'object' && 'digest' in error &&
-            typeof (error as any).digest === 'string' &&
-            (error as any).digest.startsWith('NEXT_REDIRECT')) {
-            throw error;
-        }
-
         logger.error("Login error", error);
 
         if (error instanceof AuthError) {
@@ -111,11 +104,11 @@ export async function registerAction(prevState: any, formData: FormData) {
             updatedAt: serverTimestamp(),
         });
 
-        // Auto sign-in after registration (with redirect to dashboard)
+        // Auto sign-in after registration (client will handle redirect)
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
-            redirectTo: "/dashboard",
+            redirect: false,
         });
 
         return { error: "", success: true };
