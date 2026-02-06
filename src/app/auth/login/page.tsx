@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -24,14 +24,16 @@ export default function LoginPage() {
     const [state, formAction, isPending] = useActionState(loginAction, initialState);
     const router = useRouter();
     const { data: session, status } = useSession();
+    const hasRedirected = useRef(false);
 
     // 🔴 P0 FIX: Observe AUTH STATE instead of form submit success
     // This is the SINGLE SOURCE OF TRUTH for redirect
     useEffect(() => {
         console.log("🔍 AUTH STATE CHECK:", { status, hasSession: !!session, path: window.location.pathname });
 
-        // Only redirect when we're authenticated AND on login page
-        if (status === "authenticated" && session) {
+        // Only redirect ONCE when we become authenticated
+        if (status === "authenticated" && session && !hasRedirected.current) {
+            hasRedirected.current = true;
             console.log("✅ AUTH SUCCESS → SESSION ESTABLISHED → EXECUTING REDIRECT");
             toast.success("Login successful! Redirecting to dashboard...");
             router.push("/dashboard");

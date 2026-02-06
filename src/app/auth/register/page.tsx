@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -41,6 +41,7 @@ export default function RegisterPage() {
     const [state, formAction, isPending] = useActionState(registerAction, initialState);
     const router = useRouter();
     const { data: session, status } = useSession();
+    const hasRedirected = useRef(false);
     const [passwordStrength, setPasswordStrength] = useState({
         score: 0,
         label: "",
@@ -51,7 +52,9 @@ export default function RegisterPage() {
     useEffect(() => {
         console.log("🔍 REGISTER AUTH STATE:", { status, hasSession: !!session });
 
-        if (status === "authenticated" && session) {
+        // Only redirect ONCE when we become authenticated
+        if (status === "authenticated" && session && !hasRedirected.current) {
+            hasRedirected.current = true;
             console.log("✅ REGISTRATION SUCCESS → SESSION ESTABLISHED → EXECUTING REDIRECT");
             toast.success("Registration successful! Redirecting to dashboard...");
             router.push("/dashboard");
