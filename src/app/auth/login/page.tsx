@@ -162,12 +162,13 @@ export default function LoginPage() {
                                 />
                                 Remember me
                             </label>
-                            <Link
+                            {/* Forgot password temporarily hidden - stub page */}
+                            {/* <Link
                                 href="/auth/forgot-password"
                                 className="text-sm text-blue-300 hover:text-white transition-colors"
                             >
                                 Forgot password?
-                            </Link>
+                            </Link> */}
                         </div>
 
                         {/* Submit Button */}
