@@ -215,6 +215,8 @@ export const COLLECTIONS = {
     WAVE_TRAINING_REGISTRATIONS: "wave_training_registrations",
 
     // Land & Marketplace
+    PRODUCTS: "products",
+    MARKETPLACE_ORDERS: "marketplace_orders",
     LAND_LISTINGS: "land_listings",
     LAND_VERIFICATIONS: "land_verifications",
     SELLER_VERIFICATIONS: "seller_verifications",

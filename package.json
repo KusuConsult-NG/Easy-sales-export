@@ -17,7 +17,12 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "optimize:images": "node scripts/convert-to-webp.js",
-    "analyze": "cross-env ANALYZE=true npm run build"
+    "analyze": "cross-env ANALYZE=true npm run build",
+    "seed": "node scripts/seed.js",
+    "seed:products": "node scripts/seed.js products",
+    "seed:land": "node scripts/seed.js land",
+    "seed:wave": "node scripts/seed.js wave",
+    "seed:cooperatives": "node scripts/seed.js cooperatives"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
