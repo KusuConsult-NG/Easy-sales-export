@@ -11,7 +11,7 @@ export interface User {
     email: string;
     phone?: string;
     gender?: "male" | "female" | "other";
-    role: "exporter" | "admin" | "vendor";
+    role: "member" | "exporter" | "admin" | "vendor" | "super_admin";
     verified: boolean;
     cooperativeId?: string;
     createdAt: Date;

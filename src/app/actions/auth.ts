@@ -63,6 +63,7 @@ export async function registerAction(prevState: any, formData: FormData) {
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
     const gender = formData.get("gender") as string;
+    const role = formData.get("role") as string;
 
     try {
         // Validate with Zod
@@ -72,6 +73,12 @@ export async function registerAction(prevState: any, formData: FormData) {
             password,
             confirmPassword,
         });
+
+        // Validate role
+        const allowedRoles = ["member", "exporter", "vendor"];
+        if (!role || !allowedRoles.includes(role)) {
+            return { error: "Please select a valid account type", success: false };
+        }
 
         // Create Firebase Auth user
         const userCredential = await createUserWithEmailAndPassword(
@@ -85,7 +92,7 @@ export async function registerAction(prevState: any, formData: FormData) {
             uid: userCredential.user.uid,
             fullName: validatedData.fullName,
             email: validatedData.email,
-            role: "exporter", // Default role for new users
+            role: role as "member" | "exporter" | "admin" | "vendor" | "super_admin",
             verified: false, // Email verification can be added later
             gender: gender as "male" | "female" | "other" | undefined, // Store gender for WAVE enforcement
         };

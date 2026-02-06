@@ -28,6 +28,7 @@ export default function RegisterPage() {
         email: "",
         phone: "",
         gender: "",
+        role: "",
         password: "",
         confirmPassword: "",
         acceptTerms: false,
@@ -229,6 +230,38 @@ export default function RegisterPage() {
                                         {errors.gender}
                                     </p>
                                 )}
+                            </div>
+
+                            {/* Role */}
+                            <div>
+                                <label className="block text-sm font-semibold text-white mb-2">
+                                    Account Type <span className="text-red-300">*</span>
+                                </label>
+                                <div className="relative">
+                                    <select
+                                        name="role"
+                                        value={formData.role}
+                                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                        className={`w-full px-4 py-3 bg-white/10 border ${errors.role ? "border-red-400" : "border-white/20"
+                                            } rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all appearance-none cursor-pointer`}
+                                        disabled={isPending}
+                                        required
+                                    >
+                                        <option value="" className="bg-slate-800">Select Account Type</option>
+                                        <option value="member" className="bg-slate-800">Member - Join cooperatives and access loans</option>
+                                        <option value="exporter" className="bg-slate-800">Exporter - Submit export applications</option>
+                                        <option value="vendor" className="bg-slate-800">Vendor - Sell agricultural products</option>
+                                    </select>
+                                </div>
+                                {errors.role && (
+                                    <p className="mt-1 text-sm text-red-300 flex items-center gap-1">
+                                        <AlertCircle className="w-4 h-4" />
+                                        {errors.role}
+                                    </p>
+                                )}
+                                <p className="mt-2 text-xs text-blue-200/70">
+                                    Choose the account type that best describes your needs. You can request role changes later.
+                                </p>
                             </div>
                         </div>
 
