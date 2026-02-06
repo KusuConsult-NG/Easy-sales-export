@@ -5,6 +5,9 @@
  * for the Easy Sales Export platform.
  */
 
+// Export PRD-required interfaces
+export * from "./prd-interfaces";
+
 export interface User {
     uid: string;
     fullName: string;
@@ -14,6 +17,8 @@ export interface User {
     role: "member" | "exporter" | "admin" | "vendor" | "super_admin";
     verified: boolean;
     cooperativeId?: string;
+    cooperativeMembershipId?: string;
+    sellerVerificationStatus?: "pending" | "approved" | "rejected";
     createdAt: Date;
     updatedAt: Date;
 }
@@ -182,48 +187,54 @@ export const COLLECTIONS = {
     NOTIFICATIONS: "notifications",
     TRANSACTIONS: "transactions",
     ANALYTICS: "analytics",
-    
+
     // Export & Agriculture
     EXPORT_WINDOWS: "export_windows",
     EXPORT_SLOTS: "export_slots",
-    
-    // Education & Training
-    COURSES: "courses",
-    ENROLLMENTS: "enrollments",
-    ACADEMY_COURSES: "academy_courses",
-    ACADEMY_LIVE_SESSIONS: "academy_live_sessions",
-    COURSE_PROGRESS: "course_progress",
-    COURSE_ENROLLMENTS: "course_enrollments",
-    COURSE_CERTIFICATES: "course_certificates",
-    CERTIFICATES: "certificates",
-    
+
     // Cooperatives & Finance
     COOPERATIVES: "cooperatives",
-    COOPERATIVE_MEMBERS: "cooperativeMembers",
+    COOPERATIVE_MEMBERS: "cooperative_members",
+    FIXED_SAVINGS_PLANS: "fixed_savings_plans",
+    LOAN_PRODUCTS: "loan_products",
     LOAN_APPLICATIONS: "loan_applications",
     LOAN_REPAYMENTS: "loan_repayments",
     LOAN_PAYMENTS: "loan_payments",
     WITHDRAWALS: "withdrawals",
     PAYMENTS: "payments",
-    
+
     // WAVE Program
     WAVE_APPLICATIONS: "wave_applications",
     WAVE_RESOURCES: "wave_resources",
     WAVE_TRAINING_EVENTS: "wave_training_events",
     WAVE_TRAINING_REGISTRATIONS: "wave_training_registrations",
-    
+
     // Land & Marketplace
     LAND_LISTINGS: "land_listings",
+    LAND_VERIFICATIONS: "land_verifications",
+    SELLER_VERIFICATIONS: "seller_verifications",
     ESCROW_TRANSACTIONS: "escrow_transactions",
     ESCROW_MESSAGES: "escrow_messages",
     DISPUTES: "disputes",
-    
+
+    // Education & Training
+    COURSES: "courses",
+    ENROLLMENTS: "enrollments",
+    ACADEMY_COURSES: "academy_courses",
+    ACADEMY_QUIZZES: "academy_quizzes",
+    QUIZ_ATTEMPTS: "quiz_attempts",
+    ACADEMY_LIVE_SESSIONS: "academy_live_sessions",
+    COURSE_PROGRESS: "course_progress",
+    COURSE_ENROLLMENTS: "course_enrollments",
+    COURSE_CERTIFICATES: "course_certificates",
+    CERTIFICATES: "certificates",
+
     // CMS & Admin
     ANNOUNCEMENTS: "announcements",
     BANNERS: "banners",
     AUDIT_LOGS: "audit_logs",
     FEATURE_TOGGLES: "feature_toggles",
-    
+
     // AI & Chat
     AI_CHAT_HISTORY: "ai_chat_history",
 } as const;
