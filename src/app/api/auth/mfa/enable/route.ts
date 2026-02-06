@@ -3,8 +3,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { verifyTOTPToken } from "@/lib/mfa";
-import { decryptData } from "@/lib/security";
+
+// Ensure this route is server-only
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
  * Enable MFA after verification
@@ -48,7 +50,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Decrypt secret
+        // Decrypt secret and verify token (lazy load to avoid build issues)
+        const { verifyTOTPToken } = await import("@/lib/mfa");
+        const { decryptData } = await import("@/lib/security");
+
         const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
         const secret = decryptData(userData.totpSecret, secretKey);
 
