@@ -83,3 +83,51 @@ export function nairaToKobo(naira: number): number {
 export function koboToNaira(kobo: number): number {
     return kobo / 100;
 }
+
+/**
+ * Generate a unique payment reference with prefix (Server-side)
+ */
+export function generateReference(prefix: string = "PAY"): string {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return `${prefix}-${timestamp}-${random}`;
+}
+
+/**
+ * Verify Paystack payment (Server-side)
+ */
+export async function verifyPaystackPayment(reference: string) {
+    try {
+        const response = await fetch(
+            `https://api.paystack.co/transaction/verify/${reference}`,
+            {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+                },
+            }
+        );
+
+        const data = await response.json();
+
+        if (data.status && data.data.status === "success") {
+            return {
+                success: true,
+                amount: data.data.amount / 100, // Convert from kobo to naira
+                metadata: data.data.metadata,
+                paidAt: data.data.paid_at,
+            };
+        }
+
+        return {
+            success: false,
+            error: data.message || "Payment verification failed",
+        };
+    } catch (error: any) {
+        return {
+            success: false,
+            error: error.message || "Verification failed",
+        };
+    }
+}
+
