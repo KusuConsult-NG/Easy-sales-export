@@ -161,20 +161,23 @@ export default function RegisterPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Full Name */}
                             <div>
-                                <label className="block text-sm font-semibold text-white mb-2">
-                                    Full Name
+                                <label htmlFor="register-fullname" className="block text-sm font-semibold text-white mb-2">
+                                    Full Name <span className="text-red-300">*</span>
                                 </label>
                                 <div className="relative">
                                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
                                     <input
+                                        id="register-fullname"
                                         type="text"
                                         name="fullName"
+                                        autoComplete="name"
                                         value={formData.fullName}
                                         onChange={handleInputChange}
                                         className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.fullName ? "border-red-400" : "border-white/20"
                                             } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
                                         placeholder="John Doe"
                                         disabled={isPending}
+                                        required
                                     />
                                 </div>
                                 {errors.fullName && (
@@ -187,14 +190,16 @@ export default function RegisterPage() {
 
                             {/* Phone */}
                             <div>
-                                <label className="block text-sm font-semibold text-white mb-2">
+                                <label htmlFor="register-phone" className="block text-sm font-semibold text-white mb-2">
                                     Phone Number
                                 </label>
                                 <div className="relative">
                                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
                                     <input
+                                        id="register-phone"
                                         type="tel"
                                         name="phone"
+                                        autoComplete="tel"
                                         value={formData.phone}
                                         onChange={handleInputChange}
                                         className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.phone ? "border-red-400" : "border-white/20"
@@ -274,14 +279,16 @@ export default function RegisterPage() {
 
                         {/* Email */}
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-2">
+                            <label htmlFor="register-email" className="block text-sm font-semibold text-white mb-2">
                                 Email Address
                             </label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
                                 <input
+                                    id="register-email"
                                     type="email"
                                     name="email"
+                                    autoComplete="email"
                                     value={formData.email}
                                     onChange={handleInputChange}
                                     className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.email ? "border-red-400" : "border-white/20"
@@ -300,14 +307,16 @@ export default function RegisterPage() {
 
                         {/* Password */}
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-2">
+                            <label htmlFor="register-password" className="block text-sm font-semibold text-white mb-2">
                                 Password
                             </label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
                                 <input
+                                    id="register-password"
                                     type={showPassword ? "text" : "password"}
                                     name="password"
+                                    autoComplete="new-password"
                                     value={formData.password}
                                     onChange={handleInputChange}
                                     className={`w-full pl-11 pr-11 py-3 bg-white/10 border ${errors.password ? "border-red-400" : "border-white/20"

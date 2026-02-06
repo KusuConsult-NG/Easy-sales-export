@@ -86,14 +86,16 @@ export default function LoginPage() {
 
                         {/* Email Field */}
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-2">
+                            <label htmlFor="login-email" className="block text-sm font-semibold text-white mb-2">
                                 Email Address
                             </label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
                                 <input
+                                    id="login-email"
                                     type="email"
                                     name="email"
+                                    autoComplete="email"
                                     value={formData.email}
                                     onChange={handleInputChange}
                                     className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.email ? "border-red-400" : "border-white/20"
@@ -115,14 +117,16 @@ export default function LoginPage() {
 
                         {/* Password Field */}
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-2">
+                            <label htmlFor="login-password" className="block text-sm font-semibold text-white mb-2">
                                 Password
                             </label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
                                 <input
+                                    id="login-password"
                                     type={showPassword ? "text" : "password"}
                                     name="password"
+                                    autoComplete="current-password"
                                     value={formData.password}
                                     onChange={handleInputChange}
                                     className={`w-full pl-11 pr-12 py-3 bg-white/10 border ${errors.password ? "border-red-400" : "border-white/20"
