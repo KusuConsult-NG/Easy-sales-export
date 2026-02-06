@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/utils";
 import RevenueChart from "@/components/features/RevenueChart";
 import CommodityPieChart from "@/components/features/CommodityPieChart";
 import ActivityFeed from "@/components/features/ActivityFeed";
+import OnboardingTour from "@/components/OnboardingTour";
 import {
     getDashboardStatsAction,
     getRecentActivityAction,
@@ -22,6 +23,7 @@ export default function DashboardPage() {
     const [recentActivity, setRecentActivity] = useState<RecentActivity>([]);
     const [escrowStatus, setEscrowStatus] = useState<EscrowStatus | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [showOnboarding, setShowOnboarding] = useState(false);
 
     // Fetch dashboard data on mount
     useEffect(() => {
@@ -38,6 +40,11 @@ export default function DashboardPage() {
 
                 if (statsResult.success && statsResult.data) {
                     setStats(statsResult.data);
+
+                    // Check if user has completed onboarding
+                    if (statsResult.data.onboardingCompleted === false) {
+                        setShowOnboarding(true);
+                    }
                 } else {
                     setError(statsResult.error || "Failed to load stats");
                 }
@@ -378,6 +385,17 @@ export default function DashboardPage() {
                     </>
                 )}
             </div>
+
+            {/* Onboarding Tour */}
+            <OnboardingTour
+                isOpen={showOnboarding}
+                onComplete={async () => {
+                    setShowOnboarding(false);
+                    // Mark onboarding as complete
+                    await fetch("/api/onboarding/complete", { method: "POST" });
+                }}
+                userRole={stats?.cooperativeSavings ? "member" : "user"}
+            />
         </div>
     );
 }

@@ -28,6 +28,7 @@ export type DashboardStats = {
     totalEscrow: number;
     cooperativeSavings: number;
     academyEnrollments: number;
+    onboardingCompleted: boolean;
 };
 
 export type RecentActivity = {
@@ -130,6 +131,7 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
                 totalEscrow,
                 cooperativeSavings,
                 academyEnrollments,
+                onboardingCompleted: userDoc.data()?.onboardingCompleted ?? false,
             },
         };
     } catch (error: any) {

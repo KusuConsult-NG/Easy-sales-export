@@ -41,6 +41,14 @@ const adminRoutes = [
     "/loans/approve", // New: Loan approval
 ];
 
+// Routes requiring MFA verification
+const mfaProtectedRoutes = [
+    "/admin", // All admin pages
+    "/cooperatives/withdraw",
+    "/export",
+    "/loans/apply",
+];
+
 // Routes requiring super_admin role
 const superAdminRoutes = [
     "/admin/super/financial",
@@ -125,6 +133,24 @@ export async function middleware(request: NextRequest) {
 
         if (session.user.role !== "super_admin") {
             return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
+    }
+
+    // Handle MFA enforcement for sensitive routes
+    const isMFAProtectedRoute = mfaProtectedRoutes.some((route) =>
+        pathname.startsWith(route)
+    );
+
+    if (isMFAProtectedRoute && session) {
+        // Check if user has MFA enabled
+        const mfaVerified = request.cookies.get("mfa_verified")?.value === "true";
+
+        if (!mfaVerified) {
+            // Redirect to MFA verification page
+            const mfaUrl = new URL("/settings/security/mfa", request.url);
+            mfaUrl.searchParams.set("required", "true");
+            mfaUrl.searchParams.set("redirect", pathname);
+            return NextResponse.redirect(mfaUrl);
         }
     }
 
