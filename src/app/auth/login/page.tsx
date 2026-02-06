@@ -10,7 +10,7 @@ import { COMPANY_INFO } from "@/lib/constants";
 import { loginAction } from "@/app/actions/auth";
 import toast from "react-hot-toast";
 
-const initialState = { error: null, success: false };
+const initialState = { error: "", success: false };
 
 export default function LoginPage() {
     const [formData, setFormData] = useState({

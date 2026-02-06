@@ -21,7 +21,7 @@ import { COMPANY_INFO } from "@/lib/constants";
 import { registerAction } from "@/app/actions/auth";
 import toast from "react-hot-toast";
 
-const initialState = { error: null, success: false };
+const initialState = { error: "", success: false };
 
 export default function RegisterPage() {
     const [formData, setFormData] = useState({
