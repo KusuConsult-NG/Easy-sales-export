@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -39,23 +40,33 @@ export default function RegisterPage() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [state, formAction, isPending] = useActionState(registerAction, initialState);
     const router = useRouter();
+    const { data: session, status } = useSession();
     const [passwordStrength, setPasswordStrength] = useState({
         score: 0,
         label: "",
         color: "",
     });
 
-    // Handle successful registration
+    // 🔴 P0 FIX: Observe AUTH STATE instead of form submit success
     useEffect(() => {
-        if (state.success && !isPending) {
+        console.log("🔍 REGISTER AUTH STATE:", { status, hasSession: !!session });
+
+        if (status === "authenticated" && session) {
+            console.log("✅ REGISTRATION SUCCESS → SESSION ESTABLISHED → EXECUTING REDIRECT");
             toast.success("Registration successful! Redirecting to dashboard...");
-            setTimeout(() => {
-                router.push("/dashboard");
-            }, 1000);
-        } else if (state.error && !isPending) {
-            toast.error(state.error);
+            router.push("/dashboard");
         }
-    }, [state.success, state.error, isPending, router]);
+    }, [status, session, router]);
+
+    // Handle form submission errors only
+    useEffect(() => {
+        if (state.error && !isPending) {
+            console.log("❌ REGISTRATION FAILED:", state.error);
+            toast.error(state.error);
+        } else if (state.success && !isPending) {
+            console.log("✅ REGISTRATION ACTION RETURNED SUCCESS (waiting for session)");
+        }
+    }, [state.error, state.success, isPending]);
 
     // Calculate password strength
     useEffect(() => {

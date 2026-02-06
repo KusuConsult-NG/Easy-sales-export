@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
@@ -22,18 +23,30 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [state, formAction, isPending] = useActionState(loginAction, initialState);
     const router = useRouter();
+    const { data: session, status } = useSession();
 
-    // Handle successful login
+    // 🔴 P0 FIX: Observe AUTH STATE instead of form submit success
+    // This is the SINGLE SOURCE OF TRUTH for redirect
     useEffect(() => {
-        if (state.success && !isPending) {
+        console.log("🔍 AUTH STATE CHECK:", { status, hasSession: !!session, path: window.location.pathname });
+
+        // Only redirect when we're authenticated AND on login page
+        if (status === "authenticated" && session) {
+            console.log("✅ AUTH SUCCESS → SESSION ESTABLISHED → EXECUTING REDIRECT");
             toast.success("Login successful! Redirecting to dashboard...");
-            setTimeout(() => {
-                router.push("/dashboard");
-            }, 1000);
-        } else if (state.error && !isPending) {
-            toast.error(state.error);
+            router.push("/dashboard");
         }
-    }, [state.success, state.error, isPending, router]);
+    }, [status, session, router]);
+
+    // Handle form submission errors only (success handled by session observer above)
+    useEffect(() => {
+        if (state.error && !isPending) {
+            console.log("❌ AUTH FAILED:", state.error);
+            toast.error(state.error);
+        } else if (state.success && !isPending) {
+            console.log("✅ LOGIN ACTION RETURNED SUCCESS (waiting for session)");
+        }
+    }, [state.error, state.success, isPending]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
