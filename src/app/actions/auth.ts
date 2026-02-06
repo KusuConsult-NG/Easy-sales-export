@@ -93,8 +93,8 @@ export async function registerAction(prevState: any, formData: FormData) {
             fullName: validatedData.fullName,
             email: validatedData.email,
             role: role as "member" | "exporter" | "admin" | "vendor" | "super_admin",
-            verified: false, // Email verification can be added later
-            gender: gender as "male" | "female" | "other" | undefined, // Store gender for WAVE enforcement
+            verified: true, // No email verification implemented
+            gender: gender as "male" | "female" | undefined,
         };
 
         await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {

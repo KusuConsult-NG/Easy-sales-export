@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { SessionProvider } from "next-auth/react";
 import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
+import { ToastProvider } from "@/components/providers/ToastProvider";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -51,6 +52,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} antialiased`}>
         <SessionProvider>
+          <ToastProvider />
           <SessionActivityTracker />
           <div className="flex h-screen overflow-hidden">
             <Sidebar />

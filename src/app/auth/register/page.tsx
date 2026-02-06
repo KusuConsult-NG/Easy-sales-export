@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";
 import { registerAction } from "@/app/actions/auth";
+import toast from "react-hot-toast";
 
 const initialState = { error: null, success: false };
 
@@ -45,9 +46,16 @@ export default function RegisterPage() {
     });
 
     // Handle successful registration
-    if (state.success && !isPending) {
-        router.push("/dashboard");
-    }
+    useEffect(() => {
+        if (state.success && !isPending) {
+            toast.success("Registration successful! Redirecting to dashboard...");
+            setTimeout(() => {
+                router.push("/dashboard");
+            }, 1000);
+        } else if (state.error && !isPending) {
+            toast.error(state.error);
+        }
+    }, [state.success, state.error, isPending, router]);
 
     // Calculate password strength
     useEffect(() => {
@@ -221,7 +229,6 @@ export default function RegisterPage() {
                                         <option value="" className="bg-slate-800">Select Gender</option>
                                         <option value="female" className="bg-slate-800">Female</option>
                                         <option value="male" className="bg-slate-800">Male</option>
-                                        <option value="other" className="bg-slate-800">Other</option>
                                     </select>
                                 </div>
                                 {errors.gender && (
