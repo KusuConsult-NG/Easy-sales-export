@@ -1,9 +1,49 @@
-import { LandMap } from "@/components/land/LandMap";
-import { SoilQuality, type LandListing } from "@/types/strict";
-import { getVerifiedLandListings } from "@/app/actions/land"; // Assuming this path for the server action
+"use client";
 
-export default async function LandMapPage() {
-    const listings = await getVerifiedLandListings();
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import { SoilQuality, type LandListing } from "@/types/strict";
+import { getVerifiedLandListings } from "@/app/actions/land";
+
+//Dynamically import LandMap to prevent SSR issues with leaflet
+const LandMap = dynamic(
+    () => import("@/components/land/LandMap").then(mod => ({ default: mod.LandMap })),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg" style={{ height: '600px' }}>
+                <div className="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-xl flex items-center justify-center">
+                    <p className="text-slate-600 dark:text-slate-400">Loading map...</p>
+                </div>
+            </div>
+        )
+    }
+);
+
+
+export default function LandMapPage() {
+    const [listings, setListings] = useState<LandListing[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function loadListings() {
+            const data = await getVerifiedLandListings();
+            setListings(data);
+            setLoading(false);
+        }
+        loadListings();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="mt-4 text-slate-600 dark:text-slate-400">Loading land listings...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 p-8">
@@ -55,3 +95,4 @@ export default async function LandMapPage() {
         </div>
     );
 }
+
