@@ -92,7 +92,7 @@ export default function CourseProgressCard({ courseId, courseTitle, totalLessons
                 </div>
                 <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
-                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-300 ease-out"
+                        className="h-full bg-linear-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-300 ease-out"
                         style={{ width: `${progressPercent}%` }}
                     />
                 </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { SoilQuality, type LandListing } from "@/types/strict";
 import { getVerifiedLandListings } from "@/app/actions/land";
+import { logger } from "@/lib/logger";
 
 //Dynamically import LandMap to prevent SSR issues with leaflet
 const LandMap = dynamic(
@@ -36,7 +37,7 @@ export default function LandMapPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                     <p className="mt-4 text-slate-600 dark:text-slate-400">Loading land listings...</p>
@@ -46,7 +47,7 @@ export default function LandMapPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 p-8">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
@@ -64,7 +65,7 @@ export default function LandMapPage() {
                         listings={listings}
                         height="600px"
                         onListingClick={(listing) => {
-                            console.log("Clicked listing:", listing);
+                            logger.debug("Land listing clicked", { listingId: listing.id, title: listing.title });
                             // Handle listing click (e.g., open modal)
                         }}
                     />

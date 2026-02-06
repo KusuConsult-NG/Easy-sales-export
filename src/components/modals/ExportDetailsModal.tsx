@@ -130,7 +130,7 @@ export default function ExportDetailsModal({
                     <div className="space-y-3">
                         {timeline.map((item, index) => (
                             <div key={index} className="flex items-start gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${item.completed
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${item.completed
                                         ? "bg-green-500 text-white"
                                         : "bg-slate-200 dark:bg-slate-700 text-slate-400"
                                     }`}>

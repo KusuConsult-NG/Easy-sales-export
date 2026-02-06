@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Camera, Upload, CheckCircle, XCircle, Clock, AlertCircle, Loader2 } from "lucide-react";
 import { verifyDigitalIDQR, type QRVerificationResult, type DigitalIDPayload } from "@/lib/digital-id";
+import { logger } from "@/lib/logger";
 
 export default function VerifyIDPage() {
     const [qrData, setQrData] = useState<string>("");
@@ -23,12 +24,12 @@ export default function VerifyIDPage() {
             reader.onload = async (event) => {
                 const dataUrl = event.target?.result as string;
                 // This is simplified - in production, use jsQR or similar to decode QR from image
-                console.log("QR image uploaded:", dataUrl);
+                logger.debug("QR image uploaded");
                 setVerifying(false);
             };
             reader.readAsDataURL(file);
         } catch (error) {
-            console.error("Failed to process QR code:", error);
+            logger.error("Failed to process QR code", error instanceof Error ? error : undefined);
             setVerifying(false);
         }
     };
@@ -43,8 +44,8 @@ export default function VerifyIDPage() {
             setVerifying(false);
 
             // Log verification attempt (in production, save to Firestore)
-            console.log("Verification attempt:", {
-                timestamp: new Date(),
+            logger.info("Digital ID verification attempt", {
+                timestamp: new Date().toISOString(),
                 result: verificationResult.valid ? "valid" : "invalid",
                 error: verificationResult.error,
             });
@@ -52,7 +53,7 @@ export default function VerifyIDPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
             <div className="max-w-3xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-8">
@@ -128,8 +129,8 @@ export default function VerifyIDPage() {
                 {result && (
                     <div
                         className={`rounded-lg p-6 ${result.valid
-                                ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800"
-                                : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800"
+                            : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
                             }`}
                     >
                         <div className="flex items-start space-x-3">
@@ -141,8 +142,8 @@ export default function VerifyIDPage() {
                             <div className="flex-1">
                                 <h3
                                     className={`text-lg font-semibold mb-2 ${result.valid
-                                            ? "text-emerald-900 dark:text-emerald-100"
-                                            : "text-red-900 dark:text-red-100"
+                                        ? "text-emerald-900 dark:text-emerald-100"
+                                        : "text-red-900 dark:text-red-100"
                                         }`}
                                 >
                                     {result.valid ? "✓ Valid Member ID" : "✗ Invalid QR Code"}

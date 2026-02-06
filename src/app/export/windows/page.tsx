@@ -3,11 +3,14 @@
 import { useState, useEffect } from "react";
 import { Package, Clock, Users, TrendingUp } from "lucide-react";
 import CountdownTimer from "@/components/CountdownTimer";
+import BookingModal from "@/components/modals/BookingModal";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
 
 export default function ExportWindowsPage() {
     const [windows, setWindows] = useState<ExportWindow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedWindow, setSelectedWindow] = useState<ExportWindow | null>(null);
 
     useEffect(() => {
         // Mock data - in real app, fetch from API
@@ -126,7 +129,13 @@ export default function ExportWindowsPage() {
 
                                     <CountdownTimer endDate={new Date(window.endDate)} />
 
-                                    <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition shadow-lg shadow-blue-500/30">
+                                    <button
+                                        onClick={() => {
+                                            setSelectedWindow(window);
+                                            setIsModalOpen(true);
+                                        }}
+                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition shadow-lg shadow-blue-500/30"
+                                    >
                                         Book Your Slot
                                     </button>
                                 </div>
@@ -134,6 +143,16 @@ export default function ExportWindowsPage() {
                         );
                     })}
                 </div>
+
+                {/* Booking Modal */}
+                <BookingModal
+                    isOpen={isModalOpen}
+                    onClose={() => {
+                        setIsModalOpen(false);
+                        setSelectedWindow(null);
+                    }}
+                    exportWindow={selectedWindow}
+                />
             </div>
         </div>
     );

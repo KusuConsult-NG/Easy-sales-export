@@ -73,7 +73,7 @@ export default function WithdrawPage() {
     // Success state
     if (success) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
                 <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-12 text-center">
                     <div className="flex justify-center mb-6">
                         <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
@@ -100,7 +100,7 @@ export default function WithdrawPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
             <div className="max-w-2xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
@@ -240,7 +240,7 @@ export default function WithdrawPage() {
                     <button
                         type="submit"
                         disabled={loading || !amountNum || !bankName || !accountNumber || !accountName}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-lg transition-all shadow-lg disabled:cursor-not-allowed"
+                        className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-lg transition-all shadow-lg disabled:cursor-not-allowed"
                     >
                         {loading ? (
                             <>

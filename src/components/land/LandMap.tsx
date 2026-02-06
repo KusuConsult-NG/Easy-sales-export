@@ -184,10 +184,10 @@ export function LandMap({
                                     {/* Status Badge */}
                                     <div className="pt-2">
                                         <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${listing.status === 'verified'
-                                                ? 'bg-green-100 text-green-800'
-                                                : listing.status === 'rejected'
-                                                    ? 'bg-red-100 text-red-800'
-                                                    : 'bg-yellow-100 text-yellow-800'
+                                            ? 'bg-green-100 text-green-800'
+                                            : listing.status === 'rejected'
+                                                ? 'bg-red-100 text-red-800'
+                                                : 'bg-yellow-100 text-yellow-800'
                                             }`}>
                                             {listing.status.replace('_', ' ').toUpperCase()}
                                         </span>
@@ -203,7 +203,7 @@ export function LandMap({
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="absolute top-4 left-4 bg-white dark:bg-slate-800 rounded-xl p-4 shadow-lg z-[1000]"
+                className="absolute top-4 left-4 bg-white dark:bg-slate-800 rounded-xl p-4 shadow-lg z-40"
             >
                 <h4 className="font-bold text-sm mb-3 text-slate-900 dark:text-white">Soil Quality</h4>
                 <div className="space-y-2">
@@ -228,7 +228,7 @@ export function LandMap({
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="absolute bottom-4 right-4 bg-white dark:bg-slate-800 rounded-xl p-4 shadow-lg z-[1000]"
+                className="absolute bottom-4 right-4 bg-white dark:bg-slate-800 rounded-xl p-4 shadow-lg z-40"
             >
                 <p className="text-2xl font-bold text-[#1358ec] mb-1">{listings.length}</p>
                 <p className="text-xs text-slate-600 dark:text-slate-400">

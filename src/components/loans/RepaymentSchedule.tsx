@@ -92,7 +92,7 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
                 </div>
                 <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
-                        className="h-full bg-gradient-to-r from-green-500 to-blue-600 rounded-full transition-all duration-300"
+                        className="h-full bg-linear-to-r from-green-500 to-blue-600 rounded-full transition-all duration-300"
                         style={{ width: `${progressPercent}%` }}
                     />
                 </div>

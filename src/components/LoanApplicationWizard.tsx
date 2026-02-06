@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowRight, ArrowLeft, Check, Calculator, FileText, Upload } from "lucide-react";
 import { calculateLoanCost, COOPERATIVE_TIERS, type CooperativeTier } from "@/lib/cooperative-tiers";
+import { logger } from "@/lib/logger";
 
 interface LoanApplicationWizardProps {
     userId: string;
@@ -46,7 +47,7 @@ export default function LoanApplicationWizard({
 
     const handleSubmit = async () => {
         // Submit loan application
-        console.log("Submitting loan:", { userId, ...formData });
+        logger.info("Submitting loan application", { userId, ...formData });
         onComplete();
     };
 

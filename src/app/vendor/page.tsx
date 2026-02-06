@@ -70,14 +70,14 @@ export default function VendorDashboardPage() {
                 {/* Quick Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <a
-                        href="/vendor/products/new"
+                        href="/vendor/overview"
                         className="bg-white dark:bg-slate-800 rounded-lg p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm"
                     >
                         <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
-                            Add New Product
+                            Vendor Overview
                         </h3>
                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                            List a new product on the marketplace
+                            View analytics and performance metrics
                         </p>
                     </a>
 
@@ -94,14 +94,14 @@ export default function VendorDashboardPage() {
                     </a>
 
                     <a
-                        href="/vendor/analytics"
+                        href="/vendor/settings"
                         className="bg-white dark:bg-slate-800 rounded-lg p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm"
                     >
                         <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
-                            Sales Analytics
+                            Vendor Settings
                         </h3>
                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                            View detailed sales reports
+                            Configure your store and preferences
                         </p>
                     </a>
                 </div>

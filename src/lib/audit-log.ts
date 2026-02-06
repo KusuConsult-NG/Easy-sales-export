@@ -1,6 +1,7 @@
 import { getFirestore, Timestamp } from 'firebase/firestore';
 import { collection, addDoc, query, where, getDocs, orderBy, limit as firestoreLimit, deleteDoc } from 'firebase/firestore';
 import app from './firebase';
+import { logger } from './logger';
 
 /**
  * Audit Log Types
@@ -124,7 +125,7 @@ export async function createAuditLog(entry: Omit<AuditLogEntry, 'timestamp' | 'i
         const docRef = await addDoc(collection(db, AUDIT_LOGS_COLLECTION), logEntry);
         return docRef.id;
     } catch (error) {
-        console.error('Failed to create audit log:', error);
+        logger.error('Failed to create audit log', error instanceof Error ? error : undefined);
         throw error;
     }
 }
@@ -173,7 +174,7 @@ export async function getAuditLogs(options: {
             ...doc.data(),
         } as AuditLogEntry));
     } catch (error) {
-        console.error('Failed to fetch audit logs:', error);
+        logger.error('Failed to fetch audit logs', error instanceof Error ? error : undefined);
         throw error;
     }
 }
@@ -201,10 +202,10 @@ export async function purgeOldAuditLogs(): Promise<number> {
             deletedCount++;
         }
 
-        console.log(`Purged ${deletedCount} audit logs older than ${retentionDays} days`);
+        logger.info(`Purged ${deletedCount} audit logs older than ${retentionDays} days`, { deletedCount, retentionDays });
         return deletedCount;
     } catch (error) {
-        console.error('Failed to purge audit logs:', error);
+        logger.error('Failed to purge audit logs', error instanceof Error ? error : undefined);
         throw error;
     }
 }

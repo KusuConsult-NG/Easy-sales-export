@@ -87,14 +87,14 @@ export default function CooperativesPage() {
                         <div className="flex gap-3">
                             <Link
                                 href="/cooperatives/contribute"
-                                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all shadow-lg flex items-center gap-2"
+                                className="px-6 py-3 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all shadow-lg flex items-center gap-2"
                             >
                                 <TrendingUp className="w-5 h-5" />
                                 Contribute
                             </Link>
                             <Link
                                 href="/cooperatives/withdraw"
-                                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all shadow-lg flex items-center gap-2"
+                                className="px-6 py-3 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all shadow-lg flex items-center gap-2"
                             >
                                 <TrendingDown className="w-5 h-5" />
                                 Withdraw
@@ -131,7 +131,7 @@ export default function CooperativesPage() {
                         {/* Enhanced Stats Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                             {/* Savings Balance */}
-                            <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-6 rounded-2xl text-white shadow-xl">
+                            <div className="bg-linear-to-br from-green-500 to-emerald-600 p-6 rounded-2xl text-white shadow-xl">
                                 <div className="flex items-center justify-between mb-4">
                                     <Wallet className="w-8 h-8" />
                                     <span className="text-xs bg-white/20 px-3 py-1 rounded-full">Active</span>
@@ -146,7 +146,7 @@ export default function CooperativesPage() {
                             </div>
 
                             {/* Total Contributions with Tier */}
-                            <div className="bg-gradient-to-br from-purple-500 to-pink-600 p-6 rounded-2xl text-white shadow-xl">
+                            <div className="bg-linear-to-br from-purple-500 to-pink-600 p-6 rounded-2xl text-white shadow-xl">
                                 <div className="flex items-center justify-between mb-4">
                                     <Award className="w-8 h-8" />
                                     <span className="text-xs bg-white/20 px-3 py-1 rounded-full font-semibold">
@@ -163,7 +163,7 @@ export default function CooperativesPage() {
                             </div>
 
                             {/* Loan Balance */}
-                            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-6 rounded-2xl text-white shadow-xl">
+                            <div className="bg-linear-to-br from-blue-500 to-indigo-600 p-6 rounded-2xl text-white shadow-xl">
                                 <div className="flex items-center justify-between mb-4">
                                     <DollarSign className="w-8 h-8" />
                                     {membership.loanBalance > 0 && (
@@ -182,7 +182,7 @@ export default function CooperativesPage() {
                             {/* Cooperative Info */}
                             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+                                    <div className="w-12 h-12 bg-linear-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
                                         <Users className="w-6 h-6 text-white" />
                                     </div>
                                     <div>
@@ -383,14 +383,14 @@ export default function CooperativesPage() {
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <Link
                                 href="/cooperatives/contribute"
-                                className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all shadow-lg"
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-lg transition-all shadow-lg"
                             >
                                 <TrendingUp className="w-5 h-5" />
                                 Make Contribution
                             </Link>
                             <Link
                                 href="/cooperatives/withdraw"
-                                className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg transition-all shadow-lg"
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-lg transition-all shadow-lg"
                             >
                                 <TrendingDown className="w-5 h-5" />
                                 Request Withdrawal

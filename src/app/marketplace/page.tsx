@@ -408,7 +408,15 @@ export default function MarketplacePage() {
                                                 {formatCurrency(cartTotal)}
                                             </span>
                                         </div>
-                                        <button className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors">
+                                        <button
+                                            onClick={() => {
+                                                // Save cart to localStorage for checkout page
+                                                localStorage.setItem("marketplace_cart", JSON.stringify(cart));
+                                                // Navigate to checkout
+                                                window.location.href = "/marketplace/checkout";
+                                            }}
+                                            className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors"
+                                        >
                                             Proceed to Checkout
                                         </button>
                                         <p className="text-xs text-center text-slate-500 dark:text-slate-400">

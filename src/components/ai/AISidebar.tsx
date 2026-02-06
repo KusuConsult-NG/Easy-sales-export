@@ -113,7 +113,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setIsOpen(true)}
-                    className="fixed bottom-8 right-8 w-16 h-16 bg-gradient-to-br from-[#1358ec] to-[#0d47b8] text-white rounded-full shadow-2xl flex items-center justify-center z-50 hover:shadow-[#1358ec]/50 transition-shadow"
+                    className="fixed bottom-8 right-8 w-16 h-16 bg-linear-to-br from-[#1358ec] to-[#0d47b8] text-white rounded-full shadow-2xl flex items-center justify-center z-50 hover:shadow-[#1358ec]/50 transition-shadow"
                 >
                     <Sparkles className="w-7 h-7" />
                 </motion.button>
@@ -141,7 +141,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                             className="fixed top-0 right-0 h-full w-full md:w-[480px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col"
                         >
                             {/* Header */}
-                            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-gradient-to-r from-[#1358ec] to-[#0d47b8] text-white">
+                            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-linear-to-r from-[#1358ec] to-[#0d47b8] text-white">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
                                         <Sparkles className="w-6 h-6" />
@@ -187,7 +187,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                             <div className="flex-1 overflow-y-auto p-6 space-y-4">
                                 {messages.length === 0 && (
                                     <div className="text-center py-12">
-                                        <div className="w-20 h-20 bg-gradient-to-br from-[#1358ec]/10 to-[#0d47b8]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <div className="w-20 h-20 bg-linear-to-br from-[#1358ec]/10 to-[#0d47b8]/10 rounded-full flex items-center justify-center mx-auto mb-4">
                                             <MessageCircle className="w-10 h-10 text-[#1358ec]" />
                                         </div>
                                         <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
@@ -271,7 +271,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                                     <button
                                         type="submit"
                                         disabled={!inputMessage.trim() || loading}
-                                        className="w-12 h-12 bg-[#1358ec] text-white rounded-xl flex items-center justify-center hover:bg-[#1046c7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                        className="w-12 h-12 bg-[#1358ec] text-white rounded-xl flex items-center justify-center hover:bg-[#1046c7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                                     >
                                         <Send className="w-5 h-5" />
                                     </button>

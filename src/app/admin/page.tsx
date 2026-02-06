@@ -133,18 +133,18 @@ export default function AdminDashboardPage() {
                                     >
                                         <Icon
                                             className={`w-6 h-6 ${stat.color === "blue"
-                                                    ? "text-blue-600"
-                                                    : stat.color === "emerald"
-                                                        ? "text-emerald-600"
-                                                        : stat.color === "purple"
-                                                            ? "text-purple-600"
-                                                            : stat.color === "amber"
-                                                                ? "text-amber-600"
-                                                                : stat.color === "indigo"
-                                                                    ? "text-indigo-600"
-                                                                    : stat.color === "red"
-                                                                        ? "text-red-600"
-                                                                        : "text-cyan-600"
+                                                ? "text-blue-600"
+                                                : stat.color === "emerald"
+                                                    ? "text-emerald-600"
+                                                    : stat.color === "purple"
+                                                        ? "text-purple-600"
+                                                        : stat.color === "amber"
+                                                            ? "text-amber-600"
+                                                            : stat.color === "indigo"
+                                                                ? "text-indigo-600"
+                                                                : stat.color === "red"
+                                                                    ? "text-red-600"
+                                                                    : "text-cyan-600"
                                                 }`}
                                         />
                                     </div>
@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <a
                         href="/admin/loans"
                         className="bg-white dark:bg-slate-800 rounded-lg p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm"
@@ -187,30 +187,6 @@ export default function AdminDashboardPage() {
                         </h3>
                         <p className="text-sm text-slate-600 dark:text-slate-400">
                             Review pending submissions
-                        </p>
-                    </a>
-
-                    <a
-                        href="/admin/escrow"
-                        className="bg-white dark:bg-slate-800 rounded-lg p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm"
-                    >
-                        <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
-                            Manage Escrows
-                        </h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {stats.pendingEscrows} awaiting release
-                        </p>
-                    </a>
-
-                    <a
-                        href="/admin/cms"
-                        className="bg-white dark:bg-slate-800 rounded-lg p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm"
-                    >
-                        <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
-                            Content Management
-                        </h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                            Create announcements & banners
                         </p>
                     </a>
                 </div>

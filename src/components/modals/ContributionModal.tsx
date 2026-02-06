@@ -43,7 +43,7 @@ export default function ContributionModal({
                 {/* Error Display */}
                 {state.error && !state.success && (
                     <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                        <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                         <p className="text-red-300 text-sm">{state.error}</p>
                     </div>
                 )}
@@ -51,7 +51,7 @@ export default function ContributionModal({
                 {/* Success Display */}
                 {state.success && state.message && (
                     <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                        <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
                         <p className="text-green-300 text-sm font-medium">{state.message}</p>
                     </div>
                 )}

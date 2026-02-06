@@ -116,10 +116,10 @@ export default function SessionActivityTracker() {
     if (!showWarning) return null;
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6 text-white">
+                <div className="bg-linear-to-r from-amber-500 to-orange-500 p-6 text-white">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">

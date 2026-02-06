@@ -71,7 +71,7 @@ export default function ContributePage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
@@ -151,7 +151,7 @@ export default function ContributePage() {
                         <button
                             onClick={handlePayment}
                             disabled={loading || !amountNum || amountNum < 1000}
-                            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-lg transition-all shadow-lg disabled:cursor-not-allowed"
+                            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-lg transition-all shadow-lg disabled:cursor-not-allowed"
                         >
                             {loading ? (
                                 <>
@@ -168,7 +168,7 @@ export default function ContributePage() {
 
                         {/* Security Notice */}
                         <div className="mt-4 flex items-start gap-2 text-sm text-slate-500 dark:text-slate-400">
-                            <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <Shield className="w-4 h-4 mt-0.5 shrink-0" />
                             <p>Secure payment powered by Paystack. Your payment information is encrypted.</p>
                         </div>
                     </div>
@@ -176,7 +176,7 @@ export default function ContributePage() {
                     {/* Right: Tier Preview */}
                     <div className="space-y-6">
                         {tierPreview ? (
-                            <div className={`bg-gradient-to-br ${tierPreview.color} rounded-xl shadow-lg p-8 text-white`}>
+                            <div className={`bg-linear-to-br ${tierPreview.color} rounded-xl shadow-lg p-8 text-white`}>
                                 <div className="flex items-center gap-2 mb-4">
                                     <TrendingUp className="w-6 h-6" />
                                     <h3 className="text-2xl font-bold">{tierPreview.tier} Tier</h3>
@@ -197,7 +197,7 @@ export default function ContributePage() {
                                     <ul className="space-y-2">
                                         {tierPreview.benefits.map((benefit, index) => (
                                             <li key={index} className="flex items-start gap-2">
-                                                <Zap className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                                <Zap className="w-4 h-4 mt-0.5 shrink-0" />
                                                 <span className="text-sm text-white/90">{benefit}</span>
                                             </li>
                                         ))}

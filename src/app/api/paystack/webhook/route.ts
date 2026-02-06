@@ -7,6 +7,7 @@ import { calculateUserTier } from '@/lib/cooperative-tiers';
 import { createAuditLog } from '@/lib/audit-log';
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { logger } from '@/lib/logger';
 
 /**
  * Paystack Webhook Handler
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
         const isValid = verifyPaystackWebhook(body, signature);
 
         if (!isValid) {
-            console.error('Invalid Paystack webhook signature');
+            logger.warn('Invalid Paystack webhook signature');
             return NextResponse.json(
                 { error: 'Invalid signature' },
                 { status: 401 }
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
         // Parse webhook payload
         const event = JSON.parse(body);
 
-        console.log('Paystack webhook received:', {
+        logger.info('Paystack webhook received', {
             event: event.event,
             reference: event.data?.reference,
         });
@@ -64,17 +65,17 @@ export async function POST(request: NextRequest) {
                 break;
 
             case 'charge.failed':
-                console.log('Payment failed:', event.data.reference);
+                logger.warn('Payment failed', { reference: event.data.reference });
                 // Could update a pending_payments collection here
                 break;
 
             default:
-                console.log('Unhandled webhook event:', event.event);
+                logger.debug('Unhandled webhook event', { event: event.event });
         }
 
         return NextResponse.json({ received: true });
     } catch (error: any) {
-        console.error('Webhook processing error:', error);
+        logger.error('Webhook processing error', error);
         return NextResponse.json(
             { error: 'Webhook processing failed' },
             { status: 500 }
@@ -95,7 +96,7 @@ async function handleSuccessfulPayment(paymentData: any) {
         const contributionType = metadata?.type || 'contribution';
 
         if (!userId) {
-            console.error('Missing userId in payment metadata:', reference);
+            logger.error('Missing userId in payment metadata', undefined, { reference });
             return;
         }
 
@@ -103,7 +104,7 @@ async function handleSuccessfulPayment(paymentData: any) {
         const verification = await verifyPaystackPayment(reference);
 
         if (verification.data.status !== 'success') {
-            console.error('Payment verification failed:', reference);
+            logger.error('Payment verification failed', undefined, { reference });
             return;
         }
 
@@ -115,7 +116,7 @@ async function handleSuccessfulPayment(paymentData: any) {
 
         if (!membershipDoc.exists()) {
             // Create new membership if doesn't exist
-            console.error('Membership not found for user:', userId);
+            logger.error('Membership not found for user', undefined, { userId });
             return;
         }
 
@@ -149,7 +150,7 @@ async function handleSuccessfulPayment(paymentData: any) {
             details: `Contribution of ₦${amountInNaira.toLocaleString()} processed successfully`,
         });
 
-        console.log('Payment processed successfully:', {
+        logger.info('Payment processed successfully', {
             reference,
             userId,
             amount: amountInNaira,
@@ -157,7 +158,7 @@ async function handleSuccessfulPayment(paymentData: any) {
         });
 
     } catch (error) {
-        console.error('Error processing successful payment:', error);
+        logger.error('Error processing successful payment', error instanceof Error ? error : undefined);
         throw error;
     }
 }
