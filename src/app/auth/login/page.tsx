@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,6 +8,7 @@ import Image from "next/image";
 import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";
 import { loginAction } from "@/app/actions/auth";
+import toast from "react-hot-toast";
 
 const initialState = { error: null, success: false };
 
@@ -23,9 +24,16 @@ export default function LoginPage() {
     const router = useRouter();
 
     // Handle successful login
-    if (state.success && !isPending) {
-        router.push("/dashboard");
-    }
+    useEffect(() => {
+        if (state.success && !isPending) {
+            toast.success("Login successful! Redirecting to dashboard...");
+            setTimeout(() => {
+                router.push("/dashboard");
+            }, 1000);
+        } else if (state.error && !isPending) {
+            toast.error(state.error);
+        }
+    }, [state.success, state.error, isPending, router]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
