@@ -19,6 +19,11 @@ export interface User {
     cooperativeId?: string;
     cooperativeMembershipId?: string;
     sellerVerificationStatus?: "pending" | "approved" | "rejected";
+    // MFA fields
+    mfaEnabled?: boolean;
+    totpSecret?: string; // Encrypted TOTP secret
+    mfaRecoveryCodes?: string[]; // Encrypted recovery codes
+    onboardingCompleted?: boolean; // For onboarding tour
     createdAt: Date;
     updatedAt: Date;
 }

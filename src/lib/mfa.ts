@@ -206,3 +206,141 @@ export async function verifyBackupCode(userId: string, code: string): Promise<{ 
         return { success: false, error: 'Verification failed' };
     }
 }
+
+/**
+ * TOTP Authenticator App Functions
+ */
+
+import { createHmac } from 'crypto';
+import QRCode from 'qrcode';
+
+/**
+ * Generate TOTP secret for authenticator app
+ */
+export function generateTOTPSecret(): string {
+    // Generate 20-byte random secret and base32 encode
+    const buffer = Buffer.from(Array.from({ length: 20 }, () => Math.floor(Math.random() * 256)));
+    return base32Encode(buffer);
+}
+
+/**
+ * Base32 encoding for TOTP secret
+ */
+function base32Encode(buffer: Buffer): string {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    let output = '';
+
+    for (let i = 0; i < buffer.length; i++) {
+        value = (value << 8) | buffer[i];
+        bits += 8;
+
+        while (bits >= 5) {
+            output += alphabet[(value >>> (bits - 5)) & 31];
+            bits -= 5;
+        }
+    }
+
+    if (bits > 0) {
+        output += alphabet[(value << (5 - bits)) & 31];
+    }
+
+    return output;
+}
+
+/**
+ * Base32 decoding for TOTP
+ */
+function base32Decode(base32: string): Buffer {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    const cleanedInput = base32.toUpperCase().replace(/=+$/, '');
+    let bits = 0;
+    let value = 0;
+    const output: number[] = [];
+
+    for (let i = 0; i < cleanedInput.length; i++) {
+        const idx = alphabet.indexOf(cleanedInput[i]);
+        if (idx === -1) continue;
+
+        value = (value << 5) | idx;
+        bits += 5;
+
+        if (bits >= 8) {
+            output.push((value >>> (bits - 8)) & 255);
+            bits -= 8;
+        }
+    }
+
+    return Buffer.from(output);
+}
+
+/**
+ * Generate TOTP token for a given window
+ */
+function generateTOTP(secret: string, window = 0): string {
+    const epoch = Math.floor(Date.now() / 1000 / 30) + window;
+    const time = Buffer.alloc(8);
+    time.writeBigUInt64BE(BigInt(epoch));
+
+    const key = base32Decode(secret);
+    const hmac = createHmac('sha1', key);
+    hmac.update(time);
+    const hash = hmac.digest();
+
+    const offset = hash[hash.length - 1] & 0xf;
+    const binary =
+        ((hash[offset] & 0x7f) << 24) |
+        ((hash[offset + 1] & 0xff) << 16) |
+        ((hash[offset + 2] & 0xff) << 8) |
+        (hash[offset + 3] & 0xff);
+
+    const otp = binary % 1000000;
+    return otp.toString().padStart(6, '0');
+}
+
+/**
+ * Generate QR code for authenticator app setup
+ */
+export async function generateTOTPQRCode(email: string, secret: string): Promise<string> {
+    const otpauth = `otpauth://totp/Easy%20Sales%20Export:${encodeURIComponent(email)}?secret=${secret}&issuer=Easy%20Sales%20Export`;
+    return await QRCode.toDataURL(otpauth);
+}
+
+/**
+ * Verify TOTP token from authenticator app
+ */
+export function verifyTOTPToken(token: string, secret: string): boolean {
+    try {
+        // Check current window and ±1 for clock skew tolerance
+        for (let window = -1; window <= 1; window++) {
+            const expected = generateTOTP(secret, window);
+            if (token === expected) {
+                return true;
+            }
+        }
+        return false;
+    } catch (error) {
+        return false;
+    }
+}
+
+/**
+ * Check if action requires MFA
+ */
+export function requiresMFA(action: string): boolean {
+    const sensitiveActions = [
+        'loan_application',
+        'loan_approval',
+        'withdrawal',
+        'fund_release',
+        'admin_action',
+        'role_change',
+        'land_approval',
+        'dispute_resolution',
+        'escrow_release',
+        'seller_approval',
+    ];
+
+    return sensitiveActions.includes(action);
+}
