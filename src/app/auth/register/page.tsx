@@ -130,7 +130,7 @@ export default function RegisterPage() {
             <div className="relative w-full max-w-2xl my-8">
                 {/* Logo & Title */}
                 <div className="text-center mb-8">
-                    <div className="flex items-center justify-center gap-3 mb-4">
+                    <Link href="/" className="flex items-center justify-center gap-3 mb-4 hover:opacity-80 transition-opacity">
                         <Image
                             src="/images/logo.jpg"
                             alt={COMPANY_INFO.name}
@@ -142,7 +142,7 @@ export default function RegisterPage() {
                             <h2 className="text-xl font-bold text-white">{COMPANY_INFO.name}</h2>
                             <p className="text-sm text-blue-300">{COMPANY_INFO.tagline}</p>
                         </div>
-                    </div>
+                    </Link>
                     <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
                     <p className="text-blue-200">Join Nigeria's leading ag-export platform</p>
                 </div>
