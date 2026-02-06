@@ -37,6 +37,13 @@ export async function loginAction(prevState: any, formData: FormData) {
         return { error: "", success: true };
 
     } catch (error) {
+        // Re-throw redirect errors to allow Next.js to handle navigation
+        if (error && typeof error === 'object' && 'digest' in error &&
+            typeof (error as any).digest === 'string' &&
+            (error as any).digest.startsWith('NEXT_REDIRECT')) {
+            throw error;
+        }
+
         logger.error("Login error", error);
 
         if (error instanceof AuthError) {
@@ -113,6 +120,13 @@ export async function registerAction(prevState: any, formData: FormData) {
 
         return { error: "", success: true };
     } catch (error: any) {
+        // Re-throw redirect errors to allow Next.js to handle navigation
+        if (error && typeof error === 'object' && 'digest' in error &&
+            typeof error.digest === 'string' &&
+            error.digest.startsWith('NEXT_REDIRECT')) {
+            throw error;
+        }
+
         logger.error("Registration error", error);
 
         // Handle Firebase auth errors
