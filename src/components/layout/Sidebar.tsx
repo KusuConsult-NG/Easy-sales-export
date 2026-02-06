@@ -32,9 +32,12 @@ const navigationItems = [
 export function Sidebar() {
     const pathname = usePathname();
     const [darkMode, setDarkMode] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
     // Initialize dark mode on mount
     useEffect(() => {
+        setMounted(true);
+
         // Check localStorage first, then system preference
         const savedTheme = localStorage.getItem('theme');
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -120,8 +123,14 @@ export function Sidebar() {
                 <button
                     onClick={toggleDarkMode}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    aria-label="Toggle dark mode"
                 >
-                    {darkMode ? (
+                    {!mounted ? (
+                        <>
+                            <div className="w-5 h-5" />
+                            <span>Theme</span>
+                        </>
+                    ) : darkMode ? (
                         <>
                             <Sun className="w-5 h-5" />
                             <span>Light Mode</span>
