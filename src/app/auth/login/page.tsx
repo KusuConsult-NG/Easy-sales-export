@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useActionState } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from "lucide-react";
@@ -15,8 +13,6 @@ import LoadingButton from "@/components/ui/LoadingButton";
 const initialState = { error: "", success: false };
 
 export default function LoginPage() {
-    const router = useRouter();
-    const { data: session, status } = useSession();
     const { showToast } = useToast();
     const [formData, setFormData] = useState({
         email: "",
@@ -26,13 +22,6 @@ export default function LoginPage() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showPassword, setShowPassword] = useState(false);
     const [state, formAction, isPending] = useActionState(loginAction, initialState);
-
-    // Redirect authenticated users to dashboard
-    useEffect(() => {
-        if (status === "authenticated" && session) {
-            router.push("/dashboard");
-        }
-    }, [status, session, router]);
 
     // DO NOT MODIFY – AUTH STABILITY
     // Handle errors only - success redirects server-side
