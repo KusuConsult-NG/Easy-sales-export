@@ -38,6 +38,8 @@ export async function loginAction(prevState: any, formData: FormData) {
         // DO NOT MODIFY – AUTH STABILITY
         // Explicit redirect required for form actions
         redirect("/dashboard");
+        return { error: "", success: true }; // Defensive - redirect throws, but just in case
+
 
     } catch (error) {
         // DO NOT MODIFY – AUTH STABILITY  
