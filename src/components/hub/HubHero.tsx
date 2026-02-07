@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 export default function HubHero() {
@@ -18,6 +19,17 @@ export default function HubHero() {
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold mb-8 animate-[slideInDown_0.6s_ease-out]">
                     <Sparkles className="w-4 h-4" />
                     Empowering Agricultural Commerce
+                </div>
+
+                {/* Logo */}
+                <div className="flex justify-center mb-8 animate-[slideInDown_0.5s_ease-out]">                    <Image
+                    src="/images/logo.jpg"
+                    alt="Easy Sales Export Logo"
+                    width={120}
+                    height={120}
+                    className="rounded-full border-4 border-white/30 shadow-2xl"
+                    priority
+                />
                 </div>
 
                 {/* Main Title */}
@@ -46,13 +58,6 @@ export default function HubHero() {
                     >
                         Start Learning
                     </Link>
-                </div>
-
-                {/* Scroll Indicator */}
-                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-                    <div className="w-6 h-10 border-2 border-white/50 rounded-full flex items-start justify-center p-2">
-                        <div className="w-1.5 h-3 bg-white/50 rounded-full" />
-                    </div>
                 </div>
             </div>
         </div>

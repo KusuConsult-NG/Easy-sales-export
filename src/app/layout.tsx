@@ -20,6 +20,10 @@ export const metadata: Metadata = {
     "hibiscus",
     "export platform",
   ],
+  icons: {
+    icon: "/images/logo.jpg",
+    apple: "/images/logo.jpg",
+  },
 };
 
 export default function RootLayout({
