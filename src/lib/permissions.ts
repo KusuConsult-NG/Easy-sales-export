@@ -11,7 +11,7 @@ import type { UserRole } from "./types/roles";
  * Maps routes to required roles (user must have AT LEAST ONE of these roles)
  */
 export const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
-    // Dashboard - all authenticated users
+    // Dashboard - accessible to all authenticated users with any role
     "/dashboard": ["general_user", "buyer", "seller", "land_owner", "farmer", "investor", "export_participant", "cooperative_member", "wave_participant", "field_officer", "admin", "super_admin"],
 
     // Marketplace
