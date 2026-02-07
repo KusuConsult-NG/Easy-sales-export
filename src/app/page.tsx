@@ -70,7 +70,7 @@ export default function HubPage() {
             title: "Savings",
             description: "Flexible and fixed savings plans with competitive returns for financial growth",
             icon: Wallet,
-            href: "/savings",
+            href: "/cooperatives/my-savings",
             gradient: "from-teal-500 to-green-500",
             stats: "Up to 18% Annual Returns",
         },
@@ -229,7 +229,7 @@ export default function HubPage() {
                                     </Link>
                                 </li>
                                 <li>
-                                    <Link href="/savings" className="hover:text-white transition-colors">
+                                    <Link href="/cooperatives/my-savings" className="hover:text-white transition-colors">
                                         Savings
                                     </Link>
                                 </li>
@@ -256,18 +256,8 @@ export default function HubPage() {
                             </ul>
                         </div>
                         <div>
-                            <h4 className="text-white font-semibold mb-4">Company</h4>
+                            <h4 className="text-white font-semibold mb-4">Legal</h4>
                             <ul className="space-y-2 text-sm">
-                                <li>
-                                    <Link href="/about" className="hover:text-white transition-colors">
-                                        About Us
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/contact" className="hover:text-white transition-colors">
-                                        Contact
-                                    </Link>
-                                </li>
                                 <li>
                                     <Link href="/terms" className="hover:text-white transition-colors">
                                         Terms & Conditions
@@ -276,6 +266,16 @@ export default function HubPage() {
                                 <li>
                                     <Link href="/privacy" className="hover:text-white transition-colors">
                                         Privacy Policy
+                                    </Link>
+                                </li>
+                                <li>
+                                    <Link href="/auth/register" className="hover:text-white transition-colors">
+                                        Create Account
+                                    </Link>
+                                </li>
+                                <li>
+                                    <Link href="/auth/login" className="hover:text-white transition-colors">
+                                        Login
                                     </Link>
                                 </li>
                             </ul>

@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Users, Shield, DollarSign, CheckCircle, Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function CooperativeRegisterPage() {
     const router = useRouter();
+    const { showToast } = useToast();
     const [step, setStep] = useState(1); // 1: Form, 2: Tier Selection, 3: Payment
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -77,13 +78,13 @@ export default function CooperativeRegisterPage() {
             const data = await response.json();
 
             if (data.success && data.paymentUrl) {
-                toast.success("Redirecting to payment...");
+                showToast("Redirecting to payment...", "success");
                 window.location.href = data.paymentUrl;
             } else {
-                toast.error(data.error || "Registration failed");
+                showToast(data.error || "Registration failed", "error");
             }
         } catch (error) {
-            toast.error("An error occurred. Please try again.");
+            showToast("An error occurred. Please try again.", "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -386,8 +387,8 @@ export default function CooperativeRegisterPage() {
                             <button
                                 onClick={() => setFormData({ ...formData, tier: "basic" })}
                                 className={`p-6 rounded-2xl border-2 transition ${formData.tier === "basic"
-                                        ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                    ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
                                     }`}
                             >
                                 <div className="flex items-start justify-between mb-4">
@@ -412,8 +413,8 @@ export default function CooperativeRegisterPage() {
                             <button
                                 onClick={() => setFormData({ ...formData, tier: "premium" })}
                                 className={`p-6 rounded-2xl border-2 transition ${formData.tier === "premium"
-                                        ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                    ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
                                     }`}
                             >
                                 <div className="flex items-start justify-between mb-4">

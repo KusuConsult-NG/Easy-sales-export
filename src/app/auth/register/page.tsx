@@ -20,11 +20,12 @@ import {
 } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";
 import { registerAction } from "@/app/actions/auth";
-import toast from "react-hot-toast";
+import { useToast } from "@/contexts/ToastContext";
 
 const initialState = { error: "", success: false };
 
 export default function RegisterPage() {
+    const { showToast } = useToast();
     const [formData, setFormData] = useState({
         fullName: "",
         email: "",
@@ -56,7 +57,7 @@ export default function RegisterPage() {
         if (status === "authenticated" && session && !hasRedirected.current) {
             hasRedirected.current = true;
             console.log("✅ REGISTRATION SUCCESS → SESSION ESTABLISHED → EXECUTING REDIRECT");
-            toast.success("Registration successful! Redirecting to dashboard...");
+            showToast("Registration successful! Redirecting to dashboard...", "success");
             router.push("/dashboard");
         }
     }, [status, session, router]);
@@ -65,11 +66,11 @@ export default function RegisterPage() {
     useEffect(() => {
         if (state.error && !isPending) {
             console.log("❌ REGISTRATION FAILED:", state.error);
-            toast.error(state.error);
+            showToast(state.error, "error");
         } else if (state.success && !isPending) {
             console.log("✅ REGISTRATION ACTION RETURNED SUCCESS (waiting for session)");
         }
-    }, [state.error, state.success, isPending]);
+    }, [state.error, state.success, isPending, showToast]);
 
     // Calculate password strength
     useEffect(() => {

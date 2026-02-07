@@ -7,12 +7,13 @@ import Image from "next/image";
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";
 import { loginAction } from "@/app/actions/auth";
-import toast from "react-hot-toast";
+import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
 
 const initialState = { error: "", success: false };
 
 export default function LoginPage() {
+    const { showToast } = useToast();
     const [formData, setFormData] = useState({
         email: "",
         password: "",
@@ -26,9 +27,9 @@ export default function LoginPage() {
     // Handle errors only - success redirects server-side
     useEffect(() => {
         if (state.error && !isPending) {
-            toast.error(state.error);
+            showToast(state.error, "error");
         }
-    }, [state.error, isPending]);
+    }, [state.error, isPending, showToast]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;

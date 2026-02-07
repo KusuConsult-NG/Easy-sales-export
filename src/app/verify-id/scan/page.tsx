@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Camera, CheckCircle, XCircle, Loader2, User, Shield } from "lucide-react";
 import { BrowserQRCodeReader } from "@zxing/library";
-import toast from "react-hot-toast";
+import { useToast } from "@/contexts/ToastContext";
 
 interface VerificationResult {
     valid: boolean;
@@ -18,6 +18,7 @@ interface VerificationResult {
 }
 
 export default function VerifyIDPage() {
+    const { showToast } = useToast();
     const [isScanning, setIsScanning] = useState(false);
     const [result, setResult] = useState<VerificationResult | null>(null);
     const [isVerifying, setIsVerifying] = useState(false);
@@ -31,7 +32,7 @@ export default function VerifyIDPage() {
             const videoInputDevices = await codeReader.listVideoInputDevices();
 
             if (videoInputDevices.length === 0) {
-                toast.error("No camera found");
+                showToast("No camera found", "error");
                 setIsScanning(false);
                 return;
             }
@@ -56,7 +57,7 @@ export default function VerifyIDPage() {
             );
         } catch (error) {
             console.error("QR Scanner error:", error);
-            toast.error("Failed to start camera");
+            showToast("Failed to start camera", "error");
             setIsScanning(false);
         }
     };
@@ -78,20 +79,20 @@ export default function VerifyIDPage() {
                     valid: true,
                     user: data.user,
                 });
-                toast.success("ID verified successfully!");
+                showToast("ID verified successfully!", "success");
             } else {
                 setResult({
                     valid: false,
                     error: data.error || "Invalid QR code",
                 });
-                toast.error(data.error || "Verification failed");
+                showToast(data.error || "Verification failed", "error");
             }
         } catch (error) {
             setResult({
                 valid: false,
                 error: "Verification failed. Please try again.",
             });
-            toast.error("Verification failed");
+            showToast("Verification failed", "error");
         } finally {
             setIsVerifying(false);
         }

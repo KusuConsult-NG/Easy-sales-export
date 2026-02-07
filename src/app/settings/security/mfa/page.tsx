@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { Shield, Key, Download, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
-import toast from "react-hot-toast";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function MFASetupPage() {
+    const { showToast } = useToast();
     const [step, setStep] = useState<"setup" | "verify" | "complete">("setup");
     const [qrCode, setQrCode] = useState<string>("");
     const [secret, setSecret] = useState<string>("");
@@ -42,12 +43,12 @@ export default function MFASetupPage() {
                 setSecret(data.secret);
                 setRecoveryCodes(data.recoveryCodes);
                 setStep("verify");
-                toast.success("Scan QR code with authenticator app");
+                showToast("Scan QR code with authenticator app", "success");
             } else {
-                toast.error(data.error || "Setup failed");
+                showToast(data.error || "Setup failed", "error");
             }
         } catch (error) {
-            toast.error("An error occurred");
+            showToast("An error occurred", "error");
         } finally {
             setIsLoading(false);
         }
@@ -55,7 +56,7 @@ export default function MFASetupPage() {
 
     const handleVerify = async () => {
         if (verificationCode.length !== 6) {
-            toast.error("Please enter a 6-digit code");
+            showToast("Please enter a 6-digit code", "error");
             return;
         }
 
@@ -72,12 +73,12 @@ export default function MFASetupPage() {
             if (data.success) {
                 setStep("complete");
                 setMfaEnabled(true);
-                toast.success("MFA enabled successfully!");
+                showToast("MFA enabled successfully!", "success");
             } else {
-                toast.error(data.error || "Verification failed");
+                showToast(data.error || "Verification failed", "error");
             }
         } catch (error) {
-            toast.error("Verification failed");
+            showToast("Verification failed", "error");
         } finally {
             setIsLoading(false);
         }
@@ -99,12 +100,12 @@ export default function MFASetupPage() {
             if (data.success) {
                 setMfaEnabled(false);
                 setStep("setup");
-                toast.success("MFA disabled");
+                showToast("MFA disabled", "success");
             } else {
-                toast.error(data.error || "Failed to disable");
+                showToast(data.error || "Failed to disable", "error");
             }
         } catch (error) {
-            toast.error("Failed to disable MFA");
+            showToast("Failed to disable MFA", "error");
         } finally {
             setIsLoading(false);
         }

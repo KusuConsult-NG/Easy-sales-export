@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Upload, Download, Trash2, FileText, Loader2, Plus } from "lucide-react";
 import { useSession } from "next-auth/react";
-import toast from "react-hot-toast";
+import { useToast } from "@/contexts/ToastContext";
 
 interface Certificate {
     id: string;
@@ -17,6 +17,7 @@ interface Certificate {
 
 export default function CertificatesPage() {
     const { data: session } = useSession();
+    const { showToast } = useToast();
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
@@ -47,13 +48,13 @@ export default function CertificatesPage() {
         // Validate file type
         const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
         if (!allowedTypes.includes(file.type)) {
-            toast.error("Only PDF and images are allowed");
+            showToast("Only PDF and images are allowed", "error");
             return;
         }
 
         // Validate file size (max 5MB)
         if (file.size > 5 * 1024 * 1024) {
-            toast.error("File size must be less than 5MB");
+            showToast("File size must be less than 5MB", "error");
             return;
         }
 
@@ -71,13 +72,13 @@ export default function CertificatesPage() {
             const data = await response.json();
 
             if (data.success) {
-                toast.success("Certificate uploaded successfully");
+                showToast("Certificate uploaded successfully", "success");
                 fetchCertificates();
             } else {
-                toast.error(data.error || "Upload failed");
+                showToast(data.error || "Upload failed", "error");
             }
         } catch (error) {
-            toast.error("Upload failed");
+            showToast("Upload failed", "error");
         } finally {
             setIsUploading(false);
         }
@@ -94,7 +95,7 @@ export default function CertificatesPage() {
             a.click();
             window.URL.revokeObjectURL(url);
         } catch (error) {
-            toast.error("Download failed");
+            showToast("Download failed", "error");
         }
     };
 
@@ -111,13 +112,13 @@ export default function CertificatesPage() {
             const data = await response.json();
 
             if (data.success) {
-                toast.success("Certificate deleted");
+                showToast("Certificate deleted", "success");
                 fetchCertificates();
             } else {
-                toast.error("Delete failed");
+                showToast("Delete failed", "error");
             }
         } catch (error) {
-            toast.error("Delete failed");
+            showToast("Delete failed", "error");
         }
     };
 
