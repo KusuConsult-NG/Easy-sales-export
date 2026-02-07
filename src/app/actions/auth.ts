@@ -118,13 +118,18 @@ export async function registerAction(prevState: any, formData: FormData) {
             updatedAt: serverTimestamp(),
         });
 
-        // Auto sign-in after registration (client will handle redirect)
+
+        // REGISTRATION MUST ESTABLISH SESSION — DO NOT MODIFY
+        // Auto sign-in after registration and redirect to dashboard
+        // redirect:false prevents session from being established on client
+        // We MUST redirect to allow session cookie to be set
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
-            redirect: false,
+            redirectTo: "/dashboard",
         });
 
+        // This line never executes because signIn redirects
         return { error: "", success: true };
     } catch (error: any) {
         // Re-throw redirect errors to allow Next.js to handle navigation
