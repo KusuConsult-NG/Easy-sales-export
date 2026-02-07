@@ -84,8 +84,9 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // NEW: Multi-role authorization check
-    if (session && session.user.roles) {
+    // AUTH REDIRECT — DO NOT MODIFY WITHOUT FULL REVIEW
+    // Multi-role authorization check - only enforce if user HAS roles
+    if (session && session.user.roles && Array.isArray(session.user.roles) && session.user.roles.length > 0) {
         const userRoles = session.user.roles as UserRole[];
 
         // CRITICAL: Prevent infinite redirect loop
@@ -104,6 +105,8 @@ export async function middleware(request: NextRequest) {
             }
         }
     }
+    // If user has no roles or roles is undefined/empty, allow request to proceed
+    // User is authenticated (has session), so they can access the app
 
     // Handle MFA enforcement for sensitive routes
     const isMFAProtectedRoute = mfaProtectedRoutes.some((route) =>
