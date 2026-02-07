@@ -101,13 +101,29 @@ export async function registerAction(prevState: any, formData: FormData) {
             validatedData.password
         );
 
+
         // Create Firestore user profile
-        // Assign only the role selected by user (per PRD)
+        // Assign comprehensive role set based on account type
+        const rolesByAccountType: Record<LegacyRole, UserRole[]> = {
+            // Member: Access to cooperatives, academy, marketplace
+            "member": ["general_user", "cooperative_member", "buyer"],
+
+            // Exporter: Full export + marketplace access
+            "exporter": ["general_user", "export_participant", "seller", "buyer"],
+
+            // Vendor: Marketplace seller with buying capability
+            "vendor": ["general_user", "seller", "buyer"],
+
+            // Admin roles (for completeness)
+            "admin": ["general_user", "admin"],
+            "super_admin": ["general_user", "admin", "super_admin"],
+        };
+
         const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = {
             uid: userCredential.user.uid,
             fullName: validatedData.fullName,
             email: validatedData.email,
-            roles: [LEGACY_ROLE_MAP[role as LegacyRole]],
+            roles: rolesByAccountType[role as LegacyRole],
             verified: true, // No email verification implemented
             gender: gender as "male" | "female" | undefined,
         };
