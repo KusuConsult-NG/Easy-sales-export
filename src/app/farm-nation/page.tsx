@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
-import { MapPin, DollarSign, Maximize, Heart, Filter, Lock, TrendingUp } from "lucide-react";
+import { MapPin, DollarSign, Maximize, Heart, Filter, Lock, TrendingUp, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getUserTierAction } from "@/app/actions/cooperative";
 import { useRouter } from "next/navigation";
+import { getPropertiesAction } from "@/app/actions/farm-nation";
 
 interface Property {
     id: string;
@@ -16,7 +17,8 @@ interface Property {
     price: number;
     size: number; // in hectares
     type: "sale" | "lease";
-    image: string;
+    category: string;
+    images: string[];
     description: string;
 }
 
@@ -24,20 +26,42 @@ export default function FarmNationPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
     const [selectedState, setSelectedState] = useState("all");
+    const [selectedCategory, setSelectedCategory] = useState("all");
     const [priceRange, setPriceRange] = useState("all");
     const [sizeRange, setSizeRange] = useState("all");
     const [favorites, setFavorites] = useState<string[]>([]);
     const [userTier, setUserTier] = useState<"Basic" | "Premium" | null>(null);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-    // Load user tier
+    // Load user tier and properties
     useEffect(() => {
         if (status === "authenticated") {
             getUserTierAction().then(({ tier }) => setUserTier(tier));
         }
+
+        // Load real properties
+        loadProperties();
     }, [status]);
 
-    const properties: Property[] = [
+    const [properties, setProperties] = useState<Property[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const loadProperties = async () => {
+        setLoading(true);
+        const result = await getPropertiesAction();
+
+        if (result.success && result.properties) {
+            setProperties(result.properties);
+        } else {
+            // Fallback to mock data if no properties or error
+            setProperties(mockProperties);
+        }
+
+        setLoading(false);
+    };
+
+    // Mock properties (fallback)
+    const mockProperties: Property[] = [
         {
             id: "1",
             name: "Prime Farmland in Kaduna",
@@ -46,7 +70,8 @@ export default function FarmNationPage() {
             price: 5000000,
             size: 10,
             type: "sale",
-            image: "/images/logo.jpg",
+            category: "arable",
+            images: ["/images/logo.jpg"],
             description: "Fertile land suitable for cassava, yam, and maize cultivation",
         },
         {
@@ -57,7 +82,8 @@ export default function FarmNationPage() {
             price: 3500000,
             size: 5,
             type: "sale",
-            image: "/images/logo.jpg",
+            category: "irrigated",
+            images: ["/images/logo.jpg"],
             description: "Access to water, perfect for rice farming",
         },
         {
@@ -68,7 +94,8 @@ export default function FarmNationPage() {
             price: 12000000,
             size: 25,
             type: "sale",
-            image: "/images/logo.jpg",
+            category: "commercial",
+            images: ["/images/logo.jpg"],
             description: "Ideal for large-scale agricultural projects",
         },
         {
@@ -79,7 +106,8 @@ export default function FarmNationPage() {
             price: 500000,
             size: 3,
             type: "lease",
-            image: "/images/logo.jpg",
+            category: "arable",
+            images: ["/images/logo.jpg"],
             description: "1-year lease, ready for immediate farming",
         },
         {
@@ -90,7 +118,8 @@ export default function FarmNationPage() {
             price: 800000,
             size: 8,
             type: "lease",
-            image: "/images/logo.jpg",
+            category: "irrigated",
+            images: ["/images/logo.jpg"],
             description: "2-year lease with irrigation system",
         },
         {
@@ -101,7 +130,8 @@ export default function FarmNationPage() {
             price: 8000000,
             size: 15,
             type: "sale",
-            image: "/images/logo.jpg",
+            category: "mixed",
+            images: ["/images/logo.jpg"],
             description: "Strategic location, suitable for mixed farming",
         },
     ];
@@ -114,6 +144,14 @@ export default function FarmNationPage() {
         { value: "ogun", label: "Ogun" },
         { value: "kano", label: "Kano" },
         { value: "lagos", label: "Lagos" },
+    ];
+
+    const categories = [
+        { value: "all", label: "All Categories" },
+        { value: "arable", label: "Arable Land" },
+        { value: "irrigated", label: "Irrigated Land" },
+        { value: "commercial", label: "Commercial" },
+        { value: "mixed", label: "Mixed Farming" },
     ];
 
     const priceRanges = [
@@ -136,6 +174,8 @@ export default function FarmNationPage() {
     const filteredProperties = properties.filter((property) => {
         const matchesState =
             selectedState === "all" || property.state === selectedState;
+        const matchesCategory =
+            selectedCategory === "all" || property.category === selectedCategory;
 
         let matchesPrice = true;
         if (priceRange === "0-2m") matchesPrice = property.price < 2000000;
@@ -153,7 +193,7 @@ export default function FarmNationPage() {
             matchesSize = property.size >= 10 && property.size < 20;
         else if (sizeRange === "20+") matchesSize = property.size >= 20;
 
-        return matchesState && matchesPrice && matchesSize;
+        return matchesState && matchesCategory && matchesPrice && matchesSize;
     });
 
     //  Toggle favorites
@@ -182,7 +222,7 @@ export default function FarmNationPage() {
                         <Filter className="w-5 h-5 text-slate-500" />
                         <h2 className="font-bold text-slate-900 dark:text-white">Filters</h2>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* State Filter */}
                         <div>
                             <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
@@ -196,6 +236,24 @@ export default function FarmNationPage() {
                                 {states.map((state) => (
                                     <option key={state.value} value={state.value}>
                                         {state.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Category Filter */}
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                Category
+                            </label>
+                            <select
+                                value={selectedCategory}
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                            >
+                                {categories.map((cat) => (
+                                    <option key={cat.value} value={cat.value}>
+                                        {cat.label}
                                     </option>
                                 ))}
                             </select>
@@ -250,7 +308,7 @@ export default function FarmNationPage() {
                             >
                                 <div className="relative h-56 bg-slate-100 dark:bg-slate-700">
                                     <Image
-                                        src={property.image}
+                                        src={property.images?.[0] || "/images/logo.jpg"}
                                         alt={property.name}
                                         fill
                                         className="object-cover"

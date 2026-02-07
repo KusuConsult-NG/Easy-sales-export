@@ -35,8 +35,8 @@ export async function DELETE(
 
         // Access control
         if (certData.userId !== session.user.id &&
-            session.user.role !== "admin" &&
-            session.user.role !== "super_admin") {
+            !session.user.roles?.includes("admin") &&
+            !session.user.roles?.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, error: "Access denied" },
                 { status: 403 }

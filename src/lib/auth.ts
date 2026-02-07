@@ -4,7 +4,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth as firebaseAuth, db } from "./firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { loginSchema } from "./schemas";
-import { COLLECTIONS } from "./types/firestore";
+import { COLLECTIONS, type UserRole } from "./types/firestore";
 import type { User as FirestoreUser } from "./types/firestore";
 
 /**
@@ -59,48 +59,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     // Return user object for NextAuth session
                     return {
                         id: userCredential.user.uid,
-                        email: userCredential.user.email!,
+                        email: userData.email,
                         name: userData.fullName,
-                        role: userData.role,
-                        verified: userData.verified,
+                        roles: userData.roles || [], // Multi-role support
                     };
                 } catch (error: any) {
-                    console.error("Authentication error:", error);
-
-                    // Handle Firebase auth errors
-                    if (error.code === "auth/invalid-credential") {
-                        throw new Error("Invalid email or password");
-                    }
-                    if (error.code === "auth/user-not-found") {
-                        throw new Error("No account found with this email");
-                    }
-                    if (error.code === "auth/wrong-password") {
-                        throw new Error("Incorrect password");
-                    }
-                    if (error.code === "auth/too-many-requests") {
-                        throw new Error("Too many failed attempts. Please try again later");
-                    }
-
-                    throw new Error(error.message || "Authentication failed. Please try again");
+                    console.error("Authorization error:", error.message);
+                    throw new Error(error.message || "Invalid credentials");
                 }
             },
         }),
     ],
     callbacks: {
         async jwt({ token, user }) {
-            // Attach user data to JWT on sign in
+            // On sign in, store user info in JWT
             if (user) {
                 token.id = user.id;
-                token.role = user.role;
-                token.verified = user.verified;
+                token.email = user.email;
+                token.name = user.name;
+                token.roles = user.roles; // Multi-role support
             }
+
             return token;
         },
         async session({ session, token }) {
-            // Attach user data to session from JWT
+            // Add user info to session
             if (session.user) {
                 session.user.id = token.id as string;
-                session.user.role = token.role as "member" | "exporter" | "admin" | "vendor" | "super_admin";
+                session.user.email = token.email as string;
+                session.user.name = token.name as string;
+                session.user.roles = (token.roles as UserRole[]) || []; // Multi-role support
                 session.user.verified = token.verified as boolean;
             }
             return session;
@@ -121,30 +109,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
  * Type augmentation for NextAuth
  * Extends the default session and user types with custom fields
  */
+// TypeScript module augmentation for NextAuth
 declare module "next-auth" {
+    interface User {
+        id: string;
+        email: string;
+        name: string;
+        roles: UserRole[]; // Multi-role support
+    }
+
     interface Session {
         user: {
             id: string;
             email: string;
             name: string;
-            role: "member" | "exporter" | "admin" | "vendor" | "super_admin";
+            roles: UserRole[]; // Multi-role support
             verified: boolean;
         };
     }
+}
 
-    interface User {
+declare module "next-auth/jwt" {
+    interface JWT {
         id: string;
         email: string;
         name: string;
-        role: "member" | "exporter" | "admin" | "vendor" | "super_admin";
-        verified: boolean;
-    }
-}
-
-declare module "@auth/core/jwt" {
-    interface JWT {
-        id: string;
-        role: "member" | "exporter" | "admin" | "vendor" | "super_admin";
+        roles: UserRole[]; // Multi-role support
         verified: boolean;
     }
 }

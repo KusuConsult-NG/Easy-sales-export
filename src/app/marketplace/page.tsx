@@ -1,121 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Search, Filter, ShoppingCart, X, Plus, Minus } from "lucide-react";
+import { Search, Filter, ShoppingCart, X, Plus, Minus, Store, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { COMPANY_INFO } from "@/lib/constants";
-
-interface Product {
-    id: string;
-    name: string;
-    category: string;
-    price: number;
-    unit: string;
-    inStock: boolean;
-    minOrder: number;
-    image: string;
-    escrow: boolean;
-}
+import { getProductsAction, getFeaturedProductsAction } from "@/app/actions/marketplace-buyer";
+import type { Product } from "@/lib/types/marketplace";
 
 interface CartItem extends Product {
     quantity: number;
 }
 
 export default function MarketplacePage() {
+    const router = useRouter();
+    const [products, setProducts] = useState<Product[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [priceRange, setPriceRange] = useState([0, 500000]);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [isCartOpen, setIsCartOpen] = useState(false);
 
-    const products: Product[] = [
-        {
-            id: "1",
-            name: "Premium Yam Tubers",
-            category: "tubers",
-            price: 150000,
-            unit: "per ton",
-            inStock: true,
-            minOrder: 1,
-            image: "/images/logo.jpg",
-            escrow: true,
-        },
-        {
-            id: "2",
-            name: "Organic Sesame Seeds",
-            category: "seeds",
-            price: 280000,
-            unit: "per ton",
-            inStock: true,
-            minOrder: 0.5,
-            image: "/images/logo.jpg",
-            escrow: true,
-        },
-        {
-            id: "3",
-            name: "Dried Hibiscus Flowers",
-            category: "flowers",
-            price: 320000,
-            unit: "per ton",
-            inStock: true,
-            minOrder: 0.5,
-            image: "/images/logo.jpg",
-            escrow: true,
-        },
-        {
-            id: "4",
-            name: "Premium Ginger",
-            category: "spices",
-            price: 450000,
-            unit: "per ton",
-            inStock: false,
-            minOrder: 1,
-            image: "/images/logo.jpg",
-            escrow: true,
-        },
-        {
-            id: "5",
-            name: "Cashew Nuts",
-            category: "nuts",
-            price: 380000,
-            unit: "per ton",
-            inStock: true,
-            minOrder: 0.5,
-            image: "/images/logo.jpg",
-            escrow: true,
-        },
-        {
-            id: "6",
-            name: "Dried Chili Peppers",
-            category: "spices",
-            price: 220000,
-            unit: "per ton",
-            inStock: true,
-            minOrder: 0.5,
-            image: "/images/logo.jpg",
-            escrow: true,
-        },
-    ];
-
     const categories = [
         { value: "all", label: "All Products" },
-        { value: "tubers", label: "Tubers" },
-        { value: "seeds", label: "Seeds" },
-        { value: "flowers", label: "Flowers" },
-        { value: "spices", label: "Spices" },
-        { value: "nuts", label: "Nuts" },
+        { value: "grains", label: "Grains & Cereals" },
+        { value: "vegetables", label: "Vegetables" },
+        { value: "fruits", label: "Fruits" },
+        { value: "livestock", label: "Livestock" },
+        { value: "poultry", label: "Poultry" },
+        { value: "fishery", label: "Fishery" },
+        { value: "processed", label: "Processed Foods" },
+        { value: "equipment", label: "Farm Equipment" },
+        { value: "other", label: "Other" },
     ];
+
+    // Load products on mount
+    useEffect(() => {
+        loadProducts();
+    }, []);
+
+    async function loadProducts() {
+        setLoading(true);
+        try {
+            const result = await getProductsAction();
+            if (result.success) {
+                setProducts(result.products || []);
+            }
+        } catch (error) {
+            console.error("Failed to load products:", error);
+        } finally {
+            setLoading(false);
+        }
+    }
 
     // Filter products
     const filteredProducts = products.filter((product) => {
-        const matchesSearch = product.name
+        const matchesSearch = product.title
             .toLowerCase()
             .includes(searchQuery.toLowerCase());
         const matchesCategory =
             selectedCategory === "all" || product.category === selectedCategory;
+        const price = product.pricingTiers[0]?.price || 0;
         const matchesPrice =
-            product.price >= priceRange[0] && product.price <= priceRange[1];
+            price >= priceRange[0] && price <= priceRange[1];
         return matchesSearch && matchesCategory && matchesPrice;
     });
 
@@ -154,7 +102,7 @@ export default function MarketplacePage() {
 
     // Calculate total
     const cartTotal = cart.reduce(
-        (sum, item) => sum + item.price * item.quantity,
+        (sum, item) => sum + (item.pricingTiers[0]?.price || 0) * item.quantity,
         0
     );
 
@@ -252,59 +200,94 @@ export default function MarketplacePage() {
 
                 {/* Products Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredProducts.length > 0 ? (
-                        filteredProducts.map((product, index) => (
-                            <div
-                                key={product.id}
-                                className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift animate-[slideInUp_0.6s_ease-out]"
-                                style={{ animationDelay: `${index * 100}ms` }}
-                            >
-                                <div className="relative h-48 bg-slate-100 dark:bg-slate-700">
-                                    <Image
-                                        src={product.image}
-                                        alt={product.name}
-                                        fill
-                                        className="object-cover"
-                                    />
-                                    {product.escrow && (
-                                        <div className="absolute top-3 right-3 px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full">
-                                            Escrow Protected
-                                        </div>
-                                    )}
-                                    {!product.inStock && (
-                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                            <span className="px-4 py-2 bg-red-500 text-white font-bold rounded-xl">
-                                                Out of Stock
-                                            </span>
-                                        </div>
-                                    )}
+                    {loading ? (
+                        <div className="col-span-full flex items-center justify-center py-12">
+                            <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                        </div>
+                    ) : filteredProducts.length > 0 ? (
+                        filteredProducts.map((product, index) => {
+                            const price = product.pricingTiers[0]?.price || 0;
+                            const inStock = product.status === "active" && product.availableQuantity > 0;
+
+                            return (
+                                <div
+                                    key={product.id}
+                                    className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift animate-[slideInUp_0.6s_ease-out] cursor-pointer"
+                                    style={{ animationDelay: `${index * 100}ms` }}
+                                    onClick={() => router.push(`/marketplace/product/${product.id}`)}
+                                >
+                                    <div className="relative h-48 bg-slate-100 dark:bg-slate-700">
+                                        {product.images[0] ? (
+                                            <Image
+                                                src={product.images[0]}
+                                                alt={product.title}
+                                                fill
+                                                className="object-cover"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <Store className="w-12 h-12 text-gray-400" />
+                                            </div>
+                                        )}
+                                        {product.exportReady && (
+                                            <div className="absolute top-3 right-3 px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full">
+                                                Export Ready
+                                            </div>
+                                        )}
+                                        {!inStock && (
+                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                <span className="px-4 py-2 bg-red-500 text-white font-bold rounded-xl">
+                                                    Out of Stock
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="p-6">
+                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                                            {product.title}
+                                        </h3>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                                            {product.description}
+                                        </p>
+                                        <p className="text-2xl font-bold text-primary mb-1">
+                                            {formatCurrency(price)}
+                                        </p>
+                                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                            per {product.unit} • Min: {product.minimumOrderQuantity} {product.unit}
+                                        </p>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                addToCart(product);
+                                            }}
+                                            disabled={!inStock}
+                                            className="w-full px-4 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            <ShoppingCart className="w-4 h-4" />
+                                            {inStock ? "Add to Cart" : "Out of Stock"}
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="p-6">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                                        {product.name}
-                                    </h3>
-                                    <p className="text-2xl font-bold text-primary mb-1">
-                                        {formatCurrency(product.price)}
-                                    </p>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                                        {product.unit} • Min: {product.minOrder} ton
-                                    </p>
-                                    <button
-                                        onClick={() => addToCart(product)}
-                                        disabled={!product.inStock}
-                                        className="w-full px-4 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                    >
-                                        <ShoppingCart className="w-4 h-4" />
-                                        {product.inStock ? "Add to Cart" : "Out of Stock"}
-                                    </button>
-                                </div>
-                            </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <div className="col-span-full text-center py-12">
-                            <p className="text-slate-500 dark:text-slate-400">
-                                No products match your filters
+                            <Store className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                            <p className="text-slate-500 dark:text-slate-400 text-lg mb-2">
+                                {products.length === 0 ? (
+                                    "No products available yet"
+                                ) : (
+                                    "No products match your filters"
+                                )}
                             </p>
+                            {products.length === 0 && (
+                                <button
+                                    onClick={() => router.push("/marketplace/verify")}
+                                    className="mt-4 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition"
+                                >
+                                    Become a Seller
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -337,59 +320,66 @@ export default function MarketplacePage() {
                         <div className="p-6 space-y-4">
                             {cart.length > 0 ? (
                                 <>
-                                    {cart.map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4"
-                                        >
-                                            <div className="flex items-start gap-3 mb-3">
-                                                <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700">
-                                                    <Image
-                                                        src={item.image}
-                                                        alt={item.name}
-                                                        fill
-                                                        className="object-cover"
-                                                    />
+                                    {cart.map((item) => {
+                                        const price = item.pricingTiers[0]?.price || 0;
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4"
+                                            >
+                                                <div className="flex items-start gap-3 mb-3">
+                                                    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700">
+                                                        {item.images[0] ? (
+                                                            <Image
+                                                                src={item.images[0]}
+                                                                alt={item.title}
+                                                                fill
+                                                                className="object-cover"
+                                                            />
+                                                        ) : (
+                                                            <Store className="w-8 h-8 text-gray-400 mx-auto mt-4" />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h3 className="font-bold text-slate-900 dark:text-white">
+                                                            {item.title}
+                                                        </h3>
+                                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                            {formatCurrency(price)} per {item.unit}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => removeFromCart(item.id)}
+                                                        className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                    >
+                                                        <X className="w-5 h-5 text-red-500" />
+                                                    </button>
                                                 </div>
-                                                <div className="flex-1">
-                                                    <h3 className="font-bold text-slate-900 dark:text-white">
-                                                        {item.name}
-                                                    </h3>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                                                        {formatCurrency(item.price)} {item.unit}
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => updateQuantity(item.id, -1)}
+                                                            className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                                        >
+                                                            <Minus className="w-4 h-4" />
+                                                        </button>
+                                                        <span className="w-12 text-center font-semibold text-slate-900 dark:text-white">
+                                                            {item.quantity}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => updateQuantity(item.id, 1)}
+                                                            className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                                        >
+                                                            <Plus className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                    <p className="font-bold text-primary">
+                                                        {formatCurrency(price * item.quantity)}
                                                     </p>
                                                 </div>
-                                                <button
-                                                    onClick={() => removeFromCart(item.id)}
-                                                    className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                >
-                                                    <X className="w-5 h-5 text-red-500" />
-                                                </button>
                                             </div>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => updateQuantity(item.id, -1)}
-                                                        className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                                    >
-                                                        <Minus className="w-4 h-4" />
-                                                    </button>
-                                                    <span className="w-12 text-center font-semibold text-slate-900 dark:text-white">
-                                                        {item.quantity}
-                                                    </span>
-                                                    <button
-                                                        onClick={() => updateQuantity(item.id, 1)}
-                                                        className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                                    >
-                                                        <Plus className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                                <p className="font-bold text-primary">
-                                                    {formatCurrency(item.price * item.quantity)}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
 
                                     <div className="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 pt-6 mt-6 space-y-4">
                                         <div className="flex items-center justify-between text-sm">
@@ -409,14 +399,10 @@ export default function MarketplacePage() {
                                             </span>
                                         </div>
                                         <button
-                                            onClick={() => {
-                                                // Save cart to localStorage for checkout page
-                                                localStorage.setItem("marketplace_cart", JSON.stringify(cart));
-                                                // Navigate to checkout
-                                                window.location.href = "/marketplace/checkout";
-                                            }}
-                                            className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors"
+                                            onClick={() => router.push("/marketplace/checkout")}
+                                            className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition flex items-center justify-center gap-2"
                                         >
+                                            <ShoppingCart className="w-5 h-5" />
                                             Proceed to Checkout
                                         </button>
                                         <p className="text-xs text-center text-slate-500 dark:text-slate-400">

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useState, useEffect } from "react";
+import { useActionState } from "react";
 import { X, Package, Calendar, DollarSign, AlertCircle, CheckCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import LoadingButton from "@/components/ui/LoadingButton";
+import { useToast } from "@/contexts/ToastContext";
 import { createExportWindowAction, type CreateExportActionState } from "@/app/actions/export";
 
 const initialState: CreateExportActionState = { error: "Initializing...", success: false };
@@ -14,15 +16,25 @@ interface ExportWindowModalProps {
 }
 
 export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModalProps) {
-    const [state, formAction, isPending] = useFormState(createExportWindowAction, initialState);
+    const [state, formAction, isPending] = useActionState(createExportWindowAction, initialState);
+    const { showToast } = useToast();
 
-    // Reset form and close modal on success
-    if (state.success && !isPending) {
-        setTimeout(() => {
-            onClose();
-            window.location.reload(); // Refresh to show new export
-        }, 2000);
-    }
+    // Handle success with toast notification
+    useEffect(() => {
+        if (state.success && !isPending) {
+            const orderId = ('orderId' in state) ? state.orderId : '';
+            showToast(
+                `Export window created successfully! ${orderId ? `Order ID: ${orderId}` : ''}`,
+                "success"
+            );
+            setTimeout(() => {
+                onClose();
+                window.location.reload();
+            }, 1500);
+        } else if (state.error && !state.success && state.error !== "Initializing...") {
+            showToast(state.error, "error");
+        }
+    }, [state.success, state.error, isPending, onClose, showToast]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Create Export Window">
@@ -131,13 +143,14 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                     >
                         Cancel
                     </button>
-                    <button
+                    <LoadingButton
                         type="submit"
-                        disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        loading={isPending}
+                        loadingText="Creating..."
+                        className="flex-1 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition"
                     >
-                        {isPending ? "Creating..." : "Create Export Window"}
-                    </button>
+                        Create Export Window
+                    </LoadingButton>
                 </div>
             </form>
         </Modal>

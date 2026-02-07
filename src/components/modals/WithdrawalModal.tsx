@@ -1,8 +1,11 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useEffect } from "react";
+import { useActionState } from "react";
 import { Wallet, Loader2, AlertCircle, CheckCircle, Info } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import LoadingButton from "@/components/ui/LoadingButton";
+import { useToast } from "@/contexts/ToastContext";
 import { submitWithdrawalAction, type WithdrawalActionState } from "@/app/actions/platform";
 import { formatCurrency } from "@/lib/utils";
 
@@ -21,15 +24,21 @@ export default function WithdrawalModal({
     cooperativeId,
     availableBalance
 }: WithdrawalModalProps) {
-    const [state, formAction, isPending] = useFormState(submitWithdrawalAction, initialState);
+    const [state, formAction, isPending] = useActionState(submitWithdrawalAction, initialState);
+    const { showToast } = useToast();
 
-    // Close modal on success
-    if (state.success && !isPending) {
-        setTimeout(() => {
-            onClose();
-            window.location.reload(); // Refresh to show updated balance
-        }, 2000);
-    }
+    // Handle success/error with toasts
+    useEffect(() => {
+        if (state.success && !isPending && state.message) {
+            showToast(state.message, "success");
+            setTimeout(() => {
+                onClose();
+                window.location.reload();
+            }, 1500);
+        } else if (state.error && !state.success && state.error !== "Initializing...") {
+            showToast(state.error, "error");
+        }
+    }, [state.success, state.error, isPending, onClose, showToast]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Request Withdrawal">
@@ -141,14 +150,15 @@ export default function WithdrawalModal({
                     >
                         Cancel
                     </button>
-                    <button
+                    <LoadingButton
                         type="submit"
-                        disabled={isPending || availableBalance === 0}
-                        className="flex-1 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        loading={isPending}
+                        loadingText="Submitting..."
+                        disabled={availableBalance === 0}
+                        className="flex-1 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition"
                     >
-                        {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                        {isPending ? "Submitting..." : "Request Withdrawal"}
-                    </button>
+                        Request Withdrawal
+                    </LoadingButton>
                 </div>
             </form>
         </Modal>

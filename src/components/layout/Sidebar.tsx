@@ -8,16 +8,20 @@ import {
     Truck,
     Store,
     Users,
-    Waves,
-    Sprout,
+    MapPin,
     GraduationCap,
+    Settings,
+    LogOut,
+    BookText,
     Moon,
     Sun,
+    Waves,
+    Sprout,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
-import { useState, useEffect } from "react";
 import NotificationCenter from "./NotificationCenter";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const navigationItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -31,39 +35,7 @@ const navigationItems = [
 
 export function Sidebar() {
     const pathname = usePathname();
-    const [darkMode, setDarkMode] = useState(false);
-    const [mounted, setMounted] = useState(false);
-
-    // Initialize dark mode on mount
-    useEffect(() => {
-        setMounted(true);
-
-        // Check localStorage first, then system preference
-        const savedTheme = localStorage.getItem('theme');
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-        const shouldBeDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
-
-        setDarkMode(shouldBeDark);
-        if (shouldBeDark) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    }, []);
-
-    const toggleDarkMode = () => {
-        const newDarkMode = !darkMode;
-        setDarkMode(newDarkMode);
-
-        if (newDarkMode) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
-    };
+    const { theme, toggleTheme } = useTheme();
 
     return (
         <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
@@ -71,7 +43,7 @@ export function Sidebar() {
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-4">
                     <Link
-                        href="/"
+                        href="/dashboard"
                         className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
                     >
                         <Image
@@ -121,16 +93,11 @@ export function Sidebar() {
             {/* Footer Actions */}
             <div className="p-4 border-t border-slate-200 dark:border-slate-800">
                 <button
-                    onClick={toggleDarkMode}
+                    onClick={toggleTheme}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                     aria-label="Toggle dark mode"
                 >
-                    {!mounted ? (
-                        <>
-                            <div className="w-5 h-5" />
-                            <span>Theme</span>
-                        </>
-                    ) : darkMode ? (
+                    {theme === "dark" ? (
                         <>
                             <Sun className="w-5 h-5" />
                             <span>Light Mode</span>

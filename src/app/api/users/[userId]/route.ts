@@ -27,7 +27,7 @@ export async function GET(
 
 
         // Users can only access their own profile (unless admin)
-        if (session.user.id !== userId && session.user.role !== 'admin' && session.user.role !== 'super_admin') {
+        if (session.user.id !== userId && !session.user.roles?.includes('admin') && !session.user.roles?.includes('super_admin')) {
             return NextResponse.json(
                 { error: 'Forbidden' },
                 { status: 403 }

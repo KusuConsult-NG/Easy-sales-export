@@ -12,11 +12,13 @@ const ContributionModal = dynamic(
     { ssr: false }
 );
 import {
-    getCooperativeMembershipAction,
-    getCooperativeTransactionsAction,
-    type CooperativeMembership,
-    type CooperativeTransaction
+    getMembershipAction,
+    getTransactionsAction
 } from "@/app/actions/cooperative";
+import type {
+    CooperativeMembership,
+    CooperativeTransaction
+} from "@/lib/types/cooperative";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function CooperativesPage() {
@@ -32,13 +34,13 @@ export default function CooperativesPage() {
             setIsLoading(true);
             setError(null);
 
-            const membershipResult = await getCooperativeMembershipAction();
+            const membershipResult = await getMembershipAction();
 
             if (membershipResult.success && membershipResult.data) {
                 setMembership(membershipResult.data);
 
                 // Fetch transactions if user is a member
-                const transactionsResult = await getCooperativeTransactionsAction(membershipResult.data.cooperativeId);
+                const transactionsResult = await getTransactionsAction();
                 if (transactionsResult.success && transactionsResult.data) {
                     setTransactions(transactionsResult.data);
                 }
@@ -113,14 +115,30 @@ export default function CooperativesPage() {
 
                 {/* Error State */}
                 {error && !isLoading && (
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 text-center">
-                        <AlertCircle className="w-6 h-6 text-red-400 mx-auto mb-3" />
-                        <p className="text-red-300">{error}</p>
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-8 text-center max-w-2xl mx-auto">
+                        <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-red-300 mb-2">
+                            {error}
+                        </h3>
+                        <p className="text-slate-400 mb-6">
+                            Would you like to set up a test cooperative to explore the features?
+                        </p>
                         <button
-                            onClick={() => window.location.reload()}
-                            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                            onClick={async () => {
+                                setIsLoading(true);
+                                const { setupTestCooperativeAction } = await import("@/app/actions/setup");
+                                const result = await setupTestCooperativeAction();
+                                if (result.success) {
+                                    window.location.reload();
+                                } else {
+                                    setError(result.error || "Failed to setup cooperative");
+                                    setIsLoading(false);
+                                }
+                            }}
+                            className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all shadow-lg inline-flex items-center gap-2"
                         >
-                            Retry
+                            <Plus className="w-5 h-5" />
+                            Setup Test Cooperative
                         </button>
                     </div>
                 )}
@@ -197,6 +215,154 @@ export default function CooperativesPage() {
                                     Member since {new Date(membership.memberSince).getFullYear()}
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Cooperative Benefits & Features */}
+                        <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-8 mb-8 border border-emerald-200 dark:border-slate-700">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center">
+                                    <Award className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                        Cooperative Benefits
+                                    </h2>
+                                    <p className="text-slate-600 dark:text-slate-400">
+                                        What you get as a member
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* Savings Interest */}
+                                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg border border-green-100 dark:border-slate-700">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                                            <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                        </div>
+                                        <h3 className="font-bold text-slate-900 dark:text-white">
+                                            Savings Interest
+                                        </h3>
+                                    </div>
+                                    <p className="text-3xl font-bold text-green-600 dark:text-green-400 mb-2">
+                                        5% APR
+                                    </p>
+                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        Earn annual interest on your savings balance, paid quarterly
+                                    </p>
+                                </div>
+
+                                {/* Loan Access */}
+                                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg border border-blue-100 dark:border-slate-700">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                            <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                        </div>
+                                        <h3 className="font-bold text-slate-900 dark:text-white">
+                                            Loan Access
+                                        </h3>
+                                    </div>
+                                    <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
+                                        3x Savings
+                                    </p>
+                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        Borrow up to 3× your savings balance at competitive rates
+                                    </p>
+                                </div>
+
+                                {/* Monthly Target */}
+                                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg border border-purple-100 dark:border-slate-700">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                                            <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                        </div>
+                                        <h3 className="font-bold text-slate-900 dark:text-white">
+                                            Flexible Savings
+                                        </h3>
+                                    </div>
+                                    <p className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
+                                        {formatCurrency(membership.monthlyTarget)}
+                                    </p>
+                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        Monthly target - contribute at your own pace
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* How to Take Advantage */}
+                            <div className="mt-6 bg-white dark:bg-slate-800 rounded-xl p-6 border border-amber-200 dark:border-slate-700">
+                                <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                    <ArrowRight className="w-5 h-5 text-amber-600" />
+                                    How to Take Advantage
+                                </h3>
+                                <ul className="space-y-3 text-slate-600 dark:text-slate-400">
+                                    <li className="flex gap-3">
+                                        <span className="text-green-600 dark:text-green-400 font-bold">1.</span>
+                                        <span><strong>Make regular contributions</strong> - Save consistently to build your balance and unlock loan eligibility</span>
+                                    </li>
+                                    <li className="flex gap-3">
+                                        <span className="text-green-600 dark:text-green-400 font-bold">2.</span>
+                                        <span><strong>Apply for loans</strong> - Once eligible, access low-interest loans for business expansion or emergencies</span>
+                                    </li>
+                                    <li className="flex gap-3">
+                                        <span className="text-green-600 dark:text-green-400 font-bold">3.</span>
+                                        <span><strong>Track your progress</strong> - Monitor your savings growth and interest earnings through your dashboard</span>
+                                    </li>
+                                    <li className="flex gap-3">
+                                        <span className="text-green-600 dark:text-green-400 font-bold">4.</span>
+                                        <span><strong>Withdraw when needed</strong> - Access your savings anytime with quick withdrawal processing</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* Quick Actions - Navigate to Features */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                            {/* Fixed Savings Card */}
+                            <Link
+                                href="/cooperatives/fixed-savings"
+                                className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 border border-green-200 dark:border-green-800 hover:shadow-xl transition-all group"
+                            >
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <TrendingUp className="w-6 h-6 text-white" />
+                                    </div>
+                                    <ArrowRight className="w-6 h-6 text-green-600 dark:text-green-400 group-hover:translate-x-1 transition-transform" />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                    Fixed Savings Plans
+                                </h3>
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                    Lock your savings for 1-12 months and earn up to 10% annual interest with guaranteed returns.
+                                </p>
+                                <div className="flex items-center gap-2 text-green-600 dark:text-green-400 font-semibold text-sm">
+                                    <span>Create a plan</span>
+                                    <ArrowRight className="w-4 h-4" />
+                                </div>
+                            </Link>
+
+                            {/* Loans Card */}
+                            <Link
+                                href="/cooperatives/loans"
+                                className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 border border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all group"
+                            >
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <DollarSign className="w-6 h-6 text-white" />
+                                    </div>
+                                    <ArrowRight className="w-6 h-6 text-blue-600 dark:text-blue-400 group-hover:translate-x-1 transition-transform" />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                    Cooperative Loans
+                                </h3>
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                    Access low-interest loans based on your savings balance. Apply and track repayment schedules.
+                                </p>
+                                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold text-sm">
+                                    <span>View loan products</span>
+                                    <ArrowRight className="w-4 h-4" />
+                                </div>
+                            </Link>
                         </div>
 
                         {/* Charts and Activity Row */}

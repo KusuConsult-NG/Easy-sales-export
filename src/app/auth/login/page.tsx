@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useActionState } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { Mail, Lock, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";
 import { loginAction } from "@/app/actions/auth";
 import toast from "react-hot-toast";
+import LoadingButton from "@/components/ui/LoadingButton";
 
 const initialState = { error: "", success: false };
 
@@ -22,33 +21,14 @@ export default function LoginPage() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showPassword, setShowPassword] = useState(false);
     const [state, formAction, isPending] = useActionState(loginAction, initialState);
-    const router = useRouter();
-    const { data: session, status } = useSession();
-    const hasRedirected = useRef(false);
 
-    // 🔴 P0 FIX: Observe AUTH STATE instead of form submit success
-    // This is the SINGLE SOURCE OF TRUTH for redirect
-    useEffect(() => {
-        console.log("🔍 AUTH STATE CHECK:", { status, hasSession: !!session, path: window.location.pathname });
-
-        // Only redirect ONCE when we become authenticated
-        if (status === "authenticated" && session && !hasRedirected.current) {
-            hasRedirected.current = true;
-            console.log("✅ AUTH SUCCESS → SESSION ESTABLISHED → EXECUTING REDIRECT");
-            toast.success("Login successful! Redirecting to dashboard...");
-            router.push("/dashboard");
-        }
-    }, [status, session, router]);
-
-    // Handle form submission errors only (success handled by session observer above)
+    // DO NOT MODIFY – AUTH STABILITY
+    // Handle errors only - success redirects server-side
     useEffect(() => {
         if (state.error && !isPending) {
-            console.log("❌ AUTH FAILED:", state.error);
             toast.error(state.error);
-        } else if (state.success && !isPending) {
-            console.log("✅ LOGIN ACTION RETURNED SUCCESS (waiting for session)");
         }
-    }, [state.error, state.success, isPending]);
+    }, [state.error, isPending]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -191,20 +171,16 @@ export default function LoginPage() {
                         </div>
 
                         {/* Submit Button */}
-                        <button
+                        <LoadingButton
                             type="submit"
-                            disabled={isPending}
-                            className="w-full px-6 py-4 bg-linear-to-r from-blue-600 to-blue-700 text-white font-bold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all elevation-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            loading={isPending}
+                            loadingText="Signing in..."
+                            variant="primary"
+                            size="lg"
+                            className="w-full"
                         >
-                            {isPending ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Signing in...
-                                </>
-                            ) : (
-                                "Sign In"
-                            )}
-                        </button>
+                            Sign In
+                        </LoadingButton>
                     </form>
 
                     {/* Register Link */}

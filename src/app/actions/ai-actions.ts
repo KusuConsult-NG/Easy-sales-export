@@ -47,7 +47,7 @@ export async function sendAIMessage(
         const validated = aiChatMessageSchema.parse(data);
 
         // Build context-aware system prompt
-        const systemPrompt = buildSystemPrompt(validated.context, session.user.role);
+        const systemPrompt = buildSystemPrompt(validated.context, session.user.roles?.[0] || "");
 
         // Call OpenAI API
         const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {

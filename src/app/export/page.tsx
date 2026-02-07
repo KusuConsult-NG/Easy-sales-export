@@ -1,12 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Package, Clock, CheckCircle, AlertCircle, Plus, Loader2, TrendingUp, Edit } from "lucide-react";
+import { Package, Clock, CheckCircle, AlertCircle, Plus, Loader2, TrendingUp, Edit, Calendar as CalendarIcon, List } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import ExportWindowModal from "@/components/modals/ExportWindowModal";
 import StatusUpdateModal from "@/components/modals/StatusUpdateModal";
 import ExportDetailsModal from "@/components/modals/ExportDetailsModal";
+import DateRangePicker from "@/components/export/DateRangePicker";
+import ExportCalendar from "@/components/export/ExportCalendar";
+import EmptyState from "@/components/ui/EmptyState";
 import { getExportWindowsAction } from "@/app/actions/export";
+
+type DateRange = {
+    from: Date | null;
+    to: Date | null;
+};
 
 type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
 
@@ -32,6 +40,8 @@ export default function ExportWindowsPage() {
     const [orders, setOrders] = useState<ExportWindow[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
+    const [view, setView] = useState<"list" | "calendar">("list");
 
     // Fetch export windows on mount and when filter changes
     useEffect(() => {
@@ -39,7 +49,11 @@ export default function ExportWindowsPage() {
             setIsLoading(true);
             setError(null);
 
-            const result = await getExportWindowsAction(statusFilter !== "all" ? statusFilter : undefined);
+            const result = await getExportWindowsAction(
+                statusFilter !== "all" ? statusFilter : undefined,
+                dateRange.from?.toISOString(),
+                dateRange.to?.toISOString()
+            );
 
             if (result.success && result.data) {
                 setOrders(result.data);
@@ -51,7 +65,7 @@ export default function ExportWindowsPage() {
         };
 
         fetchExports();
-    }, [statusFilter]);
+    }, [statusFilter, dateRange]);
 
     const getStatusColor = (status: ExportStatus) => {
         switch (status) {
@@ -115,21 +129,55 @@ export default function ExportWindowsPage() {
                 </div>
 
                 {/* Status Filter */}
-                <div className="mb-6 flex items-center gap-3">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter:</span>
-                    <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                        {["all", "pending", "in_transit", "delivered", "completed"].map((filter) => (
-                            <button
-                                key={filter}
-                                onClick={() => setStatusFilter(filter)}
-                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${statusFilter === filter
-                                    ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
-                                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                                    }`}
-                            >
-                                {filter.replace("_", " ")}
-                            </button>
-                        ))}
+                <div className="mb-6 flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter:</span>
+                        <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                            {["all", "pending", "in_transit", "delivered", "completed"].map((filter) => (
+                                <button
+                                    key={filter}
+                                    onClick={() => setStatusFilter(filter)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${statusFilter === filter
+                                        ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
+                                        : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                                        }`}
+                                >
+                                    {filter.replace("_", " ")}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="w-full sm:w-80">
+                        <DateRangePicker
+                            value={dateRange}
+                            onChange={setDateRange}
+                            placeholder="Filter by date range"
+                        />
+                    </div>
+
+                    {/* View Toggle */}
+                    <div className="ml-auto flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                        <button
+                            onClick={() => setView("list")}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${view === "list"
+                                ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                                }`}
+                        >
+                            <List className="w-4 h-4" />
+                            List
+                        </button>
+                        <button
+                            onClick={() => setView("calendar")}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${view === "calendar"
+                                ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
+                                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                                }`}
+                        >
+                            <CalendarIcon className="w-4 h-4" />
+                            Calendar
+                        </button>
                     </div>
                 </div>
 
@@ -155,8 +203,21 @@ export default function ExportWindowsPage() {
                     </div>
                 )}
 
-                {/* Export Cards */}
-                {!isLoading && !error && (
+                {/* Empty State */}
+                {!isLoading && !error && orders.length === 0 && (
+                    <EmptyState
+                        icon={Package}
+                        title="No Export Windows Found"
+                        description={statusFilter !== "all" || dateRange.from || dateRange.to
+                            ? "No export windows match your current filters. Try adjusting your search criteria."
+                            : "You haven't created any export windows yet. Start by creating your first export window."}
+                        actionLabel="Create Export Window"
+                        onAction={() => setIsModalOpen(true)}
+                    />
+                )}
+
+                {/* Export Cards - List View */}
+                {!isLoading && !error && view === "list" && orders.length > 0 && (
                     <div className="space-y-6">
                         {orders.map((order, index) => (
                             <div
@@ -286,6 +347,11 @@ export default function ExportWindowsPage() {
                             Learn more about our escrow system →
                         </a>
                     </div>
+                )}
+
+                {/* Calendar View */}
+                {!isLoading && !error && view === "calendar" && (
+                    <ExportCalendar exportWindows={orders} />
                 )}
             </div>
 

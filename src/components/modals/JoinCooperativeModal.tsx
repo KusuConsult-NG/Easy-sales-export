@@ -1,8 +1,11 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useEffect } from "react";
+import { useActionState } from "react";
 import { Users, DollarSign, Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import LoadingButton from "@/components/ui/LoadingButton";
+import { useToast } from "@/contexts/ToastContext";
 
 type JoinCooperativeState =
     | { error: string; success: false }
@@ -17,7 +20,7 @@ interface JoinCooperativeModalProps {
     cooperativeId: string;
 }
 
-// Server action wrapper compatible with useFormState
+// Server action wrapper compatible with useActionState
 async function joinCooperativeWrapper(
     prevState: JoinCooperativeState,
     formData: FormData
@@ -100,15 +103,21 @@ export default function JoinCooperativeModal({
     cooperativeName,
     cooperativeId
 }: JoinCooperativeModalProps) {
-    const [state, formAction, isPending] = useFormState(joinCooperativeWrapper, initialState);
+    const [state, formAction, isPending] = useActionState(joinCooperativeWrapper, initialState);
+    const { showToast } = useToast();
 
-    // Close modal on success
-    if (state.success && !isPending) {
-        setTimeout(() => {
-            onClose();
-            window.location.reload(); // Refresh to show new membership
-        }, 2000);
-    }
+    // Handle success/error with toasts
+    useEffect(() => {
+        if (state.success && !isPending && state.message) {
+            showToast(state.message, "success");
+            setTimeout(() => {
+                onClose();
+                window.location.reload();
+            }, 1500);
+        } else if (state.error && !state.success && state.error !== "Initializing...") {
+            showToast(state.error, "error");
+        }
+    }, [state.success, state.error, isPending, onClose, showToast]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Join Cooperative">
@@ -220,14 +229,14 @@ export default function JoinCooperativeModal({
                     >
                         Cancel
                     </button>
-                    <button
+                    <LoadingButton
                         type="submit"
-                        disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        loading={isPending}
+                        loadingText="Joining..."
+                        className="flex-1 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition"
                     >
-                        {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                        {isPending ? "Joining..." : "Join Cooperative"}
-                    </button>
+                        Join Cooperative
+                    </LoadingButton>
                 </div>
             </form>
         </Modal>

@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { SessionProvider } from "next-auth/react";
-import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
-import { ToastProvider } from "@/components/providers/ToastProvider";
+import { ClientLayout } from "@/components/layout/ClientLayout";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -50,17 +47,8 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} antialiased`}>
-        <SessionProvider>
-          <ToastProvider />
-          <SessionActivityTracker />
-          <div className="flex h-screen overflow-hidden">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
-              {children}
-            </main>
-          </div>
-        </SessionProvider>
+      <body className={`${inter.variable} font-sans antialiased`}>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

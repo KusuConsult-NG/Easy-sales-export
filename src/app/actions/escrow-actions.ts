@@ -65,7 +65,7 @@ export async function releaseEscrowFunds(
     transactionId: string
 ): Promise<{ success: boolean; error?: string }> {
     const session = await auth();
-    if (!session || session.user.role !== "admin") {
+    if (!session || !session.user.roles?.includes("admin")) {
         return { success: false, error: "Unauthorized" };
     }
 

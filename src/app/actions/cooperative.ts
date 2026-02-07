@@ -11,88 +11,190 @@ import {
     setDoc,
     updateDoc,
     increment,
-    serverTimestamp
+    serverTimestamp,
+    addDoc
 } from "firebase/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { z } from "zod";
+import {
+    contributionSchema,
+    cooperativeMembershipSchema,
+    type MembershipRegistrationState
+} from "@/lib/types/cooperative";
+import type {
+    CooperativeMembership,
+    CooperativeTransaction,
+    JoinCooperativeState,
+    MakeContributionState,
+    GetMembershipState,
+    GetTransactionsState
+} from "@/lib/types/cooperative";
 
 /**
  * Server Actions for Cooperative Management
  * 
  * Handles cooperative membership, contributions, and transaction history.
  * Works with the existing submitWithdrawalAction for withdrawal requests.
+ * 
+ * PHASE 2 PRD ADDITIONS:
+ * - Membership registration with Paystack integration
+ * - Fixed savings management
+ * - Loan application and management
  */
 
-// Contribution Schema
-export const contributionSchema = z.object({
-    cooperativeId: z.string().min(1, "Cooperative ID is required"),
-    amount: z.number().positive("Amount must be greater than 0"),
-    type: z.enum(["savings", "loan_repayment"], {
-        message: "Please select contribution type",
-    }),
-});
+// ============================================
+// MEMBERSHIP REGISTRATION (PRD Phase 2)
+// =========================================
 
-export type ContributionFormData = z.infer<typeof contributionSchema>;
+/**
+ * Register a new cooperative member with Paystack payment integration
+ */
+export async function registerCooperativeMemberAction(
+    formData: FormData
+): Promise<MembershipRegistrationState> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "You must be logged in to register", success: false };
+        }
 
-// Type definitions
-export type CooperativeMembership = {
-    cooperativeId: string;
-    cooperativeName: string;
-    savingsBalance: number;
-    loanBalance: number;
-    memberSince: Date;
-    monthlyTarget: number;
-};
+        const userId = session.user.id;
 
-export type CooperativeTransaction = {
-    id: string;
-    type: "contribution" | "withdrawal" | "loan" | "loan_repayment";
-    amount: number;
-    date: Date;
-    status: string;
-    description: string;
-};
+        // Check if user is already a member
+        const existingMemberRef = doc(db, "cooperative_members", userId);
+        const existingMember = await getDoc(existingMemberRef);
 
-type ActionErrorState = {
-    error: string;
-    success: false;
-};
+        if (existingMember.exists()) {
+            return { error: "You are already registered as a cooperative member", success: false };
+        }
 
-type JoinSuccessState = {
-    error: null;
-    success: true;
-    message: string;
-};
+        // Parse and validate form data
+        const rawData = {
+            firstName: formData.get("firstName") as string,
+            middleName: formData.get("middleName") as string || undefined,
+            lastName: formData.get("lastName") as string,
+            dateOfBirth: formData.get("dateOfBirth") as string,
+            gender: formData.get("gender") as "male" | "female",
+            email: formData.get("email") as string,
+            phone: formData.get("phone") as string,
+            stateOfOrigin: formData.get("stateOfOrigin") as string,
+            lga: formData.get("lga") as string,
+            residentialAddress: formData.get("residentialAddress") as string,
+            occupation: formData.get("occupation") as string,
+            nextOfKinName: formData.get("nextOfKinName") as string,
+            nextOfKinPhone: formData.get("nextOfKinPhone") as string,
+            nextOfKinAddress: formData.get("nextOfKinAddress") as string,
+            membershipTier: formData.get("membershipTier") as "basic" | "premium",
+        };
 
-type ContributionSuccessState = {
-    error: null;
-    success: true;
-    message: string;
-};
+        // Validate with Zod
+        const validationResult = cooperativeMembershipSchema.safeParse(rawData);
+        if (!validationResult.success) {
+            return {
+                error: validationResult.error.issues[0]?.message || "Validation failed",
+                success: false
+            };
+        }
 
-type MembershipSuccessState = {
-    error: null;
-    success: true;
-    data: CooperativeMembership;
-};
+        const validatedData = validationResult.data;
+        const registrationFee = validatedData.membershipTier === "basic" ? 10000 : 20000;
 
-type TransactionsSuccessState = {
-    error: null;
-    success: true;
-    data: CooperativeTransaction[];
-};
+        // Create membership record
+        const membershipData = {
+            userId,
+            firstName: validatedData.firstName,
+            middleName: validatedData.middleName,
+            lastName: validatedData.lastName,
+            dateOfBirth: validatedData.dateOfBirth,
+            gender: validatedData.gender,
+            email: validatedData.email,
+            phone: validatedData.phone,
+            stateOfOrigin: validatedData.stateOfOrigin,
+            lga: validatedData.lga,
+            residentialAddress: validatedData.residentialAddress,
+            occupation: validatedData.occupation,
+            nextOfKin: {
+                name: validatedData.nextOfKinName,
+                phone: validatedData.nextOfKinPhone,
+                address: validatedData.nextOfKinAddress,
+            },
+            membershipTier: validatedData.membershipTier,
+            registrationFee,
+            membershipStatus: "pending" as const,
+            paymentStatus: "pending" as const,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
 
-export type JoinCooperativeState = ActionErrorState | JoinSuccessState;
-export type MakeContributionState = ActionErrorState | ContributionSuccessState;
-export type GetMembershipState = ActionErrorState | MembershipSuccessState;
-export type GetTransactionsState = ActionErrorState | TransactionsSuccessState;
+        // Save to Firestore
+        await setDoc(existingMemberRef, membershipData);
 
-// Alias for modal compatibility
-export type ContributionActionState = MakeContributionState;
-export type WithdrawalActionState =
-    | { error: string; success: false }
-    | { error: null; success: true; message: string };
+        // Initialize Paystack payment
+        const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!paystackSecretKey) {
+            return {
+                error: "Payment system not configured. Please contact support.",
+                success: false
+            };
+        }
+
+        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${paystackSecretKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                email: validatedData.email,
+                amount: registrationFee * 100, // Paystack expects amount in kobo
+                metadata: {
+                    userId,
+                    membershipTier: validatedData.membershipTier,
+                    purpose: "cooperative_membership_registration",
+                },
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/payment/callback`,
+            }),
+        });
+
+        if (!paystackResponse.ok) {
+            return {
+                error: "Failed to initialize payment. Please try again.",
+                success: false
+            };
+        }
+
+        const paystackData = await paystackResponse.json();
+
+        if (!paystackData.status || !paystackData.data?.authorization_url) {
+            return {
+                error: "Failed to generate payment link. Please try again.",
+                success: false
+            };
+        }
+
+        // Update membership with payment reference
+        await updateDoc(existingMemberRef, {
+            paymentReference: paystackData.data.reference,
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: "Registration initiated. Redirecting to payment...",
+            paymentUrl: paystackData.data.authorization_url,
+        };
+    } catch (error) {
+        console.error("Membership registration failed:", error);
+        return {
+            error: error instanceof Error ? error.message : "Registration failed. Please try again.",
+            success: false
+        };
+    }
+}
+
+// ============================================
+// EXISTING ACTIONS (from original file)
+// ============================================
 
 export async function joinCooperativeAction(
     cooperativeId: string,
@@ -114,49 +216,68 @@ export async function joinCooperativeAction(
             return { error: "Cooperative not found", success: false };
         }
 
-        // Check if already a member
-        const memberRef = doc(db, COLLECTIONS.COOPERATIVES, cooperativeId, "members", userId);
-        const memberDoc = await getDoc(memberRef);
+        // Check if user is already a member
+        const membershipsRef = collection(db, COLLECTIONS.COOPERATIVE_MEMBERS);
+        const q = query(
+            membershipsRef,
+            where("userId", "==", userId),
+            where("cooperativeId", "==", cooperativeId)
+        );
+        const existingMembership = await getDocs(q);
 
-        if (memberDoc.exists()) {
+        if (!existingMembership.empty) {
             return { error: "You are already a member of this cooperative", success: false };
         }
 
-        // Add user as member
-        await setDoc(memberRef, {
+        // Create membership
+        const membershipRef = doc(membershipsRef);
+        await setDoc(membershipRef, {
             userId,
-            balance: initialContribution,
-            loanBalance: 0,
-            joinedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        });
-
-        // Update cooperative member count
-        await updateDoc(cooperativeRef, {
-            memberCount: increment(1),
-            totalSavings: increment(initialContribution),
-        });
-
-        // Update user's cooperativeId
-        await updateDoc(doc(db, COLLECTIONS.USERS, userId), {
             cooperativeId,
-            updatedAt: serverTimestamp(),
+            savingsBalance: initialContribution,
+            loanBalance: 0,
+            memberSince: serverTimestamp(),
+            monthlyTarget: 50000,
+            status: "active"
         });
+
+        // Record initial contribution if any
+        if (initialContribution > 0) {
+            const transactionsRef = collection(db, COLLECTIONS.COOPERATIVE_TRANSACTIONS);
+            await addDoc(transactionsRef, {
+                userId,
+                cooperativeId,
+                type: "contribution",
+                amount: initialContribution,
+                date: serverTimestamp(),
+                status: "completed",
+                description: "Initial contribution upon joining"
+            });
+
+            // Update cooperative total savings
+            await updateDoc(cooperativeRef, {
+                totalSavings: increment(initialContribution),
+                memberCount: increment(1)
+            });
+        } else {
+            await updateDoc(cooperativeRef, {
+                memberCount: increment(1)
+            });
+        }
 
         return {
             error: null,
             success: true,
-            message: "Successfully joined the cooperative!",
+            message: "Successfully joined the cooperative"
         };
-    } catch (error: any) {
-        console.error("Join cooperative error:", error);
-        return { error: "Failed to join cooperative. Please try again.", success: false };
+    } catch (error) {
+        console.error("Join cooperative failed:", error);
+        return {
+            error: error instanceof Error ? error.message : "Failed to join cooperative",
+            success: false
+        };
     }
 }
-
-// ============================================
-// Make Contribution Action
-// ============================================
 
 export async function makeContributionAction(
     prevState: MakeContributionState,
@@ -170,201 +291,159 @@ export async function makeContributionAction(
 
         const userId = session.user.id;
 
-        // Extract and validate form data
-        const contributionData = {
+        // Parse and validate form data
+        const rawData = {
             cooperativeId: formData.get("cooperativeId") as string,
-            amount: parseFloat(formData.get("amount") as string),
+            amount: Number(formData.get("amount")),
             type: formData.get("type") as "savings" | "loan_repayment",
         };
 
-        // Validate with Zod
-        const validatedData = contributionSchema.parse(contributionData);
+        const validationResult = contributionSchema.safeParse(rawData);
+        if (!validationResult.success) {
+            return {
+                error: validationResult.error.issues[0]?.message || "Invalid contribution data",
+                success: false
+            };
+        }
+
+        const { cooperativeId, amount, type } = validationResult.data;
 
         // Verify membership
-        const memberRef = doc(
-            db,
-            COLLECTIONS.COOPERATIVES,
-            validatedData.cooperativeId,
-            "members",
-            userId
-        );
-        const memberDoc = await getDoc(memberRef);
-
-        if (!memberDoc.exists()) {
-            return { error: "You are not a member of this cooperative", success: false };
-        }
-
-        // Update member balance
-        if (validatedData.type === "savings") {
-            await updateDoc(memberRef, {
-                balance: increment(validatedData.amount),
-                updatedAt: serverTimestamp(),
-            });
-
-            // Update cooperative total savings
-            await updateDoc(doc(db, COLLECTIONS.COOPERATIVES, validatedData.cooperativeId), {
-                totalSavings: increment(validatedData.amount),
-            });
-        } else {
-            // Loan repayment
-            const currentLoanBalance = memberDoc.data().loanBalance || 0;
-            if (currentLoanBalance <= 0) {
-                return { error: "You have no outstanding loan to repay", success: false };
-            }
-
-            const newLoanBalance = Math.max(0, currentLoanBalance - validatedData.amount);
-            await updateDoc(memberRef, {
-                loanBalance: newLoanBalance,
-                updatedAt: serverTimestamp(),
-            });
-        }
-
-        // Record transaction
-        await setDoc(doc(collection(db, COLLECTIONS.TRANSACTIONS)), {
-            userId,
-            cooperativeId: validatedData.cooperativeId,
-            type: validatedData.type,
-            amount: validatedData.amount,
-            timestamp: serverTimestamp(),
-            status: "completed",
-        });
-
-        return {
-            error: null,
-            success: true,
-            message: `Contribution of ₦${validatedData.amount.toLocaleString()} recorded successfully!`,
-        };
-    } catch (error: any) {
-        console.error("Make contribution error:", error);
-
-        if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false };
-        }
-
-        return { error: "Failed to process contribution. Please try again.", success: false };
-    }
-}
-
-// ============================================
-// Get Cooperative Membership Action
-// ============================================
-
-export async function getCooperativeMembershipAction(): Promise<GetMembershipState> {
-    try {
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
-
-        const userId = session.user.id;
-
-        // Get user's cooperative ID
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
-        const cooperativeId = userDoc.data()?.cooperativeId;
-
-        if (!cooperativeId) {
-            return { error: "You are not a member of any cooperative", success: false };
-        }
-
-        // Get cooperative details
-        const cooperativeDoc = await getDoc(doc(db, COLLECTIONS.COOPERATIVES, cooperativeId));
-        if (!cooperativeDoc.exists()) {
-            return { error: "Cooperative not found", success: false };
-        }
-
-        // Get member details
-        const memberDoc = await getDoc(
-            doc(db, COLLECTIONS.COOPERATIVES, cooperativeId, "members", userId)
-        );
-        if (!memberDoc.exists()) {
-            return { error: "Membership record not found", success: false };
-        }
-
-        const cooperativeData = cooperativeDoc.data();
-        const memberData = memberDoc.data();
-
-        const membership: CooperativeMembership = {
-            cooperativeId,
-            cooperativeName: cooperativeData.name,
-            savingsBalance: memberData.balance || 0,
-            loanBalance: memberData.loanBalance || 0,
-            memberSince: memberData.joinedAt?.toDate() || new Date(),
-            monthlyTarget: cooperativeData.monthlyTarget || 0,
-        };
-
-        return {
-            error: null,
-            success: true,
-            data: membership,
-        };
-    } catch (error: any) {
-        console.error("Get membership error:", error);
-        return { error: "Failed to fetch membership details", success: false };
-    }
-}
-
-// ============================================
-// Get Cooperative Transactions Action
-// ============================================
-
-export async function getCooperativeTransactionsAction(
-    cooperativeId: string
-): Promise<GetTransactionsState> {
-    try {
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
-
-        const userId = session.user.id;
-
-        // Verify membership
-        const memberDoc = await getDoc(
-            doc(db, COLLECTIONS.COOPERATIVES, cooperativeId, "members", userId)
-        );
-        if (!memberDoc.exists()) {
-            return { error: "You are not a member of this cooperative", success: false };
-        }
-
-        // Fetch transactions
-        const transactionsQuery = query(
-            collection(db, COLLECTIONS.TRANSACTIONS),
+        const membershipsRef = collection(db, COLLECTIONS.COOPERATIVE_MEMBERS);
+        const q = query(
+            membershipsRef,
             where("userId", "==", userId),
             where("cooperativeId", "==", cooperativeId)
         );
+        const membershipSnapshot = await getDocs(q);
 
-        const snapshot = await getDocs(transactionsQuery);
+        if (membershipSnapshot.empty) {
+            return { error: "You are not a member of this cooperative", success: false };
+        }
 
-        const transactions: CooperativeTransaction[] = snapshot.docs.map(doc => ({
-            id: doc.id,
-            type: doc.data().type,
-            amount: doc.data().amount,
-            date: doc.data().timestamp?.toDate() || new Date(),
-            status: doc.data().status,
-            description: doc.data().description || `${doc.data().type} transaction`,
-        }));
+        const membershipDoc = membershipSnapshot.docs[0];
 
-        // Sort by date (most recent first)
-        transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+        // Record transaction
+        const transactionsRef = collection(db, COLLECTIONS.COOPERATIVE_TRANSACTIONS);
+        await addDoc(transactionsRef, {
+            userId,
+            cooperativeId,
+            type,
+            amount,
+            date: serverTimestamp(),
+            status: "completed",
+            description: type === "savings" ? "Savings contribution" : "Loan repayment"
+        });
+
+        // Update balances
+        if (type === "savings") {
+            await updateDoc(membershipDoc.ref, {
+                savingsBalance: increment(amount)
+            });
+
+            const cooperativeRef = doc(db, COLLECTIONS.COOPERATIVES, cooperativeId);
+            await updateDoc(cooperativeRef, {
+                totalSavings: increment(amount)
+            });
+        } else {
+            await updateDoc(membershipDoc.ref, {
+                loanBalance: increment(-amount)
+            });
+        }
 
         return {
             error: null,
             success: true,
-            data: transactions,
+            message: `Successfully contributed ₦${amount.toLocaleString()}`
         };
-    } catch (error: any) {
-        console.error("Get transactions error:", error);
-        return { error: "Failed to fetch transactions", success: false };
+    } catch (error) {
+        console.error("Contribution failed:", error);
+        return {
+            error: error instanceof Error ? error.message : "Failed to make contribution",
+            success: false
+        };
     }
 }
 
-// ============================================
-// Get User Tier Action
-// ============================================
+export async function getMembershipAction(): Promise<GetMembershipState> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "You must be logged in", success: false };
+        }
 
-/**
- * Get user's cooperative tier for access control
- */
+        const userId = session.user.id;
+        const membershipsRef = collection(db, COLLECTIONS.COOPERATIVE_MEMBERS);
+        const q = query(membershipsRef, where("userId", "==", userId));
+        const membershipSnapshot = await getDocs(q);
+
+        if (membershipSnapshot.empty) {
+            return { error: "You are not a member of any cooperative", success: false };
+        }
+
+        const membershipData = membershipSnapshot.docs[0].data();
+        const cooperativeDoc = await getDoc(
+            doc(db, COLLECTIONS.COOPERATIVES, membershipData.cooperativeId)
+        );
+
+        const membership: CooperativeMembership = {
+            cooperativeId: membershipData.cooperativeId,
+            cooperativeName: cooperativeDoc.data()?.name || "Unknown Cooperative",
+            savingsBalance: membershipData.savingsBalance || 0,
+            loanBalance: membershipData.loanBalance || 0,
+            memberSince: membershipData.memberSince?.toDate() || new Date(),
+            monthlyTarget: membershipData.monthlyTarget || 50000,
+        };
+
+        return {
+            error: null,
+            success: true,
+            data: membership
+        };
+    } catch (error) {
+        console.error("Failed to get membership:", error);
+        return {
+            error: error instanceof Error ? error.message : "Failed to get membership",
+            success: false
+        };
+    }
+}
+
+export async function getTransactionsAction(): Promise<GetTransactionsState> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "You must be logged in", success: false };
+        }
+
+        const userId = session.user.id;
+        const transactionsRef = collection(db, COLLECTIONS.COOPERATIVE_TRANSACTIONS);
+        const q = query(transactionsRef, where("userId", "==", userId));
+        const transactionsSnapshot = await getDocs(q);
+
+        const transactions: CooperativeTransaction[] = transactionsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            type: doc.data().type,
+            amount: doc.data().amount,
+            date: doc.data().date?.toDate() || new Date(),
+            status: doc.data().status,
+            description: doc.data().description,
+        }));
+
+        return {
+            error: null,
+            success: true,
+            data: transactions
+        };
+    } catch (error) {
+        console.error("Failed to get transactions:", error);
+        return {
+            error: error instanceof Error ? error.message : "Failed to get transactions",
+            success: false
+        };
+    }
+}
+
 export async function getUserTierAction(): Promise<{
     tier: "Basic" | "Premium" | null;
     totalContributions: number;

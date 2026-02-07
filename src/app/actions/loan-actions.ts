@@ -127,7 +127,7 @@ export async function getLoanApplication(loanId: string) {
         const data = loanDoc.docs[0].data();
 
         // Check authorization - user can only view their own loans unless admin
-        if (data.userId !== session.user.id && session.user.role !== 'admin') {
+        if (data.userId !== session.user.id && !session.user.roles?.includes('admin')) {
             return { success: false, error: "Unauthorized to view this loan", loan: null };
         }
 
@@ -153,7 +153,7 @@ export async function getLoanApplication(loanId: string) {
  */
 export async function getPendingLoanApplications() {
     const session = await auth();
-    if (!session || session.user.role !== 'admin') {
+    if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only", loans: [] };
     }
 
@@ -193,7 +193,7 @@ export async function approveLoanApplication(
     data: z.infer<typeof loanApprovalSchema>
 ) {
     const session = await auth();
-    if (!session || session.user.role !== 'admin') {
+    if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
     }
 
@@ -248,7 +248,7 @@ export async function approveLoanApplication(
  */
 export async function disburseLoan(loanId: string, disbursementNotes?: string) {
     const session = await auth();
-    if (!session || session.user.role !== 'admin') {
+    if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
     }
 
@@ -284,7 +284,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
  */
 export async function getLoanStatistics() {
     const session = await auth();
-    if (!session || session.user.role !== 'admin') {
+    if (!session || !session.user.roles?.includes('admin')) {
         return {
             success: false,
             error: "Unauthorized - Admin only",

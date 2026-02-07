@@ -16,6 +16,7 @@ import {
     type Lesson,
     type CourseModule
 } from "@/app/actions/academy";
+import QuizComponent from "@/components/academy/QuizComponent";
 
 interface LessonPageProps {
     params: { courseId: string; lessonId: string };
@@ -257,6 +258,39 @@ export default function LessonPage({ params }: LessonPageProps) {
                         dangerouslySetInnerHTML={{ __html: currentLesson.content }}
                     />
                 </div>
+
+                {/* Quiz Section - Render if module has quiz and lesson is completed */}
+                {currentModule.quiz && isCompleted && (
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 mb-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+                                    Module Quiz
+                                </h2>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    {currentModule.quiz.questions.length} questions • Passing score: {currentModule.quiz.passingScore}%
+                                </p>
+                            </div>
+                            {progress?.quizScores[currentModule.id] !== undefined && (
+                                <div className={`px-4 py-2 rounded-lg font-bold ${(progress.quizScores[currentModule.id] || 0) >= currentModule.quiz.passingScore
+                                    ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                                    : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                                    }`}>
+                                    Score: {progress.quizScores[currentModule.id]}%
+                                </div>
+                            )}
+                        </div>
+
+                        <QuizComponent
+                            quiz={currentModule.quiz}
+                            moduleId={currentModule.id}
+                            courseId={courseId}
+                            userId={session?.user?.id || ''}
+                            existingScore={progress?.quizScores[currentModule.id]}
+                            onComplete={loadLesson}
+                        />
+                    </div>
+                )}
 
                 {/* Mark Complete Button */}
                 {!isCompleted && (

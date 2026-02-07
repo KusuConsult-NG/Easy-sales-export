@@ -40,7 +40,7 @@ export async function updateFeatureToggle(
     try {
         const session = await auth();
 
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { success: false, error: "Unauthorized: Admin access required" };
         }
 
@@ -101,7 +101,7 @@ export async function getAllFeatureToggles(): Promise<{
     try {
         const session = await auth();
 
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { success: false, error: "Unauthorized: Admin access required" };
         }
 

@@ -172,7 +172,7 @@ export async function updateExportStatusAction(
         }
 
         // Verify ownership (unless admin)
-        if (exportDoc.data().userId !== session.user.id && session.user.role !== "admin") {
+        if (exportDoc.data().userId !== session.user.id && !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized to update this export", success: false };
         }
 
@@ -198,7 +198,9 @@ export async function updateExportStatusAction(
 // ============================================
 
 export async function getExportWindowsAction(
-    statusFilter?: string
+    statusFilter?: string,
+    fromDate?: string,
+    toDate?: string
 ): Promise<GetExportsActionState> {
     try {
         const session = await auth();
@@ -227,7 +229,7 @@ export async function getExportWindowsAction(
 
         const snapshot = await getDocs(exportsQuery);
 
-        const exports: ExportWindow[] = snapshot.docs.map(doc => ({
+        let exports: ExportWindow[] = snapshot.docs.map(doc => ({
             id: doc.id,
             orderId: doc.data().orderId,
             commodity: doc.data().commodity,
@@ -241,6 +243,23 @@ export async function getExportWindowsAction(
             createdAt: doc.data().createdAt?.toDate() || new Date(),
             updatedAt: doc.data().updatedAt?.toDate() || new Date(),
         }));
+
+        // Apply client-side date filtering
+        if (fromDate || toDate) {
+            exports = exports.filter(exp => {
+                const createdDate = exp.createdAt;
+
+                if (fromDate && toDate) {
+                    return createdDate >= new Date(fromDate) && createdDate <= new Date(toDate);
+                } else if (fromDate) {
+                    return createdDate >= new Date(fromDate);
+                } else if (toDate) {
+                    return createdDate <= new Date(toDate);
+                }
+
+                return true;
+            });
+        }
 
         return {
             error: null,
@@ -274,7 +293,7 @@ export async function getExportWindowDetailsAction(
         }
 
         // Verify ownership (unless admin)
-        if (exportDoc.data().userId !== session.user.id && session.user.role !== "admin") {
+        if (exportDoc.data().userId !== session.user.id && !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized to view this export", success: false };
         }
 

@@ -40,7 +40,7 @@ export async function updateExportStatusAction(
 
         // Verify ownership (unless admin)
         const exportData = exportDoc.data();
-        if (exportData.userId !== session.user.id && session.user.role !== "admin" && session.user.role !== "super_admin") {
+        if (exportData.userId !== session.user.id && !session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return { error: "Unauthorized to update this export", success: false };
         }
 

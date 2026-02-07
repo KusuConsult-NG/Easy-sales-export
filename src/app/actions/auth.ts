@@ -10,6 +10,7 @@ import { AuthError } from "next-auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { User as FirestoreUser } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { LEGACY_ROLE_MAP, type LegacyRole } from "@/lib/types/roles";
 
 /**
  * Server Actions for Authentication
@@ -26,17 +27,27 @@ export async function loginAction(prevState: any, formData: FormData) {
         // Validate with Zod
         const validatedData = loginSchema.parse({ email, password });
 
-        // Sign in with NextAuth - redirect: false so we can handle success client-side
+        // DO NOT MODIFY – AUTH STABILITY
+        // Sign in first, then redirect explicitly (form actions don't handle NEXT_REDIRECT from signIn)
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
             redirect: false,
         });
 
-        // Return success - client will handle redirect
-        return { error: "", success: true };
+        // DO NOT MODIFY – AUTH STABILITY
+        // Explicit redirect required for form actions
+        redirect("/dashboard");
 
     } catch (error) {
+        // DO NOT MODIFY – AUTH STABILITY  
+        // Re-throw redirect to allow Next.js navigation
+        if (error && typeof error === 'object' && 'digest' in error &&
+            typeof error.digest === 'string' &&
+            error.digest.startsWith('NEXT_REDIRECT')) {
+            throw error;
+        }
+
         logger.error("Login error", error);
 
         if (error instanceof AuthError) {
@@ -93,7 +104,7 @@ export async function registerAction(prevState: any, formData: FormData) {
             uid: userCredential.user.uid,
             fullName: validatedData.fullName,
             email: validatedData.email,
-            role: role as "member" | "exporter" | "admin" | "vendor" | "super_admin",
+            roles: [LEGACY_ROLE_MAP[role as LegacyRole]],
             verified: true, // No email verification implemented
             gender: gender as "male" | "female" | undefined,
         };

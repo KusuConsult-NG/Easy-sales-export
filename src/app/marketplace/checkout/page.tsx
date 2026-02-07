@@ -3,29 +3,33 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ShoppingCart, CreditCard, ArrowLeft, Loader2, CheckCircle, X } from "lucide-react";
+import { ShoppingCart, CreditCard, ArrowLeft, Loader2, CheckCircle, X, Store } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { createOrderAction } from "@/app/actions/orders";
+import { useToast } from "@/contexts/ToastContext";
+import type { Product } from "@/lib/types/marketplace";
 
 // Disable static generation for this page - must be client-only due to Paystack
 export const dynamic = 'force-dynamic';
 
-interface CartItem {
-    id: string;
-    name: string;
-    category: string;
-    price: number;
-    unit: string;
+interface CartItem extends Product {
     quantity: number;
-    image: string;
 }
 
 export default function CheckoutPage() {
     const router = useRouter();
+    const { showToast } = useToast();
     const [cart, setCart] = useState<CartItem[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<"paystack" | "bank_transfer">("paystack");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
+    const [deliveryAddress, setDeliveryAddress] = useState({
+        street: "",
+        city: "",
+        state: "",
+        lga: "",
+    });
     const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
@@ -40,9 +44,8 @@ export default function CheckoutPage() {
         }
     }, [router]);
 
-    const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const tax = subtotal * 0.075; // 7.5% VAT
-    const total = subtotal + tax;
+    const subtotal = cart.reduce((sum, item) => sum + (item.pricingTiers[0]?.price || 0) * item.quantity, 0);
+    const deliveryFee = 5000;
 
     const handlePaystackCheckout = () => {
         if (!email || !phone) {
@@ -66,7 +69,7 @@ export default function CheckoutPage() {
                 const handler = PaystackPop.setup({
                     key: publicKey,
                     email: email,
-                    amount: Math.round(total * 100),
+                    amount: Math.round((subtotal + deliveryFee) * 100),
                     currency: 'NGN',
                     ref: `MP-${Date.now()}`,
                     onClose: () => {
@@ -127,32 +130,39 @@ export default function CheckoutPage() {
                                 Order Summary
                             </h2>
                             <div className="space-y-4">
-                                {cart.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        className="flex items-start gap-4 pb-4 border-b border-slate-200 dark:border-slate-700 last:border-0"
-                                    >
-                                        <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-700">
-                                            <Image
-                                                src={item.image}
-                                                alt={item.name}
-                                                fill
-                                                className="object-cover"
-                                            />
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-bold text-slate-900 dark:text-white">
-                                                {item.name}
-                                            </h3>
-                                            <p className="text-sm text-slate-600 dark:text-slate-400">
-                                                {formatCurrency(item.price)} × {item.quantity}
+                                {cart.map((item) => {
+                                    const price = item.pricingTiers[0]?.price || 0;
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className="flex items-start gap-4 pb-4 border-b border-slate-200 dark:border-slate-700 last:border-0"
+                                        >
+                                            <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-700">
+                                                {item.images[0] ? (
+                                                    <Image
+                                                        src={item.images[0]}
+                                                        alt={item.title}
+                                                        fill
+                                                        className="object-cover"
+                                                    />
+                                                ) : (
+                                                    <Store className="w-8 h-8 text-gray-400 mx-auto mt-6" />
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <h3 className="font-bold text-slate-900 dark:text-white">
+                                                    {item.title}
+                                                </h3>
+                                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                    {formatCurrency(price)} × {item.quantity} {item.unit}
+                                                </p>
+                                            </div>
+                                            <p className="font-bold text-primary">
+                                                {formatCurrency(price * item.quantity)}
                                             </p>
                                         </div>
-                                        <p className="font-bold text-primary">
-                                            {formatCurrency(item.price * item.quantity)}
-                                        </p>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -252,12 +262,12 @@ export default function CheckoutPage() {
                                     <span>{formatCurrency(subtotal)}</span>
                                 </div>
                                 <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                                    <span>VAT (7.5%)</span>
-                                    <span>{formatCurrency(tax)}</span>
+                                    <span>Delivery Fee</span>
+                                    <span>{formatCurrency(deliveryFee)}</span>
                                 </div>
                                 <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between text-lg font-bold">
                                     <span className="text-slate-900 dark:text-white">Total</span>
-                                    <span className="text-primary">{formatCurrency(total)}</span>
+                                    <span className="text-primary">{formatCurrency(subtotal + deliveryFee)}</span>
                                 </div>
                             </div>
 

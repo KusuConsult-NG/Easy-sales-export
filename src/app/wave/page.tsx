@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Heart, CheckCircle, Send, AlertCircle, Loader2 } from "lucide-react";
@@ -28,7 +28,7 @@ export default function WAVEProgramPage() {
         yearsInBusiness: "",
         reasonForApplying: "",
     });
-    const [state, formAction, isPending] = useFormState(submitWaveApplicationAction, initialState);
+    const [state, formAction, isPending] = useActionState(submitWaveApplicationAction, initialState);
 
     // Check gender eligibility on mount
     useEffect(() => {

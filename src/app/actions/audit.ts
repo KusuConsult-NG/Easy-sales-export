@@ -96,7 +96,7 @@ export async function getAuditLogsAction(
 ): Promise<GetAuditLogsState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false, data: null };
         }
 

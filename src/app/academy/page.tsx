@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import { GraduationCap, Clock, Users, Star, BookOpen, AlertCircle, CheckCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import EmptyState from "@/components/ui/EmptyState";
 import { enrollInCourseAction, type EnrollmentActionState } from "@/app/actions/platform";
 
 interface Course {
@@ -31,7 +32,7 @@ export default function AcademyPage() {
         email: "",
         phone: "",
     });
-    const [state, formAction, isPending] = useFormState(enrollInCourseAction, initialState);
+    const [state, formAction, isPending] = useActionState(enrollInCourseAction, initialState);
 
     // Handle successful enrollment
     if (state.success && !isPending) {
@@ -162,7 +163,7 @@ export default function AcademyPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                                Category
+                                Courses
                             </label>
                             <select
                                 value={selectedCategory}

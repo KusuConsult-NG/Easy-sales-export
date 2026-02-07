@@ -48,6 +48,10 @@ export type AuditAction =
     | 'feature_toggled'
     // WAVE Actions
     | 'wave_enrollment'
+    | 'wave_training_created'
+    | 'wave_training_updated'
+    | 'wave_application_approved'
+    | 'wave_application_rejected'
     | 'training_registration'
     // LMS Actions
     | 'course_enrolled'

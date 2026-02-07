@@ -37,7 +37,7 @@ export async function approveWaveApplicationAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -71,7 +71,7 @@ export async function rejectWaveApplicationAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -112,7 +112,7 @@ export async function processWithdrawalAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -173,7 +173,7 @@ export async function toggleUserVerificationAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -229,7 +229,7 @@ export async function getWaveApplicationsAction(
 }> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -276,7 +276,7 @@ export async function getPendingWithdrawalsAction(): Promise<{
 }> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -315,7 +315,7 @@ export async function getPendingLandListings(): Promise<{
 }> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -350,7 +350,7 @@ export async function verifyLandListing(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -402,12 +402,17 @@ export async function verifyLandListing(
                         </div>
                     `;
 
-                await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
-                    to: listingData.ownerEmail || "user@example.com",
-                    subject: emailSubject,
-                    html: emailContent,
-                });
+                // Security: Don't send if email is missing
+                if (!listingData.ownerEmail) {
+                    console.error(`Missing ownerEmail forland listing ${listingId}`);
+                } else {
+                    await resend.emails.send({
+                        from: "Easy Sales Export <noreply@easysalesexport.com>",
+                        to: listingData.ownerEmail,
+                        subject: emailSubject,
+                        html: emailContent,
+                    });
+                }
             }
         }
 
@@ -441,7 +446,7 @@ export async function getPendingLoanApplications(): Promise<{
 }> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -477,7 +482,7 @@ export async function approveLoanApplication(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -517,14 +522,18 @@ export async function approveLoanApplication(
             const { Resend } = await import("resend");
             const resend = new Resend(process.env.RESEND_API_KEY);
 
-            await resend.emails.send({
-                from: "Easy Sales Export <noreply@easysalesexport.com>",
-                to: loanData.userEmail || "user@example.com",
-                subject: "Loan Application Approved!",
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
-                        <p>Great news! Your loan application has been approved by our admin team.</p>
+            // Security: Don't send if email is missing
+            if (!loanData.userEmail) {
+                console.error(`Missing userEmail for loan application ${applicationId}`);
+            } else {
+                await resend.emails.send({
+                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    to: loanData.userEmail,
+                    subject: "Loan Application Approved!",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
+                            <p>Great news! Your loan application has been approved by our admin team.</p>
                         
                         <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0;">
                             <h3 style="color: #059669; margin-top: 0;">Loan Details:</h3>
@@ -542,10 +551,11 @@ export async function approveLoanApplication(
                             <li>You can track your repayment schedule in your dashboard</li>
                         </ul>
 
-                        <p>Thank you for being a valued member of our cooperative!</p>
-                    </div>
-                `,
-            });
+                            <p>Thank you for being a valued member of our cooperative!</p>
+                        </div>
+                    `,
+                });
+            }
         }
 
         // Create notification for user
@@ -583,7 +593,7 @@ export async function rejectLoanApplication(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
@@ -613,34 +623,39 @@ export async function rejectLoanApplication(
             const { Resend } = await import("resend");
             const resend = new Resend(process.env.RESEND_API_KEY);
 
-            await resend.emails.send({
-                from: "Easy Sales Export <noreply@easysalesexport.com>",
-                to: loanData.userEmail || "user@example.com",
-                subject: "Loan Application Update",
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #dc2626;">Loan Application Update</h2>
-                        <p>Thank you for applying for a loan with Easy Sales Export.</p>
-                        
-                        <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                            <p>Unfortunately, we are unable to approve your loan application at this time.</p>
-                            <p><strong>Reason:</strong> ${reason}</p>
+            // Security: Don't send if email is missing
+            if (!loanData.userEmail) {
+                console.error(`Missing userEmail for loan rejection ${applicationId}`);
+            } else {
+                await resend.emails.send({
+                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    to: loanData.userEmail,
+                    subject: "Loan Application Update",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #dc2626;">Loan Application Update</h2>
+                            <p>Thank you for applying for a loan with Easy Sales Export.</p>
+                            
+                            <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                                <p>Unfortunately, we are unable to approve your loan application at this time.</p>
+                                <p><strong>Reason:</strong> ${reason}</p>
+                            </div>
+
+                            <p><strong>What You Can Do:</strong></p>
+                            <ul>
+                                <li>Review the rejection reason carefully</li>
+                                <li>Address the issues mentioned</li>
+                                <li>Consider increasing your cooperative contributions for a higher tier</li>
+                                <li>Reapply after making the necessary adjustments</li>
+                            </ul>
+
+                            <p>If you have any questions or need clarification, please don't hesitate to contact our support team.</p>
+                            
+                            <p>We look forward to supporting your financial growth in the future.</p>
                         </div>
-
-                        <p><strong>What You Can Do:</strong></p>
-                        <ul>
-                            <li>Review the rejection reason carefully</li>
-                            <li>Address the issues mentioned</li>
-                            <li>Consider increasing your cooperative contributions for a higher tier</li>
-                            <li>Reapply after making the necessary adjustments</li>
-                        </ul>
-
-                        <p>If you have any questions or need clarification, please don't hesitate to contact our support team.</p>
-                        
-                        <p>We look forward to supporting your financial growth in the future.</p>
-                    </div>
-                `,
-            });
+                    `,
+                });
+            }
         }
 
         // Create notification for user
@@ -683,7 +698,7 @@ export async function rejectLoanApplication(
 export async function unlockUserAccount(email: string): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || session.user.role !== "admin") {
+        if (!session?.user || !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
 

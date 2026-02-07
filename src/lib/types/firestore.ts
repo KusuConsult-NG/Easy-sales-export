@@ -8,17 +8,48 @@
 // Export PRD-required interfaces
 export * from "./prd-interfaces";
 
+// Export role types
+import type { UserRole, LegacyRole } from "./roles";
+export type { UserRole, LegacyRole };
+export { ROLE_LABELS, LEGACY_ROLE_MAP } from "./roles";
+
 export interface User {
     uid: string;
     fullName: string;
     email: string;
     phone?: string;
-    gender?: "male" | "female";
-    role: "member" | "exporter" | "admin" | "vendor" | "super_admin";
+    gender?: "male" | "female"; // Required for WAVE participant validation
+    roles: UserRole[]; // Multi-role support (changed from single role)
     verified: boolean;
+
+    // Cooperative
     cooperativeId?: string;
     cooperativeMembershipId?: string;
-    sellerVerificationStatus?: "pending" | "approved" | "rejected";
+    cooperativeTier?: "tier1" | "tier2"; // ₦10K or ₦20K
+    cooperativeRegistrationFee?: number;
+
+    // Seller Verification (Enhanced)
+    sellerVerificationStatus?: "pending" | "approved" | "rejected" | "suspended";
+    sellerVerificationId?: string; // Reference to seller_verifications collection
+    sellerPhoneVerified?: boolean;
+
+    // Bank Details (for sellers and cooperative members)
+    bankDetails?: {
+        accountNumber: string;
+        bankName: string;
+        accountName: string;
+        bankCode: string;
+    };
+
+    // Address
+    address?: {
+        street: string;
+        city: string;
+        state: string;
+        lga: string;
+        country: string;
+    };
+
     // MFA fields
     mfaEnabled?: boolean;
     totpSecret?: string; // Encrypted TOTP secret
@@ -200,6 +231,7 @@ export const COLLECTIONS = {
     // Cooperatives & Finance
     COOPERATIVES: "cooperatives",
     COOPERATIVE_MEMBERS: "cooperative_members",
+    COOPERATIVE_TRANSACTIONS: "cooperative_transactions",
     FIXED_SAVINGS_PLANS: "fixed_savings_plans",
     LOAN_PRODUCTS: "loan_products",
     LOAN_APPLICATIONS: "loan_applications",
@@ -224,6 +256,18 @@ export const COLLECTIONS = {
     ESCROW_MESSAGES: "escrow_messages",
     DISPUTES: "disputes",
 
+    // Farm Nation
+    FARM_NATION_PROPERTIES: "farm_nation_properties",
+    FARM_NATION_TRANSACTIONS: "farm_nation_transactions",
+
+    // NEW: Marketplace Enhancement
+    PRODUCT_IMAGES: "product_images",
+    SHOPPING_CARTS: "shopping_carts",
+    ORDERS: "orders",
+    MESSAGES: "messages",
+    CONVERSATIONS: "conversations",
+    PRODUCT_REVIEWS: "product_reviews",
+
     // Education & Training
     COURSES: "courses",
     ENROLLMENTS: "enrollments",
@@ -245,4 +289,3 @@ export const COLLECTIONS = {
     // AI & Chat
     AI_CHAT_HISTORY: "ai_chat_history",
 } as const;
-

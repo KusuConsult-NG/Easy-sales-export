@@ -6,9 +6,12 @@ import { ArrowLeft, CreditCard, TrendingUp, Shield, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { initializeContributionPaymentAction } from '@/app/actions/cooperative-payment';
 import { COOPERATIVE_TIERS } from '@/lib/cooperative-tiers';
+import { useToast } from '@/contexts/ToastContext';
+import LoadingButton from '@/components/ui/LoadingButton';
 
 export default function ContributePage() {
     const router = useRouter();
+    const { showToast } = useToast();
     const [amount, setAmount] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -45,26 +48,38 @@ export default function ContributePage() {
             // Validate amount
             if (amountNum < 1000) {
                 setError('Minimum contribution is ₦1,000');
+                showToast('Minimum contribution is ₦1,000', 'error');
                 return;
             }
 
             if (amountNum > 1000000) {
                 setError('Maximum contribution is ₦1,000,000');
+                showToast('Maximum contribution is ₦1,000,000', 'error');
                 return;
             }
+
+            showToast('Initializing payment...', 'loading');
 
             // Initialize payment
             const result = await initializeContributionPaymentAction(amountNum);
 
             if (!result.success || !result.data) {
                 setError(result.error || 'Failed to initialize payment');
+                showToast(result.error || 'Failed to initialize payment', 'error');
                 return;
             }
 
+            showToast('Redirecting to payment gateway...', 'success');
             // Redirect to Paystack
-            window.location.href = result.data.authorizationUrl;
+            setTimeout(() => {
+                if (result.data) {
+                    window.location.href = result.data.authorizationUrl;
+                }
+            }, 1000);
         } catch (err: any) {
-            setError(err.message || 'An error occurred');
+            const errorMsg = err.message || 'An error occurred';
+            setError(errorMsg);
+            showToast(errorMsg, 'error');
         } finally {
             setLoading(false);
         }
@@ -148,23 +163,18 @@ export default function ContributePage() {
                         )}
 
                         {/* Pay Button */}
-                        <button
+                        <LoadingButton
                             onClick={handlePayment}
-                            disabled={loading || !amountNum || amountNum < 1000}
-                            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-lg transition-all shadow-lg disabled:cursor-not-allowed"
+                            disabled={!amountNum || amountNum < 1000}
+                            loading={loading}
+                            loadingText="Processing..."
+                            icon={<CreditCard className="w-5 h-5" />}
+                            variant="primary"
+                            size="lg"
+                            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
                         >
-                            {loading ? (
-                                <>
-                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <CreditCard className="w-5 h-5" />
-                                    Pay with Paystack
-                                </>
-                            )}
-                        </button>
+                            Pay with Paystack
+                        </LoadingButton>
 
                         {/* Security Notice */}
                         <div className="mt-4 flex items-start gap-2 text-sm text-slate-500 dark:text-slate-400">

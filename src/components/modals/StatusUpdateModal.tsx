@@ -1,8 +1,11 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useEffect } from "react";
+import { useActionState } from "react";
 import { Package, Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import LoadingButton from "@/components/ui/LoadingButton";
+import { useToast } from "@/contexts/ToastContext";
 import { updateExportStatusAction } from "@/app/actions/export-status";
 
 type UpdateExportStatusState =
@@ -26,15 +29,21 @@ export default function StatusUpdateModal({
     exportId,
     currentStatus
 }: StatusUpdateModalProps) {
-    const [state, formAction, isPending] = useFormState(updateExportStatusAction, initialState);
+    const [state, formAction, isPending] = useActionState(updateExportStatusAction, initialState);
+    const { showToast } = useToast();
 
-    // Close modal on success
-    if (state.success && !isPending) {
-        setTimeout(() => {
-            onClose();
-            window.location.reload();
-        }, 2000);
-    }
+    // Handle success/error with toasts
+    useEffect(() => {
+        if (state.success && !isPending && state.message) {
+            showToast(state.message, "success");
+            setTimeout(() => {
+                onClose();
+                window.location.reload();
+            }, 1500);
+        } else if (state.error && !state.success && state.error !== "Initializing...") {
+            showToast(state.error, "error");
+        }
+    }, [state.success, state.error, isPending, onClose, showToast]);
 
     const statusOptions: { value: ExportStatus; label: string; description: string }[] = [
         { value: "pending", label: "Pending", description: "Order is being prepared" },
@@ -119,14 +128,14 @@ export default function StatusUpdateModal({
                     >
                         Cancel
                     </button>
-                    <button
+                    <LoadingButton
                         type="submit"
-                        disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        loading={isPending}
+                        loadingText="Updating..."
+                        className="flex-1 px-6 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition"
                     >
-                        {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                        {isPending ? "Updating..." : "Update Status"}
-                    </button>
+                        Update Status
+                    </LoadingButton>
                 </div>
             </form>
         </Modal>

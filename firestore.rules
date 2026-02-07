@@ -13,10 +13,11 @@ service cloud.firestore {
     }
     
     // Check if user is admin
+    // Updated to match server-side RBAC which uses roles array
     function isAdmin() {
       return isSignedIn() && 
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+             'admin' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles;
     }
     
     // Check if user owns the resource
@@ -40,12 +41,12 @@ service cloud.firestore {
       
       // Create: Own profile only (during registration)
       allow create: if isOwner(userId) &&
-                       request.resource.data.keys().hasAll(['email', 'fullName', 'role']) &&
-                       request.resource.data.role == 'user'; // Prevent self-promotion to admin
+                       request.resource.data.keys().hasAll(['email', 'fullName', 'roles']) &&
+                       request.resource.data.roles.hasOnly(['user']); // Prevent self-promotion to admin
       
       // Update: Own profile (limited fields) or admin (all fields)
       allow update: if isOwner(userId) &&
-                       // Users can only update these fields
+                       // Users can only update these fields (roles excluded to prevent privilege escalation)
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'address', 'businessType', 'updatedAt'])
                     || isAdmin();
       

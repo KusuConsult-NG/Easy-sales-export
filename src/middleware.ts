@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { canAccessRoute } from "@/lib/permissions";
+import type { UserRole } from "@/lib/types/firestore";
 
 /**
  * Enhanced Next.js Middleware for Route Protection
  * 
  * Features:
- * - Session timeout detection
+ * - Session timeout detect ion
  * - Feature toggle enforcement
- * - Comprehensive role-based access control
+ * - Multi-role access control with permissions matrix
  * - Security headers
  */
 
@@ -23,36 +25,12 @@ const protectedRoutes = [
     "/academy",
 ];
 
-// Routes requiring admin role
-const adminRoutes = [
-    "/admin/users",
-    "/admin/export-windows",
-    "/admin/audit-logs",
-    "/admin/loans",
-    "/admin/land-verification",
-    "/admin/disputes",
-    "/admin/engagement",
-    "/admin/announcements",
-    "/admin/content",
-    "/admin/withdrawals",
-    "/admin/content-approval", // New: Content approval system
-    "/escrow/admin", // New: Escrow admin panel
-    "/academy/admin", // New: LMS course management
-    "/loans/approve", // New: Loan approval
-];
-
 // Routes requiring MFA verification
 const mfaProtectedRoutes = [
     "/admin", // All admin pages
     "/cooperatives/withdraw",
     "/export",
     "/loans/apply",
-];
-
-// Routes requiring super_admin role
-const superAdminRoutes = [
-    "/admin/super/financial",
-    "/admin/super/feature-toggles",
 ];
 
 // Feature toggle mappings
@@ -99,9 +77,6 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith(route)
     );
 
-    const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
-    const isSuperAdminRoute = superAdminRoutes.some((route) => pathname.startsWith(route));
-
     // Redirect unauthenticated users to login
     if (isProtectedRoute && !session) {
         const loginUrl = new URL("/auth/login", request.url);
@@ -109,30 +84,14 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // Handle admin route authorization
-    if (isAdminRoute) {
-        if (!session) {
-            const loginUrl = new URL("/auth/login", request.url);
-            loginUrl.searchParams.set("callbackUrl", pathname);
-            return NextResponse.redirect(loginUrl);
-        }
+    // NEW: Multi-role authorization check
+    if (session && session.user.roles) {
+        const userRoles = session.user.roles as UserRole[];
 
-        // Check if user has admin or super_admin role
-        if (session.user.role !== "admin" && session.user.role !== "super_admin") {
-            return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
-    }
-
-    // Handle super admin route authorization
-    if (isSuperAdminRoute) {
-        if (!session) {
-            const loginUrl = new URL("/auth/login", request.url);
-            loginUrl.searchParams.set("callbackUrl", pathname);
-            return NextResponse.redirect(loginUrl);
-        }
-
-        if (session.user.role !== "super_admin") {
-            return NextResponse.redirect(new URL("/dashboard", request.url));
+        // Check if user has permission to access this route
+        if (!canAccessRoute(userRoles, pathname)) {
+            // User doesn't have required roles for this route
+            return NextResponse.redirect(new URL("/dashboard?error=unauthorized", request.url));
         }
     }
 

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { TrendingUp, TrendingDown, DollarSign, Package, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import RevenueChart from "@/components/features/RevenueChart";
 import CommodityPieChart from "@/components/features/CommodityPieChart";
 import ActivityFeed from "@/components/features/ActivityFeed";
 import OnboardingTour from "@/components/OnboardingTour";
+import CooperativeWidget from "@/components/widgets/CooperativeWidget";
 import {
     getDashboardStatsAction,
     getRecentActivityAction,
@@ -17,6 +19,7 @@ import {
 } from "@/app/actions/dashboard";
 
 export default function DashboardPage() {
+    const router = useRouter();
     const [exportFilter, setExportFilter] = useState<"all" | "active" | "completed">("all");
     const [isLoading, setIsLoading] = useState(true);
     const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -224,6 +227,23 @@ export default function DashboardPage() {
                             <ActivityFeed />
                         </div>
 
+                        {/* Cooperative Widget */}
+                        <div className="mb-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div className="lg:col-span-2">
+                                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                                        Member Benefits
+                                    </h2>
+                                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                                        <p className="text-slate-600 dark:text-slate-400">
+                                            As a cooperative member, you can access exclusive benefits including savings plans, loans, and member networking opportunities.
+                                        </p>
+                                    </div>
+                                </div>
+                                <CooperativeWidget />
+                            </div>
+                        </div>
+
                         {/* Export Windows */}
                         <div className="mb-8">
                             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -320,7 +340,10 @@ export default function DashboardPage() {
                                             <div className="text-sm text-slate-600 dark:text-slate-400">
                                                 <span className="font-semibold">1,200+</span> investors
                                             </div>
-                                            <button className="px-6 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors">
+                                            <button
+                                                onClick={() => router.push('/export')}
+                                                className="px-6 py-2 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors"
+                                            >
                                                 Invest Now
                                             </button>
                                         </div>

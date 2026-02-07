@@ -252,7 +252,7 @@ export async function updateLandListing(
             return { success: false, error: "Listing not found" };
         }
 
-        if (listingResult.listing.ownerId !== session.user.id && session.user.role !== 'admin') {
+        if (listingResult.listing.ownerId !== session.user.id && !session.user.roles?.includes('admin')) {
             return { success: false, error: "Unauthorized to edit this listing" };
         }
 
@@ -305,7 +305,7 @@ export async function verifyLandListing(
     data: z.infer<typeof landVerificationSchema>
 ) {
     const session = await auth();
-    if (!session || session.user.role !== 'admin') {
+    if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
     }
 
@@ -371,7 +371,7 @@ export async function deleteLandListing(listingId: string) {
             return { success: false, error: "Listing not found" };
         }
 
-        if (listingResult.listing.ownerId !== session.user.id && session.user.role !== 'admin') {
+        if (listingResult.listing.ownerId !== session.user.id && !session.user.roles?.includes('admin')) {
             return { success: false, error: "Unauthorized to delete this listing" };
         }
 
@@ -405,7 +405,7 @@ export async function deleteLandListing(listingId: string) {
  */
 export async function getLandStatistics() {
     const session = await auth();
-    if (!session || session.user.role !== 'admin') {
+    if (!session || !session.user.roles?.includes('admin')) {
         return {
             success: false,
             error: "Unauthorized - Admin only",

@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useState, useEffect } from "react";
+import { useActionState } from "react";
 import { X, DollarSign, AlertCircle, CheckCircle, TrendingUp, TrendingDown } from "lucide-react";
 import Modal from "@/components/ui/Modal";
-import { makeContributionAction, type MakeContributionState } from "@/app/actions/cooperative";
+import LoadingButton from "@/components/ui/LoadingButton";
+import { useToast } from "@/contexts/ToastContext";
+import { makeContributionAction } from "@/app/actions/cooperative";
+import type { MakeContributionState } from "@/lib/types/cooperative";
 
 const initialState: MakeContributionState = { error: "Initializing...", success: false };
 
@@ -23,16 +26,22 @@ export default function ContributionModal({
     currentBalance,
     loanBalance
 }: ContributionModalProps) {
-    const [state, formAction, isPending] = useFormState(makeContributionAction, initialState);
+    const [state, formAction, isPending] = useActionState(makeContributionAction, initialState);
     const [contributionType, setContributionType] = useState<"savings" | "loan_repayment">("savings");
+    const { showToast } = useToast();
 
-    // Reset form and close modal on success
-    if (state.success && !isPending) {
-        setTimeout(() => {
-            onClose();
-            window.location.reload(); // Refresh to show updated balance
-        }, 2000);
-    }
+    // Handle success/error with toasts
+    useEffect(() => {
+        if (state.success && !isPending) {
+            showToast("Contribution submitted successfully!", "success");
+            setTimeout(() => {
+                onClose();
+                window.location.reload();
+            }, 1500);
+        } else if (state.error && !state.success && state.error !== "Initializing...") {
+            showToast(state.error, "error");
+        }
+    }, [state.success, state.error, isPending, onClose, showToast]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Make Contribution">
@@ -82,8 +91,8 @@ export default function ContributionModal({
                             type="button"
                             onClick={() => setContributionType("savings")}
                             className={`px-4 py-3 rounded-xl border-2 font-semibold transition ${contributionType === "savings"
-                                    ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400"
-                                    : "border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+                                ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400"
+                                : "border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                                 }`}
                         >
                             <TrendingUp className="w-5 h-5 mx-auto mb-1" />
@@ -94,8 +103,8 @@ export default function ContributionModal({
                             onClick={() => setContributionType("loan_repayment")}
                             disabled={loanBalance === 0}
                             className={`px-4 py-3 rounded-xl border-2 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${contributionType === "loan_repayment"
-                                    ? "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400"
-                                    : "border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+                                ? "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400"
+                                : "border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                                 }`}
                         >
                             <TrendingDown className="w-5 h-5 mx-auto mb-1" />

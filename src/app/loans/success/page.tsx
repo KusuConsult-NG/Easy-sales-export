@@ -136,7 +136,7 @@ function LoanSuccessContent() {
     );
 }
 
-export default function LoanSuccessPage() {
+function LoanSuccessPageContent() {
     return (
         <Suspense fallback={
             <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
@@ -147,6 +147,18 @@ export default function LoanSuccessPage() {
             </div>
         }>
             <LoanSuccessContent />
+        </Suspense>
+    );
+}
+
+export default function LoanSuccessPagePage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+            </div>
+        }>
+            <LoanSuccessPageContent />
         </Suspense>
     );
 }
