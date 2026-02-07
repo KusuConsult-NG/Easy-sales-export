@@ -88,10 +88,20 @@ export async function middleware(request: NextRequest) {
     if (session && session.user.roles) {
         const userRoles = session.user.roles as UserRole[];
 
+        // CRITICAL: Prevent infinite redirect loop
+        // Skip permission check if already redirected with error
+        const hasErrorParam = request.nextUrl.searchParams.has('error');
+
         // Check if user has permission to access this route
-        if (!canAccessRoute(userRoles, pathname)) {
-            // User doesn't have required roles for this route
-            return NextResponse.redirect(new URL("/dashboard?error=unauthorized", request.url));
+        if (!hasErrorParam && !canAccessRoute(userRoles, pathname)) {
+            // Special case: allow dashboard access for all authenticated users
+            if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+                // User is authenticated but lacks specific roles - allow dashboard access
+                // Dashboard will show appropriate UI based on roles
+            } else {
+                // For other protected routes, redirect to dashboard with error
+                return NextResponse.redirect(new URL("/dashboard?error=unauthorized", request.url));
+            }
         }
     }
 
