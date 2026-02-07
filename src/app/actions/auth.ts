@@ -10,7 +10,7 @@ import { AuthError } from "next-auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { User as FirestoreUser } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { LEGACY_ROLE_MAP, type LegacyRole } from "@/lib/types/roles";
+import { LEGACY_ROLE_MAP, type LegacyRole, type UserRole } from "@/lib/types/roles";
 
 /**
  * Server Actions for Authentication
@@ -101,12 +101,18 @@ export async function registerAction(prevState: any, formData: FormData) {
             validatedData.password
         );
 
-        // Create Firestore user profile
+        // Create Firestore user profile with proper role assignment
+        // CRITICAL: Always include general_user for dashboard access
+        const specificRole = LEGACY_ROLE_MAP[role as LegacyRole];
+        const userRoles: UserRole[] = specificRole === "general_user"
+            ? ["general_user"]  // Member already maps to general_user
+            : ["general_user", specificRole];  // Add general_user + specific role
+
         const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = {
             uid: userCredential.user.uid,
             fullName: validatedData.fullName,
             email: validatedData.email,
-            roles: [LEGACY_ROLE_MAP[role as LegacyRole]],
+            roles: userRoles,
             verified: true, // No email verification implemented
             gender: gender as "male" | "female" | undefined,
         };

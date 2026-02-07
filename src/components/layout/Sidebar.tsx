@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
 import NotificationCenter from "./NotificationCenter";
 import { useTheme } from "@/contexts/ThemeContext";
+import { logoutAction } from "@/app/actions/auth";
 
 const navigationItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -91,7 +92,19 @@ export function Sidebar() {
             </nav>
 
             {/* Footer Actions */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                {/* Logout Button */}
+                <form action={logoutAction}>
+                    <button
+                        type="submit"
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span className="font-medium">Logout</span>
+                    </button>
+                </form>
+
+                {/* Theme Toggle */}
                 <button
                     onClick={toggleTheme}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
