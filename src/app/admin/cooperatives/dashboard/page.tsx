@@ -287,7 +287,7 @@ export default function AdminCooperativeDashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <Link
                         href="/admin/cooperatives/members"
-                        className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition"
+                        className="bg-linear-to-br from-blue-600 to-blue-700 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition"
                     >
                         <Users className="w-8 h-8 mb-3" />
                         <h3 className="text-lg font-bold mb-2">Manage Members</h3>
@@ -296,7 +296,7 @@ export default function AdminCooperativeDashboardPage() {
 
                     <Link
                         href="/admin/cooperatives/transactions"
-                        className="bg-gradient-to-br from-green-600 to-green-700 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition"
+                        className="bg-linear-to-br from-green-600 to-green-700 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition"
                     >
                         <FileText className="w-8 h-8 mb-3" />
                         <h3 className="text-lg font-bold mb-2">View Transactions</h3>
@@ -305,7 +305,7 @@ export default function AdminCooperativeDashboardPage() {
 
                     <Link
                         href="/admin/cooperatives/loans"
-                        className="bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition"
+                        className="bg-linear-to-br from-purple-600 to-purple-700 text-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition"
                     >
                         <DollarSign className="w-8 h-8 mb-3" />
                         <h3 className="text-lg font-bold mb-2">Review Loans</h3>

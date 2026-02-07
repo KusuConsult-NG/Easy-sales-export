@@ -66,17 +66,17 @@ export default function WaveDashboardPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-pink-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
+        <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
             <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* Hero Welcome Section */}
-                <div className="bg-gradient-to-r from-pink-600 to-purple-600 rounded-3xl p-8 mb-8 text-white relative overflow-hidden">
+                <div className="bg-linear-to-r from-pink-600 to-purple-600 rounded-3xl p-8 mb-8 text-white relative overflow-hidden">
                     <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-4">
@@ -272,7 +272,7 @@ export default function WaveDashboardPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <button
                             onClick={() => router.push("/wave/profile")}
-                            className="p-4 bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-xl hover:shadow-md transition text-left"
                         >
                             <Heart className="w-8 h-8 text-pink-600 mb-2" />
                             <h3 className="font-semibold text-gray-900 dark:text-white">My Profile</h3>
@@ -283,7 +283,7 @@ export default function WaveDashboardPage() {
 
                         <button
                             onClick={() => router.push("/wave/resources")}
-                            className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl hover:shadow-md transition text-left"
                         >
                             <BookOpen className="w-8 h-8 text-blue-600 mb-2" />
                             <h3 className="font-semibold text-gray-900 dark:text-white">Learning Resources</h3>
@@ -294,7 +294,7 @@ export default function WaveDashboardPage() {
 
                         <button
                             onClick={() => router.push("/wave/training")}
-                            className="p-4 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl hover:shadow-md transition text-left"
                         >
                             <Calendar className="w-8 h-8 text-purple-600 mb-2" />
                             <h3 className="font-semibold text-gray-900 dark:text-white">Training Events</h3>

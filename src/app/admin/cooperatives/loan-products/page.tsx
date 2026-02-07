@@ -154,7 +154,7 @@ export default function LoanProductsPage() {
                 </div>
                 <button
                     onClick={() => handleOpenModal()}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2"
+                    className="px-6 py-3 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2"
                 >
                     <Plus className="w-5 h-5" />
                     Add Product
@@ -190,7 +190,7 @@ export default function LoanProductsPage() {
                             className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all"
                         >
                             <div className="flex items-start justify-between mb-4">
-                                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
+                                <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
                                     <DollarSign className="w-6 h-6 text-white" />
                                 </div>
                                 <div className="flex gap-2">
@@ -374,7 +374,7 @@ export default function LoanProductsPage() {
                             <div className="flex gap-4 pt-4">
                                 <button
                                     type="submit"
-                                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all"
+                                    className="flex-1 px-6 py-3 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all"
                                 >
                                     {editingProduct ? "Update Product" : "Create Product"}
                                 </button>

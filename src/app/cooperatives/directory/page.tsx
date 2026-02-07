@@ -155,7 +155,7 @@ export default function MemberDirectoryPage() {
                             >
                                 {/* Avatar */}
                                 <div className="flex items-center gap-4 mb-4">
-                                    <div className="w-16 h-16 bg-gradient-to-br from-green-600 to-emerald-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                                    <div className="w-16 h-16 bg-linear-to-br from-green-600 to-emerald-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
                                         {member.firstName?.[0]}{member.lastName?.[0]}
                                     </div>
                                     <div className="flex-1">

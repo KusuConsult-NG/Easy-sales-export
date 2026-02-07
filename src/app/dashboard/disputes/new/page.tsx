@@ -250,7 +250,7 @@ function NewDisputePageContent() {
                     {/* Warning */}
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 mb-6">
                         <div className="flex items-start gap-3">
-                            <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" />
+                            <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-500 shrink-0 mt-0.5" />
                             <div>
                                 <h3 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-1">
                                     Important Information

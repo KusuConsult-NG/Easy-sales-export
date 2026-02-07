@@ -38,13 +38,13 @@ export default function OnboardingGuide({
     return (
         <div className="min-h-[60vh] flex items-center justify-center p-8">
             <div className="max-w-4xl w-full">
-                <div className="bg-gradient-to-br from-primary/5 to-primary/10 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-8 md:p-12 border border-primary/20 dark:border-slate-700 shadow-2xl">
+                <div className="bg-linear-to-br from-primary/5 to-primary/10 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-8 md:p-12 border border-primary/20 dark:border-slate-700 shadow-2xl">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
                         {/* Left: Content */}
                         <div>
                             {/* Icon and Title */}
                             <div className="flex items-center gap-4 mb-6">
-                                <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center shadow-lg">
+                                <div className="w-16 h-16 bg-linear-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center shadow-lg">
                                     {icon}
                                 </div>
                                 <div>
@@ -113,7 +113,7 @@ export default function OnboardingGuide({
                             {primaryAction && !allStepsCompleted && (
                                 <Link
                                     href={primaryAction.href}
-                                    className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl group"
+                                    className="inline-flex items-center gap-3 px-8 py-4 bg-linear-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl group"
                                 >
                                     <span>{primaryAction.label}</span>
                                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -144,8 +144,8 @@ export default function OnboardingGuide({
                                     className="w-full h-auto rounded-2xl shadow-2xl"
                                 />
                             ) : (
-                                <div className="w-full aspect-square bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center">
-                                    <div className="w-32 h-32 bg-gradient-to-br from-primary to-primary/80 rounded-full opacity-20" />
+                                <div className="w-full aspect-square bg-linear-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center">
+                                    <div className="w-32 h-32 bg-linear-to-br from-primary to-primary/80 rounded-full opacity-20" />
                                 </div>
                             )}
                         </div>

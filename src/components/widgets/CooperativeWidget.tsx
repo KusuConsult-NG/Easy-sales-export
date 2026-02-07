@@ -71,7 +71,7 @@ export default function CooperativeWidget() {
     }
 
     return (
-        <div className="bg-gradient-to-br from-green-600 to-emerald-600 text-white rounded-2xl p-6 shadow-lg">
+        <div className="bg-linear-to-br from-green-600 to-emerald-600 text-white rounded-2xl p-6 shadow-lg">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold">Cooperative Savings</h3>
                 <Wallet className="w-6 h-6 opacity-80" />

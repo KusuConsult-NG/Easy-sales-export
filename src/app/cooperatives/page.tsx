@@ -135,7 +135,7 @@ export default function CooperativesPage() {
                                     setIsLoading(false);
                                 }
                             }}
-                            className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all shadow-lg inline-flex items-center gap-2"
+                            className="px-8 py-3 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl transition-all shadow-lg inline-flex items-center gap-2"
                         >
                             <Plus className="w-5 h-5" />
                             Setup Test Cooperative
@@ -218,9 +218,9 @@ export default function CooperativesPage() {
                         </div>
 
                         {/* Cooperative Benefits & Features */}
-                        <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-8 mb-8 border border-emerald-200 dark:border-slate-700">
+                        <div className="bg-linear-to-br from-emerald-50 to-green-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-8 mb-8 border border-emerald-200 dark:border-slate-700">
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center">
+                                <div className="w-12 h-12 bg-linear-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center">
                                     <Award className="w-6 h-6 text-white" />
                                 </div>
                                 <div>
@@ -321,10 +321,10 @@ export default function CooperativesPage() {
                             {/* Fixed Savings Card */}
                             <Link
                                 href="/cooperatives/fixed-savings"
-                                className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 border border-green-200 dark:border-green-800 hover:shadow-xl transition-all group"
+                                className="bg-linear-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 border border-green-200 dark:border-green-800 hover:shadow-xl transition-all group"
                             >
                                 <div className="flex items-start justify-between mb-4">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <div className="w-12 h-12 bg-linear-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
                                         <TrendingUp className="w-6 h-6 text-white" />
                                     </div>
                                     <ArrowRight className="w-6 h-6 text-green-600 dark:text-green-400 group-hover:translate-x-1 transition-transform" />
@@ -344,10 +344,10 @@ export default function CooperativesPage() {
                             {/* Loans Card */}
                             <Link
                                 href="/cooperatives/loans"
-                                className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 border border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all group"
+                                className="bg-linear-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-6 border border-blue-200 dark:border-blue-800 hover:shadow-xl transition-all group"
                             >
                                 <div className="flex items-start justify-between mb-4">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
                                         <DollarSign className="w-6 h-6 text-white" />
                                     </div>
                                     <ArrowRight className="w-6 h-6 text-blue-600 dark:text-blue-400 group-hover:translate-x-1 transition-transform" />

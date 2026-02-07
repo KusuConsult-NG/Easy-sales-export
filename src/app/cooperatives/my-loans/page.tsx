@@ -96,7 +96,7 @@ export default function MyLoansPage() {
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl p-6 shadow-lg">
+                    <div className="bg-linear-to-br from-blue-600 to-indigo-600 text-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
                             <DollarSign className="w-8 h-8" />
                         </div>
@@ -140,7 +140,7 @@ export default function MyLoansPage() {
                             return (
                                 <div key={loan.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden">
                                     {/* Loan Header */}
-                                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
+                                    <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white p-6">
                                         <div className="flex items-center justify-between mb-4">
                                             <div>
                                                 <h3 className="text-2xl font-bold mb-1">

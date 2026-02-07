@@ -148,7 +148,7 @@ export default function AdminContributionsPage() {
                                     className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-xl"
                                 >
                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-gradient-to-br from-green-600 to-emerald-600 text-white rounded-full flex items-center justify-center font-bold">
+                                        <div className="w-10 h-10 bg-linear-to-br from-green-600 to-emerald-600 text-white rounded-full flex items-center justify-center font-bold">
                                             #{index + 1}
                                         </div>
                                         <div>

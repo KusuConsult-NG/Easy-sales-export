@@ -253,7 +253,7 @@ export default function LoansPage() {
                                             className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl border border-blue-100 dark:border-blue-900 hover:shadow-2xl transition-all"
                                         >
                                             <div className="flex items-start justify-between mb-4">
-                                                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
+                                                <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
                                                     <DollarSign className="w-6 h-6 text-white" />
                                                 </div>
                                                 <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full">
@@ -287,7 +287,7 @@ export default function LoansPage() {
 
                                             <button
                                                 onClick={() => setSelectedProduct(product)}
-                                                className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                                                className="w-full px-6 py-3 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
                                             >
                                                 Apply for Loan
                                                 <ArrowLeft className="w-4 h-4 rotate-180" />

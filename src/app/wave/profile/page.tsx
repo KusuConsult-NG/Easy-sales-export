@@ -56,7 +56,7 @@ export default function WaveProfilePage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-pink-600" />
             </div>
         );
@@ -71,7 +71,7 @@ export default function WaveProfilePage() {
         : "N/A";
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 py-8">
+        <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 py-8">
             <div className="max-w-5xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
@@ -92,7 +92,7 @@ export default function WaveProfilePage() {
                 {/* Profile Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-8 border border-gray-100 dark:border-gray-700">
                     <div className="flex items-start gap-6">
-                        <div className="w-24 h-24 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white text-3xl font-bold">
+                        <div className="w-24 h-24 bg-linear-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white text-3xl font-bold">
                             <Heart className="w-12 h-12" />
                         </div>
                         <div className="flex-1">
@@ -188,7 +188,7 @@ export default function WaveProfilePage() {
                         </div>
                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                             <div
-                                className="bg-gradient-to-r from-pink-500 to-purple-600 h-3 rounded-full transition-all duration-500"
+                                className="bg-linear-to-r from-pink-500 to-purple-600 h-3 rounded-full transition-all duration-500"
                                 style={{
                                     width: `${Math.min(100, Math.round((stats.resourcesAccessed * 10 + stats.trainingsCompleted * 20) / 3))}%`,
                                 }}
@@ -285,7 +285,7 @@ export default function WaveProfilePage() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="bg-gradient-to-r from-pink-600 to-purple-600 rounded-2xl p-8 text-white">
+                <div className="bg-linear-to-r from-pink-600 to-purple-600 rounded-2xl p-8 text-white">
                     <h3 className="text-2xl font-bold mb-4">Continue Your Journey</h3>
                     <p className="text-pink-100 mb-6">
                         Keep growing your skills and building your agribusiness with WAVE resources and training.

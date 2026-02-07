@@ -171,7 +171,7 @@ export default function ContributePage() {
                             icon={<CreditCard className="w-5 h-5" />}
                             variant="primary"
                             size="lg"
-                            className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
+                            className="w-full bg-linear-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
                         >
                             Pay with Paystack
                         </LoadingButton>

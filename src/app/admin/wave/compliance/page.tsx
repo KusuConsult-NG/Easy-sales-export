@@ -190,7 +190,7 @@ export default function WAVECompliancePage() {
                 {/* Financial Metrics */}
                 {stats && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+                        <div className="bg-linear-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
                             <div className="flex items-center gap-3 mb-4">
                                 <DollarSign className="w-8 h-8 opacity-80" />
                                 <div>
@@ -200,7 +200,7 @@ export default function WAVECompliancePage() {
                             </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
+                        <div className="bg-linear-to-br from-indigo-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
                             <div className="flex items-center gap-3 mb-4">
                                 <BarChart3 className="w-8 h-8 opacity-80" />
                                 <div>
@@ -210,7 +210,7 @@ export default function WAVECompliancePage() {
                             </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl shadow-lg p-6 text-white">
+                        <div className="bg-linear-to-br from-teal-500 to-teal-600 rounded-xl shadow-lg p-6 text-white">
                             <div className="flex items-center gap-3 mb-4">
                                 <TrendingUp className="w-8 h-8 opacity-80" />
                                 <div>

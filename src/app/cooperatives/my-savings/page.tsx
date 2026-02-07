@@ -120,7 +120,7 @@ export default function MySavingsPage() {
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-gradient-to-br from-green-600 to-emerald-600 text-white rounded-2xl p-6 shadow-lg">
+                    <div className="bg-linear-to-br from-green-600 to-emerald-600 text-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
                             <Wallet className="w-8 h-8" />
                         </div>
@@ -172,7 +172,7 @@ export default function MySavingsPage() {
                                     className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden"
                                 >
                                     {/* Plan Header */}
-                                    <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6">
+                                    <div className="bg-linear-to-r from-green-600 to-emerald-600 text-white p-6">
                                         <div className="flex items-start justify-between mb-4">
                                             <div>
                                                 <h3 className="text-2xl font-bold mb-1">{plan.name}</h3>

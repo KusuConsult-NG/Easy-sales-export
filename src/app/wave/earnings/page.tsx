@@ -51,7 +51,7 @@ export default function WaveEarningsPage() {
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-purple-600" />
             </div>
         );
@@ -59,7 +59,7 @@ export default function WaveEarningsPage() {
 
     if (!earnings) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-gray-600 dark:text-gray-400">Failed to load earnings data</p>
                 </div>
@@ -68,7 +68,7 @@ export default function WaveEarningsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 py-8 px-4">
+        <div className="min-h-screen bg-linear-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 py-8 px-4">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
@@ -83,7 +83,7 @@ export default function WaveEarningsPage() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     {/* Total Earnings */}
-                    <div className="bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
+                    <div className="bg-linear-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
                         <div className="flex items-center justify-between mb-2">
                             <DollarSign className="w-8 h-8" />
                             <span className="text-purple-200 text-sm">All Time</span>

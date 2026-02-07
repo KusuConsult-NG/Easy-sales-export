@@ -56,7 +56,7 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                 className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-left text-slate-900 dark:text-white hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-between gap-2"
             >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Calendar className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                    <Calendar className="w-5 h-5 text-slate-400 shrink-0" />
                     <span className={`truncate ${!value.from && !value.to ? 'text-slate-400' : ''}`}>
                         {displayValue}
                     </span>
@@ -67,7 +67,7 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                             e.stopPropagation();
                             handleClear();
                         }}
-                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors flex-shrink-0"
+                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors shrink-0"
                     >
                         <X className="w-4 h-4" />
                     </button>

@@ -77,7 +77,7 @@ export default function CertificateVerificationPage({ params }: { params: { cert
                     ) : (
                         <>
                             {/* Header */}
-                            <div className="bg-gradient-to-r from-green-500 to-green-600 p-8 text-white text-center">
+                            <div className="bg-linear-to-r from-green-500 to-green-600 p-8 text-white text-center">
                                 <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
                                     <CheckCircle className="w-16 h-16 text-green-600" />
                                 </div>
@@ -95,7 +95,7 @@ export default function CertificateVerificationPage({ params }: { params: { cert
 
                                 <div className="space-y-4">
                                     <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                             <User className="w-5 h-5 text-primary" />
                                         </div>
                                         <div className="flex-1">
@@ -107,7 +107,7 @@ export default function CertificateVerificationPage({ params }: { params: { cert
                                     </div>
 
                                     <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                             <BookOpen className="w-5 h-5 text-primary" />
                                         </div>
                                         <div className="flex-1">
@@ -119,7 +119,7 @@ export default function CertificateVerificationPage({ params }: { params: { cert
                                     </div>
 
                                     <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                             <Calendar className="w-5 h-5 text-primary" />
                                         </div>
                                         <div className="flex-1">
@@ -136,7 +136,7 @@ export default function CertificateVerificationPage({ params }: { params: { cert
 
                                     {verification.grade && (
                                         <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                            <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                                 <Award className="w-5 h-5 text-primary" />
                                             </div>
                                             <div className="flex-1">
@@ -149,7 +149,7 @@ export default function CertificateVerificationPage({ params }: { params: { cert
                                     )}
 
                                     <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                             <CheckCircle className="w-5 h-5 text-primary" />
                                         </div>
                                         <div className="flex-1">

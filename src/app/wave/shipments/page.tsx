@@ -71,14 +71,14 @@ export default function WaveShipmentsPage() {
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-900/20 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-900/20 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-900/20 py-8 px-4">
+        <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-900/20 py-8 px-4">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
@@ -103,7 +103,7 @@ export default function WaveShipmentsPage() {
                         <p className="text-sm text-gray-600 dark:text-gray-400">Total Shipments</p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl p-6 shadow-lg text-white">
+                    <div className="bg-linear-to-br from-yellow-500 to-orange-500 rounded-xl p-6 shadow-lg text-white">
                         <div className="flex items-center justify-between mb-2">
                             <Clock className="w-6 h-6" />
                             <span className="text-2xl font-bold">{stats.pending}</span>
@@ -111,7 +111,7 @@ export default function WaveShipmentsPage() {
                         <p className="text-sm text-yellow-100">Pending</p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl p-6 shadow-lg text-white">
+                    <div className="bg-linear-to-br from-blue-500 to-indigo-500 rounded-xl p-6 shadow-lg text-white">
                         <div className="flex items-center justify-between mb-2">
                             <Truck className="w-6 h-6" />
                             <span className="text-2xl font-bold">{stats.inTransit}</span>
@@ -119,7 +119,7 @@ export default function WaveShipmentsPage() {
                         <p className="text-sm text-blue-100">In Transit</p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl p-6 shadow-lg text-white">
+                    <div className="bg-linear-to-br from-green-500 to-emerald-500 rounded-xl p-6 shadow-lg text-white">
                         <div className="flex items-center justify-between mb-2">
                             <CheckCircle className="w-6 h-6" />
                             <span className="text-2xl font-bold">{stats.delivered}</span>
@@ -153,7 +153,7 @@ export default function WaveShipmentsPage() {
                                     className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition"
                                 >
                                     {/* Shipment Header */}
-                                    <div className={`bg-gradient-to-r from-${statusColor}-500 to-${statusColor}-600 text-white p-6`}>
+                                    <div className={`bg-linear-to-r from-${statusColor}-500 to-${statusColor}-600 text-white p-6`}>
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-start gap-4">
                                                 <div className="p-3 bg-white/20 rounded-xl">
@@ -265,7 +265,7 @@ export default function WaveShipmentsPage() {
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
                         <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full my-8">
                             {/* Modal Header */}
-                            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl">
+                            <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl">
                                 <div className="flex items-start justify-between">
                                     <div>
                                         <h2 className="text-2xl font-bold mb-1">

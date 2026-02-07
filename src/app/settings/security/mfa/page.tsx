@@ -159,7 +159,7 @@ export default function MFASetupPage() {
                         </h2>
                         <div className="space-y-4 mb-6">
                             <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold flex-shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold shrink-0">
                                     1
                                 </div>
                                 <div>
@@ -170,7 +170,7 @@ export default function MFASetupPage() {
                                 </div>
                             </div>
                             <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold flex-shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold shrink-0">
                                     2
                                 </div>
                                 <div>
@@ -181,7 +181,7 @@ export default function MFASetupPage() {
                                 </div>
                             </div>
                             <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold flex-shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold shrink-0">
                                     3
                                 </div>
                                 <div>
@@ -275,7 +275,7 @@ export default function MFASetupPage() {
 
                         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 mb-6">
                             <div className="flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                                <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
                                 <div>
                                     <h3 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-2">
                                         Save Your Recovery Codes

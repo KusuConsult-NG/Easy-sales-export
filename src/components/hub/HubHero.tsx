@@ -6,7 +6,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 
 export default function HubHero() {
     return (
-        <div className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary via-primary/80 to-blue-600 dark:from-primary/90 dark:via-primary/70 dark:to-blue-700">
+        <div className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-linear-to-br from-primary via-primary/80 to-blue-600 dark:from-primary/90 dark:via-primary/70 dark:to-blue-700">
             {/* Animated background elements */}
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse" />

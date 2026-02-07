@@ -212,7 +212,7 @@ export default function FixedSavingsPage() {
                         </div>
                         <button
                             onClick={() => setShowCalculator(!showCalculator)}
-                            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2"
+                            className="px-6 py-3 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg flex items-center gap-2"
                         >
                             <Plus className="w-5 h-5" />
                             New Plan
@@ -261,9 +261,9 @@ export default function FixedSavingsPage() {
 
                 {/* Calculator/Create Form */}
                 {showCalculator && (
-                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-8 mb-8 border border-green-200 dark:border-slate-700 shadow-xl">
+                    <div className="bg-linear-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-8 mb-8 border border-green-200 dark:border-slate-700 shadow-xl">
                         <div className="flex items-center gap-3 mb-6">
-                            <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center">
+                            <div className="w-12 h-12 bg-linear-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center">
                                 <Calculator className="w-6 h-6 text-white" />
                             </div>
                             <div>
@@ -382,7 +382,7 @@ export default function FixedSavingsPage() {
                                 <button
                                     onClick={handleCreatePlan}
                                     disabled={isCreating || amount < 50000}
-                                    className="w-full mt-6 px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    className="w-full mt-6 px-6 py-4 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
                                     {isCreating ? (
                                         <>
@@ -469,7 +469,7 @@ export default function FixedSavingsPage() {
                                                     </div>
                                                     <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                                         <div
-                                                            className="h-full bg-gradient-to-r from-green-600 to-emerald-600 transition-all"
+                                                            className="h-full bg-linear-to-r from-green-600 to-emerald-600 transition-all"
                                                             style={{ width: `${Math.min(progress, 100)}%` }}
                                                         />
                                                     </div>
@@ -555,7 +555,7 @@ export default function FixedSavingsPage() {
                                 </p>
                                 <button
                                     onClick={() => setShowCalculator(true)}
-                                    className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg inline-flex items-center gap-2"
+                                    className="px-8 py-3 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg inline-flex items-center gap-2"
                                 >
                                     <Plus className="w-5 h-5" />
                                     Create Your First Plan

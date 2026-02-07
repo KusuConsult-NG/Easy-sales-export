@@ -144,7 +144,7 @@ export default function ListLandPage() {
 
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
                     {/* Header */}
-                    <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-8 text-white">
+                    <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white">
                         <h1 className="text-3xl font-bold mb-2">List Your Land</h1>
                         <p className="text-green-100">
                             Create a listing for your agricultural land
@@ -559,7 +559,7 @@ export default function ListLandPage() {
                             <button
                                 type="submit"
                                 disabled={isSubmitting || media.images.length === 0 || !documents.landTitle || !documents.surveyPlan}
-                                className="flex-1 px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                className="flex-1 px-8 py-4 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {isSubmitting ? (
                                     <>

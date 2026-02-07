@@ -195,7 +195,7 @@ export default function CertificateGenerator({
         <button
             onClick={downloadCertificate}
             disabled={isGenerating}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-lg hover:from-green-700 hover:to-green-600 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+            className="flex items-center gap-2 px-6 py-3 bg-linear-to-r from-green-600 to-green-500 text-white rounded-lg hover:from-green-700 hover:to-green-600 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
         >
             <Download className="w-5 h-5" />
             {isGenerating ? 'Generating Certificate...' : 'Download Certificate'}

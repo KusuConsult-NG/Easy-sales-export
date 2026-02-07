@@ -92,7 +92,7 @@ export default function AcademyDashboardPage() {
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+                    <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
                         <div className="flex items-center justify-between mb-4">
                             <BookOpen className="w-8 h-8 opacity-80" />
                             <span className="text-3xl font-bold">{stats.totalCourses}</span>
@@ -100,7 +100,7 @@ export default function AcademyDashboardPage() {
                         <p className="text-blue-100 font-semibold">Total Courses</p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-6 text-white">
+                    <div className="bg-linear-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-6 text-white">
                         <div className="flex items-center justify-between mb-4">
                             <TrendingUp className="w-8 h-8 opacity-80" />
                             <span className="text-3xl font-bold">{stats.inProgress}</span>
@@ -108,7 +108,7 @@ export default function AcademyDashboardPage() {
                         <p className="text-yellow-100 font-semibold">In Progress</p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
+                    <div className="bg-linear-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
                         <div className="flex items-center justify-between mb-4">
                             <Award className="w-8 h-8 opacity-80" />
                             <span className="text-3xl font-bold">{stats.completed}</span>
@@ -116,7 +116,7 @@ export default function AcademyDashboardPage() {
                         <p className="text-green-100 font-semibold">Completed</p>
                     </div>
 
-                    <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+                    <div className="bg-linear-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
                         <div className="flex items-center justify-between mb-4">
                             <Clock className="w-8 h-8 opacity-80" />
                             <span className="text-3xl font-bold">{stats.learningStreak}</span>
@@ -213,7 +213,7 @@ export default function AcademyDashboardPage() {
                             {certificates.map((cert) => (
                                 <div
                                     key={cert.id}
-                                    className="bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-xl p-6 border-2 border-yellow-200 dark:border-yellow-700"
+                                    className="bg-linear-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-xl p-6 border-2 border-yellow-200 dark:border-yellow-700"
                                 >
                                     <div className="flex items-center justify-center mb-4">
                                         <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center">

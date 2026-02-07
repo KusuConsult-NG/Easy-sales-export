@@ -155,7 +155,7 @@ export default function AddProductPage() {
 
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
                     {/* Header */}
-                    <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-8 text-white">
+                    <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white">
                         <h1 className="text-3xl font-bold mb-2">Add New Product</h1>
                         <p className="text-green-100">
                             Create a listing for your agricultural product
