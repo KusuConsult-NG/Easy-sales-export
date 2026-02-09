@@ -285,6 +285,7 @@ export const COLLECTIONS = {
     BANNERS: "banners",
     AUDIT_LOGS: "audit_logs",
     FEATURE_TOGGLES: "feature_toggles",
+    IMPERSONATION_TOKENS: "impersonation_tokens",
 
     // AI & Chat
     AI_CHAT_HISTORY: "ai_chat_history",
