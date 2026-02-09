@@ -322,7 +322,7 @@ export default function CooperativeLandingPage() {
                             return (
                                 <div
                                     key={index}
-                                    className="bg-white border-2 border-emerald-200 rounded-2xl p-6 text-center hover:shadow-xl transition"
+                                    className="bg-white border-2 border-purple-200 rounded-2xl p-6 text-center hover:shadow-xl transition"
                                 >
                                     <Icon className="w-10 h-10 text-purple-600 mx-auto mb-3" />
                                     <p className="text-sm font-semibold text-slate-700">{stat.label}</p>
@@ -451,7 +451,7 @@ export default function CooperativeLandingPage() {
                                 description: 'Priority consideration for investments, programs, and market access as they become available.',
                             },
                         ].map((item) => (
-                            <div key={item.step} className="relative bg-linear-to-br from-purple-50 to-purple-50 rounded-2xl p-8 border-2 border-emerald-200">
+                            <div key={item.step} className="relative bg-linear-to-br from-purple-50 to-purple-50 rounded-2xl p-8 border-2 border-purple-200">
                                 <div className="absolute -top-4 -left-4 bg-purple-600 text-white w-12 h-12 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
                                     {item.step}
                                 </div>
@@ -463,7 +463,7 @@ export default function CooperativeLandingPage() {
 
                     {/* WAVE Alignment Callout */}
                     <div className="bg-slate-900 rounded-3xl p-10 text-white">
-                        <h4 className="text-3xl font-bold mb-6 text-emerald-400">Why This Matters for WAVE Aspirants</h4>
+                        <h4 className="text-3xl font-bold mb-6 text-purple-400">Why This Matters for WAVE Aspirants</h4>
                         <p className="text-xl mb-4">Let's be clear and honest.</p>
                         <p className="text-lg mb-6">
                             WAVE is massive. Millions will apply. <strong>Not everyone will be selected</strong>.
@@ -477,7 +477,7 @@ export default function CooperativeLandingPage() {
                                 </li>
                             ))}
                         </ul>
-                        <div className="bg-purple-600/20 rounded-xl p-6 border border-emerald-400">
+                        <div className="bg-purple-600/20 rounded-xl p-6 border border-purple-400">
                             <p className="text-xl font-bold mb-2">Easy Sales Cooperative gives you that edge.</p>
                             <p className="text-lg">Not by bribery. Not by shortcuts. <strong>But by positioning.</strong></p>
                         </div>
@@ -498,7 +498,7 @@ export default function CooperativeLandingPage() {
                         {targetAudience.map((audience, idx) => (
                             <div
                                 key={idx}
-                                className="bg-white rounded-2xl p-6 border-2 border-emerald-200 hover:border-emerald-400 transition hover:shadow-lg"
+                                className="bg-white rounded-2xl p-6 border-2 border-purple-200 hover:border-purple-400 transition hover:shadow-lg"
                             >
                                 <CheckCircle2 className="w-8 h-8 text-purple-600 mb-3" />
                                 <p className="text-lg font-semibold text-slate-900">{audience}</p>
@@ -563,7 +563,7 @@ export default function CooperativeLandingPage() {
                         {corebenefits.map((benefit, idx) => (
                             <div
                                 key={idx}
-                                className="bg-linear-to-br from-purple-50 to-purple-50 rounded-xl p-6 border-2 border-emerald-200"
+                                className="bg-linear-to-br from-purple-50 to-purple-50 rounded-xl p-6 border-2 border-purple-200"
                             >
                                 <CheckCircle2 className="w-7 h-7 text-purple-600 mb-3" />
                                 <p className="text-base font-semibold text-slate-800">{benefit}</p>
@@ -592,10 +592,10 @@ export default function CooperativeLandingPage() {
                                 return (
                                     <div
                                         key={idx}
-                                        className="bg-white rounded-2xl p-8 shadow-lg border-2 border-emerald-200 hover:border-emerald-400 transition"
+                                        className="bg-white rounded-2xl p-8 shadow-lg border-2 border-purple-200 hover:border-purple-400 transition"
                                     >
                                         <div className="flex items-start gap-4 mb-4">
-                                            <div className="bg-emerald-100 p-3 rounded-xl">
+                                            <div className="bg-purple-100 p-3 rounded-xl">
                                                 <Icon className="w-8 h-8 text-purple-600" />
                                             </div>
                                             <div>
@@ -618,7 +618,7 @@ export default function CooperativeLandingPage() {
                         <h3 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
                             Programs & Opportunities
                         </h3>
-                        <div className="inline-block bg-white rounded-2xl px-6 py-3 shadow-lg border-2 border-emerald-300">
+                        <div className="inline-block bg-white rounded-2xl px-6 py-3 shadow-lg border-2 border-purple-300">
                             <p className="text-lg font-bold text-purple-600">Current Alignment: RH-WAVE 774</p>
                         </div>
                     </div>
@@ -707,7 +707,7 @@ export default function CooperativeLandingPage() {
                         {/* Contact Info */}
                         <div className="space-y-6">
                             <div className="flex items-start gap-4">
-                                <div className="bg-emerald-100 p-3 rounded-xl">
+                                <div className="bg-purple-100 p-3 rounded-xl">
                                     <Mail className="w-6 h-6 text-purple-600" />
                                 </div>
                                 <div>
@@ -717,7 +717,7 @@ export default function CooperativeLandingPage() {
                             </div>
 
                             <div className="flex items-start gap-4">
-                                <div className="bg-emerald-100 p-3 rounded-xl">
+                                <div className="bg-purple-100 p-3 rounded-xl">
                                     <Phone className="w-6 h-6 text-purple-600" />
                                 </div>
                                 <div>
@@ -727,7 +727,7 @@ export default function CooperativeLandingPage() {
                             </div>
 
                             <div className="flex items-start gap-4">
-                                <div className="bg-emerald-100 p-3 rounded-xl">
+                                <div className="bg-purple-100 p-3 rounded-xl">
                                     <MapPin className="w-6 h-6 text-purple-600" />
                                 </div>
                                 <div>
@@ -737,7 +737,7 @@ export default function CooperativeLandingPage() {
                             </div>
 
                             <div className="flex items-start gap-4">
-                                <div className="bg-emerald-100 p-3 rounded-xl">
+                                <div className="bg-purple-100 p-3 rounded-xl">
                                     <Clock className="w-6 h-6 text-purple-600" />
                                 </div>
                                 <div>
@@ -792,7 +792,7 @@ export default function CooperativeLandingPage() {
             </section>
 
             {/* Final CTA Section */}
-            <section className="py-20 bg-linear-to-br from-purple-600 via-green-600 to-purple-600 text-white">
+            <section className="py-20 bg-linear-to-br from-purple-600 via-indigo-600 to-purple-600 text-white">
                 <div className="max-w-4xl mx-auto px-6 text-center">
                     <h3 className="text-4xl md:text-5xl font-bold mb-6">Final Call</h3>
                     <p className="text-2xl mb-4">This is not about hope alone.</p>
