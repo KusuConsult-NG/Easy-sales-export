@@ -97,6 +97,7 @@ export default function LoginPage() {
                                     className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.email ? "border-red-400" : "border-white/20"
                                         } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
                                     placeholder="your.email@example.com"
+                                    required
                                     disabled={isPending}
                                 />
                                 {errors.email && (
@@ -128,6 +129,7 @@ export default function LoginPage() {
                                     className={`w-full pl-11 pr-12 py-3 bg-white/10 border ${errors.password ? "border-red-400" : "border-white/20"
                                         } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
                                     placeholder="••••••••"
+                                    required
                                     disabled={isPending}
                                 />
                                 <button
@@ -162,13 +164,12 @@ export default function LoginPage() {
                                 />
                                 Remember me
                             </label>
-                            {/* Forgot password temporarily hidden - stub page */}
-                            {/* <Link
+                            <Link
                                 href="/auth/forgot-password"
                                 className="text-sm text-blue-300 hover:text-white transition-colors"
                             >
                                 Forgot password?
-                            </Link> */}
+                            </Link>
                         </div>
 
                         {/* Submit Button */}

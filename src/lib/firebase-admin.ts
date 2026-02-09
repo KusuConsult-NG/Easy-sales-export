@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getAuth, Auth } from 'firebase-admin/auth';
 
 /**
  * CRITICAL: Lazy initialization pattern
@@ -64,6 +65,22 @@ export const db = new Proxy({} as Firestore, {
     get(_target, prop) {
         const instance = getAdminDb();
         return instance[prop as keyof Firestore];
+    }
+});
+
+
+/**
+ * Get Auth instance (lazy initialization)
+ */
+export function getAdminAuth(): Auth {
+    const app = initializeFirebaseAdmin();
+    return getAuth(app);
+}
+
+export const adminAuth = new Proxy({} as Auth, {
+    get(_target, prop) {
+        const instance = getAdminAuth();
+        return instance[prop as keyof Auth];
     }
 });
 

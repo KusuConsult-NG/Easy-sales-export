@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft } from "lucide-react";
@@ -18,24 +18,41 @@ export default function CertificatePage() {
     const [downloading, setDownloading] = useState(false);
 
     useEffect(() => {
-        if (status === "unauthenticated") {
-            router.push("/auth/login");
-        } else if (status === "authenticated" && session?.user) {
-            loadCertificate();
+        let mounted = true;
+
+        async function fetchCertificateData() {
+            if (status === "unauthenticated") {
+                router.push("/auth/login");
+                return;
+            }
+
+            if (status !== "authenticated" || !session?.user) return;
+
+            setLoading(true);
+            try {
+                const [courseData, progressData] = await Promise.all([
+                    getCourseByIdAction(courseId),
+                    getUserProgressAction(session!.user.id, courseId),
+                ]);
+
+                if (mounted) {
+                    setCourse(courseData);
+                    setProgress(progressData);
+                }
+            } catch (err) {
+                console.error("Failed to load certificate data:", err);
+                // Optionally set an error state here if needed
+            } finally {
+                if (mounted) setLoading(false);
+            }
         }
-    }, [status, session, courseId]);
 
-    const loadCertificate = async () => {
-        setLoading(true);
-        const [courseData, progressData] = await Promise.all([
-            getCourseByIdAction(courseId),
-            getUserProgressAction(session!.user.id, courseId),
-        ]);
+        fetchCertificateData();
 
-        setCourse(courseData);
-        setProgress(progressData);
-        setLoading(false);
-    };
+        return () => { mounted = false; };
+    }, [courseId, session, status, router]);
+
+
 
     const handleDownload = () => {
         setDownloading(true);

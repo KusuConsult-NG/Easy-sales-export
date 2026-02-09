@@ -1,0 +1,323 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, ArrowRight, CheckCircle } from "lucide-react";
+import PersonalInfoStep from "./steps/PersonalInfoStep";
+import EducationStep from "./steps/EducationStep";
+import InterestsStep from "./steps/InterestsStep";
+import ReviewStep from "./ReviewStep";
+
+interface PersonalInfoData {
+    fullName: string;
+    email: string;
+    phone: string;
+    dateOfBirth: string;
+    state: string;
+    occupation: string;
+}
+
+interface EducationData {
+    educationLevel: string;
+    fieldOfStudy: string;
+    yearsExperience: number;
+    currentRole: string;
+}
+
+interface InterestsData {
+    learningPaths: string[];
+    topics: string;
+    goals: string;
+}
+
+const STEPS = [
+    { id: 1, title: "Personal Info", description: "Basic information" },
+    { id: 2, title: "Education", description: "Academic background" },
+    { id: 3, title: "Interests", description: "Learning goals" },
+    { id: 4, title: "Review", description: "Confirm details" }
+];
+
+export default function AcademyApplicationPage() {
+    const router = useRouter();
+    const [currentStep, setCurrentStep] = useState(1);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [acceptTerms, setAcceptTerms] = useState(false);
+
+    const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
+        fullName: "",
+        email: "",
+        phone: "",
+        dateOfBirth: "",
+        state: "",
+        occupation: ""
+    });
+
+    const [education, setEducation] = useState<EducationData>({
+        educationLevel: "",
+        fieldOfStudy: "",
+        yearsExperience: 0,
+        currentRole: ""
+    });
+
+    const [interests, setInterests] = useState<InterestsData>({
+        learningPaths: [],
+        topics: "",
+        goals: ""
+    });
+
+    // Clear field-specific errors when data changes
+    const clearFieldError = (field: string) => {
+        setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[field];
+            return newErrors;
+        });
+    };
+
+    // Clear errors when personal info fields change
+    useEffect(() => {
+        if (personalInfo.fullName) clearFieldError('fullName');
+    }, [personalInfo.fullName]);
+
+    useEffect(() => {
+        if (personalInfo.email) clearFieldError('email');
+    }, [personalInfo.email]);
+
+    useEffect(() => {
+        if (personalInfo.phone) clearFieldError('phone');
+    }, [personalInfo.phone]);
+
+    useEffect(() => {
+        if (personalInfo.dateOfBirth) clearFieldError('dateOfBirth');
+    }, [personalInfo.dateOfBirth]);
+
+    useEffect(() => {
+        if (personalInfo.state) clearFieldError('state');
+    }, [personalInfo.state]);
+
+    useEffect(() => {
+        if (personalInfo.occupation) clearFieldError('occupation');
+    }, [personalInfo.occupation]);
+
+    const validateStep = (step: number): boolean => {
+        const newErrors: Record<string, string> = {};
+
+        if (step === 1) {
+            if (!personalInfo.fullName.trim()) newErrors.fullName = "Full name is required";
+            if (!personalInfo.email.trim()) {
+                newErrors.email = "Email is required";
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalInfo.email)) {
+                newErrors.email = "Invalid email format";
+            }
+            if (!personalInfo.phone.trim()) newErrors.phone = "Phone number is required";
+            if (!personalInfo.dateOfBirth) newErrors.dateOfBirth = "Date of birth is required";
+            if (!personalInfo.state) newErrors.state = "State is required";
+            if (!personalInfo.occupation.trim()) newErrors.occupation = "Occupation is required";
+        }
+
+        if (step === 2) {
+            if (!education.educationLevel) newErrors.educationLevel = "Education level is required";
+            if (!education.currentRole) newErrors.currentRole = "Current role is required";
+        }
+
+        if (step === 3) {
+            if (interests.learningPaths.length === 0) {
+                newErrors.learningPaths = "Please select at least one learning path";
+            }
+            if (!interests.goals.trim()) newErrors.goals = "Learning goals are required";
+        }
+
+        if (step === 4) {
+            if (!acceptTerms) {
+                newErrors.acceptTerms = "You must accept the terms and conditions to continue";
+            }
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleNext = () => {
+        if (validateStep(currentStep)) {
+            setCurrentStep((prev) => Math.min(prev + 1, 4));
+        }
+    };
+
+    const handlePrevious = () => {
+        setCurrentStep((prev) => Math.max(prev - 1, 1));
+        setErrors({});
+    };
+
+    const handleSubmit = async () => {
+        if (!validateStep(4)) return;
+
+        setIsSubmitting(true);
+
+        try {
+            // TODO: Implement actual submission
+            // const response = await submitAcademyApplicationAction({
+            //     personalInfo,
+            //     education,
+            //     interests
+            // });
+
+            // Simulate API call
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+
+            router.push("/academy/application/success");
+        } catch (error) {
+            console.error("Application submission error:", error);
+            setErrors({ submit: "Failed to submit application. Please try again." });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-12">
+                <div className="max-w-4xl mx-auto px-6">
+                    <h1 className="text-3xl md:text-4xl font-bold mb-2">Academy Learner Application</h1>
+                    <p className="text-blue-100">
+                        Join thousands of successful agripreneurs who transformed their careers
+                    </p>
+                </div>
+            </div>
+
+            {/* Progress Steps */}
+            <div className="max-w-4xl mx-auto px-6 -mt-8">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                    <div className="flex items-center justify-between">
+                        {STEPS.map((step, index) => (
+                            <div key={step.id} className="flex-1">
+                                <div className="flex items-center">
+                                    <div className="flex flex-col items-center flex-1">
+                                        <div
+                                            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${currentStep > step.id
+                                                ? "bg-green-600 text-white"
+                                                : currentStep === step.id
+                                                    ? "bg-blue-600 text-white"
+                                                    : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+                                                }`}
+                                        >
+                                            {currentStep > step.id ? (
+                                                <CheckCircle className="w-5 h-5" />
+                                            ) : (
+                                                step.id
+                                            )}
+                                        </div>
+                                        <div className="mt-2 text-center">
+                                            <p className={`text-sm font-semibold ${currentStep >= step.id
+                                                ? "text-slate-900 dark:text-white"
+                                                : "text-slate-500"
+                                                }`}>
+                                                {step.title}
+                                            </p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 hidden md:block">
+                                                {step.description}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {index < STEPS.length - 1 && (
+                                        <div
+                                            className={`h-1 flex-1 mx-2 rounded-full transition-all ${currentStep > step.id
+                                                ? "bg-green-600"
+                                                : "bg-slate-200 dark:bg-slate-700"
+                                                }`}
+                                        />
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Form Content */}
+            <div className="max-w-4xl mx-auto px-6 py-12">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-lg">
+                    {currentStep === 1 && (
+                        <PersonalInfoStep
+                            data={personalInfo}
+                            onChange={setPersonalInfo}
+                            errors={errors}
+                        />
+                    )}
+                    {currentStep === 2 && (
+                        <EducationStep
+                            data={education}
+                            onChange={setEducation}
+                            errors={errors}
+                        />
+                    )}
+                    {currentStep === 3 && (
+                        <InterestsStep
+                            data={interests}
+                            onChange={setInterests}
+                            errors={errors}
+                        />
+                    )}
+                    {currentStep === 4 && (
+                        <ReviewStep
+                            personalInfo={personalInfo}
+                            education={education}
+                            interests={interests}
+                            acceptTerms={acceptTerms}
+                            onAcceptTermsChange={setAcceptTerms}
+                            errors={errors}
+                        />
+                    )}
+
+                    {/* Navigation Buttons */}
+                    <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                        <button
+                            type="button"
+                            onClick={handlePrevious}
+                            disabled={currentStep === 1}
+                            className="inline-flex items-center gap-2 px-6 py-3 text-slate-600 dark:text-slate-400 font-semibold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                            Previous
+                        </button>
+
+                        {currentStep < 4 ? (
+                            <button
+                                type="button"
+                                onClick={handleNext}
+                                className="inline-flex items-center gap-2 px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg hover:shadow-blue-500/50"
+                            >
+                                Continue
+                                <ArrowRight className="w-5 h-5" />
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleSubmit}
+                                disabled={isSubmitting}
+                                className="inline-flex items-center gap-2 px-8 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition shadow-lg hover:shadow-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Submitting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle className="w-5 h-5" />
+                                        Submit Application
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
+
+                    {errors.submit && (
+                        <p className="mt-4 text-sm text-red-600 text-center">{errors.submit}</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}

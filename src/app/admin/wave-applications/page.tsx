@@ -30,26 +30,27 @@ export default function AdminWaveApplicationsPage() {
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchApplications();
-    }, [statusFilter]);
-
     const fetchApplications = async () => {
         setIsLoading(true);
         setError(null);
-
-        const result = await getWaveApplicationsAction(
-            statusFilter !== "all" ? statusFilter : undefined
-        );
-
-        if (result.success && result.data) {
-            setApplications(result.data);
-        } else {
-            setError(result.error || "Failed to load applications");
+        try {
+            const result = await getWaveApplicationsAction(
+                statusFilter !== "all" ? statusFilter : undefined
+            );
+            if (result.success && result.data) {
+                setApplications(result.data);
+            } else {
+                setError(result.error || "Failed to load applications");
+            }
+        } catch (err) {
+            setError("Failed to fetch applications");
         }
-
         setIsLoading(false);
     };
+
+    useEffect(() => {
+        fetchApplications();
+    }, [statusFilter]);
 
     const handleApprove = async (applicationId: string) => {
         setProcessingId(applicationId);

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-    TrendingUp,
-    DollarSign,
-    Package,
-    ShoppingCart,
-    LucideIcon
-} from "lucide-react";
+import { LucideIcon, TrendingUp, DollarSign, Package, ShoppingCart, Users, Activity, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Icon mapping
@@ -15,13 +9,16 @@ const iconMap: Record<string, LucideIcon> = {
     DollarSign,
     Package,
     ShoppingCart,
+    Users,
+    Activity,
+    AlertCircle
 };
 
 interface StatCardProps {
     title: string;
     value: string | number;
     subtitle?: string;
-    icon: string; // Changed to string
+    icon: string;
     trend?: {
         value: string;
         isPositive: boolean;
@@ -39,7 +36,7 @@ export function StatCard({
     className,
     delay = 0,
 }: StatCardProps) {
-    const Icon = iconMap[icon];
+    const Icon = iconMap[icon] || Package; // Fallback to Package icon
 
     return (
         <div
@@ -75,11 +72,9 @@ export function StatCard({
                         </div>
                     )}
                 </div>
-                {Icon && (
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                        <Icon className="w-6 h-6 text-primary" />
-                    </div>
-                )}
+                <div className="w-12 h-12 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                    <Icon className="w-6 h-6 text-primary" />
+                </div>
             </div>
         </div>
     );

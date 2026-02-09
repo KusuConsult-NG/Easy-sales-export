@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -27,6 +27,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     const [loading, setLoading] = useState(true);
     const [enrolling, setEnrolling] = useState(false);
 
+    // params.courseId is used directly
     const courseId = params.courseId;
 
     useEffect(() => {
@@ -36,22 +37,53 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     }, [status, router]);
 
     useEffect(() => {
-        if (status === "authenticated" && session?.user) {
-            loadCourse();
-        }
-    }, [status, session, courseId]);
+        let mounted = true;
 
-    async function loadCourse() {
-        setLoading(true);
+        async function fetchCourse() {
+            if (status !== "authenticated" || !session?.user) return;
+
+            setLoading(true);
+            try {
+                const [courseData, progressData] = await Promise.all([
+                    getCourseByIdAction(courseId),
+                    getUserProgressAction(session!.user.id, courseId),
+                ]);
+
+                if (mounted) {
+                    if (courseData) {
+                        setCourse(courseData);
+                        setProgress(progressData);
+                    } else {
+                        // Handle not found
+                    }
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        }
+
+        fetchCourse();
+
+        return () => { mounted = false; };
+    }, [courseId, session, status]);
+
+
+    // Function to manually refresh data
+    const loadCourse = useCallback(async () => {
+        if (!session?.user) return;
         const [courseData, progressData] = await Promise.all([
             getCourseByIdAction(courseId),
             getUserProgressAction(session!.user.id, courseId),
         ]);
+        if (courseData) {
+            setCourse(courseData);
+            setProgress(progressData);
+        }
+    }, [courseId, session]);
 
-        setCourse(courseData);
-        setProgress(progressData);
-        setLoading(false);
-    }
+
 
     async function handleEnroll() {
         if (!session?.user) return;
@@ -229,8 +261,8 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                                 <div
                                     key={module.id}
                                     className={`border-2 rounded-xl p-6 ${moduleCompleted
-                                            ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
-                                            : "border-slate-200 dark:border-slate-700"
+                                        ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
+                                        : "border-slate-200 dark:border-slate-700"
                                         }`}
                                 >
                                     <div className="flex items-start justify-between mb-4">
@@ -266,8 +298,8 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                                                     onClick={() => isEnrolled && router.push(`/academy/${courseId}/lesson/${lesson.id}`)}
                                                     disabled={!isEnrolled}
                                                     className={`w-full flex items-center justify-between p-4 rounded-lg transition ${isEnrolled
-                                                            ? "hover:bg-slate-50 dark:hover:bg-slate-700"
-                                                            : "opacity-50 cursor-not-allowed"
+                                                        ? "hover:bg-slate-50 dark:hover:bg-slate-700"
+                                                        : "opacity-50 cursor-not-allowed"
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-3">
@@ -305,8 +337,8 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
                                                 </div>
                                                 {quizScore !== undefined && (
                                                     <div className={`px-3 py-1 rounded-full text-xs font-bold ${quizScore >= module.quiz.passingScore
-                                                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                        : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                                                         }`}>
                                                         Score: {quizScore}%
                                                     </div>

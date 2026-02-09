@@ -8,11 +8,13 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+import { withRateLimit } from "@/lib/rate-limit";
+
 /**
  * POST /api/auth/mfa/verify
  * Verify MFA code for session (used by middleware enforcement)
  */
-export async function POST(request: NextRequest) {
+async function verifyMFAHandler(request: NextRequest) {
     try {
         const session = await auth();
 
@@ -83,3 +85,5 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
+export const POST = withRateLimit(verifyMFAHandler);

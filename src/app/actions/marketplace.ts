@@ -7,7 +7,6 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
 import {
     collection,
     doc,
@@ -19,6 +18,12 @@ import {
     where,
     serverTimestamp
 } from "firebase/firestore";
+import {
+    ref,
+    uploadBytes,
+    getDownloadURL
+} from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SellerVerification, Product, CartItem, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
@@ -168,6 +173,133 @@ export async function getSellerVerificationAction() {
     }
 }
 
+/**
+ * Submit full marketplace onboarding (Profile + Verification + Files)
+ */
+export async function submitMarketplaceOnboardingAction(
+    prevState: any,
+    formData: FormData
+) {
+    try {
+        const session = await auth();
+
+        if (!session?.user) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        const userId = session.user.id;
+        const timestamp = Date.now();
+
+        // 1. Handle File Uploads
+        const uploadFile = async (file: File, path: string) => {
+            const extension = file.name.split('.').pop();
+            const fileName = `${timestamp}_${Math.random().toString(36).substring(7)}.${extension}`;
+            const storageRef = ref(storage, `${path}/${userId}/${fileName}`);
+            const buffer = await file.arrayBuffer();
+
+            await uploadBytes(storageRef, buffer, { contentType: file.type });
+            return await getDownloadURL(storageRef);
+        };
+
+        let businessRegistrationUrl = "";
+        const farmPhotoUrls: string[] = [];
+        const productSampleUrls: string[] = [];
+
+        // Upload Business Registration
+        const bizRegFile = formData.get("businessRegistration") as File;
+        if (bizRegFile && bizRegFile.size > 0) {
+            businessRegistrationUrl = await uploadFile(bizRegFile, "start_selling/documents");
+        }
+
+        // Upload Farm Photos (expecting farmPhotos_0, farmPhotos_1, etc.)
+        for (const key of Array.from(formData.keys())) {
+            if (key.startsWith("farmPhotos_")) {
+                const file = formData.get(key) as File;
+                if (file.size > 0) {
+                    const url = await uploadFile(file, "start_selling/farm_photos");
+                    farmPhotoUrls.push(url);
+                }
+            }
+        }
+
+        // Upload Product Samples
+        for (const key of Array.from(formData.keys())) {
+            if (key.startsWith("productSamples_")) {
+                const file = formData.get(key) as File;
+                if (file.size > 0) {
+                    const url = await uploadFile(file, "start_selling/product_samples");
+                    productSampleUrls.push(url);
+                }
+            }
+        }
+
+        // 2. Prepare Data
+        const locationStr = formData.get("location") as string;
+        let location = { state: "", lga: "", address: "" };
+        try {
+            location = JSON.parse(locationStr);
+        } catch (e) { }
+
+        const bankAccountStr = formData.get("bankAccount") as string;
+        let bankAccount = { bankName: "", accountNumber: "", accountName: "" };
+        try {
+            bankAccount = JSON.parse(bankAccountStr);
+        } catch (e) { }
+
+        const verificationId = `seller_${userId}_${timestamp}`;
+        const verificationRef = doc(db, COLLECTIONS.SELLER_VERIFICATIONS, verificationId);
+
+        const verificationData = {
+            id: verificationId,
+            userId,
+            status: "pending",
+            businessName: formData.get("businessName"),
+            businessType: formData.get("businessType"),
+            phone: formData.get("phone"),
+            location,
+
+            // Interest Profile
+            accountType: formData.get("accountType"), // seller or both
+            sellerCategories: JSON.parse(formData.get("sellerCategories") as string || "[]"),
+            productionCapacity: formData.get("productionCapacity"),
+            certifications: JSON.parse(formData.get("certifications") as string || "[]"),
+
+            // Documents
+            documents: {
+                businessRegistrationUrl,
+                farmPhotoUrls,
+                productSampleUrls,
+            },
+
+            // Bank
+            bankAccount,
+
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        // 3. Save to Firestore
+        await setDoc(verificationRef, verificationData);
+
+        // 4. Update User Profile
+        const userRef = doc(db, COLLECTIONS.USERS, userId);
+        await updateDoc(userRef, {
+            phone: formData.get("phone"),
+            location: `${location.address}, ${location.lga}, ${location.state}`, // Simplified location string
+            isSeller: true, // Flag to indicate seller intent
+            sellerVerificationStatus: "pending",
+            sellerVerificationId: verificationId,
+            updatedAt: serverTimestamp(),
+        });
+
+        return { success: true, verificationId };
+
+    } catch (error: any) {
+        console.error("Marketplace onboarding error:", error);
+        return { success: false, error: error.message || "Failed to submit application" };
+    }
+}
+
 // ============================================================================
 // PRODUCT MANAGEMENT
 // ============================================================================
@@ -203,6 +335,9 @@ export interface ProductActionState {
 /**
  * Create new product listing
  */
+/**
+ * Create new product listing
+ */
 export async function createProductAction(
     prevState: ProductActionState,
     formData: FormData
@@ -225,11 +360,44 @@ export async function createProductAction(
         }
 
         if (userData?.sellerVerificationStatus !== "approved") {
-            return { success: false, error: "Your seller account must be approved first" };
+            // Allow creation if pending for testing, or enforce strict? 
+            // The prompt says "Fixing Marketplace Onboarding". 
+            // If they are just onboarding, they might not be approved yet. 
+            // But let's stick to the requirement.
+            // For now, let's strictly enforce approved status as per original code.
+            // If audit reveals this blocks testing, we can relax it.
+            if (userData?.sellerVerificationStatus !== "approved") {
+                return { success: false, error: "Your seller account must be approved first" };
+            }
+        }
+
+        const productId = `product_${userId}_${Date.now()}`;
+
+        // 1. Handle Image Uploads
+        const uploadFile = async (file: File) => {
+            const extension = file.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+            const storageRef = ref(storage, `products/${userId}/${productId}/${fileName}`);
+            const buffer = await file.arrayBuffer();
+
+            await uploadBytes(storageRef, buffer, { contentType: file.type });
+            return await getDownloadURL(storageRef);
+        };
+
+        const imageUrls: string[] = [];
+
+        // Process uploaded files (productImages_0, productImages_1, etc.)
+        for (const key of Array.from(formData.keys())) {
+            if (key.startsWith("productImages_")) {
+                const file = formData.get(key) as File;
+                if (file.size > 0) {
+                    const url = await uploadFile(file);
+                    imageUrls.push(url);
+                }
+            }
         }
 
         // Create product
-        const productId = `product_${userId}_${Date.now()}`;
         const productRef = doc(db, COLLECTIONS.PRODUCTS, productId);
 
         // Parse pricing tiers
@@ -262,7 +430,7 @@ export async function createProductAction(
             title: formData.get("title") as string,
             description: formData.get("description") as string,
             category: formData.get("category") as any,
-            images: JSON.parse(formData.get("images") as string || "[]"),
+            images: imageUrls, // Use uploaded URLs
             videoUrl: (formData.get("videoUrl") as string) || undefined,
             pricingTiers,
             availableQuantity: parseInt(formData.get("availableQuantity") as string),
@@ -324,6 +492,211 @@ export async function getSellerProductsAction() {
         return { success: true, products };
     } catch (error: any) {
         console.error("Get seller products error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get seller's orders
+ */
+export async function getSellerOrdersAction() {
+    try {
+        const session = await auth();
+
+        if (!session?.user) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        const userId = session.user.id;
+        const ordersQuery = query(
+            collection(db, COLLECTIONS.ORDERS),
+            where("sellerId", "==", userId) // Assuming direct sellerId on order or needs a different query strategy for multi-seller carts?
+            // For now, let's assume simple orders where order.sellerId exists or we filter items. 
+            // The Order type has sellerId.
+        );
+
+        const snapshot = await getDocs(ordersQuery);
+        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
+
+        return { success: true, orders };
+    } catch (error: any) {
+        console.error("Get seller orders error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get seller analytics
+ */
+export async function getSellerAnalyticsAction() {
+    try {
+        const session = await auth();
+
+        if (!session?.user) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        const userId = session.user.id;
+
+        // Fetch Orders
+        const ordersQuery = query(
+            collection(db, COLLECTIONS.ORDERS),
+            where("sellerId", "==", userId)
+        );
+        const ordersSnapshot = await getDocs(ordersQuery);
+        const orders = ordersSnapshot.docs.map(doc => doc.data() as Order);
+
+        // Fetch Products
+        const productsQuery = query(
+            collection(db, COLLECTIONS.PRODUCTS),
+            where("sellerId", "==", userId)
+        );
+        const productsSnapshot = await getDocs(productsQuery);
+        const products = productsSnapshot.docs.map(doc => doc.data() as Product);
+
+        // Calculate Stats
+        const totalSales = orders
+            .filter(o => o.status !== "cancelled" && o.status !== "disputed")
+            .reduce((sum, o) => sum + o.totalAmount, 0);
+
+        const pendingOrders = orders.filter(o => o.status === "pending_payment" || o.status === "processing").length;
+
+        // Calculate monthly revenue (simple approximation for now)
+        const currentMonth = new Date().getMonth();
+        const monthlyRevenue = orders
+            .filter(o => {
+                const date = o.createdAt instanceof Date ? o.createdAt : (o.createdAt as any).toDate();
+                return date.getMonth() === currentMonth && o.status !== "cancelled";
+            })
+            .reduce((sum, o) => sum + o.totalAmount, 0);
+
+        const activeListings = products.filter(p => p.status === "active").length;
+
+        // Conversion rate placeholder (would need view tracking)
+        const conversionRate = 0;
+
+        // Average Rating
+        const averageRating = products.length > 0
+            ? products.reduce((sum, p) => sum + (p.rating || 0), 0) / products.length
+            : 0;
+
+        return {
+            success: true,
+            analytics: {
+                totalSales,
+                activeListings,
+                pendingOrders,
+                monthlyRevenue,
+                conversionRate,
+                averageRating
+            }
+        };
+    } catch (error: any) {
+        console.error("Get seller analytics error:", error);
+        return { success: false, error: error.message };
+    }
+}
+/**
+ * Get buyer's orders
+ */
+export async function getBuyerOrdersAction() {
+    try {
+        const session = await auth();
+
+        if (!session?.user) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        const userId = session.user.id;
+        // Query orders where the current user is the buyer (userId matches)
+        // Assuming Order type has userId or buyerId. Let's check Order interface later or assume userId is default for buyer.
+        // Actually, looking at createOrder (if it existed), it would likely link buyerId.
+        // Let's assume 'userId' field on Order represents the buyer.
+        const ordersQuery = query(
+            collection(db, COLLECTIONS.ORDERS),
+            where("userId", "==", userId)
+        );
+
+        const snapshot = await getDocs(ordersQuery);
+        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
+
+        return { success: true, orders };
+    } catch (error: any) {
+        console.error("Get buyer orders error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get buyer dashboard stats
+ */
+export async function getBuyerStatsAction() {
+    try {
+        const session = await auth();
+
+        if (!session?.user) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        const userId = session.user.id;
+        const ordersQuery = query(
+            collection(db, COLLECTIONS.ORDERS),
+            where("userId", "==", userId)
+        );
+
+        const snapshot = await getDocs(ordersQuery);
+        const orders = snapshot.docs.map(doc => doc.data() as Order);
+
+        const activeOrders = orders.filter(o => o.status !== "delivered" && o.status !== "cancelled" && o.status !== "completed").length;
+        const completedOrders = orders.filter(o => o.status === "delivered" || o.status === "completed").length;
+        const totalSpent = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+        // Mock saved sellers for now as we don't have a followed_sellers collection yet
+        const savedSellers = 0;
+
+        return {
+            success: true,
+            stats: {
+                activeOrders,
+                completedOrders,
+                totalSpent,
+                savedSellers
+            }
+        };
+    } catch (error: any) {
+        console.error("Get buyer stats error:", error);
+        return { success: false, error: error.message };
+    }
+}
+/**
+ * Get single product by ID
+ */
+export async function getProductAction(productId: string) {
+    try {
+        const productRef = doc(db, COLLECTIONS.PRODUCTS, productId);
+        const productSnap = await getDoc(productRef);
+
+        if (!productSnap.exists()) {
+            return { success: false, error: "Product not found" };
+        }
+
+        const product = productSnap.data() as Product;
+
+        // Optionally fetch seller name if not denormalized
+        // For now assume basic product data is enough or we fetch user
+        let sellerName = "Unknown Seller";
+        if (product.sellerId) {
+            const userRef = doc(db, COLLECTIONS.USERS, product.sellerId);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                const userData = userSnap.data();
+                sellerName = userData.businessName || userData.displayName || "Unknown Seller";
+            }
+        }
+
+        return { success: true, product: { ...product, sellerName } };
+    } catch (error: any) {
+        console.error("Get product error:", error);
         return { success: false, error: error.message };
     }
 }

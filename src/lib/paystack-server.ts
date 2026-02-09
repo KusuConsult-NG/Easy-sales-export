@@ -100,7 +100,12 @@ export function verifyPaystackWebhook(
             .update(payload)
             .digest('hex');
 
-        return hash === signature;
+        const signatureBuffer = Buffer.from(signature);
+        const hashBuffer = Buffer.from(hash);
+
+        // Prevent timing attacks
+        return signatureBuffer.length === hashBuffer.length &&
+            crypto.timingSafeEqual(signatureBuffer, hashBuffer);
     } catch (error) {
         console.error('Webhook signature verification failed:', error);
         return false;

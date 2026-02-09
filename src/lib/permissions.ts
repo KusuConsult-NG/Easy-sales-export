@@ -143,7 +143,7 @@ export function canAccessRoute(
  */
 export function getAccessibleRoutes(userRoles: UserRole[]): string[] {
     return Object.entries(ROUTE_PERMISSIONS)
-        .filter(([_, requiredRoles]) =>
+        .filter(([, requiredRoles]) =>
             requiredRoles.some(role => userRoles.includes(role))
         )
         .map(([route]) => route);

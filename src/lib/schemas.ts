@@ -130,3 +130,75 @@ export const checkoutSchema = z.object({
 });
 
 export type CheckoutFormData = z.infer<typeof checkoutSchema>;
+
+// ============================================
+// ADMIN SCHEMAS
+// ============================================
+
+export const WaveApplicationReviewSchema = z.object({
+    applicationId: z.string().min(1),
+    status: z.enum(["approved", "rejected"]),
+    reason: z.string().optional(),
+}).refine(data => data.status !== "rejected" || !!data.reason, {
+    message: "Reason is required when rejecting",
+    path: ["reason"],
+});
+
+export const WithdrawalProcessingSchema = z.object({
+    withdrawalId: z.string().min(1),
+    action: z.enum(["approve", "reject"]),
+    reasoning: z.string().optional(),
+}).refine(data => data.action !== "reject" || !!data.reasoning, {
+    message: "Reason is required when rejecting",
+    path: ["reasoning"],
+});
+
+export const UserVerificationToggleSchema = z.object({
+    userId: z.string().min(1),
+});
+
+export const LandListingVerificationSchema = z.object({
+    listingId: z.string().min(1),
+    decision: z.enum(["approved", "rejected"]),
+    reason: z.string().optional(),
+}).refine(data => data.decision !== "rejected" || !!data.reason, {
+    message: "Reason is required when rejecting",
+    path: ["reason"],
+});
+
+
+export const LoanApplicationReviewSchema = z.object({
+    applicationId: z.string().min(1),
+    status: z.enum(["approved", "rejected"]),
+    reason: z.string().optional(),
+}).refine(data => data.status !== "rejected" || !!data.reason, {
+    message: "Reason is required when rejecting",
+    path: ["reason"],
+});
+
+
+// ============================================
+// ROLE MANAGEMENT SCHEMAS
+// ============================================
+
+const UserRoleSchema = z.enum([
+    "general_user",
+    "buyer",
+    "seller",
+    "land_owner",
+    "farmer",
+    "investor",
+    "export_participant",
+    "cooperative_member",
+    "wave_participant",
+    "field_officer",
+    "admin",
+    "super_admin"
+]);
+
+export const UpdateUserRolesSchema = z.object({
+    userId: z.string().min(1),
+    roles: z.array(UserRoleSchema).min(1, "At least one role is required"),
+});
+
+

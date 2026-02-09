@@ -11,20 +11,24 @@ export async function GET(request: NextRequest) {
     try {
         const session = await auth();
 
+        // Return non-error response when not authenticated
+        // This prevents console errors during page load
         if (!session?.user) {
-            return NextResponse.json(
-                { success: false, error: "Unauthorized" },
-                { status: 401 }
-            );
+            return NextResponse.json({
+                success: true,
+                enabled: false,
+                authenticated: false,
+            });
         }
 
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, session.user.id));
 
         if (!userDoc.exists()) {
-            return NextResponse.json(
-                { success: false, error: "User not found" },
-                { status: 404 }
-            );
+            return NextResponse.json({
+                success: true,
+                enabled: false,
+                authenticated: true,
+            });
         }
 
         const userData = userDoc.data();
@@ -32,12 +36,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             enabled: userData.mfaEnabled || false,
+            authenticated: true,
         });
     } catch (error: any) {
         console.error("MFA status check error:", error);
-        return NextResponse.json(
-            { success: false, error: "Failed to check status" },
-            { status: 500 }
-        );
+        // Return graceful error response instead of 500
+        return NextResponse.json({
+            success: true,
+            enabled: false,
+            error: "Failed to check status",
+        });
     }
 }

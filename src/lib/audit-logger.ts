@@ -82,7 +82,7 @@ export async function getAuditLogs(filters?: {
 }): Promise<AuditLog[]> {
     try {
         const auditLogsRef = collection(db, 'audit_logs');
-        let queryConstraints: any[] = [orderBy('timestamp', 'desc')];
+        const queryConstraints: any[] = [orderBy('timestamp', 'desc')];
 
         if (filters?.userId) {
             queryConstraints.push(where('userId', '==', filters.userId));

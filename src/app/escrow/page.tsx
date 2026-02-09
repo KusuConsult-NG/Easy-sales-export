@@ -4,36 +4,51 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Clock, Lock, Truck, CheckCircle, AlertTriangle, X, MessageCircle } from "lucide-react";
-import { EscrowStatus, type Transaction } from "@/types/strict";
 import {
     getUserEscrowTransactions,
     updateEscrowStatus,
     createEscrowDispute,
     releaseEscrowFunds
 } from "@/app/actions/escrow-actions";
+import { type EscrowTransaction, type EscrowStatus } from "@/types/escrow";
 import { formatCurrency } from "@/lib/utils";
+
+// Helper to safely format dates that might be Timestamps or Dates
+const formatDate = (date: any) => {
+    if (!date) return "";
+    // Handle Firestore Timestamp
+    if (typeof date.toDate === "function") {
+        return date.toDate().toLocaleDateString();
+    }
+    // Handle Date object
+    if (date instanceof Date) {
+        return date.toLocaleDateString();
+    }
+    // Handle string/number
+    return new Date(date).toLocaleDateString();
+};
 
 const STEPS = [
     {
-        key: EscrowStatus.PENDING,
+        key: "pending" as EscrowStatus,
         label: "Payment Pending",
         icon: Clock,
         description: "Waiting for payment confirmation"
     },
     {
-        key: EscrowStatus.HELD,
-        label: "Funds Held",
+        key: "funded" as EscrowStatus,
+        label: "Funds Secured",
         icon: Lock,
         description: "Payment secured in escrow"
     },
     {
-        key: EscrowStatus.DISPUTED,
-        label: "In Delivery/Dispute",
+        key: "in_transit" as EscrowStatus,
+        label: "In Transit",
         icon: Truck,
-        description: "Product being delivered or under dispute"
+        description: "Product being delivered"
     },
     {
-        key: EscrowStatus.RELEASED,
+        key: "completed" as EscrowStatus,
         label: "Complete",
         icon: CheckCircle,
         description: "Funds released to seller"
@@ -47,8 +62,18 @@ interface EscrowStepperProps {
 }
 
 export function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowStepperProps) {
-    const getStepIndex = (status: EscrowStatus) =>
-        STEPS.findIndex(s => s.key === status);
+    const getStepIndex = (status: EscrowStatus) => {
+        switch (status) {
+            case "pending": return 0;
+            case "funded": return 1;
+            case "in_transit": return 2;
+            case "delivered": return 2; // Show as part of delivery phase
+            case "disputed": return 2; // Show warning in delivery phase
+            case "completed": return 3;
+            case "cancelled": return -1;
+            default: return 0;
+        }
+    };
 
     const currentIndex = getStepIndex(currentStatus);
 
@@ -62,7 +87,7 @@ export function EscrowStepper({ currentStatus, transactionId, onStatusChange }: 
                     className="absolute top-6 left-0 h-1 bg-[#1358ec] -z-10"
                     initial={{ width: "0%" }}
                     animate={{
-                        width: currentStatus === EscrowStatus.CANCELLED
+                        width: currentStatus === "cancelled"
                             ? "0%"
                             : `${(currentIndex / (STEPS.length - 1)) * 100}%`
                     }}
@@ -74,7 +99,7 @@ export function EscrowStepper({ currentStatus, transactionId, onStatusChange }: 
                     const Icon = step.icon;
                     const isActive = index === currentIndex;
                     const isCompleted = index < currentIndex;
-                    const isCancelled = currentStatus === EscrowStatus.CANCELLED;
+                    const isCancelled = currentStatus === "cancelled";
 
                     return (
                         <motion.div
@@ -146,7 +171,7 @@ export function EscrowStepper({ currentStatus, transactionId, onStatusChange }: 
             </div>
 
             {/* Cancelled Status */}
-            {currentStatus === EscrowStatus.CANCELLED && (
+            {currentStatus === "cancelled" && (
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -161,7 +186,7 @@ export function EscrowStepper({ currentStatus, transactionId, onStatusChange }: 
             )}
 
             {/* Disputed Status */}
-            {currentStatus === EscrowStatus.DISPUTED && (
+            {currentStatus === "disputed" && (
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -180,22 +205,22 @@ export function EscrowStepper({ currentStatus, transactionId, onStatusChange }: 
 
 export default function EscrowDashboardPage() {
     const router = useRouter();
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [transactions, setTransactions] = useState<EscrowTransaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTab, setSelectedTab] = useState<'all' | 'farm-nation' | 'marketplace' | 'export'>('all');
-
-    useEffect(() => {
-        loadTransactions();
-    }, []);
 
     async function loadTransactions() {
         setLoading(true);
         const result = await getUserEscrowTransactions();
         if (result.success && result.transactions) {
-            setTransactions(result.transactions as Transaction[]);
+            setTransactions(result.transactions);
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        loadTransactions();
+    }, []);
 
     const filteredTransactions = transactions.filter(t => {
         if (selectedTab === 'all') return true;
@@ -268,20 +293,20 @@ export default function EscrowDashboardPage() {
                                 <div className="flex justify-between items-start mb-6">
                                     <div>
                                         <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
-                                            Transaction #{transaction.id.slice(0, 8)}
+                                            Transaction #{transaction.id ? transaction.id.slice(0, 8) : '...'}
                                         </h3>
                                         <p className="text-2xl font-bold text-[#1358ec]">
                                             {formatCurrency(transaction.amount)}
                                         </p>
                                     </div>
                                     <div className="text-right text-sm text-slate-500 dark:text-slate-400">
-                                        <p>{transaction.createdAt?.toLocaleDateString()}</p>
+                                        <p>{formatDate(transaction.createdAt)}</p>
                                     </div>
                                 </div>
 
                                 <EscrowStepper
                                     currentStatus={transaction.status}
-                                    transactionId={transaction.id}
+                                    transactionId={transaction.id || ""}
                                     onStatusChange={loadTransactions}
                                 />
 
@@ -294,7 +319,7 @@ export default function EscrowDashboardPage() {
                                         <MessageCircle className="w-4 h-4" />
                                         <span>Chat</span>
                                     </button>
-                                    {transaction.status === EscrowStatus.HELD && (
+                                    {["funded", "in_transit", "delivered"].includes(transaction.status) && (
                                         <button
                                             onClick={() => router.push(`/escrow/${transaction.id}/dispute`)}
                                             className="flex-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl font-medium transition flex items-center justify-center space-x-2"

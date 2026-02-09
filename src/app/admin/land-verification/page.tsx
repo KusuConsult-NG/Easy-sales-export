@@ -13,17 +13,20 @@ export default function LandVerificationPage() {
     const [rejectionReason, setRejectionReason] = useState("");
 
     useEffect(() => {
-        loadPendingListings();
-    }, []);
-
-    async function loadPendingListings() {
-        setLoading(true);
-        const result = await getPendingLandListings();
-        if (result.success && result.listings) {
-            setListings(result.listings);
+        let mounted = true;
+        async function loadPendingListings() {
+            setLoading(true);
+            const result = await getPendingLandListings();
+            if (mounted) {
+                if (result.success && result.listings) {
+                    setListings(result.listings);
+                }
+                setLoading(false);
+            }
         }
-        setLoading(false);
-    }
+        loadPendingListings();
+        return () => { mounted = false; };
+    }, []);
 
     async function handleApprove(listingId: string) {
         if (!confirm("Approve this land listing? It will be published immediately.")) return;
@@ -34,7 +37,8 @@ export default function LandVerificationPage() {
         if (result.success) {
             alert("Land listing approved successfully!");
             setSelectedListing(null);
-            await loadPendingListings();
+            // Manually update state to remove the approved listing
+            setListings(prev => prev.filter(l => l.id !== listingId));
         } else {
             alert(result.error || "Failed to approve listing");
         }
@@ -56,7 +60,8 @@ export default function LandVerificationPage() {
             alert("Land listing rejected. Owner has been notified.");
             setSelectedListing(null);
             setRejectionReason("");
-            await loadPendingListings();
+            // Manually update state to remove the rejected listing
+            setListings(prev => prev.filter(l => l.id !== listingId));
         } else {
             alert(result.error || "Failed to reject listing");
         }

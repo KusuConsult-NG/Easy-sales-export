@@ -387,12 +387,16 @@ export async function getMembershipAction(): Promise<GetMembershipState> {
         );
 
         const membership: CooperativeMembership = {
-            cooperativeId: membershipData.cooperativeId,
-            cooperativeName: cooperativeDoc.data()?.name || "Unknown Cooperative",
+            id: membershipSnapshot.docs[0].id,
+            cooperativeId: membershipData.cooperativeId || "default", // Handle missing cooperativeId?
+            cooperativeName: cooperativeDoc?.data()?.name || "KusuConsult Cooperative", // Fallback
             savingsBalance: membershipData.savingsBalance || 0,
             loanBalance: membershipData.loanBalance || 0,
-            memberSince: membershipData.memberSince?.toDate() || new Date(),
+            memberSince: membershipData.memberSince?.toDate?.() || membershipData.createdAt?.toDate?.() || new Date(),
             monthlyTarget: membershipData.monthlyTarget || 50000,
+            membershipTier: membershipData.membershipTier || "basic",
+            membershipStatus: membershipData.membershipStatus || "pending",
+            paymentStatus: membershipData.paymentStatus || "pending",
         };
 
         return {

@@ -9,88 +9,116 @@ import {
     Package,
     GraduationCap,
     AlertCircle,
+    Loader2,
 } from "lucide-react";
-import type { DashboardStats } from "@/app/actions/admin-analytics";
+import type { AnalyticsData } from "@/app/actions/admin-analytics";
 
 export default function AdminDashboardPage() {
-    const [stats, setStats] = useState<DashboardStats | null>(null);
+    const [stats, setStats] = useState<AnalyticsData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Mock data - in real app, fetch from API
-        setStats({
-            totalUsers: 1245,
-            activeUsers: 892,
-            totalRevenue: 5420000,
-            pendingEscrows: 35,
-            activeLandListings: 128,
-            pendingLoans: 47,
-            totalCourseEnrollments: 634,
-            recentActivity: [],
-        });
-        setLoading(false);
+        async function fetchStats() {
+            try {
+                // Dynamically import to ensure server action is handled correctly
+                const { getDashboardStatsAction } = await import("@/app/actions/admin-analytics");
+                const data = await getDashboardStatsAction();
+                setStats(data);
+            } catch (err) {
+                console.error("Failed to load dashboard stats", err);
+                setError("Failed to load dashboard data");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        fetchStats();
     }, []);
 
-    if (loading || !stats) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <Loader2 className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
                     <p className="text-slate-600 dark:text-slate-400">Loading dashboard...</p>
                 </div>
             </div>
         );
     }
 
+    if (error) {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="bg-red-100 p-4 rounded-full inline-block mb-4">
+                        <AlertCircle className="w-8 h-8 text-red-600" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Error Loading Dashboard</h2>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">{error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Fallback if stats is null but no error (mostly shouldn't happen with current action logic)
+    if (!stats) return null;
+
     const statCards = [
         {
             label: "Total Users",
-            value: stats.totalUsers.toLocaleString(),
+            value: stats.platformOverview.totalUsers.toLocaleString(),
             icon: Users,
             color: "blue",
-            change: "+12% from last month",
+            change: "Total registered accounts",
         },
         {
             label: "Active Users (30d)",
-            value: stats.activeUsers.toLocaleString(),
+            value: stats.platformOverview.activeUsers.toLocaleString(),
             icon: TrendingUp,
             color: "emerald",
-            change: "71.6% engagement rate",
+            change: "Logged in recently",
         },
         {
-            label: "Total Revenue",
-            value: `₦${(stats.totalRevenue / 1000000).toFixed(1)}M`,
+            label: "Total RevenueEstimate",
+            value: `₦${(stats.platformOverview.totalRevenue / 1000000).toFixed(1)}M`,
             icon: DollarSign,
             color: "purple",
-            change: "+28% from last month",
+            change: "Based on transaction volume",
         },
         {
             label: "Pending Escrows",
-            value: stats.pendingEscrows,
+            value: stats.counts.pendingEscrows,
             icon: Package,
             color: "amber",
             change: "Requires attention",
         },
         {
             label: "Active Land Listings",
-            value: stats.activeLandListings,
+            value: stats.counts.activeLandListings,
             icon: FileText,
             color: "indigo",
-            change: "+15 new this week",
+            change: "Verified listings",
         },
         {
             label: "Pending Loans",
-            value: stats.pendingLoans,
+            value: stats.counts.pendingLoans,
             icon: AlertCircle,
             color: "red",
             change: "Requires review",
         },
         {
-            label: "Course Enrollments",
-            value: stats.totalCourseEnrollments,
+            label: "Recent Activity",
+            value: stats.recentTransactions.length,
             icon: GraduationCap,
             color: "cyan",
-            change: "+34 this week",
+            change: "Actions in last 24h",
         },
     ];
 
@@ -174,7 +202,7 @@ export default function AdminDashboardPage() {
                             Review Loans
                         </h3>
                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {stats.pendingLoans} pending applications
+                            {stats.counts.pendingLoans} pending applications
                         </p>
                     </a>
 

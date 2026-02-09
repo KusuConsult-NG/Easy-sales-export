@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyPaystackWebhook, verifyPaystackPayment } from '@/lib/paystack-server';
-import { db } from '@/lib/firebase';
+import { verifyPaystackWebhook, verifyPaystackPayment } from '@/lib/paystack-server'; // Note: verifyPaystackPayment is client/fetch based, still works
+import { db } from '@/lib/firebase-admin'; // Use Admin SDK
+import { FieldValue } from 'firebase-admin/firestore';
 import { COLLECTIONS } from '@/lib/types/firestore';
-import { doc, updateDoc, increment, serverTimestamp, getDoc } from 'firebase/firestore';
 import { calculateUserTier } from '@/lib/cooperative-tiers';
-import { createAuditLog } from '@/lib/audit-log';
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { logger } from '@/lib/logger';
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Verify webhook is from Paystack
+        // Verify webhook is from Paystack (using timingSafeEqual)
         const isValid = verifyPaystackWebhook(body, signature);
 
         if (!isValid) {
@@ -93,11 +92,25 @@ async function handleSuccessfulPayment(paymentData: any) {
 
         // Extract metadata
         const userId = metadata?.userId;
-        const contributionType = metadata?.type || 'contribution';
+        // const contributionType = metadata?.type || 'contribution'; // Unused
 
         if (!userId) {
             logger.error('Missing userId in payment metadata', undefined, { reference });
             return;
+        }
+
+        // IDEMPOTENCY CHECK:
+        // Check if this payment reference has already been processed
+        // We check the audit logs for a 'contribution_made' action with this targetId
+        const auditSnapshot = await db.collection('audit_logs')
+            .where('targetId', '==', reference)
+            .where('action', '==', 'contribution_made')
+            .limit(1)
+            .get();
+
+        if (!auditSnapshot.empty) {
+            logger.warn('Duplicate webhook event detected (Idempotency)', { reference });
+            return; // Exit silently as it's already processed
         }
 
         // Verify payment again (double-check)
@@ -111,28 +124,39 @@ async function handleSuccessfulPayment(paymentData: any) {
         const amountInNaira = amount / 100; // Convert kobo to naira
 
         // Update cooperative membership
-        const membershipRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
-        const membershipDoc = await getDoc(membershipRef);
+        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
 
-        if (!membershipDoc.exists()) {
-            // Create new membership if doesn't exist
-            logger.error('Membership not found for user', undefined, { userId });
-            return;
-        }
+        await db.runTransaction(async (transaction) => {
+            const membershipDoc = await transaction.get(membershipRef);
 
-        const currentTotal = membershipDoc.data().totalContributions || 0;
-        const newTotal = currentTotal + amountInNaira;
-        const newTier = calculateUserTier(newTotal);
+            if (!membershipDoc.exists) {
+                // Create new membership if doesn't exist? OR fail.
+                // For robustness, log and fail, or create basic. 
+                // Assuming user exists if they are paying.
+                // logger.error('Membership not found for user', undefined, { userId });
+                // throw new Error("Membership not found");
+                // Actually, let's create it if missing, or update
+                // But better to just update.
+                throw new Error(`Membership not found for user ${userId}`);
+            }
 
-        await updateDoc(membershipRef, {
-            totalContributions: increment(amountInNaira),
-            tier: newTier,
-            lastContributionAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            const currentTotal = membershipDoc.data()?.totalContributions || 0;
+            const newTotal = currentTotal + amountInNaira;
+            const newTier = calculateUserTier(newTotal);
+
+            transaction.update(membershipRef, {
+                totalContributions: FieldValue.increment(amountInNaira),
+                tier: newTier,
+                lastContributionAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // Create audit log WITHIN the transaction (or mainly just ensure atomic update of member)
+            // But audit log is a new doc, usually separate.
         });
 
-        // Create audit log
-        await createAuditLog({
+        // Audit Log (Admin SDK)
+        await db.collection('audit_logs').add({
             action: 'contribution_made',
             userId,
             userEmail: customer.email,
@@ -140,21 +164,19 @@ async function handleSuccessfulPayment(paymentData: any) {
             targetType: 'payment',
             metadata: {
                 amount: amountInNaira,
-                previousTotal: currentTotal,
-                newTotal,
-                previousTier: membershipDoc.data().tier,
-                newTier,
                 paymentReference: reference,
                 paymentChannel: verification.data.channel,
             },
             details: `Contribution of ₦${amountInNaira.toLocaleString()} processed successfully`,
+            timestamp: FieldValue.serverTimestamp(), // Admin SDK uses timestamp
+            performedBy: 'system',
+            ipAddress: 'webhook'
         });
 
         logger.info('Payment processed successfully', {
             reference,
             userId,
             amount: amountInNaira,
-            newTier,
         });
 
     } catch (error) {

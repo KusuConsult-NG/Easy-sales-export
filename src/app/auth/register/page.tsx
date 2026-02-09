@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -31,7 +31,7 @@ export default function RegisterPage() {
         email: "",
         phone: "",
         gender: "",
-        role: "",
+        platforms: [] as string[], // Multi-platform selection
         password: "",
         confirmPassword: "",
         acceptTerms: false,
@@ -43,40 +43,9 @@ export default function RegisterPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
     const hasRedirected = useRef(false);
-    const [passwordStrength, setPasswordStrength] = useState({
-        score: 0,
-        label: "",
-        color: "",
-    });
-
-    // 🔴 P0 FIX: Observe AUTH STATE instead of form submit success
-    useEffect(() => {
-        console.log("🔍 REGISTER AUTH STATE:", { status, hasSession: !!session });
-
-        // Only redirect ONCE when we become authenticated
-        if (status === "authenticated" && session && !hasRedirected.current) {
-            hasRedirected.current = true;
-            console.log("✅ REGISTRATION SUCCESS → SESSION ESTABLISHED → EXECUTING REDIRECT");
-            showToast("Registration successful! Redirecting to dashboard...", "success");
-            router.push("/dashboard");
-        }
-    }, [status, session, router]);
-
-    // Handle form submission errors only
-    useEffect(() => {
-        if (state.error && !isPending) {
-            console.log("❌ REGISTRATION FAILED:", state.error);
-            showToast(state.error, "error");
-        } else if (state.success && !isPending) {
-            console.log("✅ REGISTRATION ACTION RETURNED SUCCESS (waiting for session)");
-        }
-    }, [state.error, state.success, isPending, showToast]);
-
-    // Calculate password strength
-    useEffect(() => {
+    const passwordStrength = useMemo(() => {
         if (!formData.password) {
-            setPasswordStrength({ score: 0, label: "", color: "" });
-            return;
+            return { score: 0, label: "", color: "" };
         }
 
         let score = 0;
@@ -108,7 +77,7 @@ export default function RegisterPage() {
             color = "bg-green-500";
         }
 
-        setPasswordStrength({ score, label, color });
+        return { score, label, color };
     }, [formData.password]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,6 +106,16 @@ export default function RegisterPage() {
             met: /[^a-zA-Z0-9]/.test(formData.password),
         },
     ];
+
+    const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const platform = e.target.value;
+        setFormData(prev => ({
+            ...prev,
+            platforms: e.target.checked
+                ? [...prev.platforms, platform]
+                : prev.platforms.filter(p => p !== platform)
+        }));
+    };
 
     return (
         <div className="min-h-screen bg-linear-to-br from-slate-900 via-primary to-slate-900 flex items-center justify-center p-4">
@@ -259,36 +238,60 @@ export default function RegisterPage() {
                                 )}
                             </div>
 
-                            {/* Role */}
-                            <div>
-                                <label className="block text-sm font-semibold text-white mb-2">
-                                    Account Type <span className="text-red-300">*</span>
+                            {/* Platform Selection */}
+                            <div className="col-span-full">
+                                <label className="block text-sm font-semibold text-white mb-3">
+                                    Select Platforms <span className="text-red-300">*</span>
                                 </label>
-                                <div className="relative">
-                                    <select
-                                        name="role"
-                                        value={formData.role}
-                                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                        className={`w-full px-4 py-3 bg-white/10 border ${errors.role ? "border-red-400" : "border-white/20"
-                                            } rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all appearance-none cursor-pointer`}
-                                        disabled={isPending}
-                                        required
-                                    >
-                                        <option value="" className="bg-slate-800">Select Account Type</option>
-                                        <option value="member" className="bg-slate-800">Member - Join cooperatives and access loans</option>
-                                        <option value="exporter" className="bg-slate-800">Exporter - Submit export applications</option>
-                                        <option value="vendor" className="bg-slate-800">Vendor - Sell agricultural products</option>
-                                    </select>
+                                <p className="text-xs text-blue-200/70 mb-3">
+                                    Choose all platforms you're interested in. You can request access to more later.
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {[
+                                        { id: "marketplace", label: "Marketplace", desc: "Buy & sell agricultural products" },
+                                        { id: "export", label: "Export Windows", desc: "Invest in export opportunities" },
+                                        { id: "cooperatives", label: "Cooperatives", desc: "Join cooperatives & access loans" },
+                                        { id: "farm-nation", label: "Farm Nation", desc: "Land investment & fractional ownership" },
+                                        { id: "academy", label: "Academy", desc: "Learn agricultural best practices" },
+                                    ].map(platform => (
+                                        <label
+                                            key={platform.id}
+                                            className={`flex items-start gap-3 p-3 bg-white/5 border rounded-xl cursor-pointer transition ${formData.platforms.includes(platform.id)
+                                                    ? "border-blue-400 bg-blue-500/10"
+                                                    : "border-white/10 hover:bg-white/10"
+                                                }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                name="platforms[]"
+                                                value={platform.id}
+                                                checked={formData.platforms.includes(platform.id)}
+                                                onChange={handlePlatformChange}
+                                                className="mt-1 w-4 h-4 rounded accent-blue-500"
+                                                disabled={isPending}
+                                            />
+                                            <div className="flex-1">
+                                                <div className="font-semibold text-white text-sm">{platform.label}</div>
+                                                <div className="text-xs text-blue-200/70">{platform.desc}</div>
+                                            </div>
+                                        </label>
+                                    ))}
                                 </div>
-                                {errors.role && (
-                                    <p className="mt-1 text-sm text-red-300 flex items-center gap-1">
+                                {errors.platforms && (
+                                    <p className="mt-2 text-sm text-red-300 flex items-center gap-1">
                                         <AlertCircle className="w-4 h-4" />
-                                        {errors.role}
+                                        {errors.platforms}
                                     </p>
                                 )}
-                                <p className="mt-2 text-xs text-blue-200/70">
-                                    Choose the account type that best describes your needs. You can request role changes later.
-                                </p>
+                                {/* WAVE auto-enabled for females */}
+                                {formData.gender === "female" && (
+                                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                                        <div className="flex items-center gap-2 text-blue-200">
+                                            <CheckCircle className="w-4 h-4 text-blue-300" />
+                                            <span className="text-sm font-medium">WAVE Program automatically enabled for female users</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

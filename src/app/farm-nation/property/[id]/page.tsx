@@ -25,27 +25,29 @@ export default function PropertyDetailsPage() {
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
 
+    async function loadProperty() {
+        try {
+            const result = await getPropertyByIdAction(propertyId);
+            if (result.success && result.property) {
+                setProperty(result.property);
+            } else {
+                setError(result.error || "Property not found");
+            }
+        } catch (error) {
+            setError("Failed to load property details");
+        }
+        setLoading(false);
+    }
+
     useEffect(() => {
         loadProperty();
+    }, [params.id]); // Depend only on params.id for property loading
+
+    useEffect(() => {
         if (status === "authenticated") {
             getUserTierAction().then(({ tier }) => setUserTier(tier));
         }
-    }, [propertyId, status]);
-
-    const loadProperty = async () => {
-        setLoading(true);
-        setError(null);
-
-        const result = await getPropertyByIdAction(propertyId);
-
-        if (result.success && result.property) {
-            setProperty(result.property);
-        } else {
-            setError(result.error || "Property not found");
-        }
-
-        setLoading(false);
-    };
+    }, [status]); // Depend only on status for user tier
 
     const handleExpressInterest = () => {
         if (status !== "authenticated") {
@@ -120,8 +122,8 @@ export default function PropertyDetailsPage() {
                         <button
                             onClick={() => setIsFavorite(!isFavorite)}
                             className={`p-2 rounded-lg transition ${isFavorite
-                                    ? "bg-red-100 dark:bg-red-900/20 text-red-600"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-red-600"
+                                ? "bg-red-100 dark:bg-red-900/20 text-red-600"
+                                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-red-600"
                                 }`}
                         >
                             <Heart className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
@@ -176,8 +178,8 @@ export default function PropertyDetailsPage() {
                                                         key={index}
                                                         onClick={() => setCurrentImageIndex(index)}
                                                         className={`w-2 h-2 rounded-full transition ${index === currentImageIndex
-                                                                ? "bg-white w-8"
-                                                                : "bg-white/50 hover:bg-white/75"
+                                                            ? "bg-white w-8"
+                                                            : "bg-white/50 hover:bg-white/75"
                                                             }`}
                                                     />
                                                 ))}
@@ -199,8 +201,8 @@ export default function PropertyDetailsPage() {
                                             key={index}
                                             onClick={() => setCurrentImageIndex(index)}
                                             className={`aspect-video relative rounded-lg overflow-hidden border-2 transition ${index === currentImageIndex
-                                                    ? "border-green-600"
-                                                    : "border-transparent hover:border-green-400"
+                                                ? "border-green-600"
+                                                : "border-transparent hover:border-green-400"
                                                 }`}
                                         >
                                             <Image src={img} alt={`Thumbnail ${index + 1}`} fill className="object-cover" />
@@ -223,8 +225,8 @@ export default function PropertyDetailsPage() {
                                     </div>
                                 </div>
                                 <div className={`px-4 py-2 rounded-lg font-semibold ${property.type === "sale"
-                                        ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400"
-                                        : "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400"
+                                    ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                                    : "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400"
                                     }`}>
                                     For {property.type === "sale" ? "Sale" : "Lease"}
                                 </div>

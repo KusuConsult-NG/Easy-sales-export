@@ -6,7 +6,11 @@
 
 import { auth } from '@/lib/auth';
 import { initializePaystackPayment } from '@/lib/paystack-server';
-import { nairaToKobo, generatePaymentReference } from '@/lib/paystack';
+
+// Helper function to convert Naira to Kobo (Paystack uses kobo)
+function nairaToKobo(naira: number): number {
+    return Math.round(naira * 100);
+}
 
 // Action state type
 interface ActionState {
@@ -34,11 +38,8 @@ export async function initializeContributionPaymentAction(
             return { error: 'Maximum contribution is ₦1,000,000', success: false };
         }
 
-        // Generate reference
-        const reference = generatePaymentReference();
-
-        // Initialize payment with Paystack
-        const { authorizationUrl } = await initializePaystackPayment(
+        // Initialize payment with Paystack (Paystack generates the reference)
+        const { authorizationUrl, reference } = await initializePaystackPayment(
             session.user.email!,
             nairaToKobo(amount),
             {

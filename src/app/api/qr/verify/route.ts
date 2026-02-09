@@ -6,12 +6,14 @@ import { verifyDigitalIDQR } from "@/lib/digital-id";
 import { createAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 
+import { withRateLimit } from "@/lib/rate-limit";
+
 /**
  * POST /api/qr/verify
  * Verify Digital ID QR Code
  * Admin only
  */
-export async function POST(request: NextRequest) {
+async function verifyHandler(request: NextRequest) {
     try {
         // Check authentication
         const session = await auth();
@@ -70,3 +72,5 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
+export const POST = withRateLimit(verifyHandler);

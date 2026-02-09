@@ -1,7 +1,7 @@
 "use server";
 
-import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -19,6 +19,7 @@ export type AuditAction =
     | "user_verify"
     | "user_unverify"
     | "user_role_change"
+    | "user_role_update"
     | "account_unlock"
     | "export_create"
     | "export_status_update"
@@ -71,14 +72,14 @@ export async function logAuditAction(
             return { error: "Authentication required", success: false };
         }
 
-        await addDoc(collection(db, COLLECTIONS.AUDIT_LOGS), {
+        await db.collection(COLLECTIONS.AUDIT_LOGS).add({
             action,
             adminId: session.user.id,
-            adminEmail: session.user.email,
+            adminEmail: session.user.email || "",
             targetId,
             targetType,
             details,
-            timestamp: serverTimestamp(),
+            timestamp: FieldValue.serverTimestamp(),
         });
 
         return { error: null, success: true };
@@ -100,13 +101,11 @@ export async function getAuditLogsAction(
             return { error: "Unauthorized: Admin access required", success: false, data: null };
         }
 
-        const logsQuery = query(
-            collection(db, COLLECTIONS.AUDIT_LOGS),
-            orderBy("timestamp", "desc"),
-            limit(limitCount)
-        );
+        const snapshot = await db.collection(COLLECTIONS.AUDIT_LOGS)
+            .orderBy("timestamp", "desc")
+            .limit(limitCount)
+            .get();
 
-        const snapshot = await getDocs(logsQuery);
         const logs: AuditLog[] = snapshot.docs.map(doc => ({
             id: doc.id,
             action: doc.data().action,
@@ -116,7 +115,7 @@ export async function getAuditLogsAction(
             targetType: doc.data().targetType,
             details: doc.data().details,
             timestamp: doc.data().timestamp?.toDate() || new Date(),
-        }));
+        })) as AuditLog[];
 
         return {
             error: null,

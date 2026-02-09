@@ -35,28 +35,28 @@ export default function MyPurchasesPage() {
     const [error, setError] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>("all");
 
+    async function loadPurchases() {
+        if (!session?.user) return;
+
+        try {
+            const result = await getMyPurchaseRequestsAction();
+            if (result.success && result.requests) {
+                // Cast to PurchaseRequest[] as the action returns generic objects
+                setPurchases(result.requests as unknown as PurchaseRequest[]);
+            }
+        } catch (error) {
+            console.error("Failed to load purchases:", error);
+        }
+        setLoading(false);
+    }
+
     useEffect(() => {
         if (status === "unauthenticated") {
-            router.push("/login");
+            router.push("/auth/login");
         } else if (status === "authenticated") {
             loadPurchases();
         }
-    }, [status]);
-
-    const loadPurchases = async () => {
-        setLoading(true);
-        setError(null);
-
-        const result = await getMyPurchaseRequestsAction();
-
-        if (result.success && result.requests) {
-            setPurchases(result.requests as unknown as PurchaseRequest[]);
-        } else {
-            setError(result.error || "Failed to load purchase requests");
-        }
-
-        setLoading(false);
-    };
+    }, [status, session]);;
 
     const filteredPurchases = purchases.filter(purchase => {
         if (filterStatus === "all") return true;

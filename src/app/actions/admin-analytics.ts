@@ -7,23 +7,34 @@ import { db } from "@/lib/firebase";
  * Admin Analytics & Dashboard Data
  */
 
-export interface DashboardStats {
-    totalUsers: number;
-    activeUsers: number;
-    totalRevenue: number;
-    pendingEscrows: number;
-    activeLandListings: number;
-    pendingLoans: number;
-    totalCourseEnrollments: number;
-    recentActivity: ActivityItem[];
-}
 
-export interface ActivityItem {
-    id: string;
-    type: string;
-    description: string;
-    timestamp: Timestamp;
-    userId?: string;
+/**
+ * Admin Analytics & Dashboard Data
+ */
+
+export interface AnalyticsData {
+    platformOverview: {
+        totalUsers: number;
+        activeUsers: number;
+        totalRevenue: number;
+        monthlyRevenue: number;
+        totalTransactions: number;
+        pendingApprovals: number;
+    };
+    counts: {
+        pendingEscrows: number;
+        activeLandListings: number;
+        pendingLoans: number;
+    };
+    revenueByMonth: Array<{ month: string; revenue: number }>;
+    userGrowthByMonth: Array<{ month: string; users: number }>;
+    moduleUsage: Array<{ name: string; value: number }>;
+    recentTransactions: Array<{
+        id: string;
+        type: string;
+        amount: number;
+        createdAt: Date;
+    }>;
 }
 
 export interface EngagementMetrics {
@@ -34,71 +45,162 @@ export interface EngagementMetrics {
     topFeatures: Array<{ feature: string; usage: number }>;
 }
 
-/**
- * Get dashboard statistics
- */
-export async function getDashboardStatsAction(): Promise<DashboardStats | null> {
+export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     try {
-        // Count total users
+        // 1. Platform Overview
         const usersSnapshot = await getDocs(collection(db, "users"));
         const totalUsers = usersSnapshot.size;
 
-        // Count active users (logged in last 30 days)
+        // Active users (users with recent login audit logs in last 30d)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        // Note: In production, you'd have a lastLoginAt field
-        const activeUsers = totalUsers; // Placeholder
-
-        // Get pending escrows
-        const pendingEscrowsQuery = query(
-            collection(db, "escrow_transactions"),
-            where("status", "==", "held")
-        );
-        const pendingEscrows = (await getDocs(pendingEscrowsQuery)).size;
-
-        // Get active land listings
-        const landQuery = query(
-            collection(db, "land_listings"),
-            where("status", "==", "verified")
-        );
-        const activeLandListings = (await getDocs(landQuery)).size;
-
-        // Get pending loans
-        const pendingLoansQuery = query(
-            collection(db, "loan_applications"),
-            where("status", "==", "pending")
-        );
-        const pendingLoans = (await getDocs(pendingLoansQuery)).size;
-
-        // Get recent activity from audit logs
-        const activityQuery = query(
+        const activeUsersQuery = query(
             collection(db, "audit_logs"),
-            orderBy("timestamp", "desc"),
-            firestoreLimit(10)
+            where("action", "==", "user_login"),
+            where("timestamp", ">=", Timestamp.fromDate(thirtyDaysAgo))
         );
-        const activitySnapshot = await getDocs(activityQuery);
-        const recentActivity = activitySnapshot.docs.map((doc) => {
+        const activeUsersSnapshot = await getDocs(activeUsersQuery);
+        const activeUsers = new Set(activeUsersSnapshot.docs.map(d => d.data().userId)).size;
+
+        // Revenue & Transactions
+        const transactionsSnapshot = await getDocs(collection(db, "escrow_transactions")); // Assuming this holds main revenue
+        // Also check loan_applications for disbursed loans if that counts as platform volume/revenue
+        // For now, let's use Escrow + Loans
+
+        const loansSnapshot = await getDocs(collection(db, "loan_applications"));
+
+        let totalRevenue = 0;
+        let monthlyRevenue = 0;
+        let totalTransactions = 0;
+        const currentMonth = new Date().getMonth();
+
+        // Escrow Revenue (2.5% fee)
+        transactionsSnapshot.docs.forEach(doc => {
             const data = doc.data();
-            return {
-                id: doc.id,
-                type: data.action,
-                description: formatActivityDescription(data),
-                timestamp: data.timestamp,
-                userId: data.userId,
-            };
+            if (data.status === "released" || data.status === "completed") {
+                const fee = (data.amount || 0) * 0.025;
+                totalRevenue += fee;
+                totalTransactions++;
+
+                const date = data.createdAt?.toDate();
+                if (date && date.getMonth() === currentMonth) {
+                    monthlyRevenue += fee;
+                }
+            }
         });
 
+        // Pending Approvals
+        const pendingWave = (await getDocs(query(collection(db, "wave_applications"), where("status", "==", "pending")))).size;
+        const pendingLoans = (await getDocs(query(collection(db, "loan_applications"), where("status", "==", "pending")))).size;
+        const pendingLand = (await getDocs(query(collection(db, "land_listings"), where("verificationStatus", "==", "pending")))).size;
+
+        const pendingApprovals = pendingWave + pendingLoans + pendingLand;
+
+        const pendingEscrows = (await getDocs(query(collection(db, "escrow_transactions"), where("status", "==", "held")))).size;
+        const activeLandListings = (await getDocs(query(collection(db, "land_listings"), where("status", "==", "verified")))).size;
+
+        // 2. Revenue By Month (Last 6 Months)
+        const revenueByMonthMap = new Map<string, number>();
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+        // Init last 6 months 0
+        for (let i = 0; i < 6; i++) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const key = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+            revenueByMonthMap.set(key, 0);
+        }
+
+        transactionsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.status === "released" || data.status === "completed") {
+                const date = data.createdAt?.toDate();
+                if (date && date >= sixMonthsAgo) {
+                    const key = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+                    if (revenueByMonthMap.has(key)) {
+                        revenueByMonthMap.set(key, revenueByMonthMap.get(key)! + ((data.amount || 0) * 0.025));
+                    }
+                }
+            }
+        });
+
+        const revenueByMonth = Array.from(revenueByMonthMap.entries())
+            .map(([month, revenue]) => ({ month, revenue }))
+            .reverse();
+
+        // 3. User Growth (Last 6 Months)
+        const userGrowthMap = new Map<string, number>();
+        // Init
+        for (let i = 0; i < 6; i++) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const key = `${monthNames[d.getMonth()]}`;
+            userGrowthMap.set(key, 0);
+        }
+
+        usersSnapshot.docs.forEach(doc => {
+            const date = doc.data().createdAt?.toDate();
+            if (date && date >= sixMonthsAgo) {
+                const key = `${monthNames[date.getMonth()]}`;
+                if (userGrowthMap.has(key)) {
+                    userGrowthMap.set(key, userGrowthMap.get(key)! + 1);
+                }
+            }
+        });
+        const userGrowthByMonth = Array.from(userGrowthMap.entries())
+            .map(([month, users]) => ({ month, users }))
+            .reverse();
+
+
+        // 4. Module Usage
+        // Count documents in key collections
+        const moduleUsage = [
+            { name: "Farm Nation", value: (await getDocs(collection(db, "land_listings"))).size },
+            { name: "Academy", value: (await getDocs(collection(db, "course_enrollments"))).size || 0 }, // Assuming collection exists
+            { name: "WAVE", value: (await getDocs(collection(db, "wave_applications"))).size },
+            { name: "Cooperatives", value: (await getDocs(collection(db, "cooperatives"))).size },
+            { name: "Marketplace", value: (await getDocs(collection(db, "products"))).size },
+        ];
+
+        // 5. Recent Transactions
+        const recentAuditQuery = query(
+            collection(db, "audit_logs"),
+            where("action", "in", ["payment_completed", "escrow_released", "loan_disbursed"]),
+            orderBy("timestamp", "desc"),
+            firestoreLimit(5)
+        );
+        const recentAudit = await getDocs(recentAuditQuery);
+
+        const recentTransactions = recentAudit.docs.map(doc => ({
+            id: doc.id,
+            type: formatActivityDescription(doc.data()),
+            amount: doc.data().metadata?.amount || 0,
+            createdAt: doc.data().timestamp?.toDate() || new Date(),
+        }));
+
         return {
-            totalUsers,
-            activeUsers,
-            totalRevenue: 0, // Placeholder
-            pendingEscrows,
-            activeLandListings,
-            pendingLoans,
-            totalCourseEnrollments: 0, // Placeholder
-            recentActivity,
+            platformOverview: {
+                totalUsers,
+                activeUsers,
+                totalRevenue,
+                monthlyRevenue,
+                totalTransactions,
+                pendingApprovals
+            },
+            counts: {
+                pendingEscrows,
+                activeLandListings,
+                pendingLoans
+            },
+            revenueByMonth,
+            userGrowthByMonth,
+            moduleUsage,
+            recentTransactions
         };
+
     } catch (error) {
         console.error("Failed to fetch dashboard stats:", error);
         return null;

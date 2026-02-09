@@ -5,22 +5,8 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-    getDoc,
-    addDoc,
-    updateDoc,
-    doc,
-    orderBy,
-    limit,
-    serverTimestamp,
-    Timestamp,
-    writeBatch,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Conversation, Message } from "@/lib/types/marketplace";
 
@@ -43,12 +29,10 @@ export async function createConversationAction(params: {
         const { recipientId, productId, orderId } = params;
 
         // Check if conversation already exists between these users
-        const q = query(
-            collection(db, COLLECTIONS.CONVERSATIONS),
-            where("participants", "array-contains", userId)
-        );
+        const snapshot = await db.collection(COLLECTIONS.CONVERSATIONS)
+            .where("participants", "array-contains", userId)
+            .get();
 
-        const snapshot = await getDocs(q);
         const existingConversation = snapshot.docs.find(doc => {
             const data = doc.data();
             return data.participants.includes(recipientId);
@@ -77,10 +61,7 @@ export async function createConversationAction(params: {
             updatedAt: new Date(),
         };
 
-        const conversationRef = await addDoc(
-            collection(db, COLLECTIONS.CONVERSATIONS),
-            conversationData
-        );
+        const conversationRef = await db.collection(COLLECTIONS.CONVERSATIONS).add(conversationData);
 
         return {
             success: true,
@@ -110,11 +91,10 @@ export async function sendMessageAction(
         const userId = session.user.id;
 
         // Verify user is participant
-        const conversationDoc = await getDoc(
-            doc(db, COLLECTIONS.CONVERSATIONS, conversationId)
-        );
+        const conversationRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId);
+        const conversationDoc = await conversationRef.get();
 
-        if (!conversationDoc.exists()) {
+        if (!conversationDoc.exists) {
             return { success: false, error: "Conversation not found" };
         }
 
@@ -123,6 +103,22 @@ export async function sendMessageAction(
             return { success: false, error: "Not authorized" };
         }
 
+        // Validate content length (max 5000 characters)
+        if (!content || content.trim().length === 0) {
+            return { success: false, error: "Message cannot be empty" };
+        }
+
+        if (content.length > 5000) {
+            return { success: false, error: "Message too long (max 5000 characters)" };
+        }
+
+        // Basic HTML sanitization: strip script tags and dangerous attributes
+        const sanitizedContent = content
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+            .replace(/javascript:/gi, '')
+            .trim();
+
         // Get recipient ID
         const recipientId = conversation.participants.find(id => id !== userId);
 
@@ -130,15 +126,12 @@ export async function sendMessageAction(
         const messageData = {
             senderId: userId,
             recipientId,
-            content,
+            content: sanitizedContent,
             read: false,
             createdAt: new Date(),
         };
 
-        await addDoc(
-            collection(db, COLLECTIONS.CONVERSATIONS, conversationId, "messages"),
-            messageData
-        );
+        await conversationRef.collection("messages").add(messageData);
 
         // Update conversation
         const updateData: any = {
@@ -149,13 +142,10 @@ export async function sendMessageAction(
 
         // Increment unread count for recipient
         if (recipientId) {
-            updateData[`unreadCount.${recipientId}`] = (conversation.unreadCount?.[recipientId] || 0) + 1;
+            updateData[`unreadCount.${recipientId}`] = FieldValue.increment(1);
         }
 
-        await updateDoc(
-            doc(db, COLLECTIONS.CONVERSATIONS, conversationId),
-            updateData
-        );
+        await conversationRef.update(updateData);
 
         return { success: true };
     } catch (error: any) {
@@ -178,11 +168,10 @@ export async function markMessagesAsReadAction(conversationId: string) {
         const userId = session.user.id;
 
         // Verify user is participant
-        const conversationDoc = await getDoc(
-            doc(db, COLLECTIONS.CONVERSATIONS, conversationId)
-        );
+        const conversationRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId);
+        const conversationDoc = await conversationRef.get();
 
-        if (!conversationDoc.exists()) {
+        if (!conversationDoc.exists) {
             return { success: false, error: "Conversation not found" };
         }
 
@@ -192,16 +181,13 @@ export async function markMessagesAsReadAction(conversationId: string) {
         }
 
         // Get unread messages sent to this user
-        const messagesQuery = query(
-            collection(db, COLLECTIONS.CONVERSATIONS, conversationId, "messages"),
-            where("recipientId", "==", userId),
-            where("read", "==", false)
-        );
-
-        const messagesSnapshot = await getDocs(messagesQuery);
+        const messagesSnapshot = await conversationRef.collection("messages")
+            .where("recipientId", "==", userId)
+            .where("read", "==", false)
+            .get();
 
         // Batch update messages
-        const batch = writeBatch(db);
+        const batch = db.batch();
 
         messagesSnapshot.docs.forEach(messageDoc => {
             batch.update(messageDoc.ref, {
@@ -211,7 +197,7 @@ export async function markMessagesAsReadAction(conversationId: string) {
         });
 
         // Reset unread count for this user
-        batch.update(doc(db, COLLECTIONS.CONVERSATIONS, conversationId), {
+        batch.update(conversationRef, {
             [`unreadCount.${userId}`]: 0,
         });
 
@@ -237,14 +223,12 @@ export async function getConversationsAction() {
 
         const userId = session.user.id;
 
-        const q = query(
-            collection(db, COLLECTIONS.CONVERSATIONS),
-            where("participants", "array-contains", userId),
-            orderBy("lastMessageAt", "desc"),
-            limit(50)
-        );
+        const snapshot = await db.collection(COLLECTIONS.CONVERSATIONS)
+            .where("participants", "array-contains", userId)
+            .orderBy("lastMessageAt", "desc")
+            .limit(50)
+            .get();
 
-        const snapshot = await getDocs(q);
         const conversations: Conversation[] = snapshot.docs.map(doc => ({
             ...doc.data(),
             id: doc.id,
@@ -277,11 +261,10 @@ export async function getConversationMessagesAction(
         const userId = session.user.id;
 
         // Verify user is participant
-        const conversationDoc = await getDoc(
-            doc(db, COLLECTIONS.CONVERSATIONS, conversationId)
-        );
+        const conversationRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId);
+        const conversationDoc = await conversationRef.get();
 
-        if (!conversationDoc.exists()) {
+        if (!conversationDoc.exists) {
             return { success: false, error: "Conversation not found" };
         }
 
@@ -290,13 +273,11 @@ export async function getConversationMessagesAction(
             return { success: false, error: "Not authorized" };
         }
 
-        const q = query(
-            collection(db, COLLECTIONS.CONVERSATIONS, conversationId, "messages"),
-            orderBy("createdAt", "desc"),
-            limit(limitCount)
-        );
+        const snapshot = await conversationRef.collection("messages")
+            .orderBy("createdAt", "desc")
+            .limit(limitCount)
+            .get();
 
-        const snapshot = await getDocs(q);
         const messages = snapshot.docs.map(doc => ({
             ...doc.data(),
             id: doc.id,

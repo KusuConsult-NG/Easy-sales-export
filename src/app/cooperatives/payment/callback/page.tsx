@@ -11,19 +11,6 @@ function PaymentCallbackContent() {
     const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
     const [message, setMessage] = useState("");
 
-    useEffect(() => {
-        const reference = searchParams.get("reference");
-
-        if (!reference) {
-            setStatus("failed");
-            setMessage("No payment reference found");
-            return;
-        }
-
-        // Verify payment with server
-        verifyPayment(reference);
-    }, [searchParams]);
-
     const verifyPayment = async (reference: string) => {
         try {
             const response = await fetch("/api/cooperative/verify-payment", {
@@ -36,19 +23,36 @@ function PaymentCallbackContent() {
 
             if (data.success) {
                 setStatus("success");
-                setMessage("Payment successful! Your membership application is now pending approval.");
-
-                // Redirect to cooperatives page after 3 seconds
-                setTimeout(() => router.push("/cooperatives"), 3000);
+                setTimeout(() => {
+                    const cooperativeId = searchParams.get("cooperativeId");
+                    if (cooperativeId) {
+                        router.push(`/cooperatives/${cooperativeId}`);
+                    } else {
+                        router.push("/cooperatives");
+                    }
+                }, 3000);
             } else {
-                setStatus("failed");
-                setMessage(data.message || "Payment verification failed");
+                setStatus("failed"); // Fixed type error (was "error")
+                setMessage(data.error || "Payment verification failed");
             }
         } catch (error) {
-            setStatus("failed");
-            setMessage("Failed to verify payment. Please contact support.");
+            setStatus("failed"); // Fixed type error
+            setMessage("An error occurred while verifying payment");
         }
     };
+
+    useEffect(() => {
+        const reference = searchParams.get("reference");
+
+        if (!reference) {
+            setStatus("failed"); // Fixed type error
+            setMessage("No payment reference found");
+            return;
+        }
+
+        // Verify payment with server
+        verifyPayment(reference);
+    }, [searchParams]);
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">

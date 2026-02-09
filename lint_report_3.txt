@@ -1,0 +1,1417 @@
+
+> easy-sales-export-nextjs@0.1.0 lint
+> eslint
+
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/coverage/lcov-report/prettify.js
+  1:1  warning  Unused eslint-disable directive (no problems were reported)
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/coverage/lcov-report/sorter.js
+  1:1  warning  Unused eslint-disable directive (no problems were reported)
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/__tests__/integration/loans.test.ts
+  135:55  error  Parsing error: ',' expected
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/[courseId]/lesson/[lessonId]/page.tsx
+  60:14  error    Do not assign to the variable `module`. See: https://nextjs.org/docs/messages/no-assign-module-variable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @next/next/no-assign-module-variable
+  78:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/[courseId]/lesson/[lessonId]/page.tsx:78:13
+  76 |     useEffect(() => {
+  77 |         if (status === "authenticated" && session?.user) {
+> 78 |             loadLesson();
+     |             ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  79 |         }
+  80 |     }, [status, session, courseId, lessonId]);
+  81 |  react-hooks/set-state-in-effect
+  80:8   warning  React Hook useEffect has a missing dependency: 'loadLesson'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/[courseId]/page.tsx
+  52:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/[courseId]/page.tsx:52:13
+  50 |     useEffect(() => {
+  51 |         if (status === "authenticated" && session?.user) {
+> 52 |             loadCourse();
+     |             ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  53 |         }
+  54 |     }, [status, session, courseId]);
+  55 |  react-hooks/set-state-in-effect
+  54:8   warning  React Hook useEffect has a missing dependency: 'loadCourse'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/[courseId]/quiz/[moduleId]/page.tsx
+  48:8  warning  React Hook useEffect has a missing dependency: 'loadQuiz'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  61:9  error    Do not assign to the variable `module`. See: https://nextjs.org/docs/messages/no-assign-module-variable      @next/next/no-assign-module-variable
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/certificate/[certificateId]/page.tsx
+  36:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/certificate/[certificateId]/page.tsx:36:13
+  34 |             router.push("/auth/login");
+  35 |         } else if (status === "authenticated" && session?.user) {
+> 36 |             loadCertificate();
+     |             ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  37 |         }
+  38 |     }, [status, session, courseId]);
+  39 |  react-hooks/set-state-in-effect
+  38:8   warning  React Hook useEffect has missing dependencies: 'loadCertificate' and 'router'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/courses/[courseId]/quiz/page.tsx
+  48:8  warning  React Hook useEffect has a missing dependency: 'fetchQuiz'. Either include it or remove the dependency array         react-hooks/exhaustive-deps
+  64:8  warning  React Hook useEffect has a missing dependency: 'handleAutoSubmit'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/dashboard/page.tsx
+  42:8  warning  React Hook useEffect has a missing dependency: 'fetchDashboardData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/verify/[certificateId]/page.tsx
+  23:8  warning  React Hook useEffect has a missing dependency: 'verifyCertificate'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/actions/academy.ts
+  233:13  error  Do not assign to the variable `module`. See: https://nextjs.org/docs/messages/no-assign-module-variable  @next/next/no-assign-module-variable
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/analytics/page.tsx
+  38:9  error  Error: Cannot access variable before it is declared
+
+`loadAnalytics` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/analytics/page.tsx:38:9
+  36 |
+  37 |     useEffect(() => {
+> 38 |         loadAnalytics();
+     |         ^^^^^^^^^^^^^ `loadAnalytics` accessed before it is declared
+  39 |     }, []);
+  40 |
+  41 |     async function loadAnalytics() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/analytics/page.tsx:41:5
+  39 |     }, []);
+  40 |
+> 41 |     async function loadAnalytics() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 42 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 43 |         const result = await getDashboardStatsAction();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 44 |         if (result) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |             setAnalytics(result);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 48 |     }
+     | ^^^^^^ `loadAnalytics` is declared here
+  49 |
+  50 |     if (loading) {
+  51 |         return (  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/cooperatives/loans/page.tsx
+  45:8  warning  React Hook useEffect has a missing dependency: 'filterApplications'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/cooperatives/members/page.tsx
+  50:8  warning  React Hook useEffect has a missing dependency: 'filterApplications'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/cooperatives/transactions/page.tsx
+  30:8  warning  React Hook useEffect has a missing dependency: 'loadTransactions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/farm-nation/land-verification/page.tsx
+  48:8  warning  React Hook useEffect has a missing dependency: 'filterVerificationsByStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/feature-toggles/page.tsx
+  16:9  error  Error: Cannot access variable before it is declared
+
+`loadToggles` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/feature-toggles/page.tsx:16:9
+  14 |
+  15 |     useEffect(() => {
+> 16 |         loadToggles();
+     |         ^^^^^^^^^^^ `loadToggles` accessed before it is declared
+  17 |     }, []);
+  18 |
+  19 |     async function loadToggles() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/feature-toggles/page.tsx:19:5
+  17 |     }, []);
+  18 |
+> 19 |     async function loadToggles() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 20 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |         const result = await getAllFeatureToggles();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |         if (result.success && result.data) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |             setToggles(result.data);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 25 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 26 |     }
+     | ^^^^^^ `loadToggles` is declared here
+  27 |
+  28 |     async function handleToggle(featureId: string, currentState: boolean) {
+  29 |         setUpdating(featureId);  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/finance/page.tsx
+  23:9  error  Error: Cannot access variable before it is declared
+
+`loadFinancial` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/finance/page.tsx:23:9
+  21 |
+  22 |     useEffect(() => {
+> 23 |         loadFinancial();
+     |         ^^^^^^^^^^^^^ `loadFinancial` accessed before it is declared
+  24 |     }, []);
+  25 |
+  26 |     async function loadFinancial() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/finance/page.tsx:26:5
+  24 |     }, []);
+  25 |
+> 26 |     async function loadFinancial() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 27 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |         const result = await getFinancialOverviewAction();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 29 |         setFinancial(result);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |     }
+     | ^^^^^^ `loadFinancial` is declared here
+  32 |
+  33 |     if (loading) {
+  34 |         return (  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/land-verification/page.tsx
+  16:9  error  Error: Cannot access variable before it is declared
+
+`loadPendingListings` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/land-verification/page.tsx:16:9
+  14 |
+  15 |     useEffect(() => {
+> 16 |         loadPendingListings();
+     |         ^^^^^^^^^^^^^^^^^^^ `loadPendingListings` accessed before it is declared
+  17 |     }, []);
+  18 |
+  19 |     async function loadPendingListings() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/land-verification/page.tsx:19:5
+  17 |     }, []);
+  18 |
+> 19 |     async function loadPendingListings() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 20 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |         const result = await getPendingLandListings();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |         if (result.success && result.listings) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |             setListings(result.listings);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 25 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 26 |     }
+     | ^^^^^^ `loadPendingListings` is declared here
+  27 |
+  28 |     async function handleApprove(listingId: string) {
+  29 |         if (!confirm("Approve this land listing? It will be published immediately.")) return;  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/loans/page.tsx
+  17:9  error    Error: Cannot access variable before it is declared
+
+`loadPendingLoans` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/loans/page.tsx:17:9
+  15 |
+  16 |     useEffect(() => {
+> 17 |         loadPendingLoans();
+     |         ^^^^^^^^^^^^^^^^ `loadPendingLoans` accessed before it is declared
+  18 |     }, []);
+  19 |
+  20 |     async function loadPendingLoans() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/loans/page.tsx:20:5
+  18 |     }, []);
+  19 |
+> 20 |     async function loadPendingLoans() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |         const result = await getPendingLoanApplications();
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |     }
+     | ^^^^^^ `loadPendingLoans` is declared here
+  32 |
+  33 |     async function handleApprove() {
+  34 |         if (!selectedLoan) return;  react-hooks/immutability
+  18:8  warning  React Hook useEffect has a missing dependency: 'loadPendingLoans'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/marketplace/disputes/[id]/page.tsx
+  48:8  warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/marketplace/disputes/page.tsx
+  42:8  warning  React Hook useEffect has a missing dependency: 'loadDisputes'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
+  46:8  warning  React Hook useEffect has a missing dependency: 'filterDisputes'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/marketplace/reviews/page.tsx
+  47:8  warning  React Hook useEffect has a missing dependency: 'loadReviews'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
+  51:8  warning  React Hook useEffect has a missing dependency: 'filterReviews'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/marketplace/sellers/page.tsx
+  55:8  warning  React Hook useEffect has a missing dependency: 'filterVerifications'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/users/page.tsx
+  31:9  error  Error: Cannot access variable before it is declared
+
+`fetchUsers` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/users/page.tsx:31:9
+  29 |
+  30 |     useEffect(() => {
+> 31 |         fetchUsers();
+     |         ^^^^^^^^^^ `fetchUsers` accessed before it is declared
+  32 |     }, []);
+  33 |
+  34 |     const fetchUsers = async () => {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/users/page.tsx:34:5
+  32 |     }, []);
+  33 |
+> 34 |     const fetchUsers = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 35 |         setIsLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 36 |         setError(null);
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |         setIsLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |     };
+     | ^^^^^^^ `fetchUsers` is declared here
+  48 |
+  49 |     const handleToggleVerification = async (userId: string) => {
+  50 |         setProcessingId(userId);  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/wave-applications/page.tsx
+  34:9  error    Error: Cannot access variable before it is declared
+
+`fetchApplications` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/wave-applications/page.tsx:34:9
+  32 |
+  33 |     useEffect(() => {
+> 34 |         fetchApplications();
+     |         ^^^^^^^^^^^^^^^^^ `fetchApplications` accessed before it is declared
+  35 |     }, [statusFilter]);
+  36 |
+  37 |     const fetchApplications = async () => {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/wave-applications/page.tsx:37:5
+  35 |     }, [statusFilter]);
+  36 |
+> 37 |     const fetchApplications = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 38 |         setIsLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 39 |         setError(null);
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 51 |         setIsLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 52 |     };
+     | ^^^^^^^ `fetchApplications` is declared here
+  53 |
+  54 |     const handleApprove = async (applicationId: string) => {
+  55 |         setProcessingId(applicationId);  react-hooks/immutability
+  35:8  warning  React Hook useEffect has a missing dependency: 'fetchApplications'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/wave/compliance/page.tsx
+  32:8  warning  React Hook useEffect has a missing dependency: 'fetchComplianceData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/wave/training/page.tsx
+  62:8  warning  React Hook useEffect has a missing dependency: 'loadEvents'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/withdrawals/page.tsx
+  30:9  error  Error: Cannot access variable before it is declared
+
+`fetchWithdrawals` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/withdrawals/page.tsx:30:9
+  28 |
+  29 |     useEffect(() => {
+> 30 |         fetchWithdrawals();
+     |         ^^^^^^^^^^^^^^^^ `fetchWithdrawals` accessed before it is declared
+  31 |     }, []);
+  32 |
+  33 |     const fetchWithdrawals = async () => {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/withdrawals/page.tsx:33:5
+  31 |     }, []);
+  32 |
+> 33 |     const fetchWithdrawals = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 34 |         setIsLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 35 |         setError(null);
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |         setIsLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |     };
+     | ^^^^^^^ `fetchWithdrawals` is declared here
+  47 |
+  48 |     const handleApprove = async (withdrawalId: string) => {
+  49 |         const notes = prompt("Optional admin notes:");  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/onboarding/steps/DocumentUploadStep.tsx
+  175:33  warning  Image elements must have an alt prop, either with meaningful text, or an empty string for decorative images  jsx-a11y/alt-text
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/payment/callback/page.tsx
+  24:9  error    Error: Cannot access variable before it is declared
+
+`verifyPayment` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/payment/callback/page.tsx:24:9
+  22 |
+  23 |         // Verify payment with server
+> 24 |         verifyPayment(reference);
+     |         ^^^^^^^^^^^^^ `verifyPayment` accessed before it is declared
+  25 |     }, [searchParams]);
+  26 |
+  27 |     const verifyPayment = async (reference: string) => {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/payment/callback/page.tsx:27:5
+  25 |     }, [searchParams]);
+  26 |
+> 27 |     const verifyPayment = async (reference: string) => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |         try {
+     | ^^^^^^^^^^^^^
+> 29 |             const response = await fetch("/api/cooperative/verify-payment", {
+     …
+     | ^^^^^^^^^^^^^
+> 50 |         }
+     | ^^^^^^^^^^^^^
+> 51 |     };
+     | ^^^^^^^ `verifyPayment` is declared here
+  52 |
+  53 |     return (
+  54 |         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">  react-hooks/immutability
+  25:8  warning  React Hook useEffect has a missing dependency: 'verifyPayment'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/disputes/new/page.tsx
+  68:8  warning  React Hook useEffect has missing dependencies: 'loadOrder', 'router', and 'showToast'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/notifications/page.tsx
+  38:8  warning  React Hook useEffect has missing dependencies: 'loadNotifications' and 'router'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/orders/page.tsx
+  43:8  warning  React Hook useEffect has a missing dependency: 'loadOrders'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/reviews/new/page.tsx
+  40:8  warning  React Hook useEffect has missing dependencies: 'loadOrder', 'router', and 'showToast'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/reviews/page.tsx
+  58:8  warning  React Hook useEffect has a missing dependency: 'loadReviews'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/[id]/chat/page.tsx
+  64:9  error    Error: Cannot access variable before it is declared
+
+`loadMessages` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/[id]/chat/page.tsx:64:9
+  62 |         if (status !== "authenticated") return;
+  63 |
+> 64 |         loadMessages();
+     |         ^^^^^^^^^^^^ `loadMessages` accessed before it is declared
+  65 |
+  66 |         const interval = setInterval(() => {
+  67 |             loadMessages();
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/[id]/chat/page.tsx:78:5
+  76 |     }, [messages]);
+  77 |
+> 78 |     async function loadMessages() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 79 |         try {
+     | ^^^^^^^^^^^^^
+> 80 |             const fetchedMessages = await getEscrowMessagesAction(escrowId);
+     | ^^^^^^^^^^^^^
+> 81 |             setMessages(fetchedMessages);
+     | ^^^^^^^^^^^^^
+> 82 |             setLoading(false);
+     | ^^^^^^^^^^^^^
+> 83 |         } catch (error) {
+     | ^^^^^^^^^^^^^
+> 84 |             console.error("Failed to load messages:", error);
+     | ^^^^^^^^^^^^^
+> 85 |             setLoading(false);
+     | ^^^^^^^^^^^^^
+> 86 |         }
+     | ^^^^^^^^^^^^^
+> 87 |     }
+     | ^^^^^^ `loadMessages` is declared here
+  88 |
+  89 |     async function handleSendMessage(e: React.FormEvent) {
+  90 |         e.preventDefault();  react-hooks/immutability
+  71:8  warning  React Hook useEffect has a missing dependency: 'loadMessages'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react-hooks/exhaustive-deps
+  75:9  error    Error: Cannot access variable before it is declared
+
+`scrollToBottom` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/[id]/chat/page.tsx:75:9
+  73 |     // Auto-scroll to bottom when new messages arrive
+  74 |     useEffect(() => {
+> 75 |         scrollToBottom();
+     |         ^^^^^^^^^^^^^^ `scrollToBottom` accessed before it is declared
+  76 |     }, [messages]);
+  77 |
+  78 |     async function loadMessages() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/[id]/chat/page.tsx:113:5
+  111 |     }
+  112 |
+> 113 |     function scrollToBottom() {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 114 |         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 115 |     }
+      | ^^^^^^ `scrollToBottom` is declared here
+  116 |
+  117 |     function formatTime(timestamp: any): string {
+  118 |         if (!timestamp) return "";                                                                                                                                                                                                                                                                                                                                                                react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/page.tsx
+  213:9  error  Error: Cannot access variable before it is declared
+
+`loadTransactions` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/page.tsx:213:9
+  211 |
+  212 |     useEffect(() => {
+> 213 |         loadTransactions();
+      |         ^^^^^^^^^^^^^^^^ `loadTransactions` accessed before it is declared
+  214 |     }, []);
+  215 |
+  216 |     async function loadTransactions() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/page.tsx:216:5
+  214 |     }, []);
+  215 |
+> 216 |     async function loadTransactions() {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 217 |         setLoading(true);
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 218 |         const result = await getUserEscrowTransactions();
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 219 |         if (result.success && result.transactions) {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 220 |             setTransactions(result.transactions);
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 221 |         }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 222 |         setLoading(false);
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 223 |     }
+      | ^^^^^^ `loadTransactions` is declared here
+  224 |
+  225 |     const filteredTransactions = transactions.filter(t => {
+  226 |         if (selectedTab === 'all') return true;  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/layout.tsx
+  51:16  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/layout.tsx:51:16
+  49 |
+  50 |         // User has access, render the app
+> 51 |         return <>{children}</>;
+     |                ^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+  52 |     } catch (error) {
+  53 |         console.error("Export access check error:", error);
+  54 |         redirect("/auth/login");  react-hooks/error-boundaries
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/opportunities/page.tsx
+  22:35  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/opportunities/page.tsx:22:35
+  20 |             destination: "Rotterdam, Netherlands",
+  21 |             status: "open",
+> 22 |             createdAt: { seconds: Date.now() / 1000 } as any,
+     |                                   ^^^^^^^^^^ Cannot call impure function
+  23 |             createdBy: "admin",
+  24 |         },
+  25 |         {  react-hooks/purity
+  36:35  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/opportunities/page.tsx:36:35
+  34 |             destination: "Dubai, UAE",
+  35 |             status: "open",
+> 36 |             createdAt: { seconds: Date.now() / 1000 } as any,
+     |                                   ^^^^^^^^^^ Cannot call impure function
+  37 |             createdBy: "admin",
+  38 |         },
+  39 |     ]);                react-hooks/purity
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/windows/[id]/page.tsx
+  19:13  error    Error: Cannot access variable before it is declared
+
+`loadWindow` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/windows/[id]/page.tsx:19:13
+  17 |     useEffect(() => {
+  18 |         if (windowId) {
+> 19 |             loadWindow();
+     |             ^^^^^^^^^^ `loadWindow` accessed before it is declared
+  20 |         }
+  21 |     }, [windowId]);
+  22 |
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/windows/[id]/page.tsx:23:5
+  21 |     }, [windowId]);
+  22 |
+> 23 |     async function loadWindow() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 25 |         const result = await getExportOpportunityById(windowId as string);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 26 |         if (result.success && result.data) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 27 |             setWindowData(result.data);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 29 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |     }
+     | ^^^^^^ `loadWindow` is declared here
+  31 |
+  32 |     if (loading) {
+  33 |         return (  react-hooks/immutability
+  21:8   warning  React Hook useEffect has a missing dependency: 'loadWindow'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/windows/page.tsx
+  15:9  error  Error: Cannot access variable before it is declared
+
+`loadWindows` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/windows/page.tsx:15:9
+  13 |
+  14 |     useEffect(() => {
+> 15 |         loadWindows();
+     |         ^^^^^^^^^^^ `loadWindows` accessed before it is declared
+  16 |     }, []);
+  17 |
+  18 |     async function loadWindows() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/windows/page.tsx:18:5
+  16 |     }, []);
+  17 |
+> 18 |     async function loadWindows() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 19 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 20 |         const result = await getExportOpportunities();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |         if (result.success && result.data) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |             setExportWindows(result.data);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 25 |     }
+     | ^^^^^^ `loadWindows` is declared here
+  26 |
+  27 |     async function handleSeed() {
+  28 |         setSeeding(true);  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/checkout/[propertyId]/page.tsx
+  52:9  error    Error: Cannot access variable before it is declared
+
+`loadProperty` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/checkout/[propertyId]/page.tsx:52:9
+  50 |         }
+  51 |
+> 52 |         loadProperty();
+     |         ^^^^^^^^^^^^ `loadProperty` accessed before it is declared
+  53 |     }, [propertyId, status, session]);
+  54 |
+  55 |     const loadProperty = async () => {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/checkout/[propertyId]/page.tsx:55:5
+  53 |     }, [propertyId, status, session]);
+  54 |
+> 55 |     const loadProperty = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 56 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 57 |         const result = await getPropertyByIdAction(propertyId);
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 69 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 70 |     };
+     | ^^^^^^^ `loadProperty` is declared here
+  71 |
+  72 |     const handleSubmit = async (e: React.FormEvent) => {
+  73 |         e.preventDefault();  react-hooks/immutability
+  53:8  warning  React Hook useEffect has missing dependencies: 'loadProperty' and 'router'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/list-land/page.tsx
+  430:57  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/map/page.tsx
+   80:8   warning  React Hook useEffect has a missing dependency: 'applyFilters'. Either include it or remove the dependency array                                                                                                                                                                          react-hooks/exhaustive-deps
+  301:41  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-properties/page.tsx
+  26:13  error    Error: Cannot access variable before it is declared
+
+`loadProperties` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-properties/page.tsx:26:13
+  24 |             router.push("/login");
+  25 |         } else if (status === "authenticated") {
+> 26 |             loadProperties();
+     |             ^^^^^^^^^^^^^^ `loadProperties` accessed before it is declared
+  27 |         }
+  28 |     }, [status]);
+  29 |
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-properties/page.tsx:30:5
+  28 |     }, [status]);
+  29 |
+> 30 |     const loadProperties = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |         setError(null);
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 42 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 43 |     };
+     | ^^^^^^^ `loadProperties` is declared here
+  44 |
+  45 |     const filteredProperties = properties.filter(prop => {
+  46 |         if (filterStatus === "all") return true;  react-hooks/immutability
+  28:8   warning  React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-purchases/page.tsx
+  42:13  error    Error: Cannot access variable before it is declared
+
+`loadPurchases` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-purchases/page.tsx:42:13
+  40 |             router.push("/login");
+  41 |         } else if (status === "authenticated") {
+> 42 |             loadPurchases();
+     |             ^^^^^^^^^^^^^ `loadPurchases` accessed before it is declared
+  43 |         }
+  44 |     }, [status]);
+  45 |
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-purchases/page.tsx:46:5
+  44 |     }, [status]);
+  45 |
+> 46 |     const loadPurchases = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 48 |         setError(null);
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 58 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 59 |     };
+     | ^^^^^^^ `loadPurchases` is declared here
+  60 |
+  61 |     const filteredPurchases = purchases.filter(purchase => {
+  62 |         if (filterStatus === "all") return true;  react-hooks/immutability
+  44:8   warning  React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/property/[id]/page.tsx
+  29:9  error    Error: Cannot access variable before it is declared
+
+`loadProperty` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/property/[id]/page.tsx:29:9
+  27 |
+  28 |     useEffect(() => {
+> 29 |         loadProperty();
+     |         ^^^^^^^^^^^^ `loadProperty` accessed before it is declared
+  30 |         if (status === "authenticated") {
+  31 |             getUserTierAction().then(({ tier }) => setUserTier(tier));
+  32 |         }
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/property/[id]/page.tsx:35:5
+  33 |     }, [propertyId, status]);
+  34 |
+> 35 |     const loadProperty = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 36 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 37 |         setError(null);
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 48 |     };
+     | ^^^^^^^ `loadProperty` is declared here
+  49 |
+  50 |     const handleExpressInterest = () => {
+  51 |         if (status !== "authenticated") {  react-hooks/immutability
+  33:8  warning  React Hook useEffect has a missing dependency: 'loadProperty'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/land/verify/page.tsx
+   26:9   error    Error: Cannot access variable before it is declared
+
+`loadListings` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/land/verify/page.tsx:26:9
+  24 |
+  25 |     useEffect(() => {
+> 26 |         loadListings();
+     |         ^^^^^^^^^^^^ `loadListings` accessed before it is declared
+  27 |     }, []);
+  28 |
+  29 |     async function loadListings() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/land/verify/page.tsx:29:5
+  27 |     }, []);
+  28 |
+> 29 |     async function loadListings() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         const result = await getLandListings({ status: 'pending_verification' });
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 33 |             setListings(result.listings);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 34 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 35 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 36 |     }
+     | ^^^^^^ `loadListings` is declared here
+  37 |
+  38 |     async function handleVerification(listingId: string, verified: boolean, rejectionReason?: string) {
+  39 |         setProcessing(true);  react-hooks/immutability
+  227:53  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/approve/page.tsx
+  25:9  error  Error: Cannot access variable before it is declared
+
+`loadLoans` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/approve/page.tsx:25:9
+  23 |
+  24 |     useEffect(() => {
+> 25 |         loadLoans();
+     |         ^^^^^^^^^ `loadLoans` accessed before it is declared
+  26 |     }, []);
+  27 |
+  28 |     async function loadLoans() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/approve/page.tsx:28:5
+  26 |     }, []);
+  27 |
+> 28 |     async function loadLoans() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 29 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |         const result = await getPendingLoanApplications();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |             setLoans(result.loans);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 33 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 34 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 35 |     }
+     | ^^^^^^ `loadLoans` is declared here
+  36 |
+  37 |     async function handleApproval(loanId: string, approved: boolean, notes?: string, rejectionReason?: string) {
+  38 |         setProcessing(true);  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/page.tsx
+  23:9  error  Error: Cannot access variable before it is declared
+
+`loadLoans` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/page.tsx:23:9
+  21 |
+  22 |     useEffect(() => {
+> 23 |         loadLoans();
+     |         ^^^^^^^^^ `loadLoans` accessed before it is declared
+  24 |     }, []);
+  25 |
+  26 |     async function loadLoans() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/page.tsx:26:5
+  24 |     }, []);
+  25 |
+> 26 |     async function loadLoans() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 27 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |         const result = await getUserLoanApplications();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 29 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |             setLoans(result.loans);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 33 |     }
+     | ^^^^^^ `loadLoans` is declared here
+  34 |
+  35 |     const getStatusColor = (status: LoanStatus) => {
+  36 |         const colors = {  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/buyer/layout.tsx
+  97:16  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/buyer/layout.tsx:97:16
+   95 |
+   96 |         // User has access, render the layout
+>  97 |         return <BuyerLayoutContent>{children}</BuyerLayoutContent>;
+      |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+   98 |     } catch (error) {
+   99 |         console.error("Buyer access check error:", error);
+  100 |         redirect("/auth/login");  react-hooks/error-boundaries
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/onboarding/steps/BusinessVerificationStep.tsx
+  130:25  warning  Image elements must have an alt prop, either with meaningful text, or an empty string for decorative images                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     jsx-a11y/alt-text
+  145:33  error    Error: This value cannot be modified
+
+Modifying a value returned from 'useState()', which should not be modified directly. Use the setter function to update instead.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/onboarding/steps/BusinessVerificationStep.tsx:145:33
+  143 |                             onUpload={(file) => {
+  144 |                                 const photos = documents.farmPhotos || [];
+> 145 |                                 photos[0] = file;
+      |                                 ^^^^^^ `documents` cannot be modified
+  146 |                                 updateDocument("farmPhotos", photos);
+  147 |                             }}
+  148 |                         />              react-hooks/immutability
+  155:33  error    Error: This value cannot be modified
+
+Modifying a value returned from 'useState()', which should not be modified directly. Use the setter function to update instead.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/onboarding/steps/BusinessVerificationStep.tsx:155:33
+  153 |                             onUpload={(file) => {
+  154 |                                 const photos = documents.farmPhotos || [];
+> 155 |                                 photos[1] = file;
+      |                                 ^^^^^^ `documents` cannot be modified
+  156 |                                 updateDocument("farmPhotos", photos);
+  157 |                             }}
+  158 |                         />              react-hooks/immutability
+  180:33  error    Error: This value cannot be modified
+
+Modifying a value returned from 'useState()', which should not be modified directly. Use the setter function to update instead.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/onboarding/steps/BusinessVerificationStep.tsx:180:33
+  178 |                             onUpload={(file) => {
+  179 |                                 const samples = documents.productSamples || [];
+> 180 |                                 samples[0] = file;
+      |                                 ^^^^^^^ `documents` cannot be modified
+  181 |                                 updateDocument("productSamples", samples);
+  182 |                             }}
+  183 |                         />  react-hooks/immutability
+  190:33  error    Error: This value cannot be modified
+
+Modifying a value returned from 'useState()', which should not be modified directly. Use the setter function to update instead.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/onboarding/steps/BusinessVerificationStep.tsx:190:33
+  188 |                             onUpload={(file) => {
+  189 |                                 const samples = documents.productSamples || [];
+> 190 |                                 samples[1] = file;
+      |                                 ^^^^^^^ `documents` cannot be modified
+  191 |                                 updateDocument("productSamples", samples);
+  192 |                             }}
+  193 |                         />  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/orders/[id]/page.tsx
+  22:8  warning  React Hook useEffect has a missing dependency: 'loadOrder'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/product/[id]/page.tsx
+  42:8  warning  React Hook useEffect has a missing dependency: 'loadProduct'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/products/add/page.tsx
+  430:57  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/create/page.tsx
+  193:37  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/orders/page.tsx
+  49:8  warning  React Hook useEffect has a missing dependency: 'loadOrders'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/page.tsx
+   26:13  error    Error: Cannot access variable before it is declared
+
+`loadSellerData` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/page.tsx:26:13
+  24 |             router.push("/auth/login");
+  25 |         } else if (status === "authenticated") {
+> 26 |             loadSellerData();
+     |             ^^^^^^^^^^^^^^ `loadSellerData` accessed before it is declared
+  27 |         }
+  28 |     }, [status]);
+  29 |
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/page.tsx:30:5
+  28 |     }, [status]);
+  29 |
+> 30 |     const loadSellerData = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |         const [productsRes, verificationRes] = await Promise.all([
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |     };
+     | ^^^^^^^ `loadSellerData` is declared here
+  47 |
+  48 |     const filteredProducts = products.filter(p => {
+  49 |         if (filterStatus === "all") return true;  react-hooks/immutability
+   28:8   warning  React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react-hooks/exhaustive-deps
+  225:41  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/seller/layout.tsx
+  114:16  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/seller/layout.tsx:114:16
+  112 |
+  113 |         // User has access, render the layout
+> 114 |         return <SellerLayoutContent>{children}</SellerLayoutContent>;
+      |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+  115 |     } catch (error) {
+  116 |         console.error("Seller access check error:", error);
+  117 |         redirect("/auth/login");  react-hooks/error-boundaries
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/vendor/orders/page.tsx
+  21:8  warning  React Hook useEffect has a missing dependency: 'loadOrders'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/vendor/products/page.tsx
+  22:8  warning  React Hook useEffect has a missing dependency: 'loadProducts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/dashboard/page.tsx
+  35:8  warning  React Hook useEffect has a missing dependency: 'loadDashboard'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/earnings/page.tsx
+  29:8  warning  React Hook useEffect has missing dependencies: 'loadEarnings' and 'router'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/profile/page.tsx
+  31:8  warning  React Hook useEffect has a missing dependency: 'loadProfile'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/resources/page.tsx
+  102:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/resources/page.tsx:102:9
+  100 |         }
+  101 |
+> 102 |         setFilteredResources(filtered);
+      |         ^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  103 |     }, [selectedCategory, searchQuery, resources]);
+  104 |
+  105 |     async function handleDownload(resource: WaveResource) {  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/shipments/page.tsx
+  29:8  warning  React Hook useEffect has missing dependencies: 'loadShipments' and 'router'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/training/page.tsx
+  32:8  warning  React Hook useEffect has a missing dependency: 'loadTrainingData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/application/review-pending/page.tsx
+  14:41  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/application/review-pending/page.tsx:14:41
+  12 |     // Mock data - in production, fetch from database
+  13 |     const applicationDate = new Date();
+> 14 |     const expectedReviewDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
+     |                                         ^^^^^^^^^^ Cannot call impure function
+  15 |
+  16 |     return (
+  17 |         <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 px-4 py-12">  react-hooks/purity
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/application/success/page.tsx
+  35:62  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/application/success/page.tsx:35:62
+  33 |                         </p>
+  34 |                         <p className="text-2xl font-bold text-slate-900 dark:text-white">
+> 35 |                             WAVE-{new Date().getFullYear()}-{Math.random().toString(36).substr(2, 9).toUpperCase()}
+     |                                                              ^^^^^^^^^^^^^ Cannot call impure function
+  36 |                         </p>
+  37 |                     </div>
+  38 |  react-hooks/purity
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/AnnouncementBanner.tsx
+  15:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/AnnouncementBanner.tsx:15:13
+  13 |         const stored = localStorage.getItem("dismissed_announcements");
+  14 |         if (stored) {
+> 15 |             setDismissed(new Set(JSON.parse(stored)));
+     |             ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  16 |         }
+  17 |
+  18 |         // Mock announcements - in real app, fetch from API  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/DigitalIDCard.tsx
+  156:25  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/OnboardingTour.tsx
+  45:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/OnboardingTour.tsx:45:13
+  43 |     useEffect(() => {
+  44 |         if (isOpen) {
+> 45 |             setIsVisible(true);
+     |             ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  46 |         }
+  47 |     }, [isOpen]);
+  48 |  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx
+  32:13  error    Error: Cannot access variable before it is declared
+
+`loadChatHistory` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:32:13
+  30 |     useEffect(() => {
+  31 |         if (isOpen) {
+> 32 |             loadChatHistory();
+     |             ^^^^^^^^^^^^^^^ `loadChatHistory` accessed before it is declared
+  33 |             loadSuggestions();
+  34 |         }
+  35 |     }, [isOpen, pathname]);
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:42:5
+  40 |     }, [messages]);
+  41 |
+> 42 |     async function loadChatHistory() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 43 |         const result = await getAIChatHistory(20);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 44 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |             setMessages(result.messages);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |     }
+     | ^^^^^^ `loadChatHistory` is declared here
+  48 |
+  49 |     async function loadSuggestions() {
+  50 |         const result = await getAISuggestions({                                                                                                                                                                                                                                                    react-hooks/immutability
+  33:13  error    Error: Cannot access variable before it is declared
+
+`loadSuggestions` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:33:13
+  31 |         if (isOpen) {
+  32 |             loadChatHistory();
+> 33 |             loadSuggestions();
+     |             ^^^^^^^^^^^^^^^ `loadSuggestions` accessed before it is declared
+  34 |         }
+  35 |     }, [isOpen, pathname]);
+  36 |
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:49:5
+  47 |     }
+  48 |
+> 49 |     async function loadSuggestions() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 50 |         const result = await getAISuggestions({
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 51 |             currentPage: pathname,
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 52 |             userRole,
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 53 |         });
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 54 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 55 |             setSuggestions(result.suggestions);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 56 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 57 |     }
+     | ^^^^^^ `loadSuggestions` is declared here
+  58 |
+  59 |     async function handleSendMessage(message?: string) {
+  60 |         const messageToSend = message || inputMessage.trim();  react-hooks/immutability
+  35:8   warning  React Hook useEffect has a missing dependency: 'loadSuggestions'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      react-hooks/exhaustive-deps
+  68:17  error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:68:17
+  66 |         // Add user message optimistically
+  67 |         const userMessage: AIChatMessage = {
+> 68 |             id: Date.now().toString(),
+     |                 ^^^^^^^^^^ Cannot call impure function
+  69 |             userId: 'current',
+  70 |             message: messageToSend,
+  71 |             response: '',                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react-hooks/purity
+  87:38  error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:87:38
+  85 |             // Update with AI response
+  86 |             const aiMessage: AIChatMessage = {
+> 87 |                 id: result.chatId || Date.now().toString(),
+     |                                      ^^^^^^^^^^ Cannot call impure function
+  88 |                 userId: 'current',
+  89 |                 message: messageToSend,
+  90 |                 response: result.response,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/purity
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/SessionActivityTracker.tsx
+  26:62  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/SessionActivityTracker.tsx:26:62
+  24 |     const [showWarning, setShowWarning] = useState(false);
+  25 |     const [timeRemaining, setTimeRemaining] = useState(0);
+> 26 |     const [lastActivityTime, setLastActivityTime] = useState(Date.now());
+     |                                                              ^^^^^^^^^^ Cannot call impure function
+  27 |
+  28 |     // Update activity timestamp
+  29 |     const updateActivity = useCallback(() => {                                                                                                                                                                                                                                                                                                                                                     react-hooks/purity
+  57:17  error  Error: Cannot access variable before it is declared
+
+`handleLogout` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/SessionActivityTracker.tsx:57:17
+  55 |             // Auto-logout if timeout exceeded
+  56 |             if (remaining <= 0) {
+> 57 |                 handleLogout();
+     |                 ^^^^^^^^^^^^ `handleLogout` accessed before it is declared
+  58 |             }
+  59 |         };
+  60 |
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/SessionActivityTracker.tsx:100:5
+   98 |     }, []);
+   99 |
+> 100 |     const handleLogout = async () => {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 101 |         localStorage.removeItem("lastActivity");
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 102 |         await signOut({ callbackUrl: "/auth/login?timeout=true" });
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 103 |     };
+      | ^^^^^^^ `handleLogout` is declared here
+  104 |
+  105 |     const handleExtendSession = () => {
+  106 |         updateActivity();  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/cooperative/CooperativePaymentOption.tsx
+  25:8  warning  React Hook useEffect has a missing dependency: 'checkEligibility'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/features/CommodityPieChart.tsx
+  68:40  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/features/CommodityPieChart.tsx:68:40
+  66 |                         ))}
+  67 |                     </Pie>
+> 68 |                     <Tooltip content={<CustomTooltip />} />
+     |                                        ^^^^^^^^^^^^^ This component is created during render
+  69 |                 </PieChart>
+  70 |             </ResponsiveContainer>
+  71 |             <div className="mt-4 space-y-2">
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/features/CommodityPieChart.tsx:23:27
+  21 |     const total = data.reduce((sum, item) => sum + item.value, 0);
+  22 |
+> 23 |     const CustomTooltip = ({ active, payload }: any) => {
+     |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |         if (active && payload && payload.length) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 25 |             const data = payload[0].payload;
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 39 |         return null;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 40 |     };
+     | ^^^^^^ The component is created during render here
+  41 |
+  42 |     const renderCustomLabel = (entry: any) => {
+  43 |         const percentage = ((entry.value / total) * 100).toFixed(0);  react-hooks/static-components
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/hub/PlatformStats.tsx
+  53:8  warning  React Hook useEffect has a missing dependency: 'stats'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/land/LandMap.tsx
+  91:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/land/LandMap.tsx:91:9
+  89 |     // Only render map on client-side
+  90 |     useEffect(() => {
+> 91 |         setMounted(true);
+     |         ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  92 |     }, []);
+  93 |
+  94 |     if (!mounted) {  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/layout/NotificationCenter.tsx
+  36:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/layout/NotificationCenter.tsx:36:13
+  34 |     useEffect(() => {
+  35 |         if (!session?.user?.id) {
+> 36 |             setLoading(false);
+     |             ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  37 |             return;
+  38 |         }
+  39 |  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/lms/CourseProgressCard.tsx
+  27:21  error    Error: Cannot access variable before it is declared
+
+`handleGenerateCertificate` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/lms/CourseProgressCard.tsx:27:21
+  25 |                 // Auto-generate certificate if completed and not already generated
+  26 |                 if (result.progress.completed && result.progress.progressPercent >= 100) {
+> 27 |                     handleGenerateCertificate();
+     |                     ^^^^^^^^^^^^^^^^^^^^^^^^^ `handleGenerateCertificate` accessed before it is declared
+  28 |                 }
+  29 |             }
+  30 |             setLoading(false);
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/lms/CourseProgressCard.tsx:36:5
+  34 |     }, [courseId]);
+  35 |
+> 36 |     const handleGenerateCertificate = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 37 |         setGeneratingCert(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 38 |         await generateCourseCertificate(courseId, courseTitle);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 39 |         setGeneratingCert(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 40 |     };
+     | ^^^^^^^ `handleGenerateCertificate` is declared here
+  41 |
+  42 |     if (loading) {
+  43 |         return (  react-hooks/immutability
+  34:8   warning  React Hook useEffect has a missing dependency: 'handleGenerateCertificate'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/marketplace/ProductReviewsSection.tsx
+   40:8   warning  React Hook useEffect has a missing dependency: 'loadReviews'. Either include it or remove the dependency array                                                                                                                                                                           react-hooks/exhaustive-deps
+  206:41  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/ExportWindowModal.tsx
+  37:8  warning  React Hook useEffect has a missing dependency: 'state'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/JoinCooperativeModal.tsx
+  120:8  warning  React Hook useEffect has a missing dependency: 'state.message'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/StatusUpdateModal.tsx
+  46:8  warning  React Hook useEffect has a missing dependency: 'state.message'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/WithdrawalModal.tsx
+  41:8  warning  React Hook useEffect has a missing dependency: 'state.message'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/onboarding/OnboardingGuide.tsx
+  141:33  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/shared/DocumentUpload.tsx
+  86:33  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+✖ 122 problems (53 errors, 69 warnings)
+  0 errors and 2 warnings potentially fixable with the `--fix` option.
+

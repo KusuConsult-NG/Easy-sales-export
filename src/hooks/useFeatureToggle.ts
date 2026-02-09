@@ -10,18 +10,14 @@ import { DEFAULT_TOGGLES } from "@/lib/feature-toggles";
  */
 export function useFeatureToggle(featureName: string): boolean {
     const [enabled, setEnabled] = useState(DEFAULT_TOGGLES[featureName] ?? false);
-    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function checkToggle() {
             try {
                 const isEnabled = await getFeatureToggle(featureName);
                 setEnabled(isEnabled);
-            } catch (error) {
-                console.error(`Failed to fetch toggle for ${featureName}:`, error);
+            } catch {
                 // Keep default value on error
-            } finally {
-                setLoading(false);
             }
         }
 
@@ -43,15 +39,19 @@ export function useFeatureToggles(featureNames: string[]): Record<string, boolea
         return initial;
     });
 
+    const dependencyKey = featureNames.join(',');
+
     useEffect(() => {
         async function checkToggles() {
             const results: Record<string, boolean> = {};
 
+            // Use Promise.all to fetch all toggles in parallel
             await Promise.all(
                 featureNames.map(async (name) => {
                     try {
-                        results[name] = await getFeatureToggle(name);
-                    } catch (error) {
+                        const isEnabled = await getFeatureToggle(name);
+                        results[name] = isEnabled;
+                    } catch {
                         results[name] = DEFAULT_TOGGLES[name] ?? false;
                     }
                 })
@@ -61,7 +61,8 @@ export function useFeatureToggles(featureNames: string[]): Record<string, boolea
         }
 
         checkToggles();
-    }, [featureNames.join(',')]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dependencyKey]);
 
     return toggles;
 }

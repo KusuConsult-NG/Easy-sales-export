@@ -4,6 +4,7 @@ import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, updateD
 import { db } from "@/lib/firebase";
 import { createAuditLog } from "@/lib/audit-log";
 import { calculateRepaymentSchedule, isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
+import { auth } from "@/lib/auth";
 
 export interface LoanApplication {
     id?: string;
@@ -41,6 +42,11 @@ export async function submitLoanApplicationAction(formData: {
     tier: "Basic" | "Premium";
 }): Promise<{ success: boolean; error?: string; applicationId?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== formData.userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         // ===== TIER VALIDATION =====
         // Import tier functions
         const { calculateUserTier, COOPERATIVE_TIERS, getTierMaxDuration } = await import("@/lib/cooperative-tiers");
@@ -152,6 +158,11 @@ export async function submitLoanApplicationAction(formData: {
  */
 export async function getUserLoanApplicationsAction(userId: string): Promise<LoanApplication[]> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || (session.user.id !== userId && !session.user.roles?.includes("admin"))) {
+            return [];
+        }
+
         const q = query(
             collection(db, "loan_applications"),
             where("userId", "==", userId)
@@ -173,6 +184,12 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
  */
 export async function getPendingLoanApplicationsAction(): Promise<LoanApplication[]> {
     try {
+        const session = await auth();
+        // @ts-ignore
+        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+            return [];
+        }
+
         const q = query(
             collection(db, "loan_applications"),
             where("status", "==", "pending")
@@ -194,9 +211,17 @@ export async function getPendingLoanApplicationsAction(): Promise<LoanApplicatio
  */
 export async function approveLoanAction(
     applicationId: string,
-    adminId: string
+    adminId: string // Deprecated, use session
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        // @ts-ignore
+        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const effectiveAdminId = session.user.id;
+
         const appRef = doc(db, "loan_applications", applicationId);
         const appDoc = await getDoc(appRef);
 
@@ -207,14 +232,14 @@ export async function approveLoanAction(
         await updateDoc(appRef, {
             status: "approved",
             reviewedAt: Timestamp.now(),
-            reviewedBy: adminId,
+            reviewedBy: effectiveAdminId,
         });
 
         const appData = appDoc.data() as LoanApplication;
 
         await createAuditLog({
             action: "loan_approved",
-            userId: adminId,
+            userId: effectiveAdminId,
             targetId: applicationId,
             targetType: "loan_application",
             metadata: {
@@ -235,10 +260,18 @@ export async function approveLoanAction(
  */
 export async function rejectLoanAction(
     applicationId: string,
-    adminId: string,
+    adminId: string, // Deprecated, use session
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        // @ts-ignore
+        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const effectiveAdminId = session.user.id;
+
         const appRef = doc(db, "loan_applications", applicationId);
         const appDoc = await getDoc(appRef);
 
@@ -249,7 +282,7 @@ export async function rejectLoanAction(
         await updateDoc(appRef, {
             status: "rejected",
             reviewedAt: Timestamp.now(),
-            reviewedBy: adminId,
+            reviewedBy: effectiveAdminId,
             rejectionReason: reason,
         });
 
@@ -257,7 +290,7 @@ export async function rejectLoanAction(
 
         await createAuditLog({
             action: "loan_rejected",
-            userId: adminId,
+            userId: effectiveAdminId,
             targetId: applicationId,
             targetType: "loan_application",
             metadata: {
@@ -308,6 +341,12 @@ export async function getRepaymentScheduleAction(
         }
 
         const loanData = loanDoc.data() as LoanApplication;
+
+        const session = await auth();
+        // @ts-ignore
+        if (!session?.user?.id || (session.user.id !== loanData.userId && !session.user.roles?.includes("admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
 
         // Check if schedule exists
         const scheduleQuery = query(
@@ -406,6 +445,11 @@ export async function submitRepaymentAction(data: {
     paymentReference: string;
 }): Promise<{ success: boolean; error?: string; penalty?: number }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== data.userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         const installmentRef = doc(db, "loan_repayments", data.installmentId);
         const installmentDoc = await getDoc(installmentRef);
 
@@ -505,6 +549,23 @@ export async function getRepaymentHistoryAction(
     loanId: string
 ): Promise<{ success: boolean; error?: string; payments?: any[] }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Note: For history, we should ideally check ownership of the loan first, 
+        // but skipping for now or adding a quick check would be better.
+        // Let's add a quick loan check.
+        const loanDoc = await getDoc(doc(db, "loan_applications", loanId));
+        if (loanDoc.exists()) {
+            const loanData = loanDoc.data();
+            // @ts-ignore
+            if (loanData.userId !== session.user.id && !session.user.roles?.includes("admin")) {
+                return { success: false, error: "Unauthorized" };
+            }
+        }
+
         const paymentsQuery = query(
             collection(db, "loan_payments"),
             where("loanId", "==", loanId)

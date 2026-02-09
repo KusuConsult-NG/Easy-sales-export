@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -17,6 +17,7 @@ import {
     type CourseModule
 } from "@/app/actions/academy";
 import QuizComponent from "@/components/academy/QuizComponent";
+import DOMPurify from "isomorphic-dompurify";
 
 interface LessonPageProps {
     params: { courseId: string; lessonId: string };
@@ -41,43 +42,91 @@ export default function LessonPage({ params }: LessonPageProps) {
     }, [status, router]);
 
     useEffect(() => {
-        if (status === "authenticated" && session?.user) {
-            loadLesson();
-        }
-    }, [status, session, courseId, lessonId]);
+        let mounted = true;
 
-    async function loadLesson() {
-        setLoading(true);
+        async function loadLessonData() {
+            if (status !== "authenticated" || !session?.user) return;
 
-        const [courseData, progressData] = await Promise.all([
-            getCourseByIdAction(courseId),
-            getUserProgressAction(session!.user.id, courseId),
-        ]);
+            setLoading(true);
+            try {
+                const [courseData, progressData] = await Promise.all([
+                    getCourseByIdAction(courseId),
+                    getUserProgressAction(session!.user.id, courseId),
+                ]);
 
-        if (!courseData) {
-            setLoading(false);
-            return;
-        }
+                if (!mounted) return;
 
-        // Find current lesson and module
-        let foundLesson: Lesson | null = null;
-        let foundModule: CourseModule | null = null;
+                if (!courseData) {
+                    setLoading(false);
+                    return;
+                }
 
-        for (const module of courseData.modules) {
-            const lesson = module.lessons.find(l => l.id === lessonId);
-            if (lesson) {
-                foundLesson = lesson;
-                foundModule = module;
-                break;
+                // Find current lesson and module
+                let foundLesson: Lesson | null = null;
+                let foundModule: CourseModule | null = null;
+
+                for (const courseModule of courseData.modules) {
+                    const lesson = courseModule.lessons.find(l => l.id === lessonId);
+                    if (lesson) {
+                        foundLesson = lesson;
+                        foundModule = courseModule;
+                        break;
+                    }
+                }
+
+                if (mounted) {
+                    setCourse(courseData);
+                    setProgress(progressData);
+                    setCurrentLesson(foundLesson);
+                    setCurrentModule(foundModule);
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (mounted) setLoading(false);
             }
         }
 
-        setCourse(courseData);
-        setProgress(progressData);
-        setCurrentLesson(foundLesson);
-        setCurrentModule(foundModule);
-        setLoading(false);
-    }
+        loadLessonData();
+
+        return () => { mounted = false; };
+    }, [courseId, lessonId, session, status]);
+
+    // Function to manually refresh lesson data (e.g. after completion)
+    const loadLesson = useCallback(async () => {
+        if (!session?.user) return;
+
+        try {
+            const [courseData, progressData] = await Promise.all([
+                getCourseByIdAction(courseId),
+                getUserProgressAction(session!.user.id, courseId),
+            ]);
+
+            if (courseData) {
+                // Find current lesson and module
+                let foundLesson: Lesson | null = null;
+                let foundModule: CourseModule | null = null;
+
+                for (const courseModule of courseData.modules) {
+                    const lesson = courseModule.lessons.find(l => l.id === lessonId);
+                    if (lesson) {
+                        foundLesson = lesson;
+                        foundModule = courseModule;
+                        break;
+                    }
+                }
+
+                setCourse(courseData);
+                setProgress(progressData);
+                setCurrentLesson(foundLesson);
+                setCurrentModule(foundModule);
+            }
+        } catch (error) {
+            console.error("Failed to refresh lesson:", error);
+        }
+    }, [courseId, lessonId, session]);
+
+
 
     async function handleMarkComplete() {
         if (!session?.user || !currentLesson) return;
@@ -255,7 +304,7 @@ export default function LessonPage({ params }: LessonPageProps) {
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 mb-6">
                     <div
                         className="prose dark:prose-invert max-w-none"
-                        dangerouslySetInnerHTML={{ __html: currentLesson.content }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(currentLesson.content) }}
                     />
                 </div>
 

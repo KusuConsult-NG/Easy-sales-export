@@ -4,6 +4,7 @@ import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, Timesta
 import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAuditLog } from "@/lib/audit-log";
+import { auth } from "@/lib/auth"; // Ensure auth is imported
 
 /**
  * WAVE (Women in Agribusiness Ventures & Exports) Actions
@@ -45,6 +46,16 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
     reason?: string;
 }> {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return { eligible: false, reason: "Unauthorized" };
+        }
+
+        // Allow checking own eligibility or admin checking others
+        if (session.user.id !== userId && !session.user.roles?.includes("admin")) {
+            return { eligible: false, reason: "Unauthorized" };
+        }
+
         const userRef = doc(db, COLLECTIONS.USERS, userId);
         const userDoc = await getDoc(userRef);
 
@@ -76,6 +87,15 @@ export async function enrollInWaveAction(userId: string): Promise<{
     error?: string;
 }> {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        if (session.user.id !== userId) {
+            return { success: false, error: "Cannot enroll on behalf of another user" };
+        }
+
         const eligibility = await checkWaveEligibilityAction(userId);
 
         if (!eligibility.eligible) {
@@ -109,6 +129,10 @@ export async function enrollInWaveAction(userId: string): Promise<{
  */
 export async function getWaveResourcesAction(category?: string): Promise<WaveResource[]> {
     try {
+        // Optional: Could restrict to enrolled members only
+        const session = await auth();
+        if (!session?.user) return [];
+
         let q = query(collection(db, "wave_resources"));
 
         if (category) {
@@ -132,6 +156,10 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
  */
 export async function getWaveTrainingEventsAction(): Promise<WaveTrainingEvent[]> {
     try {
+        // Publicly viewable or member only? Let's keep it safe.
+        const session = await auth();
+        if (!session?.user) return [];
+
         const q = query(
             collection(db, "wave_training_events"),
             where("status", "in", ["upcoming", "ongoing"])
@@ -178,6 +206,12 @@ export interface ShipmentTracking {
  */
 export async function getShipmentTrackingAction(userId: string): Promise<ShipmentTracking[]> {
     try {
+        const session = await auth();
+        if (!session?.user) return [];
+
+        // Users can only see their own shipments
+        if (session.user.id !== userId) return [];
+
         const shipmentsQuery = query(
             collection(db, "wave_shipments"),
             where("memberId", "==", userId)
@@ -201,6 +235,16 @@ export async function updateShipmentStatusAction(
     note?: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Check admin role
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+            return { success: false, error: "Admin access required" };
+        }
+
         const shipmentRef = doc(db, "wave_shipments", shipmentId);
         const shipmentDoc = await getDoc(shipmentRef);
 
@@ -259,6 +303,15 @@ export interface MemberEarnings {
  */
 export async function calculateEarningsAction(userId: string): Promise<MemberEarnings> {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            throw new Error("Unauthorized");
+        }
+
+        if (session.user.id !== userId && !session.user.roles?.includes("admin")) {
+            throw new Error("Unauthorized");
+        }
+
         const salesQuery = query(
             collection(db, "marketplace_orders"),
             where("sellerId", "==", userId)
@@ -344,6 +397,16 @@ export async function generateCertificateAction(
     certificateType: WaveCertificate["certificateType"]
 ): Promise<{ success: boolean; certificate?: WaveCertificate; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Check admin role
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+            return { success: false, error: "Admin access required" };
+        }
+
         const userRef = doc(db, COLLECTIONS.USERS, userId);
         const userDoc = await getDoc(userRef);
 
@@ -387,6 +450,12 @@ export async function generateCertificateAction(
  */
 export async function getMemberCertificatesAction(userId: string): Promise<WaveCertificate[]> {
     try {
+        const session = await auth();
+        if (!session?.user) return [];
+
+        // Allow reading own certificates
+        if (session.user.id !== userId) return [];
+
         const certsQuery = query(
             collection(db, "wave_certificates"),
             where("memberId", "==", userId)
@@ -411,6 +480,16 @@ export async function uploadWaveResourceAction(
     resource: Omit<WaveResource, "id" | "uploadedAt" | "downloads">
 ): Promise<{ success: boolean; resourceId?: string; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Check admin role
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+            return { success: false, error: "Admin access required" };
+        }
+
         const resourceId = `resource_${Date.now()}`;
         const resourceData: WaveResource = {
             ...resource,
@@ -435,6 +514,11 @@ export async function incrementResourceDownloadAction(
     resourceId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         const resourceRef = doc(db, "wave_resources", resourceId);
         const resourceDoc = await getDoc(resourceRef);
 
@@ -465,6 +549,15 @@ export async function registerForTrainingAction(
     eventId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        if (session.user.id !== userId) {
+            return { success: false, error: "Cannot register for another user" };
+        }
+
         const eventRef = doc(db, "wave_training_events", eventId);
         const eventDoc = await getDoc(eventRef);
 

@@ -51,6 +51,7 @@ export default function CreateProductPage() {
     const [state, formAction, isPending] = useActionState(createProductAction, initialState);
 
     const [images, setImages] = useState<string[]>([]);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [enableBulkPricing, setEnableBulkPricing] = useState(false);
     const [enableExportPricing, setEnableExportPricing] = useState(false);
 
@@ -67,17 +68,24 @@ export default function CreateProductPage() {
         const files = e.target.files;
         if (!files) return;
 
-        // In production, upload to cloud storage (Cloudinary/S3)
-        // For now, using placeholder URLs
-        const newImages = Array.from(files).map((file, idx) =>
-            `/products/placeholder_${Date.now()}_${idx}.jpg`
-        );
+        const newFiles = Array.from(files);
+        const newPreviewUrls = newFiles.map(file => URL.createObjectURL(file));
 
-        setImages([...images, ...newImages].slice(0, 5)); // Max 5 images
+        setSelectedFiles(prev => [...prev, ...newFiles].slice(0, 5));
+        setImages(prev => [...prev, ...newPreviewUrls].slice(0, 5));
     };
 
     const removeImage = (index: number) => {
         setImages(images.filter((_, i) => i !== index));
+        setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
+    };
+
+    const handleSubmit = (formData: FormData) => {
+        // Append files manually
+        selectedFiles.forEach((file, index) => {
+            formData.append(`productImages_${index}`, file);
+        });
+        formAction(formData);
     };
 
     return (
@@ -101,7 +109,7 @@ export default function CreateProductPage() {
                 </div>
 
                 {/* Product Form */}
-                <form action={formAction} className="space-y-6">
+                <form action={handleSubmit} className="space-y-6">
                     {/* Basic Information */}
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
@@ -212,7 +220,6 @@ export default function CreateProductPage() {
                             )}
                         </div>
 
-                        <input type="hidden" name="images" value={JSON.stringify(images)} />
                         <p className="text-sm text-gray-500">Upload up to 5 images</p>
                     </div>
 

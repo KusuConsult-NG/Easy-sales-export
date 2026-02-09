@@ -300,6 +300,44 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    
+    // ============================================
+    // CONVERSATIONS & MESSAGES (Messaging System)
+    // ============================================
+    match /conversations/{conversationId} {
+      // Read: Users who are participants in the conversation
+      allow read: if isSignedIn() && 
+        request.auth.uid in resource.data.participants;
+      
+      // Create: Users can create conversations with themselves as participant
+      allow create: if isSignedIn() &&
+        request.auth.uid in request.resource.data.participants &&
+        request.resource.data.participants.size() == 2;
+      
+      // Update: Participants can update (for lastMessage, updatedAt)
+      allow update: if isSignedIn() &&
+        request.auth.uid in resource.data.participants;
+      
+      // Delete: No deletion of conversations (archiving should be flag-based)
+      allow delete: if false;
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Read: Users who are participants in the parent conversation
+        allow read: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+        
+        // Create: Participants can send messages
+        allow create: if isSignedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
+          request.resource.data.senderId == request.auth.uid;
+        
+        // Update/Delete: Messages are immutable
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+    
     // ============================================
     // ESCROW TRANSACTIONS
     // ============================================

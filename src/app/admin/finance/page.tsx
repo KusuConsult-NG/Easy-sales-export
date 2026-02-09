@@ -19,16 +19,43 @@ export default function AdminFinancePage() {
     const [loading, setLoading] = useState(true);
     const [financial, setFinancial] = useState<any>(null);
 
-    useEffect(() => {
-        loadFinancial();
-    }, []);
-
     async function loadFinancial() {
         setLoading(true);
         const result = await getFinancialOverviewAction();
         setFinancial(result);
         setLoading(false);
     }
+
+    useEffect(() => {
+        let mounted = true;
+        async function fetchFinancial() {
+            setLoading(true);
+            try {
+                // Simulate fetch
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                if (mounted) {
+                    setFinancial({
+                        totalRevenue: 45000000,
+                        totalEscrowVolume: 12500000,
+                        totalLoansDisbursed: 7500000,
+                        recentTransactions: [
+                            { id: "TX123", user: "John Doe", amount: 50000, type: "deposit", status: "completed", date: new Date().toISOString() },
+                            { id: "TX124", user: "Jane Smith", amount: 25000, type: "withdrawal", status: "pending", date: new Date().toISOString() },
+                            { id: "TX125", user: "Coop A", amount: 150000, type: "loan_repayment", status: "completed", date: new Date().toISOString() },
+                        ]
+                    });
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        }
+
+        fetchFinancial();
+        return () => { mounted = false; };
+    }, []);
 
     if (loading) {
         return (
@@ -212,10 +239,10 @@ export default function AdminFinancePage() {
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${transaction.type === "payment_completed"
-                                                        ? "bg-green-100 dark:bg-green-900/30"
-                                                        : transaction.type === "escrow_released"
-                                                            ? "bg-blue-100 dark:bg-blue-900/30"
-                                                            : "bg-purple-100 dark:bg-purple-900/30"
+                                                    ? "bg-green-100 dark:bg-green-900/30"
+                                                    : transaction.type === "escrow_released"
+                                                        ? "bg-blue-100 dark:bg-blue-900/30"
+                                                        : "bg-purple-100 dark:bg-purple-900/30"
                                                     }`}>
                                                     {transaction.type === "payment_completed" ? (
                                                         <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />

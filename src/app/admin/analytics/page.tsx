@@ -34,10 +34,6 @@ export default function AdminAnalyticsPage() {
     const [loading, setLoading] = useState(true);
     const [analytics, setAnalytics] = useState<any>(null);
 
-    useEffect(() => {
-        loadAnalytics();
-    }, []);
-
     async function loadAnalytics() {
         setLoading(true);
         const result = await getDashboardStatsAction();
@@ -46,6 +42,28 @@ export default function AdminAnalyticsPage() {
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        let mounted = true;
+
+        async function fetchAnalytics() {
+            setLoading(true);
+            try {
+                const result = await getDashboardStatsAction();
+                if (mounted && result) {
+                    setAnalytics(result);
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        }
+
+        fetchAnalytics();
+
+        return () => { mounted = false; };
+    }, []);
 
     if (loading) {
         return (

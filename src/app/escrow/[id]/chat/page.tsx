@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Send, Loader2, MessageCircle, ArrowLeft, Shield } from "lucide-react";
@@ -8,10 +8,14 @@ import { sendEscrowMessageAction, getEscrowMessagesAction, getEscrowTransactionB
 import type { Message } from "@/app/actions/escrow";
 
 interface EscrowChatPageProps {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 }
 
 export default function EscrowChatPage({ params }: EscrowChatPageProps) {
+    // Unwrap the params Promise using React.use() (Next.js 15+)
+    const resolvedParams = use(params);
+    const escrowId = resolvedParams.id;
+
     const router = useRouter();
     const { data: session, status } = useSession();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -21,8 +25,6 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
     const [escrowData, setEscrowData] = useState<EscrowTransaction | null>(null);
     const [authorized, setAuthorized] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    const escrowId = params.id;
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -55,24 +57,6 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
         checkAuthorization();
     }, [status, session, escrowId, router]);
 
-    // Load messages on mount and every 3 seconds
-    useEffect(() => {
-        if (status !== "authenticated") return;
-
-        loadMessages();
-
-        const interval = setInterval(() => {
-            loadMessages();
-        }, 3000); // Poll every 3 seconds
-
-        return () => clearInterval(interval);
-    }, [status, escrowId]);
-
-    // Auto-scroll to bottom when new messages arrive
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
     async function loadMessages() {
         try {
             const fetchedMessages = await getEscrowMessagesAction(escrowId);
@@ -83,6 +67,28 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
             setLoading(false);
         }
     }
+
+    function scrollToBottom() {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+
+    // Load messages on mount and every 3 seconds
+    useEffect(() => {
+        if (status !== "authenticated") return;
+
+        loadMessages();
+
+        const interval = setInterval(() => {
+            loadMessages();
+        }, 5000); // Poll every 5 seconds
+
+        return () => clearInterval(interval);
+    }, [status, escrowId]);
+
+    // Auto-scroll to bottom when new messages arrive
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
 
     async function handleSendMessage(e: React.FormEvent) {
         e.preventDefault();
@@ -108,9 +114,7 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
         setSending(false);
     }
 
-    function scrollToBottom() {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
+
 
     function formatTime(timestamp: any): string {
         if (!timestamp) return "";
@@ -240,7 +244,7 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
                                                     )}
 
                                                     {/* Message Text */}
-                                                    <p className="text-sm break-words">{message.message}</p>
+                                                    <p className="text-sm wrap-break-word">{message.message}</p>
 
                                                     {/* Timestamp */}
                                                     <div

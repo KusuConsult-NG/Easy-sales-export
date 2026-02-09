@@ -90,7 +90,7 @@ export async function getActiveAnnouncementsAction(
     try {
         const now = Timestamp.now();
 
-        let q = query(
+        const q = query(
             collection(db, "announcements"),
             where("active", "==", true)
         );

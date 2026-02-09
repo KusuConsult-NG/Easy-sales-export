@@ -88,7 +88,7 @@ export async function sendResetEmailAction(
             `
         });
 
-        console.log(`Password reset email sent to: ${email}`);
+        // console.log(`Password reset email sent to: ${email}`);
 
         return {
             success: true,

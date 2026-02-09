@@ -15,13 +15,11 @@ function VerifyPaymentContent() {
     const reference = searchParams.get('reference');
     const cooperativeId = searchParams.get('cooperativeId');
 
-    const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-    const [message, setMessage] = useState<string>('');
+    const [status, setStatus] = useState<'loading' | 'success' | 'error'>(reference ? 'loading' : 'error');
+    const [message, setMessage] = useState<string>(reference ? '' : 'Missing payment reference');
 
     useEffect(() => {
         if (!reference) {
-            setStatus('error');
-            setMessage('Missing payment reference');
             return;
         }
 

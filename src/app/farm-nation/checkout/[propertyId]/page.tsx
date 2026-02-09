@@ -31,6 +31,24 @@ export default function CheckoutPage() {
         purpose: "",
     });
 
+    async function loadProperty() {
+        try {
+            const result = await getPropertyByIdAction(propertyId);
+            if (result.success && result.property) {
+                if (result.property.status !== "available") {
+                    setError("This property is no longer available");
+                } else {
+                    setProperty(result.property);
+                }
+            } else {
+                setError(result.error || "Property not found");
+            }
+        } catch (error) {
+            setError("Failed to load property details");
+        }
+        setLoading(false);
+    }
+
     useEffect(() => {
         if (status === "authenticated") {
             getUserTierAction().then(({ tier }) => {
@@ -45,29 +63,10 @@ export default function CheckoutPage() {
                 name: session?.user?.name || "",
                 email: session?.user?.email || "",
             }));
-        } else if (status === "unauthenticated") {
-            router.push("/login");
+
+            loadProperty(); // Call loadProperty here
         }
-
-        loadProperty();
-    }, [propertyId, status, session]);
-
-    const loadProperty = async () => {
-        setLoading(true);
-        const result = await getPropertyByIdAction(propertyId);
-
-        if (result.success && result.property) {
-            if (result.property.status !== "available") {
-                setError("This property is no longer available");
-            } else {
-                setProperty(result.property);
-            }
-        } else {
-            setError(result.error || "Property not found");
-        }
-
-        setLoading(false);
-    };
+    }, [propertyId, status, session, params.propertyId]); // Added params.propertyId to dependencies
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

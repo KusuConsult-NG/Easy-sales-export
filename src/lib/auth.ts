@@ -61,6 +61,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         id: userCredential.user.uid,
                         email: userData.email,
                         name: userData.fullName,
+                        image: null, // Placeholder for future profile image support
                         roles: userData.roles || [], // Multi-role support
                     };
                 } catch (error: any) {
@@ -77,6 +78,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.id = user.id;
                 token.email = user.email;
                 token.name = user.name;
+                token.image = user.image;
                 token.roles = user.roles; // Multi-role support
             }
 
@@ -88,6 +90,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 session.user.id = token.id as string;
                 session.user.email = token.email as string;
                 session.user.name = token.name as string;
+                session.user.image = token.image as string | null;
                 session.user.roles = (token.roles as UserRole[]) || []; // Multi-role support
                 session.user.verified = token.verified as boolean;
             }
@@ -115,6 +118,7 @@ declare module "next-auth" {
         id: string;
         email: string;
         name: string;
+        image?: string | null;
         roles: UserRole[]; // Multi-role support
     }
 
@@ -123,6 +127,7 @@ declare module "next-auth" {
             id: string;
             email: string;
             name: string;
+            image?: string | null;
             roles: UserRole[]; // Multi-role support
             verified: boolean;
         };
@@ -134,6 +139,7 @@ declare module "next-auth/jwt" {
         id: string;
         email: string;
         name: string;
+        image?: string | null;
         roles: UserRole[]; // Multi-role support
         verified: boolean;
     }

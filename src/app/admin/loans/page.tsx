@@ -13,10 +13,6 @@ export default function AdminLoansPage() {
     const [rejectionReason, setRejectionReason] = useState("");
     const [showRejectModal, setShowRejectModal] = useState(false);
 
-    useEffect(() => {
-        loadPendingLoans();
-    }, []);
-
     async function loadPendingLoans() {
         setLoading(true);
         const result = await getPendingLoanApplications();
@@ -26,9 +22,44 @@ export default function AdminLoansPage() {
             if (result.applications.length > 0 && !selectedLoan) {
                 setSelectedLoan(result.applications[0]);
             }
+        } else {
+            // If API fails/returns empty, ensure we have an empty array to avoid crashes
+            setLoans([]);
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        let mounted = true;
+
+        async function loadLoansOnMount() {
+            setLoading(true);
+            try {
+                const result = await getPendingLoanApplications();
+                if (mounted) {
+                    if (result.success && result.applications) {
+                        setLoans(result.applications);
+                        // Auto-select first loan if available
+                        if (result.applications.length > 0 && !selectedLoan) {
+                            setSelectedLoan(result.applications[0]);
+                        }
+                    } else {
+                        setLoans([]);
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load pending loans:", error);
+                if (mounted) {
+                    setLoans([]);
+                }
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        }
+
+        loadLoansOnMount();
+        return () => { mounted = false; };
+    }, []);
 
     async function handleApprove() {
         if (!selectedLoan) return;
@@ -320,15 +351,15 @@ export default function AdminLoansPage() {
                                         return (
                                             <div
                                                 className={`p-3 rounded-lg ${isEligible
-                                                        ? "bg-green-50 dark:bg-green-900/20"
-                                                        : "bg-red-50 dark:bg-red-900/20"
+                                                    ? "bg-green-50 dark:bg-green-900/20"
+                                                    : "bg-red-50 dark:bg-red-900/20"
                                                     }`}
                                             >
                                                 <p className="text-sm font-medium mb-1">Eligibility Check</p>
                                                 <p
                                                     className={`text-xs ${isEligible
-                                                            ? "text-green-700 dark:text-green-400"
-                                                            : "text-red-700 dark:text-red-400"
+                                                        ? "text-green-700 dark:text-green-400"
+                                                        : "text-red-700 dark:text-red-400"
                                                         }`}
                                                 >
                                                     {isEligible ? "✓ " : "✗ "}

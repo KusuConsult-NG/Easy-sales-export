@@ -4,6 +4,7 @@ import { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { SessionProvider } from "next-auth/react";
 import { ToastProvider } from "@/contexts/ToastContext";
+import { Toaster } from "sonner";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -13,7 +14,8 @@ interface ClientLayoutProps {
 }
 
 // Routes that should NOT have the Sidebar (auth pages, landing page, etc.)
-const noSidebarRoutes = ['/auth'];
+const noSidebarRoutes = ['/auth', '/dashboard'];
+
 
 export function ClientLayout({ children }: ClientLayoutProps) {
     const pathname = usePathname();
@@ -39,6 +41,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
                     ) : (
                         <>{children}</>
                     )}
+                    <Toaster position="top-right" richColors />
                 </ThemeProvider>
             </ToastProvider>
         </SessionProvider>

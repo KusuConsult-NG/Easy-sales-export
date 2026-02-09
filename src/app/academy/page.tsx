@@ -1,395 +1,269 @@
 "use client";
 
-import { useState } from "react";
-import { useActionState } from "react";
-import { GraduationCap, Clock, Users, Star, BookOpen, AlertCircle, CheckCircle } from "lucide-react";
-import Modal from "@/components/ui/Modal";
-import EmptyState from "@/components/ui/EmptyState";
-import { enrollInCourseAction, type EnrollmentActionState } from "@/app/actions/platform";
+import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, CheckCircle } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
 
-interface Course {
-    id: string;
-    title: string;
-    category: string;
-    level: string;
-    duration: string;
-    students: number;
-    rating: number;
-    price: number;
-    instructor: string;
-    description: string;
-}
-
-const initialState: EnrollmentActionState = { error: "Initializing...", success: false };
-
-export default function AcademyPage() {
-    const [selectedCategory, setSelectedCategory] = useState("all");
-    const [selectedLevel, setSelectedLevel] = useState("all");
-    const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
-    const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-    const [enrollmentData, setEnrollmentData] = useState({
-        fullName: "",
-        email: "",
-        phone: "",
-    });
-    const [state, formAction, isPending] = useActionState(enrollInCourseAction, initialState);
-
-    // Handle successful enrollment
-    if (state.success && !isPending) {
-        setIsEnrollModalOpen(false);
-        setEnrollmentData({ fullName: "", email: "", phone: "" });
-    }
-
-    const courses: Course[] = [
+export default function AcademyLandingPage() {
+    const featuredCourses = [
         {
-            id: "1",
-            title: "Modern Yam Farming Techniques",
-            category: "farming",
-            level: "beginner",
-            duration: "4 weeks",
-            students: 234,
-            rating: 4.8,
-            price: 15000,
-            instructor: "Dr. Adamu Hassan",
-            description: "Learn the latest scientific methods for maximizing yam yield",
-        },
-        {
-            id: "2",
-            title: "Export Documentation & Regulations",
-            category: "export",
-            level: "intermediate",
-            duration: "3 weeks",
-            students: 189,
-            rating: 4.9,
-            price: 25000,
-            instructor: "Chioma Okeke",
-            description: "Master the requirements for exporting Nigerian agricultural products",
-        },
-        {
-            id: "3",
-            title: "Agribusiness Management",
-            category: "business",
-            level: "intermediate",
-            duration: "6 weeks",
-            students: 312,
-            rating: 4.7,
-            price: 30000,
-            instructor: "Musa Abdullahi",
-            description: "Build a profitable agricultural business from the ground up",
-        },
-        {
-            id: "4",
-            title: "Organic Farming Certification",
-            category: "farming",
-            level: "advanced",
+            title: "Modern Yam Farming",
+            instructor: "Dr. Adeyemi Ogunlade",
+            students: 2450,
             duration: "8 weeks",
-            students: 156,
-            rating: 4.9,
-            price: 35000,
-            instructor: "Prof. Grace Okonkwo",
-            description: "Get certified in organic farming practices and international standards",
+            price: "₦45,000",
+            image: "/images/logo.jpg",
+            category: "Farming"
         },
         {
-            id: "5",
-            title: "Post-Harvest Processing",
-            category: "processing",
-            level: "beginner",
-            duration: "3 weeks",
-            students: 201,
-            rating: 4.6,
-            price: 20000,
-            instructor: "Ibrahim Yusuf",
-            description: "Reduce losses and add value through proper processing techniques",
+            title: "Export Documentation & Compliance",
+            instructor: "Mrs. Jennifer Okoro",
+            students: 1820,
+            duration: "6 weeks",
+            price: "₦55,000",
+            image: "/images/logo.jpg",
+            category: "Export"
         },
         {
-            id: "6",
-            title: "Digital Marketing for Farmers",
-            category: "business",
-            level: "beginner",
-            duration: "4 weeks",
-            students: 287,
-            rating: 4.8,
-            price: 18000,
-            instructor: "Fatima Bello",
-            description: "Use social media and online platforms to reach more buyers",
-        },
+            title: "Agribusiness Management",
+            instructor: "Prof. Ibrahim Musa",
+            students: 3120,
+            duration: "12 weeks",
+            price: "₦75,000",
+            image: "/images/logo.jpg",
+            category: "Business"
+        }
     ];
-
-    const categories = [
-        { value: "all", label: "All Categories" },
-        { value: "farming", label: "Farming Techniques" },
-        { value: "export", label: "Export & Trade" },
-        { value: "business", label: "Business Management" },
-        { value: "processing", label: "Processing & Storage" },
-    ];
-
-    const levels = [
-        { value: "all", label: "All Levels" },
-        { value: "beginner", label: "Beginner" },
-        { value: "intermediate", label: "Intermediate" },
-        { value: "advanced", label: "Advanced" },
-    ];
-
-    // Filter courses
-    const filteredCourses = courses.filter((course) => {
-        const matchesCategory =
-            selectedCategory === "all" || course.category === selectedCategory;
-        const matchesLevel =
-            selectedLevel === "all" || course.level === selectedLevel;
-        return matchesCategory && matchesLevel;
-    });
-
-    // Handle enrollment
-    const handleEnroll = (course: Course) => {
-        setSelectedCourse(course);
-        setIsEnrollModalOpen(true);
-    };
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            <div className="p-8">
-                {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-                        Academy
-                    </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
-                        Learn modern farming techniques and business skills from industry experts
-                    </p>
-                </div>
-
-                {/* Filters */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 mb-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                                Courses
-                            </label>
-                            <select
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                            >
-                                {categories.map((cat) => (
-                                    <option key={cat.value} value={cat.value}>
-                                        {cat.label}
-                                    </option>
-                                ))}
-                            </select>
+            {/* Hero Section */}
+            <div className="relative overflow-hidden bg-linear-to-br from-blue-600 via-indigo-600 to-purple-600 text-white">
+                <div className="absolute inset-0 bg-black/10"></div>
+                <div className="relative max-w-7xl mx-auto px-8 py-24">
+                    <div className="max-w-3xl">
+                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-semibold mb-6">
+                            <GraduationCap className="w-4 h-4" />
+                            Agricultural Education Platform
                         </div>
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                                Difficulty Level
-                            </label>
-                            <select
-                                value={selectedLevel}
-                                onChange={(e) => setSelectedLevel(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+                            Easy Sales Academy
+                        </h1>
+                        <p className="text-xl md:text-2xl mb-4 text-blue-50">
+                            Master Modern Agriculture & Agribusiness
+                        </p>
+                        <p className="text-lg mb-8 text-blue-100 max-w-2xl">
+                            Learn from industry experts, earn recognized certifications, and transform your agricultural knowledge into profitable ventures.
+                        </p>
+                        <div className="flex flex-wrap gap-4">
+                            <Link
+                                href="/academy/application"
+                                className="group inline-flex items-center gap-3 bg-white text-blue-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-blue-500/50 transition-all hover:scale-105"
                             >
-                                {levels.map((level) => (
-                                    <option key={level.value} value={level.value}>
-                                        {level.label}
-                                    </option>
-                                ))}
-                            </select>
+                                Start Learning Today
+                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                            </Link>
                         </div>
                     </div>
                 </div>
+                {/* Wave SVG */}
+                <div className="absolute bottom-0 left-0 right-0">
+                    <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
+                        <path d="M0 0L60 10C120 20 240 40 360 46.7C480 53 600 47 720 43.3C840 40 960 40 1080 46.7C1200 53 1320 67 1380 73.3L1440 80V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0V0Z" fill="rgb(248 250 252)" className="dark:fill-slate-950" />
+                    </svg>
+                </div>
+            </div>
 
-                {/* Courses Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredCourses.length > 0 ? (
-                        filteredCourses.map((course, index) => (
-                            <div
-                                key={course.id}
-                                className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 hover-lift animate-[slideInUp_0.6s_ease-out]"
-                                style={{ animationDelay: `${index * 100}ms` }}
-                            >
-                                <div className="flex items-center justify-between mb-4">
-                                    <span
-                                        className={`px-3 py-1 rounded-full text-xs font-bold ${course.level === "beginner"
-                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                            : course.level === "intermediate"
-                                                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                                                : "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
-                                            }`}
-                                    >
-                                        {course.level.charAt(0).toUpperCase() + course.level.slice(1)}
+            {/* Stats Section */}
+            <div className="max-w-7xl mx-auto px-8 -mt-16 relative z-10">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                        <div className="text-4xl font-bold text-blue-600 mb-2">50+</div>
+                        <div className="text-slate-600 dark:text-slate-400 font-medium">Expert Courses</div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                        <div className="text-4xl font-bold text-blue-600 mb-2">25,000+</div>
+                        <div className="text-slate-600 dark:text-slate-400 font-medium">Active Students</div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                        <div className="text-4xl font-bold text-blue-600 mb-2">95%</div>
+                        <div className="text-slate-600 dark:text-slate-400 font-medium">Completion Rate</div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                        <div className="text-4xl font-bold text-blue-600 mb-2">4.8/5</div>
+                        <div className="text-slate-600 dark:text-slate-400 font-medium">Student Rating</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Featured Courses */}
+            <div className="max-w-7xl mx-auto px-8 py-16">
+                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-4">
+                    Featured Courses
+                </h2>
+                <p className="text-center text-slate-600 dark:text-slate-400 mb-12 max-w-2xl mx-auto">
+                    Handpicked courses from industry experts to accelerate your agricultural success
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                    {featuredCourses.map((course, index) => (
+                        <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift">
+                            <div className="relative h-48 bg-slate-200 dark:bg-slate-700">
+                                <Image
+                                    src={course.image}
+                                    alt={course.title}
+                                    fill
+                                    className="object-cover"
+                                />
+                                <div className="absolute top-4 left-4">
+                                    <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                        {course.category}
                                     </span>
+                                </div>
+                            </div>
+                            <div className="p-6">
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                    {course.title}
+                                </h3>
+                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                    by {course.instructor}
+                                </p>
+                                <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mb-4">
                                     <div className="flex items-center gap-1">
-                                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                                            {course.rating}
-                                        </span>
+                                        <Users className="w-4 h-4" />
+                                        {course.students.toLocaleString()}
                                     </div>
-                                </div>
-
-                                <div className="mb-4">
-                                    <GraduationCap className="w-10 h-10 text-primary mb-3" />
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                                        {course.title}
-                                    </h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-                                        {course.description}
-                                    </p>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 font-semibold">
-                                        Instructor: {course.instructor}
-                                    </p>
-                                </div>
-
-                                <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mb-4 pb-4 border-b border-slate-200 dark:border-slate-700">
                                     <div className="flex items-center gap-1">
                                         <Clock className="w-4 h-4" />
                                         {course.duration}
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <Users className="w-4 h-4" />
-                                        {course.students} students
-                                    </div>
                                 </div>
-
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-2xl font-bold text-primary">
-                                        ₦{course.price.toLocaleString()}
+                                <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                                    <span className="text-2xl font-bold text-blue-600">
+                                        {course.price}
                                     </span>
                                 </div>
-
-                                <button
-                                    onClick={() => handleEnroll(course)}
-                                    className="w-full px-4 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <BookOpen className="w-4 h-4" />
-                                    Enroll Now
-                                </button>
                             </div>
-                        ))
-                    ) : (
-                        <div className="col-span-full text-center py-12">
-                            <p className="text-slate-500 dark:text-slate-400">
-                                No courses match your filters
-                            </p>
                         </div>
-                    )}
+                    ))}
+                </div>
+
+                <div className="text-center">
+                    <Link
+                        href="/academy/courses"
+                        className="inline-flex items-center gap-2 px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition"
+                    >
+                        View All Courses
+                        <ArrowRight className="w-5 h-5" />
+                    </Link>
                 </div>
             </div>
 
-            {/* Enrollment Modal */}
-            <Modal
-                isOpen={isEnrollModalOpen}
-                onClose={() => setIsEnrollModalOpen(false)}
-                title={`Enroll in ${selectedCourse?.title || "Course"}`}
-            >
-                <form action={formAction} className="space-y-4">
-                    {/* Hidden courseId field */}
-                    <input type="hidden" name="courseId" value={selectedCourse?.id || ""} />
+            {/* Benefits Section */}
+            <div className="max-w-7xl mx-auto px-8 py-16">
+                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-12">
+                    Why Learn With Us?
+                </h2>
 
-                    {/* Server error display */}
-                    {state.error && (
-                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-300 shrink-0 mt-0.5" />
-                            <p className="text-sm text-red-200">{state.error}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6">
+                            <Award className="w-7 h-7 text-blue-600" />
                         </div>
-                    )}
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                            Certified Programs
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Earn industry-recognized certifications upon course completion to boost your credibility.
+                        </p>
+                    </div>
 
-                    {/* Success message */}
-                    {state.success && state.message && (
-                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
-                            <CheckCircle className="w-5 h-5 text-green-300 shrink-0 mt-0.5" />
-                            <p className="text-sm text-green-200">{state.message}</p>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6">
+                            <BookOpen className="w-7 h-7 text-blue-600" />
                         </div>
-                    )}
-
-                    <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 mb-4">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                            Course Fee
-                        </p>
-                        <p className="text-2xl font-bold text-primary">
-                            ₦{selectedCourse?.price.toLocaleString()}
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                            Practical Learning
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Hands-on projects and real-world case studies from successful Nigerian agribusinesses.
                         </p>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Full Name *
-                        </label>
-                        <input
-                            type="text"
-                            name="fullName"
-                            value={enrollmentData.fullName}
-                            onChange={(e) =>
-                                setEnrollmentData({ ...enrollmentData, fullName: e.target.value })
-                            }
-                            required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
-                            placeholder="Enter your full name"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Email Address *
-                        </label>
-                        <input
-                            type="email"
-                            value={enrollmentData.email}
-                            onChange={(e) =>
-                                setEnrollmentData({ ...enrollmentData, email: e.target.value })
-                            }
-                            required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
-                            placeholder="your.email@example.com"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Phone Number *
-                        </label>
-                        <input
-                            type="tel"
-                            value={enrollmentData.phone}
-                            onChange={(e) =>
-                                setEnrollmentData({ ...enrollmentData, phone: e.target.value })
-                            }
-                            required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
-                            placeholder="+234 XXX XXX XXXX"
-                        />
-                    </div>
-
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-                        <p className="text-sm text-blue-800 dark:text-blue-200">
-                            <strong>Note:</strong> After enrollment, you'll receive course access
-                            details via email within 24 hours. Payment can be made via bank
-                            transfer or card.
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6">
+                            <TrendingUp className="w-7 h-7 text-blue-600" />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                            Career Growth
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Access to job opportunities and business partnerships through our alumni network.
                         </p>
                     </div>
+                </div>
+            </div>
 
-                    <div className="flex gap-3">
-                        <button
-                            type="button"
-                            onClick={() => setIsEnrollModalOpen(false)}
-                            className="flex-1 px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            {/* Learning Paths */}
+            <div className="max-w-7xl mx-auto px-8 py-16">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800 rounded-3xl p-12">
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
+                        Learning Paths
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-blue-600 shrink-0 mt-1" />
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Farming Excellence</h4>
+                                <p className="text-slate-600 dark:text-slate-400">Modern farming techniques, crop management, and yield optimization</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-blue-600 shrink-0 mt-1" />
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Export Mastery</h4>
+                                <p className="text-slate-600 dark:text-slate-400">Documentation, compliance, and international trade regulations</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-blue-600 shrink-0 mt-1" />
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Agribusiness</h4>
+                                <p className="text-slate-600 dark:text-slate-400">Business planning, financial management, and market strategy</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-blue-600 shrink-0 mt-1" />
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Technology & Innovation</h4>
+                                <p className="text-slate-600 dark:text-slate-400">AgTech, precision farming, and digital agriculture</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* CTA Section */}
+            <div className="max-w-7xl mx-auto px-8 py-16">
+                <div className="bg-linear-to-r from-blue-600 to-indigo-600 rounded-3xl p-12 text-center text-white relative overflow-hidden">
+                    <div className="absolute inset-0 bg-black/10"></div>
+                    <div className="relative z-10">
+                        <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                            Start Learning Today
+                        </h2>
+                        <p className="text-xl mb-8 text-blue-100 max-w-2xl mx-auto">
+                            Join thousands of successful agripreneurs who transformed their careers through our courses.
+                        </p>
+                        <Link
+                            href="/academy/courses"
+                            className="group inline-flex items-center gap-3 bg-white text-blue-600 px-10 py-5 rounded-xl font-bold text-lg shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                         >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isPending}
-                            className="flex-1 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isPending ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin inline-block mr-2" />
-                                    Enrolling...
-                                </>
-                            ) : (
-                                "Confirm Enrollment"
-                            )}
-                        </button>
+                            Browse All Courses
+                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        </Link>
                     </div>
-                </form>
-            </Modal>
+                </div>
+            </div>
         </div>
     );
 }

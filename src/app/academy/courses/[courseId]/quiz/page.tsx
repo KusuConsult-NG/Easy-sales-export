@@ -70,7 +70,7 @@ export default function StudentQuizPage({ params }: { params: { courseId: string
             const data = await response.json();
 
             if (data.success) {
-                let quizData = data.quiz;
+                const quizData = data.quiz;
 
                 // Shuffle questions if enabled
                 if (quizData.shuffleQuestions) {

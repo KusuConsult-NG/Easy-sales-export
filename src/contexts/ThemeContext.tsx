@@ -17,6 +17,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     // Initialize theme on mount
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true);
 
         // Check localStorage first, then system preference

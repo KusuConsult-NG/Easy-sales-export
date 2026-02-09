@@ -1,9 +1,8 @@
 "use server";
 
 import { signIn, signOut } from "@/lib/auth";
-import { auth as firebaseAuth, db } from "@/lib/firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db, adminAuth } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { registerSchema, loginSchema } from "@/lib/schemas";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
@@ -11,6 +10,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { User as FirestoreUser } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { LEGACY_ROLE_MAP, type LegacyRole, type UserRole } from "@/lib/types/roles";
+import { getPrimaryApp } from "@/lib/role-app-mapping";
 
 /**
  * Server Actions for Authentication
@@ -37,6 +37,7 @@ export async function loginAction(prevState: any, formData: FormData) {
 
         // DO NOT MODIFY – AUTH STABILITY
         // Explicit redirect required for form actions
+        // Redirect to /dashboard which will then redirect to primary app
         redirect("/dashboard");
         return { error: "", success: true }; // Defensive - redirect throws, but just in case
 
@@ -76,8 +77,8 @@ export async function registerAction(prevState: any, formData: FormData) {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
-    const gender = formData.get("gender") as string;
-    const role = formData.get("role") as string;
+    const gender = formData.get("gender") as "male" | "female";
+    const platforms = formData.getAll("platforms[]") as string[]; // Multi-platform selection
 
     try {
         // Validate with Zod
@@ -88,61 +89,81 @@ export async function registerAction(prevState: any, formData: FormData) {
             confirmPassword,
         });
 
-        // Validate role
-        const allowedRoles = ["member", "exporter", "vendor"];
-        if (!role || !allowedRoles.includes(role)) {
-            return { error: "Please select a valid account type", success: false };
+        // Validate platforms (at least one required)
+        const allowedPlatforms = ["marketplace", "export", "cooperatives", "farm-nation", "academy"];
+        if (!platforms || platforms.length === 0) {
+            return { error: "Please select at least one platform", success: false };
         }
 
-        // Create Firebase Auth user
-        const userCredential = await createUserWithEmailAndPassword(
-            firebaseAuth,
-            validatedData.email,
-            validatedData.password
-        );
+        // Validate all platforms are allowed
+        const invalidPlatforms = platforms.filter(p => !allowedPlatforms.includes(p));
+        if (invalidPlatforms.length > 0) {
+            return { error: "Invalid platform selection", success: false };
+        }
 
-
-        // Create Firestore user profile
-        // Assign comprehensive role set based on account type
-        const rolesByAccountType: Record<LegacyRole, UserRole[]> = {
-            // Member: Access to cooperatives, academy, marketplace
-            "member": ["general_user", "cooperative_member", "buyer"],
-
-            // Exporter: Full export + marketplace access
-            "exporter": ["general_user", "export_participant", "seller", "buyer"],
-
-            // Vendor: Marketplace seller with buying capability
-            "vendor": ["general_user", "seller", "buyer"],
-
-            // Admin roles (for completeness)
-            "admin": ["general_user", "admin"],
-            "super_admin": ["general_user", "admin", "super_admin"],
-        };
-
-        const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = {
-            uid: userCredential.user.uid,
-            fullName: validatedData.fullName,
+        // Create Firebase Auth user via Admin SDK
+        const userRecord = await adminAuth.createUser({
             email: validatedData.email,
-            roles: rolesByAccountType[role as LegacyRole],
-            verified: true, // No email verification implemented
-            gender: gender as "male" | "female" | undefined,
-        };
-
-        await setDoc(doc(db, COLLECTIONS.USERS, userCredential.user.uid), {
-            ...userProfile,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            password: validatedData.password,
+            displayName: validatedData.fullName,
+            emailVerified: true, // Auto-verify for now
         });
 
+        // Build role set based on platform selections + gender
+        const roles: Set<UserRole> = new Set(["general_user"]); // Everyone gets general_user
+
+        // Map platform selections to roles
+        if (platforms.includes("marketplace")) {
+            roles.add("buyer");
+            roles.add("seller");
+        }
+        if (platforms.includes("export")) {
+            roles.add("export_participant");
+        }
+        if (platforms.includes("cooperatives")) {
+            roles.add("cooperative_member");
+        }
+        if (platforms.includes("farm-nation")) {
+            roles.add("investor"); // Default Farm Nation role (can upgrade to farmer/land_owner later)
+        }
+        if (platforms.includes("academy")) {
+            roles.add("academy_participant"); // Explicit Academy access
+        }
+
+        // AUTO-GRANT WAVE for females
+        if (gender === "female") {
+            roles.add("wave_participant");
+        }
+
+        const userRoles = Array.from(roles);
+
+        // Create Firestore user profile
+        const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = {
+            uid: userRecord.uid,
+            fullName: validatedData.fullName,
+            email: validatedData.email,
+            roles: userRoles,
+            verified: false,
+            gender: gender,
+        };
+
+        await db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({
+            ...userProfile,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
 
         // REGISTRATION MUST ESTABLISH SESSION — DO NOT MODIFY
-        // Auto sign-in after registration and redirect to dashboard
+        // Determine primary app based on assigned roles
+        const primaryApp = getPrimaryApp(userProfile.roles);
+
+        // Auto sign-in after registration and redirect to primary app
         // redirect:false prevents session from being established on client
         // We MUST redirect to allow session cookie to be set
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
-            redirectTo: "/dashboard",
+            redirectTo: primaryApp,
         });
 
         // This line never executes because signIn redirects

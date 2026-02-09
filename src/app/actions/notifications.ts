@@ -1,8 +1,7 @@
 "use server";
 
-import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, updateDoc, Timestamp, arrayUnion } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { createAuditLog } from "@/lib/audit-log";
+import { db } from "@/lib/firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 
 /**
  * In-App Notification System
@@ -39,7 +38,7 @@ export async function createNotificationAction(data: {
             createdAt: Timestamp.now(),
         };
 
-        const docRef = await addDoc(collection(db, "notifications"), notification);
+        const docRef = await db.collection("notifications").add(notification);
 
         return { success: true, notificationId: docRef.id };
     } catch (error) {
@@ -56,14 +55,20 @@ export async function createBulkNotificationsAction(
     notification: Omit<Notification, "id" | "userId">
 ): Promise<{ success: boolean; error?: string; count?: number }> {
     try {
-        const promises = userIds.map((userId) =>
-            addDoc(collection(db, "notifications"), {
+        const batch = db.batch();
+        const notificationsRef = db.collection("notifications");
+
+        userIds.forEach((userId) => {
+            const docRef = notificationsRef.doc();
+            batch.set(docRef, {
                 userId,
                 ...notification,
-            })
-        );
+                read: false,
+                createdAt: Timestamp.now(),
+            });
+        });
 
-        await Promise.all(promises);
+        await batch.commit();
 
         return { success: true, count: userIds.length };
     } catch (error) {
@@ -77,30 +82,26 @@ export async function createBulkNotificationsAction(
  */
 export async function getUserNotificationsAction(userId: string): Promise<Notification[]> {
     try {
-        const q = query(
-            collection(db, "notifications"),
-            where("userId", "==", userId)
-        );
+        const snapshot = await db.collection("notifications")
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(q);
-
-        return snapshot.docs
-            .map((doc) => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    userId: data.userId,
-                    title: data.title,
-                    message: data.message,
-                    type: data.type,
-                    link: data.link,
-                    linkText: data.linkText,
-                    read: data.read,
-                    createdAt: data.createdAt,
-                    readAt: data.readAt,
-                } as Notification;
-            })
-            .sort((a, b) => b.createdAt.seconds - a.createdAt.seconds);
+        return snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                userId: data.userId,
+                title: data.title,
+                message: data.message,
+                type: data.type,
+                link: data.link,
+                linkText: data.linkText,
+                read: data.read,
+                createdAt: data.createdAt,
+                readAt: data.readAt,
+            } as Notification;
+        });
     } catch (error) {
         console.error("Failed to fetch notifications:", error);
         return [];
@@ -114,9 +115,7 @@ export async function markNotificationAsReadAction(
     notificationId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const notificationRef = doc(db, "notifications", notificationId);
-
-        await updateDoc(notificationRef, {
+        await db.collection("notifications").doc(notificationId).update({
             read: true,
             readAt: Timestamp.now(),
         });
@@ -133,22 +132,24 @@ export async function markNotificationAsReadAction(
  */
 export async function markAllAsReadAction(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const q = query(
-            collection(db, "notifications"),
-            where("userId", "==", userId),
-            where("read", "==", false)
-        );
+        const snapshot = await db.collection("notifications")
+            .where("userId", "==", userId)
+            .where("read", "==", false)
+            .get();
 
-        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            return { success: true };
+        }
 
-        const promises = snapshot.docs.map((doc) =>
-            updateDoc(doc.ref, {
+        const batch = db.batch();
+        snapshot.docs.forEach((doc) => {
+            batch.update(doc.ref, {
                 read: true,
                 readAt: Timestamp.now(),
-            })
-        );
+            });
+        });
 
-        await Promise.all(promises);
+        await batch.commit();
 
         return { success: true };
     } catch (error) {
@@ -162,15 +163,13 @@ export async function markAllAsReadAction(userId: string): Promise<{ success: bo
  */
 export async function getUnreadCountAction(userId: string): Promise<number> {
     try {
-        const q = query(
-            collection(db, "notifications"),
-            where("userId", "==", userId),
-            where("read", "==", false)
-        );
+        const snapshot = await db.collection("notifications")
+            .where("userId", "==", userId)
+            .where("read", "==", false)
+            .count()
+            .get();
 
-        const snapshot = await getDocs(q);
-
-        return snapshot.size;
+        return snapshot.data().count;
     } catch (error) {
         console.error("Failed to get unread count:", error);
         return 0;

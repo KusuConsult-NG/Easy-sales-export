@@ -203,11 +203,8 @@ export default function HubPage() {
                             <h3 className="text-white font-bold mb-4 text-lg">
                                 Easy Sales Export
                             </h3>
-                            <p className="text-sm mb-2">
-                                Kusu Consult NG Limited
-                            </p>
                             <p className="text-sm">
-                                RC: 1234567
+                                RC: 763845
                             </p>
                         </div>
                         <div>

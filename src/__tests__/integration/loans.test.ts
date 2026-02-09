@@ -132,7 +132,7 @@ describe('Loan Application Integration Tests', () => {
 
             // 4. Verify user can borrow up to ₦150,000
             const requestedLoan = 120000;
-            const canBorrow = requestedLoan <= maxLoan Amount;
+            const canBorrow = requestedLoan <= maxLoanAmount;
 
             expect(canBorrow).toBe(true);
             console.log(`✅ User can borrow ₦${requestedLoan.toLocaleString()} (limit: ₦${maxLoanAmount.toLocaleString()})`);

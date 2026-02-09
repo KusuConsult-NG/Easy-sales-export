@@ -1,21 +1,19 @@
 "use server";
 
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-    doc,
-    updateDoc,
-    serverTimestamp,
-    orderBy,
-    getDoc, // Added getDoc
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
-import { createNotificationAction } from "@/app/actions/notifications"; // Added createNotificationAction
+import { createNotificationAction } from "@/app/actions/notifications";
+import {
+    WaveApplicationReviewSchema,
+    WithdrawalProcessingSchema,
+    UserVerificationToggleSchema,
+    LandListingVerificationSchema,
+    LoanApplicationReviewSchema
+} from "@/lib/schemas";
+import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
  * Admin Server Actions
@@ -37,16 +35,20 @@ export async function approveWaveApplicationAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
+            return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
         }
 
-        const applicationRef = doc(db, COLLECTIONS.WAVE_APPLICATIONS, applicationId);
-        await updateDoc(applicationRef, {
+        const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
+        if (!valid.success) {
+            return { error: (valid.error as any).errors[0].message, success: false };
+        }
+
+        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).update({
             status: "approved",
             reviewedBy: session.user.id,
-            reviewedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Log audit
@@ -71,17 +73,21 @@ export async function rejectWaveApplicationAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
+            return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
         }
 
-        const applicationRef = doc(db, COLLECTIONS.WAVE_APPLICATIONS, applicationId);
-        await updateDoc(applicationRef, {
+        const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
+        if (!valid.success) {
+            return { error: (valid.error as any).errors[0].message, success: false };
+        }
+
+        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).update({
             status: "rejected",
             rejectionReason: reason,
             reviewedBy: session.user.id,
-            reviewedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Log audit
@@ -108,29 +114,34 @@ export async function rejectWaveApplicationAction(
 export async function processWithdrawalAction(
     withdrawalId: string,
     action: "approve" | "reject",
-    reasoning?: string // Changed 'notes' to 'reasoning'
+    reasoning?: string
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
+            return { error: "Unauthorized: Permission required - finance:process_withdrawals", success: false };
         }
 
-        const withdrawalRef = doc(db, COLLECTIONS.WITHDRAWALS, withdrawalId);
-        const withdrawalDoc = await getDoc(withdrawalRef); // Added getDoc
+        const valid = WithdrawalProcessingSchema.safeParse({ withdrawalId, action, reasoning });
+        if (!valid.success) {
+            return { error: (valid.error as any).errors[0].message, success: false };
+        }
 
-        if (!withdrawalDoc.exists()) { // Added check for existence
+        const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
+        const withdrawalDoc = await withdrawalRef.get();
+
+        if (!withdrawalDoc.exists) {
             return { error: "Withdrawal request not found", success: false };
         }
 
-        const withdrawalData = withdrawalDoc.data(); // Added retrieval of withdrawal data
+        const withdrawalData = withdrawalDoc.data()!;
 
-        await updateDoc(withdrawalRef, {
-            status: action === "approve" ? "completed" : "rejected", // Reverted status logic to original
+        await withdrawalRef.update({
+            status: action === "approve" ? "completed" : "rejected",
             processedBy: session.user.id,
-            processedAt: serverTimestamp(),
-            adminNotes: reasoning || "", // Changed 'notes' to 'adminNotes' and used 'reasoning'
-            updatedAt: serverTimestamp(),
+            processedAt: FieldValue.serverTimestamp(),
+            adminNotes: reasoning || "",
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Create notification for user
@@ -145,12 +156,12 @@ export async function processWithdrawalAction(
             linkText: "View Dashboard",
         });
 
-        // Log audit (kept original logAuditAction, assuming createAuditLog was a typo or not fully intended replacement)
+        // Log audit
         await logAuditAction(
             action === "approve" ? "withdrawal_approve" : "withdrawal_reject",
             withdrawalId,
             "withdrawal",
-            { notes: reasoning, adminId: session.user.id } // Used 'reasoning' for notes
+            { notes: reasoning, adminId: session.user.id }
         );
 
         return {
@@ -173,28 +184,31 @@ export async function toggleUserVerificationAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            return { error: "Unauthorized: Permission required - users:update", success: false };
+        }
+
+        const valid = UserVerificationToggleSchema.safeParse({ userId });
+        if (!valid.success) {
+            return { error: (valid.error as any).errors[0].message, success: false };
         }
 
         // Get current user doc
-        const userRef = doc(db, COLLECTIONS.USERS, userId);
-        const userSnapshot = await getDocs(
-            query(collection(db, COLLECTIONS.USERS), where("__name__", "==", userId))
-        );
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
 
-        if (userSnapshot.empty) {
+        if (!userDoc.exists) {
             return { error: "User not found", success: false };
         }
 
-        const currentData = userSnapshot.docs[0].data();
+        const currentData = userDoc.data()!;
         const newVerificationStatus = !currentData.isVerified;
 
-        await updateDoc(userRef, {
+        await userRef.update({
             isVerified: newVerificationStatus,
             verifiedBy: session.user.id,
-            verifiedAt: newVerificationStatus ? serverTimestamp() : null,
-            updatedAt: serverTimestamp(),
+            verifiedAt: newVerificationStatus ? FieldValue.serverTimestamp() : null,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Log audit
@@ -229,24 +243,20 @@ export async function getWaveApplicationsAction(
 }> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
+            return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
         }
 
-        let applicationsQuery = query(
-            collection(db, COLLECTIONS.WAVE_APPLICATIONS),
-            orderBy("createdAt", "desc")
-        );
+        let query = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+            .orderBy("createdAt", "desc");
 
         if (statusFilter) {
-            applicationsQuery = query(
-                collection(db, COLLECTIONS.WAVE_APPLICATIONS),
-                where("status", "==", statusFilter),
-                orderBy("createdAt", "desc")
-            );
+            query = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("status", "==", statusFilter)
+                .orderBy("createdAt", "desc");
         }
 
-        const snapshot = await getDocs(applicationsQuery);
+        const snapshot = await query.get();
         const applications = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
@@ -276,17 +286,15 @@ export async function getPendingWithdrawalsAction(): Promise<{
 }> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
+            return { error: "Unauthorized: Permission required - finance:read", success: false };
         }
 
-        const withdrawalsQuery = query(
-            collection(db, COLLECTIONS.WITHDRAWALS),
-            where("status", "==", "pending"),
-            orderBy("createdAt", "desc")
-        );
+        const snapshot = await db.collection(COLLECTIONS.WITHDRAWALS)
+            .where("status", "==", "pending")
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(withdrawalsQuery);
         const withdrawals = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
@@ -315,17 +323,15 @@ export async function getPendingLandListings(): Promise<{
 }> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
+            return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
         }
 
-        const listingsQuery = query(
-            collection(db, "land_listings"),
-            where("verificationStatus", "==", "pending"),
-            orderBy("createdAt", "desc")
-        );
+        const snapshot = await db.collection("land_listings")
+            .where("verificationStatus", "==", "pending")
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(listingsQuery);
         const listings = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
@@ -350,27 +356,30 @@ export async function verifyLandListing(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
+            return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
+        }
+
+        const valid = LandListingVerificationSchema.safeParse({ listingId, decision, reason });
+        if (!valid.success) {
+            return { error: (valid.error as any).errors[0].message, success: false };
         }
 
         // Update listing status
-        const listingRef = doc(db, "land_listings", listingId);
-        await updateDoc(listingRef, {
+        const listingRef = db.collection("land_listings").doc(listingId);
+        await listingRef.update({
             verificationStatus: decision,
             verifiedBy: session.user.id,
-            verifiedAt: serverTimestamp(),
+            verifiedAt: FieldValue.serverTimestamp(),
             rejectionReason: decision === "rejected" ? reason : null,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Get listing data for email
-        const listingSnapshot = await getDocs(
-            query(collection(db, "land_listings"), where("__name__", "==", listingId))
-        );
+        const listingDoc = await listingRef.get();
 
-        if (!listingSnapshot.empty) {
-            const listingData = listingSnapshot.docs[0].data();
+        if (listingDoc.exists) {
+            const listingData = listingDoc.data()!;
 
             // Send email notification via Resend
             if (process.env.RESEND_API_KEY) {
@@ -446,17 +455,15 @@ export async function getPendingLoanApplications(): Promise<{
 }> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
         }
 
-        const loansQuery = query(
-            collection(db, "loan_applications"),
-            where("status", "==", "pending"),
-            orderBy("appliedAt", "desc")
-        );
+        const snapshot = await db.collection("loan_applications")
+            .where("status", "==", "pending")
+            .orderBy("appliedAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(loansQuery);
         const applications = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
@@ -477,25 +484,77 @@ export async function getPendingLoanApplications(): Promise<{
     }
 }
 
+// ============================================
+// Export Window Management (Admin)
+// ============================================
+
+export async function getAllExportRequestsAction(
+    statusFilter?: "pending" | "in_transit" | "delivered" | "completed" | "all"
+): Promise<{
+    error: string | null;
+    success: boolean;
+    exports?: any[];
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
+        }
+
+        let query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
+            .orderBy("createdAt", "desc");
+
+        if (statusFilter && statusFilter !== "all") {
+            query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
+                .where("status", "==", statusFilter)
+                .orderBy("createdAt", "desc");
+        }
+
+        const snapshot = await query.get();
+        const exports = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            orderDate: doc.data().orderDate?.toDate() || new Date(),
+            deliveryDate: doc.data().deliveryDate?.toDate(),
+            escrowReleaseDate: doc.data().escrowReleaseDate?.toDate(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        }));
+
+        return {
+            error: null,
+            success: true,
+            exports,
+        };
+    } catch (error: any) {
+        console.error("Get all export requests error:", error);
+        return { error: "Failed to fetch export requests", success: false };
+    }
+}
+
 export async function approveLoanApplication(
     applicationId: string
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
+            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
+        }
+
+        const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
+        if (!valid.success) {
+            return { error: (valid.error as any).errors[0].message, success: false };
         }
 
         // Get loan data for validation
-        const loanSnapshot = await getDocs(
-            query(collection(db, "loan_applications"), where("__name__", "==", applicationId))
-        );
+        const loanRef = db.collection("loan_applications").doc(applicationId);
+        const loanDoc = await loanRef.get();
 
-        if (loanSnapshot.empty) {
+        if (!loanDoc.exists) {
             return { error: "Loan application not found", success: false };
         }
 
-        const loanData = loanSnapshot.docs[0].data();
+        const loanData = loanDoc.data()!;
 
         // Validate tier eligibility
         const tierMultiplier = loanData.tier === "Premium" ? 5 : 2.5;
@@ -509,12 +568,11 @@ export async function approveLoanApplication(
         }
 
         // Update loan status
-        const loanRef = doc(db, "loan_applications", applicationId);
-        await updateDoc(loanRef, {
+        await loanRef.update({
             status: "approved",
             reviewedBy: session.user.id,
-            reviewedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Send approval email
@@ -593,29 +651,32 @@ export async function rejectLoanApplication(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
+            return { error: "Unauthorized: Permission required - finance:read", success: false };
+        }
+
+        const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
+        if (!valid.success) {
+            return { error: (valid.error as any).errors[0].message, success: false };
         }
 
         // Get loan data for email
-        const loanSnapshot = await getDocs(
-            query(collection(db, "loan_applications"), where("__name__", "==", applicationId))
-        );
+        const loanRef = db.collection("loan_applications").doc(applicationId);
+        const loanDoc = await loanRef.get();
 
-        if (loanSnapshot.empty) {
+        if (!loanDoc.exists) {
             return { error: "Loan application not found", success: false };
         }
 
-        const loanData = loanSnapshot.docs[0].data();
+        const loanData = loanDoc.data()!;
 
         // Update loan status
-        const loanRef = doc(db, "loan_applications", applicationId);
-        await updateDoc(loanRef, {
+        await loanRef.update({
             status: "rejected",
             rejectionReason: reason,
             reviewedBy: session.user.id,
-            reviewedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Send rejection email
@@ -698,8 +759,8 @@ export async function rejectLoanApplication(
 export async function unlockUserAccount(email: string): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
+            return { error: "Unauthorized: Permission required - users:read", success: false };
         }
 
         if (!email || !email.includes("@")) {
@@ -728,4 +789,159 @@ export async function unlockUserAccount(email: string): Promise<ActionState> {
         return { error: "Failed to unlock account", success: false };
     }
 }
+// ============================================
+// User Management (Admin)
+// ============================================
 
+// ============================================
+// User Management (Admin)
+// ============================================
+
+interface GetUsersOptions {
+    limit?: number;
+    role?: string;
+    status?: "verified" | "unverified" | "all";
+    search?: string;
+    lastDocId?: string;
+}
+
+export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
+    error: string | null;
+    success: boolean;
+    users?: any[];
+    lastDocId?: string;
+    hasMore?: boolean;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
+            return { error: "Unauthorized: Permission required - users:read", success: false };
+        }
+
+        const pageSize = options.limit || 20;
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
+
+        // Apply filters
+        // Note: Firestore requires composite indexes for complex queries.
+        // We'll prioritize role/status filtering over search for now, 
+        // or do simple client-side search if db size is small.
+        // For production scale, use Algolia/Elasticsearch.
+
+        // Basic filtering
+        if (options.role && options.role !== "all") {
+            query = query.where("roles", "array-contains", options.role);
+        }
+
+        if (options.status === "verified") {
+            query = query.where("verified", "==", true);
+        } else if (options.status === "unverified") {
+            query = query.where("verified", "==", false);
+        }
+
+        // Sorting
+        query = query.orderBy("createdAt", "desc");
+
+        // Pagination
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        query = query.limit(pageSize);
+
+        const snapshot = await query.get();
+
+        // Manual search filtering (if needed, though inefficient for large datasets without 3rd party search)
+        // For this implementation, we will assume search happens on the filtered set or rely on precise filters.
+        // If 'search' is provided, we might need a specific index or external service.
+        // For now, let's process the snapshot.
+
+        const users = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                name: data.fullName || "Unknown",
+                email: data.email,
+                phone: data.phone,
+                role: data.roles?.[0] || "general_user", // Basic display of primary role
+                roles: data.roles || [], // Full roles array
+                isVerified: data.verified ?? false,
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+                verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate() : undefined,
+                // Add extra fields for detail view
+                bankDetails: data.bankDetails,
+                address: data.address,
+                metadata: data.metadata,
+                accountType: data.accountType
+            };
+        });
+
+        // Simple client-side search filter on the fetched page (not ideal but works for small pages)
+        // Or if the user really wants search, we should note the limitation.
+        let filteredUsers = users;
+        if (options.search) {
+            const searchLower = options.search.toLowerCase();
+            filteredUsers = users.filter(user =>
+                user.name.toLowerCase().includes(searchLower) ||
+                user.email.toLowerCase().includes(searchLower) ||
+                (user.phone && user.phone.includes(searchLower))
+            );
+        }
+
+        const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+
+        return {
+            error: null,
+            success: true,
+            users: filteredUsers,
+            lastDocId: lastVisible ? lastVisible.id : undefined,
+            hasMore: snapshot.docs.length === pageSize
+        };
+    } catch (error: any) {
+        console.error("Get users error:", error);
+        return { error: "Failed to fetch users: " + error.message, success: false };
+    }
+}
+
+// Update User Roles Action
+export async function updateUserRolesAction(
+    userId: string,
+    roles: string[]
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) {
+            return { error: "Unauthorized: Permission required - users:assign_roles", success: false };
+        }
+
+        // Validate inputs
+        const { UpdateUserRolesSchema } = await import("@/lib/schemas");
+        const valid = UpdateUserRolesSchema.safeParse({ userId, roles });
+
+        if (!valid.success) {
+            return { error: (valid.error as any).errors[0].message, success: false };
+        }
+
+        // Prevent admin from removing their own admin role
+        if (userId === session.user.id && !roles.includes("admin")) {
+            return { error: "Cannot remove your own admin privileges", success: false };
+        }
+
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            roles: roles,
+            updatedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        await logAuditAction("user_role_update", userId, "user", {
+            roles,
+            adminId: session.user.id
+        });
+
+        return { success: true, error: null, message: "User roles updated" };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}

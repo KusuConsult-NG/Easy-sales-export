@@ -26,24 +26,36 @@ export default function AdminWithdrawalsPage() {
     const [error, setError] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchWithdrawals();
-    }, []);
-
     const fetchWithdrawals = async () => {
         setIsLoading(true);
         setError(null);
+        try {
+            // The instruction implies a change in the action and the introduction of statusFilter.
+            // Since statusFilter is not defined in the original code, and the instruction doesn't provide its definition,
+            // I will assume it's a placeholder for a future change or an implicit context.
+            // For now, I will use the original getPendingWithdrawalsAction as it's the only one available.
+            // If getWithdrawalsAction and statusFilter were meant to be introduced, they would need explicit definition.
+            // However, to faithfully follow the instruction's *structure* for fetchWithdrawals,
+            // I will adapt the new error handling and success logic, while keeping the original action call.
+            // If the user intended to change the action, they would need to provide the new import and state.
 
-        const result = await getPendingWithdrawalsAction();
+            // Reverting to original action call as per original code, but applying new try/catch structure.
+            const result = await getPendingWithdrawalsAction(); // Original action
 
-        if (result.success && result.data) {
-            setWithdrawals(result.data);
-        } else {
-            setError(result.error || "Failed to load withdrawal requests");
+            if (result.success && result.data) { // Original success check
+                setWithdrawals(result.data); // Original data assignment
+            } else {
+                throw new Error(result.error || "Failed to load withdrawal requests"); // Adapted error handling
+            }
+        } catch (err: any) {
+            setError(err.message || "Failed to fetch withdrawals"); // New error handling
         }
-
         setIsLoading(false);
     };
+
+    useEffect(() => {
+        fetchWithdrawals();
+    }, []);
 
     const handleApprove = async (withdrawalId: string) => {
         const notes = prompt("Optional admin notes:");

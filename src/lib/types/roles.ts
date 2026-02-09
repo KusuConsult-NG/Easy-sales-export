@@ -15,6 +15,7 @@ export type UserRole =
     | "export_participant" // Participates in exports
     | "cooperative_member" // Cooperative savings member
     | "wave_participant"   // WAVE program (female only)
+    | "academy_participant" // Academy learning platform
     | "field_officer"      // Verifies applications/data
     | "admin"              // System administration
     | "super_admin";       // Full system control
@@ -50,6 +51,7 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
     export_participant: 3,
     cooperative_member: 3,
     wave_participant: 3,
+    academy_participant: 3,
     field_officer: 4,
     admin: 5,
     super_admin: 6,
@@ -68,6 +70,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     export_participant: "Export Participant",
     cooperative_member: "Cooperative Member",
     wave_participant: "WAVE Participant",
+    academy_participant: "Academy Participant",
     field_officer: "Field Officer / Verifier",
     admin: "Administrator",
     super_admin: "Super Administrator",

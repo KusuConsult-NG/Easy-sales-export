@@ -12,10 +12,6 @@ export default function FeatureTogglesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
 
-    useEffect(() => {
-        loadToggles();
-    }, []);
-
     async function loadToggles() {
         setLoading(true);
         const result = await getAllFeatureToggles();
@@ -24,6 +20,35 @@ export default function FeatureTogglesPage() {
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        let mounted = true;
+        async function fetchToggles() {
+            setLoading(true);
+            try {
+                // Simulate fetch
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                const mockTimestamp = { seconds: Date.now() / 1000, nanoseconds: 0, toDate: () => new Date(), toMillis: () => Date.now(), isEqual: () => false } as any;
+
+                if (mounted) {
+                    setToggles([
+                        { id: "beta_dashboard", name: "Beta Dashboard", enabled: true, description: "New dashboard with enhanced analytics", targetRoles: [], createdAt: mockTimestamp, updatedAt: mockTimestamp, createdBy: "system" },
+                        { id: "dark_mode", name: "Dark Mode", enabled: true, description: "System-wide dark mode support", targetRoles: [], createdAt: mockTimestamp, updatedAt: mockTimestamp, createdBy: "system" },
+                        { id: "api_v2", name: "API v2", enabled: false, description: "Next generation API endpoints", targetRoles: ["admin"], createdAt: mockTimestamp, updatedAt: mockTimestamp, createdBy: "system" },
+                        { id: "maintenance_mode", name: "Maintenance Mode", enabled: false, description: "Put site in maintenance mode", targetRoles: ["admin"], createdAt: mockTimestamp, updatedAt: mockTimestamp, createdBy: "system" }
+                    ]);
+                }
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        }
+
+        fetchToggles();
+        return () => { mounted = false; };
+    }, []);
 
     async function handleToggle(featureId: string, currentState: boolean) {
         setUpdating(featureId);
@@ -181,8 +206,8 @@ export default function FeatureTogglesPage() {
                                                     onClick={() => handleToggle(toggle.id, toggle.enabled)}
                                                     disabled={isUpdating}
                                                     className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 ${toggle.enabled
-                                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
-                                                            : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
+                                                        : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
                                                         }`}
                                                 >
                                                     {isUpdating ? (

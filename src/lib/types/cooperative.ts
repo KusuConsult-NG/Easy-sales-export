@@ -179,17 +179,21 @@ export type LoanApplication = {
 // ============================================
 
 export type CooperativeMembership = {
+    id: string; // Document ID (User ID in this case)
     cooperativeId: string;
     cooperativeName: string;
     savingsBalance: number;
     loanBalance: number;
     memberSince: Date;
     monthlyTarget: number;
+    membershipTier: "basic" | "premium";
+    membershipStatus: "pending" | "approved" | "suspended";
+    paymentStatus: "pending" | "completed" | "failed";
 };
 
 export type CooperativeTransaction = {
     id: string;
-    type: "contribution" | "withdrawal" | "loan" | "loan_repayment";
+    type: "contribution" | "withdrawal" | "loan" | "loan_repayment" | "interest";
     amount: number;
     date: Date;
     status: string;

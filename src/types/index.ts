@@ -248,3 +248,42 @@ export interface DashboardStats {
     savings: number;
     roi: string;
 }
+
+// ===========================
+// Messaging System Types
+// ===========================
+
+export interface Message {
+    id: string;
+    conversationId: string;
+    senderId: string;
+    content: string;
+    attachments?: string[];
+    readBy?: string[];
+    createdAt: Date;
+    updatedAt?: Date;
+    status: "sent" | "delivered" | "read";
+    type: "text" | "image" | "document" | "system";
+}
+
+export interface ConversationParticipant {
+    userId: string;
+    name: string;
+    avatar?: string;
+    lastReadAt?: Date;
+    role?: "buyer" | "seller" | "admin" | "support";
+}
+
+export interface Conversation {
+    id: string;
+    participants: ConversationParticipant[];
+    lastMessage?: Message;
+    unreadCount: number;
+    createdAt: Date;
+    updatedAt: Date;
+    type: "direct" | "group" | "support" | "escrow";
+    contextId?: string; // e.g. orderId, productId, or escrowId
+    contextType?: "order" | "product" | "escrow";
+    status: "active" | "archived" | "blocked";
+}
+

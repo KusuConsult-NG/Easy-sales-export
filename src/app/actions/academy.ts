@@ -3,6 +3,7 @@
 import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { createAuditLog } from "@/lib/audit-log";
+import { auth } from "@/lib/auth";
 
 /**
  * Academy (LMS) - Courses, Progress Tracking, Live Sessions
@@ -125,6 +126,11 @@ export async function enrollInCourseAction(
     courseId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         // Check if already enrolled
         const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
         const progressDoc = await getDoc(progressRef);
@@ -169,6 +175,11 @@ export async function completeLessonAction(
     lessonId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
         const progressDoc = await getDoc(progressRef);
 
@@ -215,6 +226,11 @@ export async function submitQuizScoreAction(
     score: number
 ): Promise<{ success: boolean; error?: string; passed?: boolean }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
         const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
         const progressDoc = await getDoc(progressRef);
 
@@ -287,8 +303,102 @@ export async function getLiveSessionsAction(courseId?: string): Promise<LiveSess
             id: doc.id,
             ...doc.data(),
         })) as LiveSession[];
+        return snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+        })) as LiveSession[];
     } catch (error) {
         console.error("Failed to fetch live sessions:", error);
         return [];
+    }
+}
+
+/**
+ * ADMIN ACTIONS
+ */
+
+export async function createCourseAction(data: Partial<Course>): Promise<{ success: boolean; id?: string; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const docRef = await addDoc(collection(db, "academy_courses"), {
+            ...data,
+            instructorId: session.user.id, // Ensure instructor is linked
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+            modules: [],
+            status: "draft",
+        });
+
+        await createAuditLog({
+            action: "course_created",
+            userId: session.user.id,
+            targetId: docRef.id,
+            targetType: "course",
+        });
+
+        return { success: true, id: docRef.id };
+    } catch (error: any) {
+        console.error("Create course error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function updateCourseAction(courseId: string, data: Partial<Course>): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        // @ts-ignore - session.user.roles is valid but TS might complain depending on global type
+        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        await updateDoc(doc(db, "academy_courses", courseId), {
+            ...data,
+            updatedAt: Timestamp.now(),
+        });
+
+        await createAuditLog({
+            action: "course_updated",
+            userId: session.user.id,
+            targetId: courseId,
+            targetType: "course",
+            details: "Updated details",
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Update course error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function updateCourseModulesAction(courseId: string, modules: CourseModule[]): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        // @ts-ignore
+        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        await updateDoc(doc(db, "academy_courses", courseId), {
+            modules,
+            updatedAt: Timestamp.now(),
+        });
+
+        await createAuditLog({
+            action: "course_updated",
+            userId: session.user.id,
+            targetId: courseId,
+            targetType: "course",
+            details: "Updated modules",
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Update modules error:", error);
+        return { success: false, error: error.message };
     }
 }

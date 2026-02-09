@@ -1,451 +1,173 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useActionState } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { Heart, CheckCircle, Send, AlertCircle, Loader2 } from "lucide-react";
-import Modal from "@/components/ui/Modal";
-import Accordion from "@/components/ui/Accordion";
-import { COMPANY_INFO } from "@/lib/constants";
-import { submitWaveApplicationAction, type WaveApplicationState } from "@/app/actions/platform";
-import { checkWaveEligibilityAction } from "@/app/actions/wave";
+import Link from "next/link";
+import { ArrowRight, Users, TrendingUp, Award, Star, CheckCircle } from "lucide-react";
 
-const initialState: WaveApplicationState = { error: "Initializing...", success: false };
-
-export default function WAVEProgramPage() {
-    const router = useRouter();
-    const { data: session, status: sessionStatus } = useSession();
-    const [checking, setChecking] = useState(true);
-    const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
-    const [formData, setFormData] = useState({
-        fullName: "",
-        email: "",
-        phone: "",
-        gender: "female" as const, // WAVE is female-only
-        businessName: "",
-        businessType: "",
-        yearsInBusiness: "",
-        reasonForApplying: "",
-    });
-    const [state, formAction, isPending] = useActionState(submitWaveApplicationAction, initialState);
-
-    // Check gender eligibility on mount
-    useEffect(() => {
-        async function checkEligibility() {
-            if (sessionStatus === "loading") return;
-
-            if (!session?.user?.id) {
-                router.push("/auth/login");
-                return;
-            }
-
-            const result = await checkWaveEligibilityAction(session.user.id);
-
-            if (!result.eligible) {
-                router.push("/wave/access-denied");
-                return;
-            }
-
-            setChecking(false);
-        }
-
-        checkEligibility();
-    }, [session, sessionStatus, router]);
-
-    // Handle successful submission
-    if (state.success && !isPending) {
-        setIsApplicationModalOpen(false);
-        setFormData({
-            fullName: "",
-            email: "",
-            phone: "",
-            gender: "female" as const,
-            businessName: "",
-            businessType: "",
-            yearsInBusiness: "",
-            reasonForApplying: "",
-        });
-    }
-
-    const faqs = [
-        {
-            question: "Who is eligible for the WAVE Program?",
-            answer:
-                "The WAVE Program is open to all women agripreneurs in Nigeria, whether you're just starting or have an established agricultural business. We welcome farmers, processors, exporters, and agricultural service providers who demonstrate commitment to growth and sustainable practices.",
-        },
-        {
-            question: "What kind of support does the WAVE Program provide?",
-            answer:
-                "The WAVE Program offers comprehensive support including: (1) Financial grants and low-interest loans from ₦50,000 to ₦5,000,000, (2) Business development training and mentorship, (3) Market access and export opportunities, (4) Networking with other women entrepreneurs, and (5) Technical assistance for farming and processing.",
-        },
-        {
-            question: "How long does the application process take?",
-            answer:
-                "The complete application process typically takes 4-6 weeks from submission to final decision. This includes: initial application review (1 week), interview and site visit (1-2 weeks), committee review (1-2 weeks), and final approval and disbursement (1 week).",
-        },
-        {
-            question: "Do I need collateral to receive funding?",
-            answer:
-                "No! The WAVE Program is specifically designed to support women who may not have traditional collateral. We use alternative assessment methods including business viability, commitment to training, and group guarantees through cooperative memberships.",
-        },
-        {
-            question: "Can I apply if I'm already a member of a cooperative?",
-            answer:
-                "Absolutely! Being a cooperative member actually strengthens your application. Cooperative members receive priority consideration and can access larger funding amounts through group applications.",
-        },
-        {
-            question: "What is the repayment structure for loans?",
-            answer:
-                "We offer flexible repayment terms tailored to your business cycle. For farmers, repayment begins after harvest. Typical repayment periods range from 12-36 months with competitive interest rates of 5-8% APY. Grace periods of 3-6 months are available for new businesses.",
-        },
-    ];
-
-    const benefits = [
-        {
-            title: "Financial Support",
-            description: "Access grants and loans from ₦50,000 to ₦5,000,000",
-            icon: "💰",
-        },
-        {
-            title: "Training & Mentorship",
-            description: "Learn from industry experts and successful women entrepreneurs",
-            icon: "📚",
-        },
-        {
-            title: "Market Access",
-            description: "Connect with buyers and export opportunities",
-            icon: "🌍",
-        },
-        {
-            title: "Networking",
-            description: "Join a community of 500+ women agripreneurs",
-            icon: "👥",
-        },
-        {
-            title: "Technical Support",
-            description: "Get expert guidance on farming techniques and processing",
-            icon: "🔧",
-        },
-        {
-            title: "Cooperative Benefits",
-            description: "Access group savings and collective bargaining",
-            icon: "🤝",
-        },
-    ];
-
-    const handleInputChange = (
-        e: React.ChangeEvent<
-            HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-        >
-    ) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value,
-        });
-    };
-
+export default function WAVELandingPage() {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            <div className="p-8">
-                {/* Hero Section */}
-                <div className="bg-linear-to-br from-pink-600 to-purple-700 text-white rounded-3xl p-12 mb-8 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
-                    <div className="relative max-w-3xl">
-                        <div className="flex items-center gap-3 mb-4">
-                            <Heart className="w-12 h-12" />
-                            <h1 className="text-4xl font-bold">WAVE Program</h1>
+            {/* Hero Section */}
+            <div className="relative overflow-hidden bg-linear-to-br from-pink-500 via-rose-500 to-red-500 text-white">
+                <div className="absolute inset-0 bg-black/10"></div>
+                <div className="relative max-w-7xl mx-auto px-8 py-24">
+                    <div className="max-w-3xl">
+                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-semibold mb-6">
+                            <Star className="w-4 h-4" />
+                            Women Empowerment Program
                         </div>
-                        <h2 className="text-2xl font-semibold mb-4">
-                            Women Agripreneurs Value-creation Empowerment
-                        </h2>
-                        <p className="text-lg text-pink-100 mb-8">
-                            Empowering Nigerian women farmers through funding, training, mentorship,
-                            and market access. Join our community of successful women agripreneurs
-                            transforming agriculture across Nigeria.
+                        <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+                            WAVE Program
+                        </h1>
+                        <p className="text-xl md:text-2xl mb-4 text-pink-50">
+                            Women's Agribusiness Venture Empowerment
                         </p>
-                        <button
-                            onClick={() => setIsApplicationModalOpen(true)}
-                            className="px-8 py-4 bg-white text-pink-600 font-bold rounded-xl hover:scale-105 transition-transform elevation-3"
+                        <p className="text-lg mb-8 text-pink-100 max-w-2xl">
+                            Get access to funding, training, and mentorship to grow your agricultural business.
+                            Join thousands of women farmers transforming Nigerian agriculture.
+                        </p>
+                        <Link
+                            href="/wave/application"
+                            className="group inline-flex items-center gap-3 bg-white text-rose-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-pink-500/50 transition-all hover:scale-105"
                         >
                             Apply Now
-                        </button>
+                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        </Link>
                     </div>
                 </div>
-
-                {/* Benefits Grid */}
-                <div className="mb-8">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                        Program Benefits
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {benefits.map((benefit, index) => (
-                            <div
-                                key={index}
-                                className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 hover-lift animate-[slideInUp_0.6s_ease-out]"
-                                style={{ animationDelay: `${index * 100}ms` }}
-                            >
-                                <div className="text-4xl mb-4">{benefit.icon}</div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-                                    {benefit.title}
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    {benefit.description}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Application Process */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2 mb-8">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                        Application Process
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        {[
-                            {
-                                step: "1",
-                                title: "Submit Application",
-                                description: "Fill out the online application form",
-                            },
-                            {
-                                step: "2",
-                                title: "Review & Interview",
-                                description: "Attend interview and site visit",
-                            },
-                            {
-                                step: "3",
-                                title: "Committee Approval",
-                                description: "Application reviewed by selection committee",
-                            },
-                            {
-                                step: "4",
-                                title: "Funding & Training",
-                                description: "Receive funds and begin training program",
-                            },
-                        ].map((item, index) => (
-                            <div key={index} className="text-center">
-                                <div className="w-16 h-16 rounded-full bg-pink-600 text-white text-2xl font-bold flex items-center justify-center mx-auto mb-4">
-                                    {item.step}
-                                </div>
-                                <h3 className="font-bold text-slate-900 dark:text-white mb-2">
-                                    {item.title}
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    {item.description}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* FAQs */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                        Frequently Asked Questions
-                    </h2>
-                    <Accordion items={faqs} />
+                {/* Wave SVG Background */}
+                <div className="absolute bottom-0 left-0 right-0">
+                    <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
+                        <path d="M0 0L60 10C120 20 240 40 360 46.7C480 53 600 47 720 43.3C840 40 960 40 1080 46.7C1200 53 1320 67 1380 73.3L1440 80V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0V0Z" fill="rgb(248 250 252)" className="dark:fill-slate-950" />
+                    </svg>
                 </div>
             </div>
 
-            {/* Application Modal */}
-            <Modal
-                isOpen={isApplicationModalOpen}
-                onClose={() => setIsApplicationModalOpen(false)}
-                title="Apply to WAVE Program"
-            >
-                <form action={formAction} className="space-y-4">
-                    {/* Server error display */}
-                    {state.error && (
-                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-300 shrink-0 mt-0.5" />
-                            <p className="text-sm text-red-200">{state.error}</p>
+            {/* Stats Section */}
+            <div className="max-w-7xl mx-auto px-8 -mt-16 relative z-10">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                        <div className="text-4xl font-bold text-rose-600 mb-2">15,000+</div>
+                        <div className="text-slate-600 dark:text-slate-400 font-medium">Women Empowered</div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                        <div className="text-4xl font-bold text-rose-600 mb-2">₦500M+</div>
+                        <div className="text-slate-600 dark:text-slate-400 font-medium">Total Funding Disbursed</div>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                        <div className="text-4xl font-bold text-rose-600 mb-2">92%</div>
+                        <div className="text-slate-600 dark:text-slate-400 font-medium">Success Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Benefits Section */}
+            <div className="max-w-7xl mx-auto px-8 py-16">
+                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-4">
+                    What You Get
+                </h2>
+                <p className="text-center text-slate-600 dark:text-slate-400 mb-12 max-w-2xl mx-auto">
+                    WAVE provides comprehensive support to help women farmers succeed in agriculture
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-rose-100 dark:bg-rose-900/30 rounded-xl flex items-center justify-center mb-6">
+                            <TrendingUp className="w-7 h-7 text-rose-600" />
                         </div>
-                    )}
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                            Funding Access
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Get up to ₦2M in grants and low-interest loans to scale your agribusiness operations.
+                        </p>
+                    </div>
 
-                    {/* Success message */}
-                    {state.success && state.message && (
-                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
-                            <CheckCircle className="w-5 h-5 text-green-300 shrink-0 mt-0.5" />
-                            <p className="text-sm text-green-200">{state.message}</p>
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-rose-100 dark:bg-rose-900/30 rounded-xl flex items-center justify-center mb-6">
+                            <Award className="w-7 h-7 text-rose-600" />
                         </div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Full Name *
-                        </label>
-                        <input
-                            type="text"
-                            name="fullName"
-                            value={formData.fullName}
-                            onChange={handleInputChange}
-                            required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
-                            placeholder="Enter your full name"
-                        />
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                            Training & Certification
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Access world-class training programs and earn certifications recognized across Nigeria.
+                        </p>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Email Address *
-                        </label>
-                        <input
-                            type="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleInputChange}
-                            required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
-                            placeholder="your.email@example.com"
-                        />
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-rose-100 dark:bg-rose-900/30 rounded-xl flex items-center justify-center mb-6">
+                            <Users className="w-7 h-7 text-rose-600" />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                            Mentorship Network
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Connect with successful women farmers and business mentors for guidance and support.
+                        </p>
                     </div>
+                </div>
+            </div>
 
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Phone Number *
-                        </label>
-                        <input
-                            type="tel"
-                            name="phone"
-                            value={formData.phone}
-                            onChange={handleInputChange}
-                            required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
-                            placeholder="+234 XXX XXX XXXX"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Gender Confirmation *
-                        </label>
-                        <div className="bg-pink-50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800 rounded-xl p-4">
-                            <input
-                                type="hidden"
-                                name="gender"
-                                value="female"
-                            />
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="radio"
-                                    id="gender-female"
-                                    checked={true}
-                                    readOnly
-                                    className="w-4 h-4 accent-pink-600"
-                                />
-                                <label htmlFor="gender-female" className="text-sm font-medium text-slate-900 dark:text-white">
-                                    I confirm I am a female entrepreneur
-                                </label>
+            {/* Eligibility Section */}
+            <div className="max-w-7xl mx-auto px-8 py-16">
+                <div className="bg-linear-to-br from-rose-50 to-pink-50 dark:from-slate-800 dark:to-slate-800 rounded-3xl p-12">
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
+                        Who Can Apply?
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-rose-600 shrink-0 mt-1" />
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Female Farmers</h4>
+                                <p className="text-slate-600 dark:text-slate-400">Women actively involved in agricultural production or processing</p>
                             </div>
-                            <p className="text-xs text-pink-600 dark:text-pink-400 mt-2">
-                                ℹ️ WAVE Program is exclusively for women agripreneurs
-                            </p>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-rose-600 shrink-0 mt-1" />
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Nigerian Citizen</h4>
+                                <p className="text-slate-600 dark:text-slate-400">Must be a Nigerian citizen or permanent resident</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-rose-600 shrink-0 mt-1" />
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Age 18-55</h4>
+                                <p className="text-slate-600 dark:text-slate-400">Applicants must be between 18 and 55 years old</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-rose-600 shrink-0 mt-1" />
+                            <div>
+                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Business Plan</h4>
+                                <p className="text-slate-600 dark:text-slate-400">Have a clear agricultural business idea or existing venture</p>
+                            </div>
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Business Name *
-                        </label>
-                        <input
-                            type="text"
-                            name="businessName"
-                            value={formData.businessName}
-                            onChange={handleInputChange}
-                            required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
-                            placeholder="e.g., Amina's Organic Farms"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Type of Agricultural Business *
-                        </label>
-                        <select
-                            name="businessType"
-                            value={formData.businessType}
-                            onChange={handleInputChange}
-                            required
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-pink-600"
-                        >
-                            <option value="">Select business type</option>
-                            <option value="farming">Farming/Crop Production</option>
-                            <option value="processing">Food Processing</option>
-                            <option value="trading">Agricultural Trading</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Years in Business *
-                        </label>
-                        <input
-                            type="number"
-                            name="yearsInBusiness"
-                            value={formData.yearsInBusiness}
-                            onChange={handleInputChange}
-                            required
-                            min="0"
-                            max="100"
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
-                            placeholder="0"
-                        />
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            Enter 0 if just starting
+            {/* CTA Section */}
+            <div className="max-w-7xl mx-auto px-8 py-16">
+                <div className="bg-linear-to-r from-pink-600 to-rose-600 rounded-3xl p-12 text-center text-white relative overflow-hidden">
+                    <div className="absolute inset-0 bg-black/10"></div>
+                    <div className="relative z-10">
+                        <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                            Ready to Transform Your Farming Business?
+                        </h2>
+                        <p className="text-xl mb-8 text-pink-100 max-w-2xl mx-auto">
+                            Join thousands of successful women farmers already benefiting from the WAVE program.
                         </p>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                            Why are you applying to the WAVE Program? *
-                        </label>
-                        <textarea
-                            name="reasonForApplying"
-                            value={formData.reasonForApplying}
-                            onChange={handleInputChange}
-                            required
-                            rows={5}
-                            minLength={50}
-                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-600"
-                            placeholder="Please explain your business goals, challenges you face, and how WAVE Program support would help you grow... (minimum 50 characters)"
-                        />
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {formData.reasonForApplying.length}/50 characters minimum
-                        </p>
-                    </div>
-
-                    <div className="flex gap-3 pt-4">
-                        <button
-                            type="button"
-                            onClick={() => setIsApplicationModalOpen(false)}
-                            className="flex-1 px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        <Link
+                            href="/wave/application"
+                            className="group inline-flex items-center gap-3 bg-white text-rose-600 px-10 py-5 rounded-xl font-bold text-lg shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                         >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isPending}
-                            className="flex-1 px-6 py-3 bg-pink-600 text-white font-semibold rounded-xl hover:bg-pink-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isPending ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    Submitting...
-                                </>
-                            ) : (
-                                <>
-                                    <Send className="w-4 h-4" />
-                                    Submit Application
-                                </>
-                            )}
-                        </button>
+                            Start Your Application
+                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        </Link>
                     </div>
-                </form>
-            </Modal>
+                </div>
+            </div>
         </div>
     );
 }

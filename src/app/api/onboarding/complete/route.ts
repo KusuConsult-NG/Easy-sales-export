@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -18,10 +18,25 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        await updateDoc(doc(db, COLLECTIONS.USERS, session.user.id), {
-            onboardingCompleted: true,
-            updatedAt: new Date(),
-        });
+        const userDocRef = doc(db, COLLECTIONS.USERS, session.user.id);
+        const userDoc = await getDoc(userDocRef);
+
+        // If user document doesn't exist, create it with onboarding completed
+        if (!userDoc.exists()) {
+            await setDoc(userDocRef, {
+                id: session.user.id,
+                email: session.user.email,
+                onboardingCompleted: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }, { merge: true });
+        } else {
+            // Update existing document
+            await updateDoc(userDocRef, {
+                onboardingCompleted: true,
+                updatedAt: new Date(),
+            });
+        }
 
         return NextResponse.json({
             success: true,
@@ -29,8 +44,18 @@ export async function POST(request: NextRequest) {
         });
     } catch (error: any) {
         console.error("Onboarding completion error:", error);
+        console.error("Error details:", {
+            code: error.code,
+            message: error.message,
+            stack: error.stack,
+        });
+
         return NextResponse.json(
-            { success: false, error: "Failed to mark complete" },
+            {
+                success: false,
+                error: "Failed to mark complete",
+                details: error.message // Include error message for debugging
+            },
             { status: 500 }
         );
     }

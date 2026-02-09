@@ -82,6 +82,6 @@ export function getAssignableRoles(userRoles: UserRole[]): UserRole[] {
     const userLevel = getHighestRoleLevel(userRoles);
 
     return Object.entries(ROLE_HIERARCHY)
-        .filter(([_, level]) => level <= userLevel)
+        .filter(([, level]) => level <= userLevel)
         .map(([role]) => role as UserRole);
 }
