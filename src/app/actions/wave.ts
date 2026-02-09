@@ -80,6 +80,87 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
 }
 
 /**
+ * Submit multi-step WAVE application
+ * Accepts object data from multi-step form (not FormData)
+ */
+export async function submitMultiStepWaveApplicationAction(applicationData: {
+    fullName: string;
+    email: string;
+    phone: string;
+    dateOfBirth: string;
+    gender: "female" | "male" | "";
+    citizenship: string;
+    stateOfResidence: string;
+    agriculturalActivity: string;
+    yearsOfExperience: number;
+    farmSize: string;
+    monthlyRevenue: string;
+    currentChallenges: string;
+    businessName: string;
+    businessDescription: string;
+    targetMarket: string;
+    fundingNeeded: number;
+    shortTermGoals: string;
+    mediumTermGoals: string;
+    longTermGoals: string;
+    expectedImpact: string;
+}): Promise<{ success: boolean; error?: string; applicationId?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { success: false, error: "You must be logged in to apply" };
+        }
+
+        // CRITICAL: Female-only enforcement
+        if (applicationData.gender !== "female") {
+            return {
+                success: false,
+                error: "WAVE Program is exclusively for female entrepreneurs"
+            };
+        }
+
+        // Generate application ID
+        const applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+
+        // Save to Firestore
+        await setDoc(doc(db, COLLECTIONS.WAVE_APPLICATIONS, applicationId), {
+            ...applicationData,
+            userId: session.user.id,
+            userEmail: session.user.email || applicationData.email,
+            status: "pending", // pending | approved | rejected
+            applicationDate: Timestamp.now(),
+            reviewedAt: null,
+            reviewedBy: null,
+            rejectionReason: null,
+            updatedAt: Timestamp.now(),
+        });
+
+        // Audit log
+        await createAuditLog({
+            action: "user_update",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "wave_application",
+            metadata: {
+                businessName: applicationData.businessName,
+                fundingNeeded: applicationData.fundingNeeded,
+            },
+        });
+
+        return {
+            success: true,
+            applicationId,
+        };
+    } catch (error: any) {
+        console.error("WAVE application submission error:", error);
+        return {
+            success: false,
+            error: "Failed to submit application. Please try again."
+        };
+    }
+}
+
+/**
  * Enroll user in WAVE program
  */
 export async function enrollInWaveAction(userId: string): Promise<{
@@ -465,6 +546,21 @@ export async function getMemberCertificatesAction(userId: string): Promise<WaveC
         return snapshot.docs.map(doc => doc.data()) as WaveCertificate[];
     } catch (error) {
         console.error("Get certificates error:", error);
+        return [];
+    }
+}
+
+/**
+ * Get current user's certificates (auth handled internally)
+ */
+export async function getCurrentUserCertificatesAction(): Promise<WaveCertificate[]> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return [];
+
+        return await getMemberCertificatesAction(session.user.id);
+    } catch (error) {
+        console.error("Get current user certificates error:", error);
         return [];
     }
 }
