@@ -267,6 +267,8 @@ export const COLLECTIONS = {
     MESSAGES: "messages",
     CONVERSATIONS: "conversations",
     PRODUCT_REVIEWS: "product_reviews",
+    REVIEWS: "product_reviews", // Alias for PRODUCT_REVIEWS
+
 
     // Education & Training
     COURSES: "courses",

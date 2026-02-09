@@ -585,7 +585,15 @@ export async function exportUserDataAction(
         const userData = userDoc.data();
 
         // Gather all user-related data
-        const userDataExport = {
+        const userDataExport: {
+            profile: any;
+            cooperativeMemberships: any[];
+            waveEnrollments: any[];
+            transactions: any[];
+            orders: any[];
+            reviews: any[];
+            loans: any[];
+        } = {
             profile: userData,
             cooperativeMemberships: [],
             waveEnrollments: [],
