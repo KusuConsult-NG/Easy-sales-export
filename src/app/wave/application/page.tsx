@@ -19,6 +19,7 @@ import {
     CheckCircle,
     Loader2,
 } from "lucide-react";
+import { submitMultiStepWaveApplicationAction } from "@/app/actions/wave";
 
 // Step imports
 import EligibilityStep from "./steps/EligibilityStep";
@@ -96,6 +97,8 @@ const STEPS = [
     "Review",
 ];
 
+
+
 export default function WaveApplicationPage() {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(0);
@@ -123,12 +126,17 @@ export default function WaveApplicationPage() {
     const handleSubmit = async () => {
         setSubmitting(true);
         try {
-            // TODO: Call submitWaveApplicationAction
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-            router.push("/wave/application/success");
+            // Submit WAVE application with full multi-step data
+            const result = await submitMultiStepWaveApplicationAction(formData);
+
+            if (result.success) {
+                router.push("/wave/application/success");
+            } else {
+                alert(result.error || "Failed to submit application. Please try again.");
+            }
         } catch (error) {
             console.error("Submission error:", error);
-            alert("Failed to submit application. Please try again.");
+            alert("An unexpected error occurred. Please try again.");
         } finally {
             setSubmitting(false);
         }
@@ -157,10 +165,10 @@ export default function WaveApplicationPage() {
                             >
                                 <div
                                     className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all z-10 ${index < currentStep
-                                            ? "bg-rose-600 text-white"
-                                            : index === currentStep
-                                                ? "bg-rose-600 text-white ring-4 ring-rose-200 dark:ring-rose-900"
-                                                : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+                                        ? "bg-rose-600 text-white"
+                                        : index === currentStep
+                                            ? "bg-rose-600 text-white ring-4 ring-rose-200 dark:ring-rose-900"
+                                            : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
                                         }`}
                                 >
                                     {index < currentStep ? (
@@ -175,8 +183,8 @@ export default function WaveApplicationPage() {
                                 {index < STEPS.length - 1 && (
                                     <div
                                         className={`absolute top-5 left-1/2 w-full h-0.5 -z-10 ${index < currentStep
-                                                ? "bg-rose-600"
-                                                : "bg-slate-200 dark:bg-slate-700"
+                                            ? "bg-rose-600"
+                                            : "bg-slate-200 dark:bg-slate-700"
                                             }`}
                                     />
                                 )}

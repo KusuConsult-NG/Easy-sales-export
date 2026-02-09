@@ -4,42 +4,49 @@
  * Displays member's earned certificates from training, milestones, and achievements
  */
 
-import { Award, Download, Share2, Calendar, CheckCircle, TrendingUp, BookOpen, Star } from "lucide-react";
-import Link from "next/link";
+"use client";
 
-// Mock certificate data - will be replaced with Firestore data later
-const mockCertificates = [
-    {
-        id: "cert-1",
-        type: "training" as const,
-        name: "Agricultural Business Fundamentals",
-        description: "Completed comprehensive training on agricultural business management",
-        issuedDate: "2024-01-15",
-        icon: BookOpen,
-        color: "bg-blue-600"
-    },
-    {
-        id: "cert-2",
-        type: "milestone" as const,
-        name: "First Product Sale",
-        description: "Successfully completed your first product sale through the WAVE platform",
-        issuedDate: "2024-02-01",
-        icon: TrendingUp,
-        color: "bg-green-600"
-    },
-    {
-        id: "cert-3",
-        type: "program" as const,
-        name: "WAVE Program Completion - Phase 1",
-        description: "Successfully completed Phase 1 of the WAVE empowerment program",
-        issuedDate: "2024-03-10",
-        icon: Award,
-        color: "bg-purple-600"
-    },
-];
+import { useEffect, useState } from "react";
+import { Award, Download, Share2, Calendar, CheckCircle, TrendingUp, BookOpen, Star, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { getCurrentUserCertificatesAction, WaveCertificate } from "@/app/actions/wave";
 
 export default function CertificatesPage() {
-    const hasCertificates = mockCertificates.length > 0;
+    const [certificates, setCertificates] = useState<WaveCertificate[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function loadCertificates() {
+            setLoading(true);
+            try {
+                const certs = await getCurrentUserCertificatesAction();
+                setCertificates(certs);
+            } catch (error) {
+                console.error("Failed to load certificates:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        loadCertificates();
+    }, []);
+
+    // Calculate certificate counts by type
+    const certCounts = {
+        training: certificates.filter(c => c.certificateType === "training").length,
+        achievement: certificates.filter(c => c.certificateType === "achievement").length,
+        completion: certificates.filter(c => c.certificateType === "completion").length,
+    };
+
+    const hasCertificates = certificates.length > 0;
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="w-12 h-12 animate-spin text-rose-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -61,7 +68,7 @@ export default function CertificatesPage() {
                             <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-slate-900 dark:text-white">3</p>
+                            <p className="text-2xl font-bold text-slate-900 dark:text-white">{certCounts.training}</p>
                             <p className="text-sm text-slate-600 dark:text-slate-400">Training</p>
                         </div>
                     </div>
@@ -73,7 +80,7 @@ export default function CertificatesPage() {
                             <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-slate-900 dark:text-white">2</p>
+                            <p className="text-2xl font-bold text-slate-900 dark:text-white">{certCounts.achievement}</p>
                             <p className="text-sm text-slate-600 dark:text-slate-400">Milestones</p>
                         </div>
                     </div>
@@ -85,7 +92,7 @@ export default function CertificatesPage() {
                             <Award className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-slate-900 dark:text-white">1</p>
+                            <p className="text-2xl font-bold text-slate-900 dark:text-white">{certCounts.completion}</p>
                             <p className="text-sm text-slate-600 dark:text-slate-400">Program</p>
                         </div>
                     </div>
@@ -97,8 +104,8 @@ export default function CertificatesPage() {
                             <Star className="w-6 h-6 text-rose-600 dark:text-rose-400" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-slate-900 dark:text-white">0</p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Recognition</p>
+                            <p className="text-2xl font-bold text-slate-900 dark:text-white">{certificates.length}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400">Total</p>
                         </div>
                     </div>
                 </div>
@@ -109,7 +116,7 @@ export default function CertificatesPage() {
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
-                            Your Certificates ({mockCertificates.length})
+                            Your Certificates ({certificates.length})
                         </h2>
                         <div className="flex gap-2">
                             <button className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
@@ -122,49 +129,51 @@ export default function CertificatesPage() {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {mockCertificates.map((cert) => {
-                            const Icon = cert.icon;
-                            return (
-                                <div
-                                    key={cert.id}
-                                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 hover:shadow-lg transition-shadow"
-                                >
-                                    {/* Certificate Header */}
-                                    <div className="flex items-start gap-4 mb-4">
-                                        <div className={`w-14 h-14 ${cert.color} rounded-xl flex items-center justify-center shrink-0`}>
-                                            <Icon className="w-7 h-7 text-white" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-1">
-                                                {cert.name}
-                                            </h3>
-                                            <p className="text-sm text-slate-600 dark:text-slate-400">
-                                                {cert.description}
-                                            </p>
-                                        </div>
+                        {certificates.map((cert) => (
+                            <div
+                                key={cert.id}
+                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 hover:shadow-lg transition-shadow"
+                            >
+                                {/* Certificate Header */}
+                                <div className="flex items-start gap-4 mb-4">
+                                    <div className={`w-14 h-14 ${cert.certificateType === 'training' ? 'bg-blue-600' :
+                                            cert.certificateType === 'achievement' ? 'bg-green-600' :
+                                                'bg-purple-600'
+                                        } rounded-xl flex items-center justify-center shrink-0`}>
+                                        {cert.certificateType === 'training' && <BookOpen className="w-7 h-7 text-white" />}
+                                        {cert.certificateType === 'achievement' && <TrendingUp className="w-7 h-7 text-white" />}
+                                        {cert.certificateType === 'completion' && <Award className="w-7 h-7 text-white" />}
                                     </div>
-
-                                    {/* Certificate Meta */}
-                                    <div className="flex items-center gap-2 mb-4 text-sm text-slate-600 dark:text-slate-400">
-                                        <Calendar className="w-4 h-4" />
-                                        <span>Issued on {new Date(cert.issuedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                                        <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 ml-2" />
-                                        <span className="text-green-600 dark:text-green-400 font-medium">Verified</span>
-                                    </div>
-
-                                    {/* Actions */}
-                                    <div className="flex gap-3">
-                                        <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg transition-colors">
-                                            <Download className="w-4 h-4" />
-                                            Download PDF
-                                        </button>
-                                        <button className="px-4 py-2.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg transition-colors">
-                                            <Share2 className="w-4 h-4" />
-                                        </button>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-1">
+                                            {cert.programName}
+                                        </h3>
+                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                            {cert.certificateType.charAt(0).toUpperCase() + cert.certificateType.slice(1)} Certificate
+                                        </p>
                                     </div>
                                 </div>
-                            );
-                        })}
+
+                                {/* Certificate Meta */}
+                                <div className="flex items-center gap-2 mb-4 text-sm text-slate-600 dark:text-slate-400">
+                                    <Calendar className="w-4 h-4" />
+                                    <span>Issued on {new Date(cert.issuedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                                    <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 ml-2" />
+                                    <span className="text-green-600 dark:text-green-400 font-medium">Verified</span>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex gap-3">
+                                    <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg transition-colors">
+                                        <Download className="w-4 h-4" />
+                                        Download PDF
+                                    </button>
+                                    <button className="px-4 py-2.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg transition-colors">
+                                        <Share2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             ) : (
