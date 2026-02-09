@@ -27,50 +27,41 @@ export default function MySavingsPage() {
     async function loadSavings() {
         setLoading(true);
         try {
-            const [membershipResult, transactionsResult] = await Promise.all([
+            const [membershipResult, savingsResponse] = await Promise.all([
                 getMembershipAction(),
-                getTransactionsAction(),
+                fetch("/api/cooperative/fixed-savings"),
             ]);
 
             if (membershipResult.success && membershipResult.data) {
                 setMembership(membershipResult.data);
             }
 
-            if (transactionsResult.success && transactionsResult.data) {
-                // Filter for fixed savings transactions
-                const savingsTxns = transactionsResult.data.filter(
-                    (t: any) => t.type === "fixed_savings" && t.status === "completed"
-                );
-
-                // Group by savings plan (mock - would need actual savings plans)
-                setSavings([
-                    {
-                        id: "1",
-                        name: "Monthly Fixed Savings",
+            if (savingsResponse.ok) {
+                const savingsData = await savingsResponse.json();
+                if (savingsData.success && savingsData.plans) {
+                    // Transform API response to component format
+                    const transformedPlans = savingsData.plans.map((plan: any) => ({
+                        id: plan.id,
+                        name: `Fixed Savings Plan - ${plan.durationMonths} months`,
                         type: "fixed",
-                        balance: 450000,
-                        interestRate: 8,
-                        startDate: new Date("2025-01-01"),
-                        maturityDate: new Date("2026-01-01"),
-                        monthlyContribution: 50000,
-                        status: "active",
-                    },
-                    {
-                        id: "2",
-                        name: "Target Savings",
-                        type: "target",
-                        balance: 200000,
-                        targetAmount: 500000,
-                        interestRate: 6,
-                        startDate: new Date("2025-06-01"),
-                        maturityDate: new Date("2026-06-01"),
-                        monthlyContribution: 25000,
-                        status: "active",
-                    },
-                ]);
+                        balance: plan.amount,
+                        interestRate: plan.interestRate,
+                        startDate: new Date(plan.startDate),
+                        maturityDate: new Date(plan.maturityDate),
+                        monthlyContribution: plan.amount / plan.durationMonths,
+                        status: plan.status,
+                        targetAmount: null, // Fixed savings don't have targets
+                    }));
+                    setSavings(transformedPlans);
+                } else {
+                    setSavings([]);
+                }
+            } else {
+                setSavings([]);
             }
         } catch (error) {
             console.error("Failed to load savings:", error);
+            setSavings([]);
         } finally {
             setLoading(false);
         }

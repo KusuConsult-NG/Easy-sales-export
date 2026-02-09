@@ -180,7 +180,7 @@ export default function CooperativeLandingPage() {
                     <div className="flex items-center justify-between h-16">
                         {/* Logo */}
                         <Link href="/cooperatives/landing" className="flex items-center gap-2">
-                            <Users className="w-8 h-8 text-emerald-600" />
+                            <Users className="w-8 h-8 text-purple-600" />
                             <span className="text-xl font-bold text-slate-900">Easy Sales Cooperative</span>
                         </Link>
 
@@ -191,8 +191,8 @@ export default function CooperativeLandingPage() {
                                     key={link.href}
                                     onClick={() => scrollToSection(link.href)}
                                     className={`text-sm font-medium transition ${activeSection === link.href
-                                        ? 'text-emerald-600'
-                                        : 'text-slate-600 hover:text-emerald-600'
+                                        ? 'text-purple-600'
+                                        : 'text-slate-600 hover:text-purple-600'
                                         }`}
                                 >
                                     {link.label}
@@ -204,13 +204,13 @@ export default function CooperativeLandingPage() {
                         <div className="hidden lg:flex items-center gap-4">
                             <Link
                                 href="/auth/login?redirect=/cooperatives"
-                                className="text-sm font-medium text-slate-600 hover:text-emerald-600 transition"
+                                className="text-sm font-medium text-slate-600 hover:text-purple-600 transition"
                             >
                                 Login
                             </Link>
                             <Link
                                 href="/cooperatives/onboarding"
-                                className="bg-linear-to-r from-emerald-600 to-green-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition"
+                                className="bg-linear-to-r from-purple-600 to-indigo-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition"
                             >
                                 Become a Member
                             </Link>
@@ -232,7 +232,7 @@ export default function CooperativeLandingPage() {
                                 <button
                                     key={link.href}
                                     onClick={() => scrollToSection(link.href)}
-                                    className="block w-full text-left px-4 py-2 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600"
+                                    className="block w-full text-left px-4 py-2 text-slate-600 hover:bg-purple-50 hover:text-purple-600"
                                 >
                                     {link.label}
                                 </button>
@@ -246,7 +246,7 @@ export default function CooperativeLandingPage() {
                                 </Link>
                                 <Link
                                     href="/cooperatives/onboarding"
-                                    className="block w-full text-center bg-linear-to-r from-emerald-600 to-green-700 text-white py-2 rounded-lg font-semibold"
+                                    className="block w-full text-center bg-linear-to-r from-purple-600 to-indigo-600 text-white py-2 rounded-lg font-semibold"
                                 >
                                     Become a Member
                                 </Link>
@@ -257,7 +257,7 @@ export default function CooperativeLandingPage() {
             </nav>
 
             {/* Hero Section */}
-            <section id="home" className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-emerald-50 via-white to-purple-50 overflow-hidden pt-16">
+            <section id="home" className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 via-white to-purple-50 overflow-hidden pt-16">
                 {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-5">
                     <div className="absolute inset-0" style={{
@@ -272,12 +272,12 @@ export default function CooperativeLandingPage() {
                     </h1>
                     <h2 className="text-2xl md:text-4xl font-bold text-slate-700 mb-8">
                         Where Access Turns Into Income <br />
-                        <span className="text-emerald-600">and Structure Creates Wealth</span>
+                        <span className="text-purple-600">and Structure Creates Wealth</span>
                     </h2>
 
                     <Link
                         href="/cooperatives/onboarding"
-                        className="inline-flex items-center gap-3 bg-linear-to-r from-emerald-600 to-green-700 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-emerald-500/50 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-3 bg-linear-to-r from-purple-600 to-indigo-600 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-purple-500/50 transition-all hover:scale-105"
                     >
                         <span>Become a Member</span>
                         <ArrowRight className="w-6 h-6" />
@@ -296,7 +296,7 @@ export default function CooperativeLandingPage() {
                             <p className="text-xl mb-4">
                                 If you are here, it means you already understand one truth:
                             </p>
-                            <p className="text-2xl font-bold text-emerald-600 mb-6">
+                            <p className="text-2xl font-bold text-purple-600 mb-6">
                                 Opportunities don't reward effort. They reward POSITIONING.
                             </p>
                             <p className="text-lg">
@@ -307,11 +307,11 @@ export default function CooperativeLandingPage() {
                     </div>
 
                     {/* Key Differentiator */}
-                    <div className="bg-linear-to-br from-purple-50 to-emerald-50 rounded-3xl p-8 mb-12">
+                    <div className="bg-linear-to-br from-purple-50 to-purple-50 rounded-3xl p-8 mb-12">
                         <p className="text-lg text-slate-800 leading-relaxed">
                             This is <strong className="text-purple-600">not a traditional Nigerian cooperative</strong>.{' '}
                             Yes, we offer the core benefits of strong cooperatives worldwide. But we go{' '}
-                            <strong className="text-emerald-600">far beyond</strong> what most cooperatives in Nigeria are doing.
+                            <strong className="text-purple-600">far beyond</strong> what most cooperatives in Nigeria are doing.
                         </p>
                     </div>
 
@@ -324,7 +324,7 @@ export default function CooperativeLandingPage() {
                                     key={index}
                                     className="bg-white border-2 border-emerald-200 rounded-2xl p-6 text-center hover:shadow-xl transition"
                                 >
-                                    <Icon className="w-10 h-10 text-emerald-600 mx-auto mb-3" />
+                                    <Icon className="w-10 h-10 text-purple-600 mx-auto mb-3" />
                                     <p className="text-sm font-semibold text-slate-700">{stat.label}</p>
                                 </div>
                             );
@@ -335,7 +335,7 @@ export default function CooperativeLandingPage() {
                     <div className="text-center">
                         <Link
                             href="/cooperatives/onboarding"
-                            className="inline-flex items-center gap-2 bg-linear-to-r from-purple-600 to-emerald-600 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-2xl transition"
+                            className="inline-flex items-center gap-2 bg-linear-to-r from-purple-600 to-purple-600 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-2xl transition"
                         >
                             Position Yourself for WAVE, Investment & Market Access
                             <ArrowRight className="w-5 h-5" />
@@ -357,7 +357,7 @@ export default function CooperativeLandingPage() {
                         <p className="text-xl text-slate-700 mb-6">
                             Across Nigeria today, millions are registering for empowerment programs. But only a fraction will be successful.
                         </p>
-                        <p className="text-2xl font-bold text-emerald-600 mb-6">Why?</p>
+                        <p className="text-2xl font-bold text-purple-600 mb-6">Why?</p>
                         <p className="text-lg text-slate-700">
                             Because programs select people who are already <strong>structured</strong>, <strong>visible</strong>,{' '}
                             <strong>organized</strong>, and <strong>aligned with implementation partners</strong>.
@@ -380,7 +380,7 @@ export default function CooperativeLandingPage() {
                                     'Aligns them directly with WAVE execution and funding flows',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex items-start gap-2">
-                                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                                        <CheckCircle2 className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
                                         <span className="text-slate-700">{item}</span>
                                     </li>
                                 ))}
@@ -393,13 +393,13 @@ export default function CooperativeLandingPage() {
                                 This is <strong className="text-purple-600">not a traditional Nigerian cooperative</strong>.
                             </p>
                             <p className="text-slate-700">
-                                We offer the core benefits of strong cooperatives worldwide, but we go <strong className="text-emerald-600">far beyond</strong> what most cooperatives in Nigeria are doing.
+                                We offer the core benefits of strong cooperatives worldwide, but we go <strong className="text-purple-600">far beyond</strong> what most cooperatives in Nigeria are doing.
                             </p>
                         </div>
                     </div>
 
                     {/* Philosophy */}
-                    <div className="bg-linear-to-br from-emerald-600 to-purple-600 rounded-3xl p-10 text-center text-white shadow-2xl">
+                    <div className="bg-linear-to-br from-purple-600 to-purple-600 rounded-3xl p-10 text-center text-white shadow-2xl">
                         <h4 className="text-3xl font-bold mb-4">Our Philosophy</h4>
                         <p className="text-xl mb-4">This is not about hope alone.</p>
                         <p className="text-2xl font-bold">This is about being inside the system where hope is executed.</p>
@@ -423,7 +423,7 @@ export default function CooperativeLandingPage() {
                             The Strategic Positioning Framework
                         </h3>
                         <p className="text-xl text-slate-600">
-                            Easy Sales Cooperative operates on a simple principle: <strong className="text-emerald-600">positioning creates opportunity</strong>.
+                            Easy Sales Cooperative operates on a simple principle: <strong className="text-purple-600">positioning creates opportunity</strong>.
                         </p>
                     </div>
 
@@ -451,8 +451,8 @@ export default function CooperativeLandingPage() {
                                 description: 'Priority consideration for investments, programs, and market access as they become available.',
                             },
                         ].map((item) => (
-                            <div key={item.step} className="relative bg-linear-to-br from-emerald-50 to-purple-50 rounded-2xl p-8 border-2 border-emerald-200">
-                                <div className="absolute -top-4 -left-4 bg-emerald-600 text-white w-12 h-12 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
+                            <div key={item.step} className="relative bg-linear-to-br from-purple-50 to-purple-50 rounded-2xl p-8 border-2 border-emerald-200">
+                                <div className="absolute -top-4 -left-4 bg-purple-600 text-white w-12 h-12 rounded-full flex items-center justify-center text-2xl font-bold shadow-lg">
                                     {item.step}
                                 </div>
                                 <h4 className="text-2xl font-bold text-slate-900 mb-3 mt-2">{item.title}</h4>
@@ -477,7 +477,7 @@ export default function CooperativeLandingPage() {
                                 </li>
                             ))}
                         </ul>
-                        <div className="bg-emerald-600/20 rounded-xl p-6 border border-emerald-400">
+                        <div className="bg-purple-600/20 rounded-xl p-6 border border-emerald-400">
                             <p className="text-xl font-bold mb-2">Easy Sales Cooperative gives you that edge.</p>
                             <p className="text-lg">Not by bribery. Not by shortcuts. <strong>But by positioning.</strong></p>
                         </div>
@@ -500,7 +500,7 @@ export default function CooperativeLandingPage() {
                                 key={idx}
                                 className="bg-white rounded-2xl p-6 border-2 border-emerald-200 hover:border-emerald-400 transition hover:shadow-lg"
                             >
-                                <CheckCircle2 className="w-8 h-8 text-emerald-600 mb-3" />
+                                <CheckCircle2 className="w-8 h-8 text-purple-600 mb-3" />
                                 <p className="text-lg font-semibold text-slate-900">{audience}</p>
                             </div>
                         ))}
@@ -524,7 +524,7 @@ export default function CooperativeLandingPage() {
                                 </li>
                             ))}
                         </ul>
-                        <p className="text-xl font-bold text-emerald-600 mb-2">
+                        <p className="text-xl font-bold text-purple-600 mb-2">
                             Easy Sales Cooperative is an EARLY-MOVER ADVANTAGE.
                         </p>
                         <p className="text-lg text-slate-700">
@@ -539,7 +539,7 @@ export default function CooperativeLandingPage() {
                         </p>
                         <Link
                             href="/cooperatives/onboarding"
-                            className="inline-flex items-center gap-3 bg-linear-to-r from-emerald-600 to-green-700 text-white px-12 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-emerald-500/50 transition-all hover:scale-105"
+                            className="inline-flex items-center gap-3 bg-linear-to-r from-purple-600 to-indigo-600 text-white px-12 py-5 rounded-xl text-xl font-bold shadow-2xl hover:shadow-purple-500/50 transition-all hover:scale-105"
                         >
                             <span>Become a Member Now</span>
                             <ArrowRight className="w-6 h-6" />
@@ -563,9 +563,9 @@ export default function CooperativeLandingPage() {
                         {corebenefits.map((benefit, idx) => (
                             <div
                                 key={idx}
-                                className="bg-linear-to-br from-emerald-50 to-purple-50 rounded-xl p-6 border-2 border-emerald-200"
+                                className="bg-linear-to-br from-purple-50 to-purple-50 rounded-xl p-6 border-2 border-emerald-200"
                             >
-                                <CheckCircle2 className="w-7 h-7 text-emerald-600 mb-3" />
+                                <CheckCircle2 className="w-7 h-7 text-purple-600 mb-3" />
                                 <p className="text-base font-semibold text-slate-800">{benefit}</p>
                             </div>
                         ))}
@@ -580,7 +580,7 @@ export default function CooperativeLandingPage() {
                     {/* What We Do Differently */}
                     <div className="mb-12">
                         <h4 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 text-center">
-                            What Easy Sales Cooperative Does That Others <span className="text-emerald-600">DON'T</span>
+                            What Easy Sales Cooperative Does That Others <span className="text-purple-600">DON'T</span>
                         </h4>
                         <p className="text-xl text-slate-600 text-center mb-12">
                             Here's where the difference becomes obvious.
@@ -596,7 +596,7 @@ export default function CooperativeLandingPage() {
                                     >
                                         <div className="flex items-start gap-4 mb-4">
                                             <div className="bg-emerald-100 p-3 rounded-xl">
-                                                <Icon className="w-8 h-8 text-emerald-600" />
+                                                <Icon className="w-8 h-8 text-purple-600" />
                                             </div>
                                             <div>
                                                 <h5 className="text-xl font-bold text-slate-900 mb-2">{idx + 1}. {benefit.title}</h5>
@@ -612,14 +612,14 @@ export default function CooperativeLandingPage() {
             </section>
 
             {/* Programs & Opportunities Section */}
-            <section id="programs" className="py-20 bg-linear-to-br from-emerald-50 via-purple-50 to-white">
+            <section id="programs" className="py-20 bg-linear-to-br from-purple-50 via-purple-50 to-white">
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="text-center mb-16">
                         <h3 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
                             Programs & Opportunities
                         </h3>
                         <div className="inline-block bg-white rounded-2xl px-6 py-3 shadow-lg border-2 border-emerald-300">
-                            <p className="text-lg font-bold text-emerald-600">Current Alignment: RH-WAVE 774</p>
+                            <p className="text-lg font-bold text-purple-600">Current Alignment: RH-WAVE 774</p>
                         </div>
                     </div>
 
@@ -633,12 +633,12 @@ export default function CooperativeLandingPage() {
                             const Icon = area.icon;
                             return (
                                 <div key={idx} className="bg-white rounded-2xl p-6 shadow-lg">
-                                    <Icon className="w-10 h-10 text-emerald-600 mb-4" />
+                                    <Icon className="w-10 h-10 text-purple-600 mb-4" />
                                     <h4 className="text-xl font-bold text-slate-900 mb-4">{area.title}</h4>
                                     <ul className="space-y-2">
                                         {area.items.map((item, itemIdx) => (
                                             <li key={itemIdx} className="flex items-start gap-2 text-sm text-slate-700">
-                                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                                <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                                                 <span>{item}</span>
                                             </li>
                                         ))}
@@ -649,7 +649,7 @@ export default function CooperativeLandingPage() {
                     </div>
 
                     {/* Investment Opportunities */}
-                    <div className="bg-linear-to-br from-purple-600 to-emerald-600 rounded-3xl p-10 text-white text-center">
+                    <div className="bg-linear-to-br from-purple-600 to-purple-600 rounded-3xl p-10 text-white text-center">
                         <Sparkles className="w-12 h-12 mx-auto mb-4" />
                         <h4 className="text-2xl font-bold mb-4">Investment Opportunities</h4>
                         <p className="text-lg">
@@ -677,7 +677,7 @@ export default function CooperativeLandingPage() {
                                 >
                                     <span className="text-lg font-semibold text-slate-900 pr-4">{faq.q}</span>
                                     {expandedFaq === idx ? (
-                                        <ChevronUp className="w-6 h-6 text-emerald-600 shrink-0" />
+                                        <ChevronUp className="w-6 h-6 text-purple-600 shrink-0" />
                                     ) : (
                                         <ChevronDown className="w-6 h-6 text-slate-400 shrink-0" />
                                     )}
@@ -708,7 +708,7 @@ export default function CooperativeLandingPage() {
                         <div className="space-y-6">
                             <div className="flex items-start gap-4">
                                 <div className="bg-emerald-100 p-3 rounded-xl">
-                                    <Mail className="w-6 h-6 text-emerald-600" />
+                                    <Mail className="w-6 h-6 text-purple-600" />
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-slate-900 mb-1">Email</h4>
@@ -718,7 +718,7 @@ export default function CooperativeLandingPage() {
 
                             <div className="flex items-start gap-4">
                                 <div className="bg-emerald-100 p-3 rounded-xl">
-                                    <Phone className="w-6 h-6 text-emerald-600" />
+                                    <Phone className="w-6 h-6 text-purple-600" />
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-slate-900 mb-1">Phone</h4>
@@ -728,7 +728,7 @@ export default function CooperativeLandingPage() {
 
                             <div className="flex items-start gap-4">
                                 <div className="bg-emerald-100 p-3 rounded-xl">
-                                    <MapPin className="w-6 h-6 text-emerald-600" />
+                                    <MapPin className="w-6 h-6 text-purple-600" />
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-slate-900 mb-1">Address</h4>
@@ -738,7 +738,7 @@ export default function CooperativeLandingPage() {
 
                             <div className="flex items-start gap-4">
                                 <div className="bg-emerald-100 p-3 rounded-xl">
-                                    <Clock className="w-6 h-6 text-emerald-600" />
+                                    <Clock className="w-6 h-6 text-purple-600" />
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-slate-900 mb-1">Office Hours</h4>
@@ -758,7 +758,7 @@ export default function CooperativeLandingPage() {
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
                                     <input
                                         type="text"
-                                        className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-emerald-500 focus:outline-none transition"
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"
                                         placeholder="Your full name"
                                     />
                                 </div>
@@ -766,7 +766,7 @@ export default function CooperativeLandingPage() {
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
                                     <input
                                         type="email"
-                                        className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-emerald-500 focus:outline-none transition"
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"
                                         placeholder="your@email.com"
                                     />
                                 </div>
@@ -774,13 +774,13 @@ export default function CooperativeLandingPage() {
                                     <label className="block text-sm font-medium text-slate-700 mb-2">Message</label>
                                     <textarea
                                         rows={4}
-                                        className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-emerald-500 focus:outline-none transition"
+                                        className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"
                                         placeholder="How can we help you?"
                                     />
                                 </div>
                                 <button
                                     type="submit"
-                                    className="w-full bg-linear-to-r from-emerald-600 to-green-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:shadow-xl transition"
+                                    className="w-full bg-linear-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:shadow-xl transition"
                                 >
                                     <Send className="w-5 h-5" />
                                     <span>Send Message</span>
@@ -792,7 +792,7 @@ export default function CooperativeLandingPage() {
             </section>
 
             {/* Final CTA Section */}
-            <section className="py-20 bg-linear-to-br from-emerald-600 via-green-600 to-purple-600 text-white">
+            <section className="py-20 bg-linear-to-br from-purple-600 via-green-600 to-purple-600 text-white">
                 <div className="max-w-4xl mx-auto px-6 text-center">
                     <h3 className="text-4xl md:text-5xl font-bold mb-6">Final Call</h3>
                     <p className="text-2xl mb-4">This is not about hope alone.</p>
@@ -804,7 +804,7 @@ export default function CooperativeLandingPage() {
                     </div>
                     <Link
                         href="/cooperatives/onboarding"
-                        className="inline-flex items-center gap-3 bg-white text-emerald-600 px-12 py-6 rounded-xl text-xl font-bold shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-3 bg-white text-purple-600 px-12 py-6 rounded-xl text-xl font-bold shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                     >
                         <span>Begin Here — Position Yourself Now</span>
                         <ArrowRight className="w-6 h-6" />

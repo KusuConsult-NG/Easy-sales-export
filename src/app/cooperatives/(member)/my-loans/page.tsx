@@ -14,11 +14,13 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getMembershipAction } from "@/app/actions/cooperative";
+import { getUserLoanApplicationsAction, getRepaymentScheduleAction } from "@/app/actions/loans";
 
 export default function MyLoansPage() {
     const [loading, setLoading] = useState(true);
     const [membership, setMembership] = useState<any>(null);
     const [loans, setLoans] = useState<any[]>([]);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         loadLoans();
@@ -26,36 +28,71 @@ export default function MyLoansPage() {
 
     async function loadLoans() {
         setLoading(true);
+        setError(null);
         try {
             const result = await getMembershipAction();
             if (result.success && result.data) {
                 setMembership(result.data);
-                // TODO: Fetch actual loans from cooperative_loans collection
-                // For now using mock data
-                setLoans([
-                    {
-                        id: "1",
-                        amount: 500000,
-                        balance: 350000,
-                        interestRate: 5,
-                        duration: 12,
-                        startDate: new Date("2025-06-01"),
-                        status: "disbursed",
-                        nextPaymentDate: new Date("2026-03-01"),
-                        nextPaymentAmount: 45000,
-                        repaymentSchedule: [
-                            { date: new Date("2025-07-01"), amount: 45000, paid: true },
-                            { date: new Date("2025-08-01"), amount: 45000, paid: true },
-                            { date: new Date("2025-09-01"), amount: 45000, paid: true },
-                            { date: new Date("2026-01-01"), amount: 45000, paid: true },
-                            { date: new Date("2026-02-01"), amount: 45000, paid: false },
-                            { date: new Date("2026-03-01"), amount: 45000, paid: false },
-                        ],
-                    },
-                ]);
+
+                // Fetch real loans from Firestore using membership.id (which is the User ID)
+                const loanApplications = await getUserLoanApplicationsAction(result.data.id);
+
+                // Only show disbursed loans (active loans with repayment schedules)
+                const disbursedLoans = loanApplications.filter(loan => loan.status === "disbursed");
+
+                // Fetch repayment schedule for each disbursed loan
+                const loansWithSchedules = await Promise.all(
+                    disbursedLoans.map(async (loan) => {
+                        const scheduleResult = await getRepaymentScheduleAction(loan.id!);
+
+                        if (scheduleResult.success && scheduleResult.schedule) {
+                            const schedule = scheduleResult.schedule;
+
+                            // Calculate balance (sum of unpaid installments)
+                            const balance = schedule
+                                .filter(inst => inst.status !== "paid")
+                                .reduce((sum, inst) => sum + (inst.totalAmount - inst.paidAmount), 0);
+
+                            // Find next unpaid installment
+                            const nextPayment = schedule.find(inst => inst.status === "pending" || inst.status === "partial");
+
+                            return {
+                                ...loan,
+                                balance,
+                                repaymentSchedule: schedule.map(inst => ({
+                                    date: inst.dueDate,
+                                    amount: inst.totalAmount,
+                                    paid: inst.status === "paid"
+                                })),
+                                nextPaymentDate: nextPayment ? nextPayment.dueDate : null,
+                                nextPaymentAmount: nextPayment ? nextPayment.totalAmount - nextPayment.paidAmount : 0,
+                                startDate: loan.disbursedAt?.toDate?.() || loan.appliedAt?.toDate?.() || new Date(),
+                                interestRate: loan.interestRate,
+                                duration: loan.durationMonths
+                            };
+                        }
+
+                        // Fallback if schedule fetch fails
+                        return {
+                            ...loan,
+                            balance: loan.totalRepayment,
+                            repaymentSchedule: [],
+                            nextPaymentDate: null,
+                            nextPaymentAmount: loan.monthlyPayment || 0,
+                            startDate: loan.disbursedAt?.toDate?.() || loan.appliedAt?.toDate?.() || new Date(),
+                            interestRate: loan.interestRate,
+                            duration: loan.durationMonths
+                        };
+                    })
+                );
+
+                setLoans(loansWithSchedules);
+            } else {
+                setError(result.error || "Failed to load membership data");
             }
         } catch (error) {
             console.error("Failed to load loans:", error);
+            setError("An unexpected error occurred while loading your loans");
         } finally {
             setLoading(false);
         }
@@ -213,8 +250,8 @@ export default function MyLoansPage() {
                                                 <div
                                                     key={index}
                                                     className={`flex items-center justify-between p-4 rounded-lg ${payment.paid
-                                                            ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
-                                                            : "bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
+                                                        ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                                                        : "bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-3">
