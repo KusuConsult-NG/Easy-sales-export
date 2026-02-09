@@ -282,13 +282,6 @@ export default function CooperativeLandingPage() {
                         <span>Become a Member</span>
                         <ArrowRight className="w-6 h-6" />
                     </Link>
-
-                    {/* Scroll Indicator */}
-                    <div className="mt-20 animate-bounce">
-                        <div className="w-6 h-10 border-2 border-emerald-600 rounded-full mx-auto flex items-start justify-center p-1">
-                            <div className="w-1.5 h-3 bg-emerald-600 rounded-full" />
-                        </div>
-                    </div>
                 </div>
             </section>
 
