@@ -65,7 +65,7 @@ export default function WaveLandingPage() {
 
                 <div className="relative max-w-7xl mx-auto px-6 py-20 text-center">
                     {/* Presidential Badge */}
-                    <div className="inline-flex items-center gap-2 bg-linear-to-r from-rose-600 to-red-600 text-white px-6 py-2 rounded-full text-sm font-semibold mb-8 shadow-lg">
+                    <div className="inline-flex items-center gap-2 bg-linear-to-r from-pink-500 via-rose-500 to-red-500 text-white px-6 py-2 rounded-full text-sm font-semibold mb-8 shadow-lg">
                         <Shield className="w-4 h-4" />
                         <span>Presidential Mandate • Renewed Hope Agenda</span>
                     </div>
@@ -74,7 +74,7 @@ export default function WaveLandingPage() {
                     <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
                         RH-WAVE 774
                     </h1>
-                    <h2 className="text-3xl md:text-5xl font-bold bg-linear-to-r from-rose-600 to-pink-600 bg-clip-text text-transparent mb-6">
+                    <h2 className="text-3xl md:text-5xl font-bold bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 bg-clip-text text-transparent mb-6">
                         Women Agro-Value Expansion Program
                     </h2>
 
@@ -87,7 +87,7 @@ export default function WaveLandingPage() {
                     {/* CTA Button */}
                     <Link
                         href="/wave/application"
-                        className="inline-flex items-center gap-3 bg-linear-to-r from-rose-600 to-red-600 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-rose-500/50 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-3 bg-linear-to-r from-pink-500 via-rose-500 to-red-500 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-rose-500/50 transition-all hover:scale-105"
                     >
                         <span>Register Now</span>
                         <ArrowRight className="w-6 h-6" />
@@ -174,7 +174,7 @@ export default function WaveLandingPage() {
                             More Than a Program — <br />
                             <span className="text-rose-600">A National Reawakening</span>
                         </h2>
-                        <div className="w-24 h-1 bg-linear-to-r from-rose-600 to-pink-600 mx-auto rounded-full" />
+                        <div className="w-24 h-1 bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 mx-auto rounded-full" />
                     </div>
 
                     <div className="prose prose-lg max-w-4xl mx-auto text-slate-700 leading-relaxed">
@@ -234,7 +234,7 @@ export default function WaveLandingPage() {
                     <div className="text-center mt-12">
                         <Link
                             href="/wave/application"
-                            className="inline-flex items-center gap-3 bg-linear-to-r from-rose-600 to-red-600 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-rose-500/50 transition-all hover:scale-105"
+                            className="inline-flex items-center gap-3 bg-linear-to-r from-pink-500 via-rose-500 to-red-500 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-rose-500/50 transition-all hover:scale-105"
                         >
                             <Users className="w-5 h-5" />
                             <span>Join 10 Million Women Building Nigeria's Future</span>
@@ -376,7 +376,7 @@ export default function WaveLandingPage() {
                         ))}
                     </div>
 
-                    <div className="bg-linear-to-r from-rose-600 to-pink-600 rounded-3xl p-1 max-w-4xl mx-auto">
+                    <div className="bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 rounded-3xl p-1 max-w-4xl mx-auto">
                         <div className="bg-white rounded-3xl p-8 text-center">
                             <p className="text-2xl font-bold text-slate-900">
                                 This is not charity — this is <span className="text-rose-600">structured economic participation</span>.
@@ -416,7 +416,7 @@ export default function WaveLandingPage() {
                     <h2 className="text-4xl md:text-5xl font-bold text-center text-slate-900 mb-6">
                         Why RH-WAVE 774 Matters to Nigeria's Future
                     </h2>
-                    <div className="w-24 h-1 bg-linear-to-r from-rose-600 to-pink-600 mx-auto rounded-full mb-16" />
+                    <div className="w-24 h-1 bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 mx-auto rounded-full mb-16" />
 
                     {/* National Impact */}
                     <div className="grid md:grid-cols-2 gap-8 mb-16">
@@ -497,7 +497,7 @@ export default function WaveLandingPage() {
             </section>
 
             {/* Final Registration CTA */}
-            <section className="py-20 bg-linear-to-br from-rose-600 to-red-600 text-white">
+            <section className="py-20 bg-linear-to-br from-pink-500 via-rose-500 to-red-500 text-white">
                 <div className="max-w-4xl mx-auto px-6 text-center">
                     <h2 className="text-4xl md:text-5xl font-bold mb-6">
                         Register Now — Be Positioned for Impact, Income & Legacy
