@@ -63,6 +63,10 @@ export type AuditAction =
     | 'course_updated'
     | 'quiz_created'
     | 'certificate_issued'
+    // Content Moderation Actions
+    | 'content:approve'
+    | 'content:reject'
+    | 'content:flag'
     // Security Actions
     | 'mfa_enabled'
     | 'mfa_disabled'
