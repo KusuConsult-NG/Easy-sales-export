@@ -14,7 +14,7 @@ interface ClientLayoutProps {
 }
 
 // Routes that should NOT have the Sidebar (auth pages, landing page, etc.)
-const noSidebarRoutes = ['/auth', '/dashboard'];
+const noSidebarRoutes = ['/auth', '/dashboard', '/wave', '/cooperatives/landing'];
 
 
 export function ClientLayout({ children }: ClientLayoutProps) {
