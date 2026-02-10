@@ -67,23 +67,50 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         setError("");
 
         try {
-            // Simulate API call to verify account
-            // In production, this would call Paystack, Flutterwave, or bank API
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Import Paystack actions
+            const { verifyBankAccount, getBankList } = await import('@/app/actions/paystack');
 
-            // Mock account name retrieval
-            const mockAccountName = "John Doe"; // This would come from the API
+            // Get bank list to map name to code
+            const bankListResult = await getBankList();
 
-            setAccountName(mockAccountName);
+            if (!bankListResult.success || !bankListResult.banks) {
+                throw new Error('Failed to fetch bank list');
+            }
+
+            // Find the selected bank's code
+            const selectedBank = bankListResult.banks.find(
+                bank => bank.name === bankName ||
+                    bank.name.toLowerCase().includes(bankName.toLowerCase())
+            );
+
+            if (!selectedBank) {
+                setError(`Bank "${bankName}" not found. Please select from the dropdown.`);
+                setVerifying(false);
+                return;
+            }
+
+            // Verify account using Paystack API
+            const result = await verifyBankAccount(accountNumber, selectedBank.code);
+
+            if (!result.success || !result.accountName) {
+                setError(result.error || "Failed to verify account. Please check your details.");
+                setVerified(false);
+                setVerifying(false);
+                return;
+            }
+
+            // Success - account verified
+            setAccountName(result.accountName);
             setVerified(true);
 
             onVerified({
                 bankName,
                 accountNumber,
-                accountName: mockAccountName,
+                accountName: result.accountName,
                 verified: true,
             });
         } catch (err) {
+            console.error('Bank verification error:', err);
             setError("Failed to verify account. Please try again.");
             setVerified(false);
         } finally {

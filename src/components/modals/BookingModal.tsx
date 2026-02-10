@@ -28,34 +28,27 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
 
         setIsSubmitting(true);
 
-        // Simulate booking persistence
         try {
-            // TODO: Replace with actual Firestore booking action
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-
-            // Store booking locally for now
-            const booking = {
-                id: `BOOK-${Date.now()}`,
-                exportWindowId: exportWindow.id,
+            // Use real Firestore booking action
+            const { createBookingAction } = await import('@/app/actions/export-booking');
+            const result = await createBookingAction({
+                exportWindowId: exportWindow.id || '',
                 quantity,
                 totalPrice,
-                status: "pending",
-                createdAt: new Date().toISOString(),
-            };
+            });
 
-            const existingBookings = JSON.parse(
-                localStorage.getItem("export_bookings") || "[]"
-            );
-            existingBookings.push(booking);
-            localStorage.setItem("export_bookings", JSON.stringify(existingBookings));
-
-            setIsSuccess(true);
-            setTimeout(() => {
-                onClose();
-                setIsSuccess(false);
-                setQuantity(1);
+            if (result.success) {
+                setIsSuccess(true);
+                setTimeout(() => {
+                    onClose();
+                    setIsSuccess(false);
+                    setQuantity(1);
+                    setIsSubmitting(false);
+                }, 2000);
+            } else {
+                alert(result.error || "Booking failed. Please try again.");
                 setIsSubmitting(false);
-            }, 2000);
+            }
         } catch (error) {
             alert("Booking failed. Please try again.");
             setIsSubmitting(false);

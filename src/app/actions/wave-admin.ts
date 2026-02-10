@@ -329,6 +329,18 @@ export async function approveWaveApplicationAction(
                 enrolledAt: Timestamp.now(),
                 active: true,
             });
+
+            // Send approval email
+            const userDocData = await getDoc(doc(db, "users", appData.userId));
+            if (userDocData.exists()) {
+                const userData = userDocData.data();
+                const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
+                await sendWaveApplicationEmail(
+                    userData.email,
+                    userData.name || 'Member',
+                    'approved'
+                );
+            }
         }
 
         await createAuditLog({
@@ -359,6 +371,25 @@ export async function rejectWaveApplicationAction(
         const userDoc = await getDoc(doc(db, "users", session.user.id));
         if (!userDoc.exists() || !userDoc.data().roles?.includes("admin")) {
             return { success: false, error: "Unauthorized" };
+        }
+
+        // Get application data for email
+        const appDoc = await getDoc(doc(db, "wave_applications", applicationId));
+        if (appDoc.exists()) {
+            const appData = appDoc.data();
+            if (appData.userId) {
+                const userDoc = await getDoc(doc(db, "users", appData.userId));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
+                    await sendWaveApplicationEmail(
+                        userData.email,
+                        userData.name || 'Member',
+                        'rejected',
+                        reason
+                    );
+                }
+            }
         }
 
         await updateDoc(doc(db, "wave_applications", applicationId), {

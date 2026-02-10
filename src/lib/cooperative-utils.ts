@@ -7,7 +7,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection } from "firebase/firestore";
 
 /**
  * Get user's cooperative balance
@@ -154,14 +154,36 @@ export async function getCooperativeQuickStats(): Promise<{
         const loanBalance = data.loanBalance || 0;
         const availableCredit = Math.max(0, savingsBalance * 0.5 - loanBalance);
 
-        // TODO: Fetch next payment from loans collection
-        // For now returning mock data
+        // Fetch active loans to get next payment
+        let nextPaymentDate: Date | undefined;
+        let nextPaymentAmount: number | undefined;
+
+        if (loanBalance > 0) {
+            const { getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
+
+            const loansQuery = query(
+                collection(db, 'cooperative_loans'),
+                where('userId', '==', session.user.id),
+                where('status', 'in', ['disbursed', 'approved']),
+                orderBy('nextPaymentDate', 'asc'),
+                limit(1)
+            );
+
+            const loansSnapshot = await getDocs(loansQuery);
+
+            if (!loansSnapshot.empty) {
+                const loanData = loansSnapshot.docs[0].data() as any;
+                nextPaymentDate = loanData.nextPaymentDate?.toDate();
+                nextPaymentAmount = loanData.nextPaymentAmount || loanData.monthlyPayment;
+            }
+        }
+
         const stats = {
             savingsBalance,
             loanBalance,
             availableCredit,
-            nextPaymentDate: loanBalance > 0 ? new Date("2026-03-01") : undefined,
-            nextPaymentAmount: loanBalance > 0 ? 45000 : undefined,
+            nextPaymentDate,
+            nextPaymentAmount,
         };
 
         return {

@@ -21,7 +21,9 @@ export async function migrateUserRole(userId: string, legacyRole: LegacyRole): P
         updatedAt: new Date(),
     });
 
-    console.log(`Migrated user ${userId}: ${legacyRole} → [${newRole}]`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`Migrated user ${userId}: ${legacyRole} → [${newRole}]`);
+    }
 }
 
 /**
@@ -41,7 +43,9 @@ export async function migrateAllUsers(): Promise<{ success: number; failed: numb
 
             // Skip if already migrated
             if (userData.roles && Array.isArray(userData.roles)) {
-                console.log(`User ${userDoc.id} already migrated, skipping`);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.log(`User ${userDoc.id} already migrated, skipping`);
+                }
                 continue;
             }
 
@@ -98,7 +102,9 @@ export async function addUserRole(userId: string, role: UserRole): Promise<void>
     const currentRoles = userData.roles || [];
 
     if (currentRoles.includes(role)) {
-        console.log(`User ${userId} already has role ${role}`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`User ${userId} already has role ${role}`);
+        }
         return;
     }
 
@@ -107,7 +113,9 @@ export async function addUserRole(userId: string, role: UserRole): Promise<void>
         updatedAt: new Date(),
     });
 
-    console.log(`Added role ${role} to user ${userId}`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`Added role ${role} to user ${userId}`);
+    }
 }
 
 /**
@@ -129,7 +137,9 @@ export async function removeUserRole(userId: string, role: UserRole): Promise<vo
         updatedAt: new Date(),
     });
 
-    console.log(`Removed role ${role} from user ${userId}`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`Removed role ${role} from user ${userId}`);
+    }
 }
 
 /**
@@ -143,7 +153,9 @@ export async function setUserRoles(userId: string, roles: UserRole[]): Promise<v
         updatedAt: new Date(),
     });
 
-    console.log(`Set roles for user ${userId}:`, roles);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`Set roles for user ${userId}:`, roles);
+    }
 }
 
 import { getDoc } from "firebase/firestore";

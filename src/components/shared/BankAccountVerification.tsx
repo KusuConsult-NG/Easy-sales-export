@@ -50,21 +50,46 @@ export default function BankAccountVerification({
         setVerificationStatus("idle");
 
         try {
-            // TODO: Implement actual Paystack bank verification
-            // const response = await verifyBankAccount(bankName, accountNumber);
+            // Import the real Paystack verification action
+            const { verifyBankAccount, getBankList } = await import('@/app/actions/paystack');
 
-            // Mock verification for now
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Get bank list to map name/code
+            const bankListResult = await getBankList();
 
-            // Simulate success
-            const mockName = "John Doe Business Account";
-            setResolvedName(mockName);
+            if (!bankListResult.success || !bankListResult.banks) {
+                setVerificationStatus("error");
+                onVerify?.(false);
+                return;
+            }
+
+            // Find bank code - bankName might be the code already or the name
+            const selectedBank = bankListResult.banks.find(
+                bank => bank.code === bankName ||
+                    bank.name === bankName ||
+                    bank.name.toLowerCase().includes(bankName.toLowerCase())
+            );
+
+            const bankCode = selectedBank?.code || bankName;
+
+            // Call actual Paystack API
+            const result = await verifyBankAccount(accountNumber, bankCode);
+
+            if (!result.success || !result.accountName) {
+                setVerificationStatus("error");
+                onVerify?.(false);
+                return;
+            }
+
+            // Success - account verified
+            const resolvedName = result.accountName;
+            setResolvedName(resolvedName);
             setVerificationStatus("success");
 
             // Call both callbacks for different use cases
-            onVerify?.(true, mockName);
-            onVerified?.({ bankName, accountNumber, accountName: mockName });
+            onVerify?.(true, resolvedName);
+            onVerified?.({ bankName, accountNumber, accountName: resolvedName });
         } catch (error) {
+            console.error('Bank verification error:', error);
             setVerificationStatus("error");
             onVerify?.(false);
         } finally {
