@@ -14,7 +14,16 @@ interface ClientLayoutProps {
 }
 
 // Routes that should NOT have the Sidebar (auth pages, landing page, etc.)
-const noSidebarRoutes = ['/auth', '/dashboard', '/wave', '/cooperatives/landing'];
+const noSidebarRoutes = [
+    '/auth',
+    '/dashboard',
+    '/wave',
+    '/cooperatives/landing',
+    '/marketplace',
+    '/academy',
+    '/export',
+    '/farm-nation'
+];
 
 
 export function ClientLayout({ children }: ClientLayoutProps) {
@@ -23,6 +32,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
     // Check if current route should have the Sidebar
     // Auth routes: no sidebar
     // Landing page (/): no sidebar  
+    // Ecosystem landing pages: no sidebar
     // All other routes: show sidebar
     const shouldShowSidebar = pathname !== '/' && !noSidebarRoutes.some(route => pathname.startsWith(route));
 
