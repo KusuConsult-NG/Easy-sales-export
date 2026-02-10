@@ -1,0 +1,185 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ========================================
+    // COOPERATIVE MODULE - DOCUMENT UPLOADS
+    // ========================================
+    
+    // Cooperative member documents (ID, passport, proof of address)
+    match /cooperative/documents/{userId}/{documentType}/{fileName} {
+      // Users can upload their own documents during onboarding
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 5 * 1024 * 1024 // 5MB max
+                   && request.resource.contentType.matches('image/(jpeg|jpg|png)|application/pdf');
+      
+      // Users can read their own documents
+      allow read: if request.auth != null 
+                  && request.auth.uid == userId;
+      
+      // Admins can read all cooperative documents
+      allow read: if request.auth != null 
+                  && request.auth.token.role == 'admin';
+    }
+    
+    // Legacy path support (if any documents were uploaded with simpler path)
+    match /cooperative/documents/{userId}/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|jpg|png)|application/pdf');
+      
+      allow read: if request.auth != null 
+                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+    }
+    
+    // ========================================
+    // MARKETPLACE MODULE
+    // ========================================
+    
+    // Seller verification documents
+    match /marketplace/sellers/{userId}/documents/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 10 * 1024 * 1024; // 10MB
+      
+      allow read: if request.auth != null 
+                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+    }
+    
+    // Product images
+    match /marketplace/products/{sellerId}/{productId}/{fileName} {
+      // Sellers can upload images for their own products
+      allow write: if request.auth != null 
+                   && request.auth.uid == sellerId
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      
+      // Anyone can read product images (public)
+      allow read: if true;
+    }
+    
+    // ========================================
+    // FARM NATION MODULE
+    // ========================================
+    
+    // Farm/property images
+    match /farm-nation/properties/{ownerId}/{propertyId}/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.uid == ownerId
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      
+      // Public read for property listings
+      allow read: if true;
+    }
+    
+    // Land verification documents
+    match /farm-nation/verification/{userId}/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 10 * 1024 * 1024;
+      
+      allow read: if request.auth != null 
+                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+    }
+    
+    // ========================================
+    // ACADEMY MODULE
+    // ========================================
+    
+    // Course materials (admin/instructor only)
+    match /academy/courses/{courseId}/materials/{fileName} {
+      allow write: if request.auth != null 
+                   && (request.auth.token.role == 'admin' || request.auth.token.role == 'instructor');
+      
+      // Enrolled students and admins can read
+      allow read: if request.auth != null;
+    }
+    
+    // Student submissions/assignments
+    match /academy/submissions/{userId}/{assignmentId}/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 10 * 1024 * 1024;
+      
+      allow read: if request.auth != null 
+                  && (request.auth.uid == userId || request.auth.token.role == 'admin' || request.auth.token.role == 'instructor');
+    }
+    
+    // ========================================
+    // EXPORT MODULE
+    // ========================================
+    
+    // Export documentation and certificates
+    match /export/documents/{userId}/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 10 * 1024 * 1024;
+      
+      allow read: if request.auth != null 
+                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+    }
+    
+    // ========================================
+    // WAVE PROGRAM
+    // ========================================
+    
+    // WAVE application documents
+    match /wave/applications/{userId}/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 10 * 1024 * 1024;
+      
+      allow read: if request.auth != null 
+                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+    }
+    
+    // WAVE training materials (admin only upload, public read for participants)
+    match /wave/training/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.token.role == 'admin';
+      
+      allow read: if request.auth != null;
+    }
+    
+    // ========================================
+    // USER PROFILES
+    // ========================================
+    
+    // Profile pictures
+    match /users/{userId}/profile/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 2 * 1024 * 1024 // 2MB
+                   && request.resource.contentType.matches('image/.*');
+      
+      // Public read for profile pictures
+      allow read: if true;
+    }
+    
+    // ========================================
+    // ADMIN UPLOADS
+    // ========================================
+    
+    // Platform-wide assets (banners, announcements, etc.)
+    match /platform/{folder}/{fileName} {
+      allow write: if request.auth != null 
+                   && request.auth.token.role == 'admin';
+      
+      // Public read
+      allow read: if true;
+    }
+    
+    // ========================================
+    // DEFAULT DENY
+    // ========================================
+    
+    // Deny all other access by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -253,12 +253,13 @@ export default function RegisterPage() {
                                         { id: "cooperatives", label: "Cooperatives", desc: "Join cooperatives & access loans" },
                                         { id: "farm-nation", label: "Farm Nation", desc: "Land investment & fractional ownership" },
                                         { id: "academy", label: "Academy", desc: "Learn agricultural best practices" },
+                                        { id: "wave", label: "WAVE Program", desc: "Women empowerment & business training" },
                                     ].map(platform => (
                                         <label
                                             key={platform.id}
                                             className={`flex items-start gap-3 p-3 bg-white/5 border rounded-xl cursor-pointer transition ${formData.platforms.includes(platform.id)
-                                                    ? "border-blue-400 bg-blue-500/10"
-                                                    : "border-white/10 hover:bg-white/10"
+                                                ? "border-blue-400 bg-blue-500/10"
+                                                : "border-white/10 hover:bg-white/10"
                                                 }`}
                                         >
                                             <input
