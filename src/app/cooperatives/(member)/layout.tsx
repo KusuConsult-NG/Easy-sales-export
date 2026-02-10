@@ -9,7 +9,6 @@ import { redirect } from "next/navigation";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp, getApps } from "firebase-admin/app";
-import CooperativeSidebar from "./CooperativeSidebar";
 
 export default async function CooperativeMemberLayout({
     children,
@@ -48,12 +47,9 @@ export default async function CooperativeMemberLayout({
     }
 
     return (
-        <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-            {/* Sidebar */}
-            <CooperativeSidebar />
-
-            {/* Main Content */}
-            <main className="flex-1 lg:ml-64">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            {/* Main Content - Full Width */}
+            <main className="w-full">
                 <div className="p-4 lg:p-8">
                     {children}
                 </div>
