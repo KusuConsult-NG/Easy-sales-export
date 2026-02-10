@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, CheckCircle } from "lucide-react";
+import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, CheckCircle, Home } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -37,6 +37,15 @@ export default function AcademyLandingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            {/* Home Navigation Button */}
+            <Link
+                href="/"
+                className="fixed top-6 left-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700"
+            >
+                <Home className="w-4 h-4" />
+                <span className="font-semibold text-sm">Home</span>
+            </Link>
+
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-blue-600 via-indigo-600 to-purple-600 text-white">
                 <div className="absolute inset-0 bg-black/10"></div>

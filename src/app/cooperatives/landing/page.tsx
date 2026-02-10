@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
     Shield, Users, TrendingUp, Award, Target, Briefcase,
     CheckCircle2, ArrowRight, Menu, X, ChevronDown, ChevronUp,
-    Mail, Phone, MapPin, Clock, Send, Sparkles, Zap, Globe
+    Mail, Phone, MapPin, Clock, Send, Sparkles, Zap, Globe, Home
 } from 'lucide-react';
 
 export default function CooperativeLandingPage() {
@@ -174,6 +174,15 @@ export default function CooperativeLandingPage() {
 
     return (
         <div className="min-h-screen bg-white">
+            {/* Home Navigation Button */}
+            <Link
+                href="/"
+                className="fixed top-20 left-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700"
+            >
+                <Home className="w-4 h-4" />
+                <span className="font-semibold text-sm">Home</span>
+            </Link>
+
             {/* Navigation */}
             <nav className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-md z-50">
                 <div className="max-w-7xl mx-auto px-6">

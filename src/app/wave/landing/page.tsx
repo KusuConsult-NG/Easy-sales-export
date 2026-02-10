@@ -7,7 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowRight, Users, TrendingUp, Globe, Shield, Sparkles, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, Users, TrendingUp, Globe, Shield, Sparkles, CheckCircle, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -53,6 +53,15 @@ export default function WaveLandingPage() {
 
     return (
         <div className="min-h-screen">
+            {/* Home Navigation Button */}
+            <Link
+                href="/"
+                className="fixed top-6 left-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700"
+            >
+                <Home className="w-4 h-4" />
+                <span className="font-semibold text-sm">Home</span>
+            </Link>
+
             {/* Hero Section with Carousel */}
             <section className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
                 {/* Background Pattern */}
