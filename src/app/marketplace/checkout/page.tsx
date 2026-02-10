@@ -2,28 +2,32 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { ShoppingCart, CreditCard, ArrowLeft, Loader2, CheckCircle, X, Store } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { createOrderAction } from "@/app/actions/orders";
+import { initializeOrderPaymentAction, type CartItem } from "@/app/actions/marketplace-payment";
 import { useToast } from "@/contexts/ToastContext";
+import PhoneInput, { isValidNigerianPhone } from "@/components/ui/PhoneInput";
 import type { Product } from "@/lib/types/marketplace";
 
 // Disable static generation for this page - must be client-only due to Paystack
 export const dynamic = 'force-dynamic';
 
-interface CartItem extends Product {
+interface LocalCartItem extends Product {
     quantity: number;
 }
 
 export default function CheckoutPage() {
     const router = useRouter();
+    const { data: session } = useSession();
     const { showToast } = useToast();
-    const [cart, setCart] = useState<CartItem[]>([]);
+    const [cart, setCart] = useState<LocalCartItem[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<"paystack" | "bank_transfer">("paystack");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
+    const [phoneError, setPhoneError] = useState<string>("");
     const [deliveryAddress, setDeliveryAddress] = useState({
         street: "",
         city: "",
@@ -31,9 +35,15 @@ export default function CheckoutPage() {
         lga: "",
     });
     const [isClient, setIsClient] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         setIsClient(true);
+        // Pre-fill email from session
+        if (session?.user?.email) {
+            setEmail(session.user.email);
+        }
+
         // Retrieve cart from localStorage
         const savedCart = localStorage.getItem("marketplace_cart");
         if (savedCart) {
@@ -42,56 +52,73 @@ export default function CheckoutPage() {
             // No cart items, redirect back to marketplace
             router.push("/marketplace");
         }
-    }, [router]);
+    }, [router, session]);
 
     const subtotal = cart.reduce((sum, item) => sum + (item.pricingTiers[0]?.price || 0) * item.quantity, 0);
     const deliveryFee = 5000;
 
-    const handlePaystackCheckout = () => {
-        if (!email || !phone) {
-            alert("Please provide your email and phone number");
+    const handlePaystackCheckout = async () => {
+        if (!session) {
+            router.push("/auth/login?redirect=/marketplace/checkout");
             return;
         }
 
-        const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-        if (!publicKey) {
-            alert("Payment temporarily unavailable. Please contact support.");
+        if (!email || !phone) {
+            setError("Please provide your email and phone number");
+            return;
+        }
+
+        // Validate phone number
+        if (!isValidNigerianPhone(phone)) {
+            setPhoneError("Please enter a valid Nigerian phone number");
+            return;
+        }
+
+        if (cart.length === 0) {
+            setError("Your cart is empty");
             return;
         }
 
         setIsProcessing(true);
+        setError(null);
+        setPhoneError("");
 
-        // Dynamically import and use Paystack only on client
-        if (typeof window !== 'undefined') {
-            import('react-paystack').then((mod) => {
-                const PaystackPop = (window as any).PaystackPop;
+        try {
+            // Prepare cart items for payment
+            const cartItems: CartItem[] = cart.map(item => ({
+                id: item.id,
+                title: item.title,
+                sellerId: item.sellerId,
+                price: item.pricingTiers[0]?.price || 0,
+                quantity: item.quantity,
+                unit: item.unit,
+            }));
 
-                const handler = PaystackPop.setup({
-                    key: publicKey,
-                    email: email,
-                    amount: Math.round((subtotal + deliveryFee) * 100),
-                    currency: 'NGN',
-                    ref: `MP-${Date.now()}`,
-                    onClose: () => {
-                        setIsProcessing(false);
-                    },
-                    callback: (response: any) => {
-                        setIsProcessing(false);
-                        localStorage.removeItem("marketplace_cart");
-                        router.push(`/marketplace/success?reference=${response.reference}`);
-                    },
-                });
-                handler.openIframe();
-            }).catch(() => {
+            // Initialize payment
+            const result = await initializeOrderPaymentAction(
+                cartItems,
+                email,
+                phone,
+                deliveryFee
+            );
+
+            if (result.success && result.data) {
+                // Redirect to Paystack for payment
+                (window as any).location.href = result.data.authorizationUrl;
+            } else {
+                setError(result.error || "Failed to initialize payment");
                 setIsProcessing(false);
-                alert("Payment system error. Please try again.");
-            });
+            }
+        } catch (err) {
+            setError("An error occurred while processing your payment");
+            setIsProcessing(false);
         }
     };
 
     const handleBankTransfer = () => {
         alert("Bank transfer instructions will be sent to your email");
-        // TODO: Implement bank transfer logic
+        // Bank transfer: Display account details modal, create pending order requiring manual verification
+        // For now, Paystack handles all payments - bank transfer is optional alternative
     };
 
     if (!isClient || cart.length === 0) {
@@ -185,19 +212,13 @@ export default function CheckoutPage() {
                                         required
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                        Phone Number
-                                    </label>
-                                    <input
-                                        type="tel"
-                                        value={phone}
-                                        onChange={(e) => setPhone(e.target.value)}
-                                        placeholder="+234 XXX XXX XXXX"
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
-                                        required
-                                    />
-                                </div>
+                                <PhoneInput
+                                    label="Phone Number"
+                                    value={phone}
+                                    onChange={(e) => setPhone(e.target.value)}
+                                    error={phoneError}
+                                    required
+                                />
                             </div>
                         </div>
 
@@ -271,6 +292,13 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
+                            {/* Error Display */}
+                            {error && (
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-4">
+                                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                                </div>
+                            )}
+
                             {process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ? (
                                 <button
                                     onClick={handlePaystackCheckout}
@@ -309,9 +337,6 @@ export default function CheckoutPage() {
                             <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-4">
                                 All payments are escrow-protected for your security
                             </p>
-
-                            {/* Add Paystack inline script */}
-                            <script src="https://js.paystack.co/v1/inline.js" async></script>
                         </div>
                     </div>
                 </div>

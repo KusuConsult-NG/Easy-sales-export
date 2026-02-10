@@ -17,11 +17,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Check if user is admin
-        // TODO: Add proper admin role check
-        const isAdmin = session.user.email?.endsWith("@easysalesexport.com") ||
-            session.user.roles?.includes("admin");
-
-        if (!isAdmin) {
+        if (!session.user.roles?.includes("admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

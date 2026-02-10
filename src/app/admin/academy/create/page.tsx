@@ -28,12 +28,13 @@ export default function CreateCoursePage() {
                 title: formData.title,
                 description: formData.description,
                 instructor: formData.instructor,
-                // @ts-ignore - Category not in interface yet, add later
-                category: formData.category,
                 thumbnail: formData.thumbnail,
-                level: "beginner", // Default
-                duration: "4 weeks", // Default
-            } as any);
+                level: "beginner",
+                duration: "4 weeks",
+                modules: [],
+                createdAt: undefined as any,
+                updatedAt: undefined as any,
+            });
 
             if (result.success && result.id) {
                 toast.success("Course created successfully!");

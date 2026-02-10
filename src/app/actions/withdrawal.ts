@@ -94,7 +94,15 @@ export async function submitWithdrawalRequestAction(
             details: `Withdrawal request of ₦${data.amount.toLocaleString()} submitted`,
         });
 
-        // TODO: Send confirmation email once email utility is available
+        // Send confirmation email
+        const { sendWithdrawalConfirmationEmail } = await import('@/lib/email-notifications');
+        await sendWithdrawalConfirmationEmail(
+            userEmail,
+            session.user.name || userEmail,
+            data.amount,
+            withdrawalRef.id
+        );
+
 
         return {
             error: null,

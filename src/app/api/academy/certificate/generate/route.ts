@@ -68,8 +68,10 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // TODO: Get course details for course title
-        const courseTitle = "Sample Course Title"; // Replace with actual course fetch
+        // Get course details
+        const courseRef = doc(db, "courses", courseId);
+        const courseDoc = await getDoc(courseRef);
+        const courseTitle = courseDoc.exists() ? courseDoc.data().title : "Course Completion";
 
         // Create certificate
         const certificateRef = doc(collection(db, "certificates"));

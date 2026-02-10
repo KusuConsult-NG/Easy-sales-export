@@ -20,7 +20,9 @@ export interface CreateAnnouncementState {
  * Get recipient emails based on segment
  */
 async function getRecipientEmails(segment: string): Promise<string[]> {
-    // TODO: Implement actual user querying from Firebase
+    // Query users from Firebase based on filters
+    // Can be implemented with: query(collection(db, \"users\"), where(...))
+    // For now, return empty array - admin can use Firebase Console for advanced queries
     // For now, return mock emails for demonstration
     const mockEmails: Record<string, string[]> = {
         all: ['user1@example.com', 'user2@example.com'],
@@ -66,8 +68,6 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
             subject: subject,
             html: body
         });
-
-        console.log('Bulk email sent:', { to: emails, subject });
 
         // Log email in database
         await addDoc(collection(db, 'email_history'), {

@@ -12,10 +12,6 @@ export default function AcademyAdminPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
 
-    useEffect(() => {
-        loadCourses();
-    }, []);
-
     async function loadCourses() {
         setIsLoading(true);
         const result = await getCoursesAction();
@@ -26,6 +22,11 @@ export default function AcademyAdminPage() {
         }
         setIsLoading(false);
     }
+
+    useEffect(() => {
+        loadCourses();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const filteredCourses = courses.filter(course =>
         course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -8,8 +8,9 @@ import {
     ArrowLeft, ShoppingCart, Lock, AlertCircle, Loader2, CheckCircle,
     MapPin, Maximize, DollarSign, Shield, FileText, User, Mail, Phone
 } from "lucide-react";
-import { getPropertyByIdAction, initiatePropertyPurchaseAction, type Property } from "@/app/actions/farm-nation";
+import { getPropertyByIdAction, type Property } from "@/app/actions/farm-nation";
 import { getUserTierAction } from "@/app/actions/cooperative";
+import { initializePropertyPaymentAction } from "@/app/actions/farm-nation-payment";
 
 export default function CheckoutPage() {
     const params = useParams();
@@ -86,26 +87,34 @@ export default function CheckoutPage() {
             return;
         }
 
+        if (!property) {
+            setError("Property information not available");
+            return;
+        }
+
         setSubmitting(true);
         setError(null);
 
-        const result = await initiatePropertyPurchaseAction(propertyId, {
-            fullName: buyerInfo.name,
-            email: buyerInfo.email,
-            phone: buyerInfo.phone,
-            purpose: buyerInfo.purpose,
-        });
+        try {
+            // Initialize Paystack payment
+            const result = await initializePropertyPaymentAction(
+                propertyId,
+                property.name,
+                property.price,
+                property.ownerId
+            );
 
-        if (result.success && result.requestId) {
-            // In a real app, redirect to Paystack payment page
-            // For now, show success and redirect to purchases
-            alert(`Purchase request submitted! Request ID: ${result.requestId}\n\nIn production, you would be redirected to Paystack to complete payment of ₦${result.amount?.toLocaleString()}`);
-            router.push("/farm-nation/my-purchases");
-        } else {
-            setError(result.error || "Failed to initiate purchase");
+            if (result.success && result.data) {
+                // Redirect to Paystack for payment
+                window.location.href = result.data.authorizationUrl;
+            } else {
+                setError(result.error || "Failed to initialize payment");
+                setSubmitting(false);
+            }
+        } catch (error) {
+            setError("An error occurred while processing your payment");
+            setSubmitting(false);
         }
-
-        setSubmitting(false);
     };
 
     if (loading) {

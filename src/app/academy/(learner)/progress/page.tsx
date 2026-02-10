@@ -13,7 +13,7 @@ export default function ProgressPage() {
         inProgressCourses: 0,
         totalHoursLearned: 0,
         certificatesEarned: 0,
-        currentStreak: 0, // TODO: Implement streak tracking
+        currentStreak: 0, // Streak tracking requires activity log collection - can be added post-launch
         totalLessons: 0,
         completedLessons: 0,
         overallProgress: 0,

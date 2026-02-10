@@ -185,7 +185,6 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
 export async function getPendingLoanApplicationsAction(): Promise<LoanApplication[]> {
     try {
         const session = await auth();
-        // @ts-ignore
         if (!session?.user?.id || !session.user.roles?.includes("admin")) {
             return [];
         }
@@ -215,7 +214,6 @@ export async function approveLoanAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        // @ts-ignore
         if (!session?.user?.id || !session.user.roles?.includes("admin")) {
             return { success: false, error: "Unauthorized" };
         }
@@ -265,7 +263,6 @@ export async function rejectLoanAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        // @ts-ignore
         if (!session?.user?.id || !session.user.roles?.includes("admin")) {
             return { success: false, error: "Unauthorized" };
         }
@@ -343,7 +340,6 @@ export async function getRepaymentScheduleAction(
         const loanData = loanDoc.data() as LoanApplication;
 
         const session = await auth();
-        // @ts-ignore
         if (!session?.user?.id || (session.user.id !== loanData.userId && !session.user.roles?.includes("admin"))) {
             return { success: false, error: "Unauthorized" };
         }
@@ -560,7 +556,6 @@ export async function getRepaymentHistoryAction(
         const loanDoc = await getDoc(doc(db, "loan_applications", loanId));
         if (loanDoc.exists()) {
             const loanData = loanDoc.data();
-            // @ts-ignore
             if (loanData.userId !== session.user.id && !session.user.roles?.includes("admin")) {
                 return { success: false, error: "Unauthorized" };
             }

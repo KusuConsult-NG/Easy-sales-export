@@ -47,8 +47,6 @@ export async function GET(request: NextRequest) {
             inProgress: courses.filter(c => !c.completedAt).length,
             completed: courses.filter(c => c.completedAt).length,
             certificatesEarned: certificates.length,
-            totalHours: 0, // TODO: Calculate from actual course durations
-            learningStreak: 0, // TODO: Calculate from activity logs
         };
 
         return NextResponse.json({

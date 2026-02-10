@@ -282,7 +282,27 @@ export async function releaseEscrowFunds(
             return { success: false, error: "Invalid transaction amount" };
         }
 
-        // Release funds
+        // Create payment instruction for admin payout
+        const paymentInstructionData = {
+            type: "escrow_release",
+            escrowId: transactionId,
+            recipientId: txData.sellerId,
+            recipientEmail: txData.sellerEmail,
+            amount: txData.amount,
+            status: "pending_admin_action",
+            description: `Release escrow funds for ${txData.productName}`,
+            createdAt: new Date(),
+            createdBy: userId,
+            metadata: {
+                buyerId: txData.buyerId,
+                productName: txData.productName,
+                paymentReference: txData.paymentReference,
+            },
+        };
+
+        await addDoc(collection(db, "paymentInstructions"), paymentInstructionData);
+
+        // Update escrow status
         await updateDoc(txRef, {
             status: "completed",
             releasedAt: new Date(),
@@ -290,8 +310,21 @@ export async function releaseEscrowFunds(
             updatedAt: new Date(),
         });
 
-        // TODO: Integrate with payment gateway to transfer funds to seller
-        // For now, this is a status update. Payment integration would go here.
+        // Create audit log
+        const { createAuditLog } = await import("@/lib/audit-log");
+        await createAuditLog({
+            action: "escrow_released",
+            userId,
+            userEmail: session.user.email!,
+            targetId: transactionId,
+            targetType: "escrow",
+            metadata: {
+                sellerId: txData.sellerId,
+                amount: txData.amount,
+                productName: txData.productName,
+            },
+            details: `Released ₦${txData.amount.toLocaleString()} escrow to seller`,
+        });
 
         return { success: true };
     } catch (error: any) {
@@ -343,7 +376,28 @@ export async function refundEscrowToBuyer(
             return { success: false, error: "Escrow already refunded" };
         }
 
-        // Refund
+        // Create payment instruction for admin refund
+        const refundInstructionData = {
+            type: "escrow_refund",
+            escrowId: transactionId,
+            recipientId: txData.buyerId,
+            recipientEmail: txData.buyerEmail,
+            amount: txData.amount,
+            status: "pending_admin_action",
+            description: `Refund escrow for ${txData.productName}`,
+            createdAt: new Date(),
+            createdBy: userId,
+            metadata: {
+                sellerId: txData.sellerId,
+                productName: txData.productName,
+                paymentReference: txData.paymentReference,
+                reason: "Escrow cancelled/disputed",
+            },
+        };
+
+        await addDoc(collection(db, "paymentInstructions"), refundInstructionData);
+
+        // Update escrow status
         await updateDoc(txRef, {
             status: "cancelled",
             refundedAt: new Date(),
@@ -351,7 +405,21 @@ export async function refundEscrowToBuyer(
             updatedAt: new Date(),
         });
 
-        // TODO: Integrate with payment gateway to refund to buyer
+        // Create audit log
+        const { createAuditLog } = await import("@/lib/audit-log");
+        await createAuditLog({
+            action: "escrow_refunded",
+            userId,
+            userEmail: session.user.email!,
+            targetId: transactionId,
+            targetType: "escrow",
+            metadata: {
+                buyerId: txData.buyerId,
+                amount: txData.amount,
+                productName: txData.productName,
+            },
+            details: `Refunded ₦${txData.amount.toLocaleString()} escrow to buyer`,
+        });
 
         return { success: true };
     } catch (error: any) {

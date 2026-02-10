@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth";
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc, serverTimestamp, updateDoc, increment } from "firebase/firestore";
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc, increment, runTransaction } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 // Helper function to convert Naira to Kobo
@@ -113,12 +113,23 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             return { error: "Authentication required", success: false };
         }
 
+        // 🔒 SECURITY FIX #1: Double-payment protection
+        const processedRef = doc(db, "processedPayments", reference);
+        const existingPayment = await getDoc(processedRef);
+
+        if (existingPayment.exists()) {
+            return {
+                error: "Payment has already been processed",
+                success: false
+            };
+        }
+
         // Verify payment with Paystack
         const paymentData = await verifyPaystackPayment(reference);
 
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
-                error: "Payment verification failed",
+                error: "Payment verification failed. Please contact support if amount was debited.",
                 success: false,
             };
         }
@@ -126,34 +137,64 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         // Get metadata
         const metadata = paymentData.data.metadata as any;
         const enrollmentId = `${metadata.userId}_${metadata.courseId}`;
+        const amountInNaira = paymentData.data.amount / 100;
 
-        // Update enrollment status
-        const enrollmentRef = doc(db, COLLECTIONS.ENROLLMENTS, enrollmentId);
-        await updateDoc(enrollmentRef, {
-            status: "active",
-            paymentStatus: "paid",
-            paymentVerifiedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        });
-
-        // Increment course student count
-        const courseRef = doc(db, COLLECTIONS.COURSES, metadata.courseId);
-        const courseDoc = await getDoc(courseRef);
-        if (courseDoc.exists()) {
-            await updateDoc(courseRef, {
-                students: increment(1),
-            });
+        // Verify user match
+        if (metadata.userId !== session.user.id) {
+            return { error: "Payment verification failed: User mismatch", success: false };
         }
+
+        // 🔒 SECURITY FIX #3: Amount re-validation
+        if (amountInNaira < 1000 || amountInNaira > 500000) {
+            return { error: "Invalid payment amount", success: false };
+        }
+
+        // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
+        await runTransaction(db, async (transaction) => {
+            // Update enrollment status
+            const enrollmentRef = doc(db, COLLECTIONS.ENROLLMENTS, enrollmentId);
+            transaction.update(enrollmentRef, {
+                status: "active",
+                paymentStatus: "paid",
+                paymentVerifiedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+
+            // Increment course student count
+            const courseRef = doc(db, COLLECTIONS.COURSES, metadata.courseId);
+            const courseSnap = await transaction.get(courseRef);
+            if (courseSnap.exists()) {
+                const currentStudents = courseSnap.data().students || 0;
+                transaction.update(courseRef, {
+                    students: currentStudents + 1,
+                });
+            }
+
+            // Mark payment as processed
+            transaction.set(processedRef, {
+                processedAt: serverTimestamp(),
+                userId: session.user.id,
+                amount: amountInNaira,
+                type: "academy_enrollment",
+                reference,
+            });
+        });
 
         return {
             success: true,
             message: "Enrollment successful! Check your email for course access details.",
         };
     } catch (error: any) {
-        console.error("Payment verification error:", error);
+        // 🔒 SECURITY FIX #2: Sanitized error logging
+        console.error('[Payment Verification Error]', {
+            timestamp: new Date().toISOString(),
+            action: 'verifyEnrollment',
+            reference,
+        });
+
         return {
             success: false,
-            error: "Failed to verify payment. Please contact support.",
+            error: "Failed to verify payment. Please contact support with reference: " + reference,
         };
     }
 }

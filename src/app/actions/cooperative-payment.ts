@@ -43,7 +43,6 @@ export async function initializeContributionPaymentAction(
             session.user.email!,
             nairaToKobo(amount),
             {
-                userId: session.user.id,
                 type: 'contribution',
                 amount,
                 userName: session.user.name || session.user.email,
@@ -85,47 +84,89 @@ export async function verifyContributionPaymentAction(
         const { verifyPaystackPayment } = await import('@/lib/paystack-server');
         const { db } = await import('@/lib/firebase');
         const { COLLECTIONS } = await import('@/lib/types/firestore');
-        const { doc, updateDoc, increment, serverTimestamp, getDoc } = await import('firebase/firestore');
+        const { doc, getDoc, setDoc, runTransaction, serverTimestamp } = await import('firebase/firestore');
         const { calculateUserTier } = await import('@/lib/cooperative-tiers');
         const { createAuditLog } = await import('@/lib/audit-log');
+
+        // 🔒 SECURITY FIX #1: Double-payment protection
+        const processedRef = doc(db, 'processedPayments', reference);
+        const existingPayment = await getDoc(processedRef);
+
+        if (existingPayment.exists()) {
+            return {
+                error: 'Payment has already been processed',
+                success: false
+            };
+        }
 
         // Verify payment with Paystack
         const verification = await verifyPaystackPayment(reference);
 
         if (verification.data.status !== 'success') {
             return {
-                error: `Payment ${verification.data.status}: ${verification.data.gateway_response}`,
+                error: `Payment ${verification.data.status}. Please contact support if amount was debited.`,
                 success: false
             };
         }
 
         const amountInNaira = verification.data.amount / 100;
         const userId = verification.data.metadata?.userId;
+        const expectedAmount = verification.data.metadata?.amount;
 
+        // User ID verification
         if (userId !== session.user.id) {
             return { error: 'Payment verification failed: User mismatch', success: false };
         }
 
-        // Update membership
-        const membershipRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
-        const membershipDoc = await getDoc(membershipRef);
-
-        if (!membershipDoc.exists()) {
-            return { error: 'Membership not found', success: false };
+        // 🔒 SECURITY FIX #3: Amount re-validation
+        if (amountInNaira < 1000 || amountInNaira > 1000000) {
+            return { error: 'Invalid payment amount', success: false };
         }
 
-        const currentTotal = membershipDoc.data().totalContributions || 0;
-        const newTotal = currentTotal + amountInNaira;
-        const newTier = calculateUserTier(newTotal);
+        // Verify amount matches metadata (allow 1 naira variance for rounding)
+        if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
+            return { error: 'Payment amount mismatch', success: false };
+        }
 
-        await updateDoc(membershipRef, {
-            totalContributions: increment(amountInNaira),
-            tier: newTier,
-            lastContributionAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+        // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
+        const result = await runTransaction(db, async (transaction) => {
+            // Get membership
+            const membershipRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
+            const membershipDoc = await transaction.get(membershipRef);
+
+            if (!membershipDoc.exists()) {
+                throw new Error('Membership not found');
+            }
+
+            const currentTotal = membershipDoc.data().totalContributions || 0;
+            const newTotal = currentTotal + amountInNaira;
+            const newTier = calculateUserTier(newTotal);
+
+            // Update membership atomically
+            transaction.update(membershipRef, {
+                totalContributions: newTotal,
+                tier: newTier,
+                lastContributionAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+
+            // Mark payment as processed atomically
+            transaction.set(processedRef, {
+                processedAt: serverTimestamp(),
+                amount: amountInNaira,
+                type: 'contribution',
+                reference,
+            });
+
+            return {
+                currentTotal,
+                newTotal,
+                previousTier: membershipDoc.data().tier,
+                newTier,
+            };
         });
 
-        // Create audit log
+        // Create audit log (outside transaction - not critical)
         await createAuditLog({
             action: 'contribution_made',
             userId,
@@ -134,10 +175,10 @@ export async function verifyContributionPaymentAction(
             targetType: 'payment',
             metadata: {
                 amount: amountInNaira,
-                previousTotal: currentTotal,
-                newTotal,
-                previousTier: membershipDoc.data().tier,
-                newTier,
+                previousTotal: result.currentTotal,
+                newTotal: result.newTotal,
+                previousTier: result.previousTier,
+                newTier: result.newTier,
                 paymentReference: reference,
             },
             details: `Contribution of ₦${amountInNaira.toLocaleString()} processed successfully`,
@@ -149,9 +190,15 @@ export async function verifyContributionPaymentAction(
             message: `Payment successful! Your contribution of ₦${amountInNaira.toLocaleString()} has been recorded.`,
         };
     } catch (error: any) {
-        console.error('Payment verification error:', error);
+        // 🔒 SECURITY FIX #2: Sanitized error logging
+        console.error('[Payment Verification Error]', {
+            timestamp: new Date().toISOString(),
+            action: 'verifyContribution',
+            reference,
+        });
+
         return {
-            error: error.message || 'Payment verification failed',
+            error: 'Payment verification failed. Please contact support with reference: ' + reference,
             success: false,
         };
     }

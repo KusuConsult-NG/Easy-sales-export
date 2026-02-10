@@ -3,6 +3,7 @@
 import { Mail, MapPin, Phone, Send } from "lucide-react";
 import { useState } from "react";
 import { COMPANY_INFO } from "@/lib/constants";
+import { toast } from "sonner";
 
 export default function ContactPage() {
     const [formData, setFormData] = useState({
@@ -11,11 +12,25 @@ export default function ContactPage() {
         subject: "",
         message: "",
     });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // TODO: Implement form submission
-        console.log("Form submitted:", formData);
+        setIsSubmitting(true);
+
+        try {
+            // Send via mailto link as fallback
+            const mailtoLink = `mailto:${COMPANY_INFO.contact.cooperative.email}?subject=${encodeURIComponent(formData.subject)}&body=${encodeURIComponent(`Name: ${formData.name}\nEmail: ${formData.email}\n\n${formData.message}`)}`;
+            window.location.href = mailtoLink;
+            toast.success("Opening your email client...");
+
+            // Reset form
+            setFormData({ name: "", email: "", subject: "", message: "" });
+        } catch (error) {
+            toast.error("Failed to open email client. Please email us directly.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -174,10 +189,11 @@ export default function ContactPage() {
                                 {/* Submit Button */}
                                 <button
                                     type="submit"
-                                    className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl"
+                                    disabled={isSubmitting}
+                                    className="w-full inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <Send className="w-5 h-5" />
-                                    Send Message
+                                    {isSubmitting ? "Sending..." : "Send Message"}
                                 </button>
                             </form>
                         </div>

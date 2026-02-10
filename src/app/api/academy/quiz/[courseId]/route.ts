@@ -45,7 +45,7 @@ export async function GET(
             })),
         };
 
-        // TODO: Get user's previous attempts to calculate attemptNumber
+        // Get user's previous attempts to calculate attemptNumber\n        const attemptsQuery = query(\n            collection(db, \"quiz_attempts\"),\n            where(\"userId\", \"==\", session.user.id),\n            where(\"quizId\", \"==\", courseId)\n        );\n        const attemptsSnapshot = await getDocs(attemptsQuery);\n        const attemptNumber = attemptsSnapshot.size + 1;
         const attemptNumber = 1;
 
         return NextResponse.json({

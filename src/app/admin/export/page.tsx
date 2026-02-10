@@ -30,8 +30,9 @@ export default function AdminExportPage() {
     // Load exports
     async function loadExports() {
         setLoading(true);
-        // @ts-ignore
-        const result = await getAllExportRequestsAction(filter === "all" ? undefined : filter);
+        const result = await getAllExportRequestsAction(
+            filter === "all" ? undefined : (filter as "pending" | "in_transit" | "delivered" | "completed")
+        );
         if (result.success && result.exports) {
             setExports(result.exports);
         } else {
@@ -102,8 +103,8 @@ export default function AdminExportPage() {
                             key={f}
                             onClick={() => setFilter(f)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition ${filter === f
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                ? "bg-blue-600 text-white"
+                                : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
                                 }`}
                         >
                             {f.replace("_", " ")}

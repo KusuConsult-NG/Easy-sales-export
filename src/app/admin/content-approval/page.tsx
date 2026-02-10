@@ -14,10 +14,6 @@ export default function ContentApprovalPage() {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
 
-    useEffect(() => {
-        loadContent();
-    }, []);
-
     async function loadContent() {
         setLoading(true);
         const result = await getPendingContentAction();
@@ -28,6 +24,11 @@ export default function ContentApprovalPage() {
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        loadContent();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleApprove = async (item: PendingContentItem) => {
         if (!confirm(`Are you sure you want to approve "${item.title}"?`)) return;

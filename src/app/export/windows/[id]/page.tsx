@@ -1,24 +1,32 @@
 "use client";
 
-import { ArrowLeft, TrendingUp, Calendar, MapPin, Clock, Shield, FileText, Users, CheckCircle2, AlertCircle } from "lucide-react";
+import { ArrowLeft, TrendingUp, Calendar, MapPin, Clock, Shield, FileText, Users, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { getExportOpportunityById, type ExportOpportunity } from "@/app/actions/export-investments";
+import { initializeInvestmentPaymentAction } from "@/app/actions/export-payment";
 
 export default function ExportWindowDetailPage() {
     const params = useParams();
     const windowId = params.id;
+    const { data: session } = useSession();
+    const router = useRouter();
 
     const [windowData, setWindowData] = useState<ExportOpportunity | null>(null);
     const [loading, setLoading] = useState(true);
+    const [investing, setInvesting] = useState(false);
+    const [investmentAmount, setInvestmentAmount] = useState<number>(0);
+    const [error, setError] = useState<string | null>(null);
 
     async function loadWindow() {
         setLoading(true);
         const result = await getExportOpportunityById(windowId as string);
         if (result.success && result.data) {
             setWindowData(result.data);
+            setInvestmentAmount(result.data.minInvestment);
         }
         setLoading(false);
     }
@@ -28,6 +36,39 @@ export default function ExportWindowDetailPage() {
             loadWindow();
         }
     }, [windowId]);
+
+    const handleInvest = async () => {
+        if (!session) {
+            router.push("/auth/login?redirect=/export/windows/" + windowId);
+            return;
+        }
+
+        if (!windowData) return;
+
+        setInvesting(true);
+        setError(null);
+
+        try {
+            const result = await initializeInvestmentPaymentAction(
+                windowId as string,
+                windowData.commodity,
+                investmentAmount,
+                windowData.commodity,
+                parseFloat(windowData.projectedROI.replace("%", ""))
+            );
+
+            if (result.success && result.data) {
+                // Redirect to Paystack for payment
+                (window as any).location.href = result.data.authorizationUrl;
+            } else {
+                setError(result.error || "Failed to initialize investment");
+                setInvesting(false);
+            }
+        } catch (err) {
+            setError("An error occurred while processing your investment");
+            setInvesting(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -267,10 +308,42 @@ export default function ExportWindowDetailPage() {
                                 </div>
                             </div>
 
+                            {/* Investment Amount Input */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Investment Amount (₦)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={investmentAmount}
+                                    onChange={(e) => setInvestmentAmount(Number(e.target.value))}
+                                    min={windowData.minInvestment}
+                                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-600"
+                                />
+                            </div>
+
+                            {/* Error Display */}
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                                </div>
+                            )}
+
                             {/* CTAs */}
                             <div className="space-y-3">
-                                <button className="w-full px-6 py-4 bg-purple-600 text-white font-bold text-lg rounded-xl hover:bg-purple-700 transition-all hover:scale-105 shadow-lg">
-                                    Invest Now
+                                <button
+                                    onClick={handleInvest}
+                                    disabled={investing}
+                                    className="w-full px-6 py-4 bg-purple-600 text-white font-bold text-lg rounded-xl hover:bg-purple-700 transition-all hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {investing ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        "Invest Now"
+                                    )}
                                 </button>
                                 <button className="w-full px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition">
                                     Save for Later

@@ -16,15 +16,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // TODO: Add admin role check
-        // const userRef = doc(db, "users", session.user.id);
-        // const userDoc = await getDoc(userRef);
-        // if (!userDoc.exists() || userDoc.data().role !== "admin") {
-        //     return NextResponse.json(
-        //         { success: false, message: "Admin access required" },
-        //         { status: 403 }
-        //     );
-        // }
+        // Admin role check
+        if (!session.user.roles?.includes("admin")) {
+            return NextResponse.json(
+                { success: false, message: "Admin access required" },
+                { status: 403 }
+            );
+        }
 
         const quizData = await request.json();
 

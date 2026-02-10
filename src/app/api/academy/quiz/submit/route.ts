@@ -87,15 +87,41 @@ export async function POST(request: NextRequest) {
             totalPoints,
             passed,
             autoSubmit,
-            startedAt: new Date(), // TODO: Track actual start time
+            startedAt: new Date(), // Start time should be tracked on quiz page load (client-side), sent with submission
             completedAt: new Date(),
             createdAt: new Date(),
         });
 
-        // Update course progress if passed
+
+        //Update course progress if passed
         if (passed) {
-            // TODO: Update course_progress collection
+            const progressRef = doc(db, "courseProgress", `${session.user.id}_${courseId}`);
+            const progressDoc = await getDoc(progressRef);
+
+            const moduleId = quizData.moduleId || "module_unknown";
+            const updateData: any = {
+                [`quizScores.${moduleId}`]: scorePercentage,
+                lastAccessedAt: new Date(),
+            };
+
+            if (progressDoc.exists()) {
+                // Update existing progress
+                const currentData = progressDoc.data();
+                const completedQuizzes = new Set(currentData.completedQuizzes || []);
+                completedQuizzes.add(moduleId);
+
+                updateData.completedQuizzes = Array.from(completedQuizzes);
+                await setDoc(progressRef, updateData, { merge: true });
+            } else {
+                // Create new progress record
+                updateData.userId = session.user.id;
+                updateData.courseId = courseId;
+                updateData.completedQuizzes = [moduleId];
+                updateData.createdAt = new Date();
+                await setDoc(progressRef, updateData);
+            }
         }
+
 
         return NextResponse.json({
             success: true,

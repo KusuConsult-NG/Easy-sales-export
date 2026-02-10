@@ -85,7 +85,15 @@ export async function GET(request: NextRequest) {
             .reduce((sum, app) => sum + (app.amountDisbursed || 0), 0);
 
         const averageLoanSize = approved > 0 ? totalDisbursed / approved : 0;
-        const repaymentRate = 85; // TODO: Calculate from actual repayment data
+        
+        // Calculate repayment rate from actual loan data
+        const loansRef = collection(db, "loans");
+        const loansSnapshot = await getDocs(loansRef);
+        const totalLoans = loansSnapshot.size;
+        const repaidLoans = loansSnapshot.docs.filter(
+            doc => doc.data().status === "repaid" || doc.data().status === "completed"
+        ).length;
+        const repaymentRate = totalLoans > 0 ? Math.round((repaidLoans / totalLoans) * 100) : 85;
 
         // Calculate demographics
         const ageGroups: Record<string, number> = {

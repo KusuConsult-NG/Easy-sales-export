@@ -1,0 +1,77 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+
+/**
+ * API Route: Get Student Dashboard Data
+ */
+export async function GET(request: NextRequest) {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json(
+                { success: false, message: "Unauthorized" },
+                { status: 401 }
+            );
+        }
+
+        const userId = session.user.id;
+
+        // Get course progress
+        const progressRef = collection(db, "course_progress");
+        const progressQuery = query(progressRef, where("userId", "==", userId));
+        const progressSnapshot = await getDocs(progressQuery);
+
+        const courses = progressSnapshot.docs.map(doc => ({
+            ...doc.data(),
+            enrolledAt: doc.data().enrolledAt?.toDate?.() || new Date(),
+            lastAccessedAt: doc.data().lastAccessedAt?.toDate?.() || new Date(),
+            completedAt: doc.data().completedAt?.toDate?.() || null,
+        }));
+
+        // Get certificates
+        const certificatesRef = collection(db, "certificates");
+        const certQuery = query(certificatesRef, where("userId", "==", userId));
+        const certSnapshot = await getDocs(certQuery);
+
+        const certificates = certSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            completionDate: doc.data().completionDate?.toDate?.() || new Date(),
+        }));
+
+        // Calculate stats
+        const stats = {
+            totalCourses: courses.length,
+            inProgress: courses.filter(c => !c.completedAt).length,
+            completed: courses.filter(c => c.completedAt).length,
+            certificatesEarned: certificates.length,
+            totalHours: enrolledCourses.reduce((sum, course) => {
+                // Parse duration like "8 weeks" -> estimate 40 hours
+                const match = course.duration?.match(/(\d+)\s*(week|month|hour)/i);
+                if (match) {
+                    const value = parseInt(match[1]);
+                    const unit = match[2].toLowerCase();
+                    const hours = unit === 'week' ? value * 5 : unit === 'month' ? value * 20 : value;
+                    return sum + (hours * (course.progress / 100));
+                }
+                return sum;
+            }, 0),
+            learningStreak: 0 // Requires activity log tracking - can be added post-launch
+        };
+
+        return NextResponse.json({
+            success: true,
+            courses,
+            certificates,
+            stats
+        });
+    } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+        return NextResponse.json(
+            { success: false, message: "Internal server error" },
+            { status: 500 }
+        );
+    }
+}

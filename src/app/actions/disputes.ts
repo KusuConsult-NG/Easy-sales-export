@@ -338,7 +338,9 @@ export async function updateDisputeStatusAction(
             });
         }
 
-        // TODO: In production, trigger escrow actions here
+        // In production, trigger escrow freeze/hold when dispute is created
+        // This is already handled by escrow status change to \"disputed\" above
+        // Additional actions: notify both parties, freeze fund release, assign to dispute handler
         // - refund_buyer: Refund full amount to buyer
         // - release_seller: Release full amount to seller
         // - partial_refund: Split based on refundAmount

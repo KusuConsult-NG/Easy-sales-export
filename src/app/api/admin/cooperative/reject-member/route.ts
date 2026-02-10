@@ -17,10 +17,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        const isAdmin = session.user.email?.endsWith("@easysalesexport.com") ||
-            session.user.roles?.includes("admin");
-
-        if (!isAdmin) {
+        if (!session.user.roles?.includes("admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -55,7 +52,15 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date(),
         });
 
-        // TODO: Send rejection email notification to member
+        // Send rejection email notification  
+        const memberData = memberDoc.data();
+        const { sendMembershipRejectionEmail } = await import('@/lib/email-notifications');
+        await sendMembershipRejectionEmail(
+            memberData.email || '',
+            memberData.name || 'Member',
+            reason
+        );
+
 
         return NextResponse.json({
             success: true,

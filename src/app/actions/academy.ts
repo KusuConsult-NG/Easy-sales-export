@@ -493,7 +493,6 @@ export async function createCourseAction(data: Partial<Course>): Promise<{ succe
 export async function updateCourseAction(courseId: string, data: Partial<Course>): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        // @ts-ignore - session.user.roles is valid but TS might complain depending on global type
         if (!session?.user?.id || !session.user.roles?.includes("admin")) {
             return { success: false, error: "Unauthorized" };
         }
@@ -521,7 +520,6 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
 export async function updateCourseModulesAction(courseId: string, modules: CourseModule[]): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        // @ts-ignore
         if (!session?.user?.id || !session.user.roles?.includes("admin")) {
             return { success: false, error: "Unauthorized" };
         }
