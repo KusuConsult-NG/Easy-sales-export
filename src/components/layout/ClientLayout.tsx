@@ -22,7 +22,8 @@ const noSidebarRoutes = [
     '/marketplace',
     '/academy',
     '/export',
-    '/farm-nation'
+    '/farm-nation',
+    '/contact'
 ];
 
 
