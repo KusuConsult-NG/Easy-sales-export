@@ -35,12 +35,10 @@ import type { UserRole } from "@/lib/types/roles";
 
 const navigationItems: Array<{ name: string; href: string; icon: any; app: AppIdentifier; requiredRole?: UserRole }> = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, app: "dashboard" },
-    { name: "Export Windows", href: "/export", icon: Truck, app: "export" },
     // Admin Only
     { name: "Manage Exports", href: "/admin/export", icon: FileText, app: "export", requiredRole: "admin" },
     { name: "Marketplace", href: "/marketplace", icon: Store, app: "marketplace" },
     { name: "Cooperatives", href: "/cooperatives", icon: Users, app: "cooperatives" },
-    { name: "WAVE Program", href: "/wave", icon: Waves, app: "wave" },
     { name: "Farm Nation", href: "/farm-nation", icon: Sprout, app: "farm-nation" },
     { name: "Academy", href: "/academy", icon: GraduationCap, app: "academy" },
     { name: "Escrow", href: "/escrow", icon: Lock, app: "escrow" },
