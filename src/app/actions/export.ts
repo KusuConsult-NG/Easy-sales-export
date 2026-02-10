@@ -323,3 +323,210 @@ export async function getExportWindowDetailsAction(
         return { error: "Failed to fetch export details", success: false };
     }
 }
+
+// ============================================
+// Submit Export Onboarding Action
+// ============================================
+
+export async function submitExportOnboardingAction(
+    onboardingData: {
+        profile: any;
+        kyc: any;
+        bank: any;
+        terms: any;
+    }
+): Promise<{ error: string | null; success: boolean; applicationId?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "Authentication required", success: false };
+        }
+
+        const userId = session.user.id;
+
+        // Generate unique application ID
+        const applicationId = `EXPORT-ONBOARD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+        // Combine all onboarding data
+        const fullApplication = {
+            applicationId,
+            userId,
+            userEmail: session.user.email,
+            profile: onboardingData.profile,
+            kyc: onboardingData.kyc,
+            bank: onboardingData.bank,
+            terms: onboardingData.terms,
+            status: "pending_review",
+            submittedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        };
+
+        // Save to Firestore
+        const onboardingRef = doc(collection(db, "export_onboarding"));
+        await setDoc(onboardingRef, fullApplication);
+
+        // Update user document to mark export service registration
+        const userRef = doc(db, COLLECTIONS.USERS, userId);
+        await updateDoc(userRef, {
+            services: {
+                export: {
+                    registered: true,
+                    status: "pending_approval",
+                    applicationId,
+                    appliedAt: serverTimestamp(),
+                },
+            },
+            updatedAt: serverTimestamp(),
+        });
+
+        return {
+            error: null,
+            success: true,
+            applicationId,
+        };
+    } catch (error: any) {
+        console.error("Submit export onboarding error:", error);
+        return { error: "Failed to submit onboarding application", success: false };
+    }
+}
+
+// ============================================
+// Get User Export Investments Action
+// ============================================
+
+export async function getUserExportInvestmentsAction(): Promise<{
+    error: string | null;
+    success: boolean;
+    data?: Array<{
+        id: string;
+        commodity: string;
+        amount: number;
+        expectedReturn: number;
+        status: string;
+        daysRemaining: number;
+    }>;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "Authentication required", success: false };
+        }
+
+        const userId = session.user.id;
+
+        // Fetch user's export windows
+        const exportsQuery = query(
+            collection(db, COLLECTIONS.EXPORT_WINDOWS),
+            where("userId", "==", userId),
+            where("status", "in", ["pending", "in_transit", "delivered"]),
+            orderBy("createdAt", "desc")
+        );
+
+        const snapshot = await getDocs(exportsQuery);
+
+        const investments = snapshot.docs.map(doc => {
+            const data = doc.data();
+
+            // Calculate days remaining until delivery
+            let daysRemaining = 0;
+            if (data.deliveryDate) {
+                const delivery = data.deliveryDate.toDate();
+                const now = new Date();
+                const diffTime = delivery.getTime() - now.getTime();
+                daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+            }
+
+            // Calculate expected return (assume 20% ROI for now)
+            const expectedReturn = data.amount * 0.20;
+
+            return {
+                id: doc.id,
+                commodity: data.commodity || "Export",
+                amount: data.amount,
+                expectedReturn,
+                status: data.status,
+                daysRemaining,
+            };
+        });
+
+        return {
+            error: null,
+            success: true,
+            data: investments,
+        };
+    } catch (error: any) {
+        console.error("Get user export investments error:", error);
+        return { error: "Failed to fetch investments", success: false };
+    }
+}
+
+// ============================================
+// Get User Export Stats Action
+// ============================================
+
+export async function getUserExportStatsAction(): Promise<{
+    error: string | null;
+    success: boolean;
+    data?: {
+        totalInvested: number;
+        activeInvestments: number;
+        totalReturns: number;
+        pendingReturns: number;
+    };
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "Authentication required", success: false };
+        }
+
+        const userId = session.user.id;
+
+        // Fetch all user's export windows
+        const exportsQuery = query(
+            collection(db, COLLECTIONS.EXPORT_WINDOWS),
+            where("userId", "==", userId)
+        );
+
+        const snapshot = await getDocs(exportsQuery);
+
+        let totalInvested = 0;
+        let activeInvestments = 0;
+        let totalReturns = 0;
+        let pendingReturns = 0;
+
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const amount = data.amount || 0;
+
+            totalInvested += amount;
+
+            // Count active investments (not completed)
+            if (data.status === "pending" || data.status === "in_transit" || data.status === "delivered") {
+                activeInvestments++;
+                // Pending returns (20% ROI assumption)
+                pendingReturns += amount * 0.20;
+            }
+
+            // Total returns from completed investments
+            if (data.status === "completed") {
+                totalReturns += amount * 0.20;
+            }
+        });
+
+        return {
+            error: null,
+            success: true,
+            data: {
+                totalInvested,
+                activeInvestments,
+                totalReturns,
+                pendingReturns,
+            },
+        };
+    } catch (error: any) {
+        console.error("Get user export stats error:", error);
+        return { error: "Failed to fetch statistics", success: false };
+    }
+}

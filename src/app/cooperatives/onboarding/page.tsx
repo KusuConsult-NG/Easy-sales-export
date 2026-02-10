@@ -11,6 +11,7 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registerCooperativeMemberAction } from "@/app/actions/cooperative";
+import { CooperativeErrorBoundary } from "@/components/errors/CooperativeErrorBoundary";
 
 // Steps
 import TierSelectionStep from "./steps/TierSelectionStep";
@@ -19,15 +20,14 @@ import NextOfKinStep from "./steps/NextOfKinStep";
 import DocumentUploadStep from "./steps/DocumentUploadStep";
 import PaymentStep from "./steps/PaymentStep";
 
-export default function CooperativeOnboardingPage() {
+function CooperativeOnboardingContent() {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Form data
     const [tierData, setTierData] = useState({
-        tier: "" as "basic" | "premium" | "gold" | "",
-        paymentCycle: "monthly" as "monthly" | "annual"
+        tier: "" as "basic" | "premium" | ""
     });
 
     const [personalInfo, setPersonalInfo] = useState({
@@ -98,6 +98,25 @@ export default function CooperativeOnboardingPage() {
             formData.append("nextOfKinName", nextOfKin.fullName);
             formData.append("nextOfKinPhone", nextOfKin.phone);
             formData.append("nextOfKinAddress", nextOfKin.address);
+
+            // Documents (uploaded to Firebase Storage)
+            if (documents.validId?.url) {
+                formData.append("validIdUrl", documents.validId.url);
+                formData.append("validIdName", documents.validId.name);
+            }
+            if (documents.passportPhoto?.url) {
+                formData.append("passportPhotoUrl", documents.passportPhoto.url);
+                formData.append("passportPhotoName", documents.passportPhoto.name);
+            }
+            if (documents.proofOfAddress?.url) {
+                formData.append("proofOfAddressUrl", documents.proofOfAddress.url);
+                formData.append("proofOfAddressName", documents.proofOfAddress.name);
+            }
+
+            // BVN
+            if (documents.bvn) {
+                formData.append("bvn", documents.bvn);
+            }
 
             // Call Server Action
             const result = await registerCooperativeMemberAction(formData);
@@ -208,12 +227,21 @@ export default function CooperativeOnboardingPage() {
                 )}
                 {currentStep === 5 && (
                     <PaymentStep
-                        tierData={tierData as { tier: "basic" | "premium" | "gold"; paymentCycle: "monthly" | "annual" }}
+                        tierData={tierData as { tier: "basic" | "premium" }}
                         onComplete={handleComplete}
                         onBack={() => setCurrentStep(4)}
                     />
                 )}
             </div>
         </div>
+    );
+}
+
+// Wrap with error boundary
+export default function CooperativeOnboardingPage() {
+    return (
+        <CooperativeErrorBoundary>
+            <CooperativeOnboardingContent />
+        </CooperativeErrorBoundary>
     );
 }

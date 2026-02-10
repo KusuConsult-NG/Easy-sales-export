@@ -13,6 +13,8 @@ import { OnboardingLayout } from "@/components/onboarding/OnboardingLayout";
 import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { OnboardingStep } from "@/types/service-registration";
 
+import { submitExportOnboardingAction } from "@/app/actions/export";
+
 // Import step components
 import { InvestmentProfileStep } from "./steps/InvestmentProfileStep";
 import { KYCVerificationStep } from "./steps/KYCVerificationStep";
@@ -92,16 +94,19 @@ export default function ExportOnboardingPage() {
 
     const handleSubmit = async (finalData: any) => {
         try {
-            // TODO: Submit to Firebase/API
-            console.log("Submitting onboarding data:", finalData);
+            const result = await submitExportOnboardingAction(finalData);
 
-            // TODO: Update user roles and service registration in database
-            // await updateUserServiceRegistration(userId, 'export', finalData);
-
-            // FOR NOW: Redirect to pending/success page
-            router.push("/export/onboarding/pending");
+            if (result.success) {
+                // Successfully submitted - redirect to pending page
+                router.push("/export/onboarding/pending");
+            } else {
+                // Handle error
+                console.error("Onboarding submission failed:", result.error);
+                alert(`Failed to submit: ${result.error}`);
+            }
         } catch (error) {
             console.error("Error submitting onboarding:", error);
+            alert("An error occurred. Please try again.");
         }
     };
 

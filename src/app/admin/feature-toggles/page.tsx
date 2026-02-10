@@ -22,32 +22,7 @@ export default function FeatureTogglesPage() {
     }
 
     useEffect(() => {
-        let mounted = true;
-        async function fetchToggles() {
-            setLoading(true);
-            try {
-                // Simulate fetch
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                const mockTimestamp = { seconds: Date.now() / 1000, nanoseconds: 0, toDate: () => new Date(), toMillis: () => Date.now(), isEqual: () => false } as any;
-
-                if (mounted) {
-                    setToggles([
-                        { id: "beta_dashboard", name: "Beta Dashboard", enabled: true, description: "New dashboard with enhanced analytics", targetRoles: [], createdAt: mockTimestamp, updatedAt: mockTimestamp, createdBy: "system" },
-                        { id: "dark_mode", name: "Dark Mode", enabled: true, description: "System-wide dark mode support", targetRoles: [], createdAt: mockTimestamp, updatedAt: mockTimestamp, createdBy: "system" },
-                        { id: "api_v2", name: "API v2", enabled: false, description: "Next generation API endpoints", targetRoles: ["admin"], createdAt: mockTimestamp, updatedAt: mockTimestamp, createdBy: "system" },
-                        { id: "maintenance_mode", name: "Maintenance Mode", enabled: false, description: "Put site in maintenance mode", targetRoles: ["admin"], createdAt: mockTimestamp, updatedAt: mockTimestamp, createdBy: "system" }
-                    ]);
-                }
-            } catch (error) {
-                console.error(error);
-            } finally {
-                if (mounted) setLoading(false);
-            }
-        }
-
-        fetchToggles();
-        return () => { mounted = false; };
+        loadToggles();
     }, []);
 
     async function handleToggle(featureId: string, currentState: boolean) {

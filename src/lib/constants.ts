@@ -28,8 +28,17 @@ export const COMPANY_INFO = {
     tagline: "Export & Agriculture",
     fullName: "EASY SALES EXPORT & AGRICULTURE",
     rc: "RC: 763845",
-    email: "info@easysalesexport.com",
-    phone: "+234 123 456 7890",
+    contact: {
+        cooperative: {
+            email: "info@easysalescooperative.com",
+            address: "68 Murtala Muhammed Way, opposite UTC junction, beside the VIO office, in Jos, Plateau State, Nigeria",
+        },
+        general: {
+            email: "info@easysalesexport.com",
+            phone: "+234 123 456 7890",
+        },
+    },
     copyright: `© ${new Date().getFullYear()} EASY SALES EXPORT & AGRICULTURE. All rights reserved.`,
 } as const;
+
 

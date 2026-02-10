@@ -54,7 +54,7 @@ export default function WaveLandingPage() {
     return (
         <div className="min-h-screen">
             {/* Hero Section with Carousel */}
-            <section className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-rose-50 via-white to-red-50 overflow-hidden">
+            <section className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
                 {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-5">
                     <div className="absolute inset-0" style={{
@@ -65,7 +65,7 @@ export default function WaveLandingPage() {
 
                 <div className="relative max-w-7xl mx-auto px-6 py-20 text-center">
                     {/* Presidential Badge */}
-                    <div className="inline-flex items-center gap-2 bg-linear-to-r from-pink-500 via-rose-500 to-red-500 text-white px-6 py-2 rounded-full text-sm font-semibold mb-8 shadow-lg">
+                    <div className="inline-flex items-center gap-2 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-6 py-2 rounded-full text-sm font-semibold mb-8 shadow-lg">
                         <Shield className="w-4 h-4" />
                         <span>Presidential Mandate • Renewed Hope Agenda</span>
                     </div>
@@ -74,20 +74,20 @@ export default function WaveLandingPage() {
                     <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
                         RH-WAVE 774
                     </h1>
-                    <h2 className="text-3xl md:text-5xl font-bold bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 bg-clip-text text-transparent mb-6">
+                    <h2 className="text-3xl md:text-5xl font-bold bg-linear-to-r from-green-700 via-green-600 to-green-500 bg-clip-text text-transparent mb-6">
                         Women Agro-Value Expansion Program
                     </h2>
 
                     {/* Subheadline */}
                     <p className="text-xl md:text-2xl text-slate-700 max-w-4xl mx-auto mb-12">
                         A National Movement. A Presidential Mandate. <br />
-                        <span className="font-semibold text-rose-600">A Women-Led Revolution in Agribusiness.</span>
+                        <span className="font-semibold text-green-700">A Women-Led Revolution in Agribusiness.</span>
                     </p>
 
                     {/* CTA Button */}
                     <Link
                         href="/wave/application"
-                        className="inline-flex items-center gap-3 bg-linear-to-r from-pink-500 via-rose-500 to-red-500 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-rose-500/50 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-green-500/50 transition-all hover:scale-105"
                     >
                         <span>Register Now</span>
                         <ArrowRight className="w-6 h-6" />
@@ -96,11 +96,11 @@ export default function WaveLandingPage() {
             </section>
 
             {/* Image Carousel Section */}
-            <section className="py-16 bg-linear-to-br from-rose-50 via-red-50 to-white">
+            <section className="py-16 bg-linear-to-br from-green-50 via-green-100 to-white">
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="text-center mb-8">
                         <h3 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">
-                            <span className="text-rose-600">RH-WAVE 774</span> in Action
+                            <span className="text-green-700">RH-WAVE 774</span> in Action
                         </h3>
                         <p className="text-lg text-slate-700">Witness the transformation happening across Nigeria</p>
                     </div>
@@ -130,14 +130,14 @@ export default function WaveLandingPage() {
                                 className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-4 rounded-full shadow-lg transition z-10"
                                 aria-label="Previous image"
                             >
-                                <ChevronLeft className="w-6 h-6 text-rose-600" />
+                                <ChevronLeft className="w-6 h-6 text-green-700" />
                             </button>
                             <button
                                 onClick={nextImage}
                                 className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-4 rounded-full shadow-lg transition z-10"
                                 aria-label="Next image"
                             >
-                                <ChevronRight className="w-6 h-6 text-rose-600" />
+                                <ChevronRight className="w-6 h-6 text-green-700" />
                             </button>
 
                             {/*Indicators */}
@@ -172,19 +172,19 @@ export default function WaveLandingPage() {
                     <div className="text-center mb-16">
                         <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
                             More Than a Program — <br />
-                            <span className="text-rose-600">A National Reawakening</span>
+                            <span className="text-green-700">A National Reawakening</span>
                         </h2>
-                        <div className="w-24 h-1 bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 mx-auto rounded-full" />
+                        <div className="w-24 h-1 bg-linear-to-r from-green-700 via-green-600 to-green-600 mx-auto rounded-full" />
                     </div>
 
                     <div className="prose prose-lg max-w-4xl mx-auto text-slate-700 leading-relaxed">
                         <p className="text-xl mb-6">
-                            RH-WAVE 774 is Nigeria's boldest answer to economic exclusion, food insecurity, and structural inequality — anchored on the <strong className="text-rose-600">brilliance, courage, and economic power of Nigerian women</strong>.
+                            RH-WAVE 774 is Nigeria's boldest answer to economic exclusion, food insecurity, and structural inequality — anchored on the <strong className="text-green-700">brilliance, courage, and economic power of Nigerian women</strong>.
                         </p>
                         <p className="text-lg mb-6">
                             Launched under the visionary leadership of <strong>President Bola Ahmed Tinubu, GCFR</strong>, in June 2025, this flagship Women Agro-Value Expansion Programme propels women from subsistence farming to value-chain entrepreneurs, market leaders, and exporters.
                         </p>
-                        <p className="text-lg font-semibold text-rose-700">
+                        <p className="text-lg font-semibold text-green-700">
                             This is not empowerment rhetoric — this is economic inclusion in practice.
                         </p>
                     </div>
@@ -192,16 +192,16 @@ export default function WaveLandingPage() {
             </section>
 
             {/* Vision & Stats Section */}
-            <section className="py-20 bg-linear-to-br from-rose-50 to-red-50">
+            <section className="py-20 bg-linear-to-br from-green-50 to-green-50">
                 <div className="max-w-7xl mx-auto px-6">
                     {/* Vision Statement */}
                     <div className="bg-white rounded-3xl p-10 shadow-xl mb-16">
                         <div className="flex items-start gap-4 mb-4">
-                            <Sparkles className="w-8 h-8 text-rose-600 shrink-0 mt-1" />
+                            <Sparkles className="w-8 h-8 text-green-700 shrink-0 mt-1" />
                             <div>
                                 <h3 className="text-2xl font-bold text-slate-900 mb-4">Our Vision</h3>
                                 <p className="text-lg text-slate-700 leading-relaxed">
-                                    A Nigeria where every woman is a <strong className="text-rose-600">wealth creator</strong>, <strong className="text-pink-600">value-chain leader</strong>, <strong className="text-rose-600">job generator</strong>, trusted participant in national export growth, and builder of resilient food systems.
+                                    A Nigeria where every woman is a <strong className="text-green-700">wealth creator</strong>, <strong className="text-green-600">value-chain leader</strong>, <strong className="text-green-700">job generator</strong>, trusted participant in national export growth, and builder of resilient food systems.
                                 </p>
                             </div>
                         </div>
@@ -211,21 +211,21 @@ export default function WaveLandingPage() {
                     <h3 className="text-3xl font-bold text-center text-slate-900 mb-12">The Challenge We're Solving</h3>
                     <div className="grid md:grid-cols-3 gap-8">
                         <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition">
-                            <div className="text-6xl font-bold text-rose-600 mb-4">70%</div>
+                            <div className="text-6xl font-bold text-green-700 mb-4">70%</div>
                             <p className="text-slate-700 text-lg">
                                 Nigerian women represent nearly <strong>70% of the agricultural workforce</strong>
                             </p>
                         </div>
                         <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition">
-                            <div className="text-6xl font-bold text-pink-600 mb-4">80%</div>
+                            <div className="text-6xl font-bold text-green-600 mb-4">80%</div>
                             <p className="text-slate-700 text-lg">
                                 Over <strong>80% of total food production</strong> comes from women
                             </p>
                         </div>
-                        <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition border-4 border-red-200">
-                            <div className="text-6xl font-bold text-red-600 mb-4">10%</div>
+                        <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition border-4 border-green-200">
+                            <div className="text-6xl font-bold text-green-700 mb-4">10%</div>
                             <p className="text-slate-700 text-lg">
-                                Yet only <strong className="text-red-600">~10% own farmland</strong> or access finance, markets, or technology
+                                Yet only <strong className="text-green-700">~10% own farmland</strong> or access finance, markets, or technology
                             </p>
                         </div>
                     </div>
@@ -234,7 +234,7 @@ export default function WaveLandingPage() {
                     <div className="text-center mt-12">
                         <Link
                             href="/wave/application"
-                            className="inline-flex items-center gap-3 bg-linear-to-r from-pink-500 via-rose-500 to-red-500 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-rose-500/50 transition-all hover:scale-105"
+                            className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-green-500/50 transition-all hover:scale-105"
                         >
                             <Users className="w-5 h-5" />
                             <span>Join 10 Million Women Building Nigeria's Future</span>
@@ -247,7 +247,7 @@ export default function WaveLandingPage() {
             <section className="py-20 bg-slate-50">
                 <div className="max-w-6xl mx-auto px-6">
                     <h2 className="text-4xl md:text-5xl font-bold text-center text-slate-900 mb-16">
-                        Our Genesis — <span className="text-rose-600">Hope Birthed from National Purpose</span>
+                        Our Genesis — <span className="text-green-700">Hope Birthed from National Purpose</span>
                     </h2>
 
                     <div className="space-y-12">
@@ -257,17 +257,17 @@ export default function WaveLandingPage() {
                                 Nigerian women represent nearly 70% of the agricultural workforce and over 80% of total food production. Yet tragically, only ~10% own farmland or access finance, markets, or technology.
                             </p>
                             <p className="text-lg text-slate-700 leading-relaxed mt-4">
-                                This stark imbalance has constrained productivity, deepened poverty, and weakened national food systems. <strong className="text-rose-600">RH-WAVE 774 was born to change that.</strong>
+                                This stark imbalance has constrained productivity, deepened poverty, and weakened national food systems. <strong className="text-green-700">RH-WAVE 774 was born to change that.</strong>
                             </p>
                             <p className="text-lg text-slate-700 leading-relaxed mt-4">
-                                Under the <strong>Renewed Hope Agenda</strong>, President Tinubu empowered the Federal Ministry of Women Affairs to architect a program that <strong className="text-pink-600">dismantles barriers — not just talk about them</strong>.
+                                Under the <strong>Renewed Hope Agenda</strong>, President Tinubu empowered the Federal Ministry of Women Affairs to architect a program that <strong className="text-green-600">dismantles barriers — not just talk about them</strong>.
                             </p>
                         </div>
 
                         {/* OIC Partnership */}
-                        <div className="bg-linear-to-br from-rose-50 to-pink-50 rounded-2xl p-8 border-l-4 border-rose-600">
+                        <div className="bg-linear-to-br from-green-50 to-green-50 rounded-2xl p-8 border-l-4 border-green-700">
                             <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
-                                <Globe className="w-7 h-7 text-rose-600" />
+                                <Globe className="w-7 h-7 text-green-700" />
                                 OIC & Strategic Collaboration — A Global Partnership in Abuja
                             </h3>
                             <p className="text-lg text-slate-700 leading-relaxed mb-4">
@@ -279,9 +279,9 @@ export default function WaveLandingPage() {
                         </div>
 
                         {/* Easy Sales Export Partnership */}
-                        <div className="bg-linear-to-br from-red-50 to-blue-50 rounded-2xl p-8 border-l-4 border-pink-600">
+                        <div className="bg-linear-to-br from-green-50 to-green-100 rounded-2xl p-8 border-l-4 border-green-600">
                             <h3 className="text-2xl font-bold text-slate-900 mb-4 flex items-center gap-3">
-                                <Shield className="w-7 h-7 text-pink-600" />
+                                <Shield className="w-7 h-7 text-green-600" />
                                 Easy Sales Export — Lead Implementation Partner
                             </h3>
                             <p className="text-lg text-slate-700 leading-relaxed mb-4">
@@ -292,27 +292,27 @@ export default function WaveLandingPage() {
                             </p>
                             <ul className="space-y-2 text-slate-700">
                                 <li className="flex items-start gap-3">
-                                    <CheckCircle className="w-5 h-5 text-pink-600 shrink-0 mt-1" />
+                                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-1" />
                                     <span>Agribusiness structuring and governance</span>
                                 </li>
                                 <li className="flex items-start gap-3">
-                                    <CheckCircle className="w-5 h-5 text-pink-600 shrink-0 mt-1" />
+                                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-1" />
                                     <span>Cooperative systems design</span>
                                 </li>
                                 <li className="flex items-start gap-3">
-                                    <CheckCircle className="w-5 h-5 text-pink-600 shrink-0 mt-1" />
+                                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-1" />
                                     <span>Market access and export pathways</span>
                                 </li>
                                 <li className="flex items-start gap-3">
-                                    <CheckCircle className="w-5 h-5 text-pink-600 shrink-0 mt-1" />
+                                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-1" />
                                     <span>Operational execution excellence</span>
                                 </li>
                                 <li className="flex items-start gap-3">
-                                    <CheckCircle className="w-5 h-5 text-pink-600 shrink-0 mt-1" />
+                                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-1" />
                                     <span>Monitoring, reporting, and impact delivery systems</span>
                                 </li>
                             </ul>
-                            <p className="text-lg font-semibold text-purple-700 mt-4">
+                            <p className="text-lg font-semibold text-green-800 mt-4">
                                 This partnership ensures RH-WAVE 774 becomes a scalable, transparent, and impact-heavy reality.
                             </p>
                         </div>
@@ -328,7 +328,7 @@ export default function WaveLandingPage() {
                             What RH-WAVE 774 Will Do
                         </h2>
                         <p className="text-xl text-slate-700 max-w-3xl mx-auto">
-                            The program is built on <strong className="text-rose-600">5 pillars of transformation</strong>
+                            The program is built on <strong className="text-green-700">5 pillars of transformation</strong>
                         </p>
                     </div>
 
@@ -376,10 +376,10 @@ export default function WaveLandingPage() {
                         ))}
                     </div>
 
-                    <div className="bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 rounded-3xl p-1 max-w-4xl mx-auto">
+                    <div className="bg-linear-to-r from-green-700 via-green-600 to-green-600 rounded-3xl p-1 max-w-4xl mx-auto">
                         <div className="bg-white rounded-3xl p-8 text-center">
                             <p className="text-2xl font-bold text-slate-900">
-                                This is not charity — this is <span className="text-rose-600">structured economic participation</span>.
+                                This is not charity — this is <span className="text-green-700">structured economic participation</span>.
                             </p>
                         </div>
                     </div>
@@ -387,7 +387,7 @@ export default function WaveLandingPage() {
                     {/* Who Should Join */}
                     <div className="mt-16 bg-white rounded-3xl p-10 shadow-xl">
                         <h3 className="text-3xl font-bold text-center text-slate-900 mb-8">
-                            To Every Nigerian Woman — <span className="text-rose-600">This is Your Moment</span>
+                            To Every Nigerian Woman — <span className="text-green-700">This is Your Moment</span>
                         </h3>
                         <p className="text-lg text-slate-700 text-center mb-6">If you are:</p>
                         <div className="grid md:grid-cols-4 gap-4 max-w-4xl mx-auto">
@@ -395,15 +395,15 @@ export default function WaveLandingPage() {
                                 "A farmer", "A trader", "A processor", "A graduate",
                                 "A single mother", "A rural entrepreneur", "A market woman", "A woman with dreams"
                             ].map((type, index) => (
-                                <div key={index} className="bg-rose-50 rounded-lg p-4 text-center">
-                                    <p className="font-semibold text-rose-700">{type}</p>
+                                <div key={index} className="bg-green-50 rounded-lg p-4 text-center">
+                                    <p className="font-semibold text-green-700">{type}</p>
                                 </div>
                             ))}
                         </div>
                         <p className="text-xl font-bold text-center text-slate-900 mt-8">
                             RH-WAVE 774 is designed for you.
                         </p>
-                        <p className="text-lg text-center text-rose-600 mt-4">
+                        <p className="text-lg text-center text-green-700 mt-4">
                             This is your invitation to rise. To build. To lead. To own your economic future.
                         </p>
                     </div>
@@ -416,7 +416,7 @@ export default function WaveLandingPage() {
                     <h2 className="text-4xl md:text-5xl font-bold text-center text-slate-900 mb-6">
                         Why RH-WAVE 774 Matters to Nigeria's Future
                     </h2>
-                    <div className="w-24 h-1 bg-linear-to-r from-pink-500 via-rose-500 to-pink-600 mx-auto rounded-full mb-16" />
+                    <div className="w-24 h-1 bg-linear-to-r from-green-700 via-green-600 to-green-600 mx-auto rounded-full mb-16" />
 
                     {/* National Impact */}
                     <div className="grid md:grid-cols-2 gap-8 mb-16">
@@ -447,7 +447,7 @@ export default function WaveLandingPage() {
                                 icon: "🇳🇬"
                             }
                         ].map((benefit, index) => (
-                            <div key={index} className="bg-linear-to-br from-rose-50 to-pink-50 rounded-2xl p-8 border-l-4 border-rose-600">
+                            <div key={index} className="bg-linear-to-br from-green-50 to-green-50 rounded-2xl p-8 border-l-4 border-green-700">
                                 <div className="flex items-start gap-4">
                                     <div className="text-4xl">{benefit.icon}</div>
                                     <div>
@@ -460,7 +460,7 @@ export default function WaveLandingPage() {
                     </div>
 
                     {/* What You Gain */}
-                    <div className="bg-linear-to-br from-red-50 to-blue-50 rounded-3xl p-10">
+                    <div className="bg-linear-to-br from-green-50 to-green-100 rounded-3xl p-10">
                         <h3 className="text-3xl font-bold text-center text-slate-900 mb-8">What You Gain</h3>
                         <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
                             {[
@@ -473,7 +473,7 @@ export default function WaveLandingPage() {
                                 "Partnership with international organizations (OIC)"
                             ].map((gain, index) => (
                                 <div key={index} className="flex items-start gap-3">
-                                    <CheckCircle className="w-6 h-6 text-rose-600 shrink-0 mt-1" />
+                                    <CheckCircle className="w-6 h-6 text-green-700 shrink-0 mt-1" />
                                     <p className="text-slate-700 font-medium">{gain}</p>
                                 </div>
                             ))}
@@ -487,9 +487,9 @@ export default function WaveLandingPage() {
                         </p>
                         <p className="text-lg text-slate-700 mb-8 max-w-3xl mx-auto">
                             Women feeding the world. Women leading commerce. Women transforming communities. <br />
-                            <span className="font-semibold text-rose-600">Women building nations.</span>
+                            <span className="font-semibold text-green-700">Women building nations.</span>
                         </p>
-                        <p className="text-xl font-bold text-pink-600 mb-8">
+                        <p className="text-xl font-bold text-green-600 mb-8">
                             This is WAVE. This is your stage. This is your legacy.
                         </p>
                     </div>
@@ -497,7 +497,7 @@ export default function WaveLandingPage() {
             </section>
 
             {/* Final Registration CTA */}
-            <section className="py-20 bg-linear-to-br from-pink-500 via-rose-500 to-red-500 text-white">
+            <section className="py-20 bg-linear-to-br from-green-700 via-green-600 to-green-500 text-white">
                 <div className="max-w-4xl mx-auto px-6 text-center">
                     <h2 className="text-4xl md:text-5xl font-bold mb-6">
                         Register Now — Be Positioned for Impact, Income & Legacy
@@ -511,7 +511,7 @@ export default function WaveLandingPage() {
 
                     <Link
                         href="/wave/application"
-                        className="inline-flex items-center gap-3 bg-white text-rose-700 px-12 py-6 rounded-xl text-xl font-bold shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-3 bg-white text-green-700 px-12 py-6 rounded-xl text-xl font-bold shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                     >
                         <span>Begin Here - Apply Now!</span>
                         <ArrowRight className="w-6 h-6" />

@@ -1,5 +1,6 @@
 "use client";
 
+import HubNavigation from "@/components/hub/HubNavigation";
 import HubHero from "@/components/hub/HubHero";
 import ModuleCard from "@/components/hub/ModuleCard";
 import PlatformStats from "@/components/hub/PlatformStats";
@@ -52,11 +53,11 @@ export default function HubPage() {
         },
         {
             title: "WAVE Program",
-            description: "Women in Agriculture Venture Excellence - Empowerment loans and training",
+            description: "RH-WAVE 774: Presidential mandate empowering Nigerian women in agriculture through training, funding, and market access",
             icon: Users,
-            href: "/wave",
+            href: "/wave/landing",
             gradient: "from-pink-500 to-rose-500",
-            stats: "₦850M+ Disbursed",
+            stats: "10M Women Target",
         },
         {
             title: "Cooperatives",
@@ -66,18 +67,13 @@ export default function HubPage() {
             gradient: "from-indigo-500 to-blue-500",
             stats: "89 Active Groups",
         },
-        {
-            title: "Savings",
-            description: "Flexible and fixed savings plans with competitive returns for financial growth",
-            icon: Wallet,
-            href: "/cooperatives/my-savings",
-            gradient: "from-teal-500 to-green-500",
-            stats: "Up to 18% Annual Returns",
-        },
     ];
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            {/* Navigation */}
+            <HubNavigation />
+
             {/* Hero Section */}
             <HubHero />
 

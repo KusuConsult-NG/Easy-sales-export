@@ -9,8 +9,8 @@
 import { ShoppingCart, Package, Clock, CheckCircle, Star, TrendingUp, Search, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { getBuyerStatsAction, getBuyerOrdersAction } from "@/app/actions/marketplace";
-import type { Order } from "@/lib/types/marketplace";
+import { getBuyerStatsAction, getBuyerOrdersAction, getRecommendedProductsAction } from "@/app/actions/marketplace";
+import type { Order, Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 
 export default function BuyerDashboard() {
@@ -22,13 +22,15 @@ export default function BuyerDashboard() {
         savedSellers: 0
     });
     const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+    const [recommendedProducts, setRecommendedProducts] = useState<any[]>([]);
 
     useEffect(() => {
         async function loadDashboard() {
             try {
-                const [statsResult, ordersResult] = await Promise.all([
+                const [statsResult, ordersResult, recommendedResult] = await Promise.all([
                     getBuyerStatsAction(),
-                    getBuyerOrdersAction()
+                    getBuyerOrdersAction(),
+                    getRecommendedProductsAction(3)
                 ]);
 
                 if (statsResult.success && statsResult.stats) {
@@ -44,6 +46,20 @@ export default function BuyerDashboard() {
                     });
                     setRecentOrders(sorted.slice(0, 5));
                 }
+
+                if (recommendedResult.success && recommendedResult.products) {
+                    // Transform to match expected format
+                    const transformed = recommendedResult.products.map(p => ({
+                        id: p.id,
+                        name: p.title,
+                        price: p.pricingTiers[0]?.price || 0,
+                        unit: p.unit,
+                        seller: p.sellerName || "Unknown Seller",
+                        rating: p.rating || 0,
+                        image: p.images[0] || "/images/logo.jpg"
+                    }));
+                    setRecommendedProducts(transformed);
+                }
             } catch (error) {
                 console.error("Failed to load buyer dashboard:", error);
             } finally {
@@ -52,36 +68,6 @@ export default function BuyerDashboard() {
         }
         loadDashboard();
     }, []);
-
-    const recommendedProducts = [
-        {
-            id: 1,
-            name: "Dried Hibiscus Flowers",
-            price: 3500,
-            unit: "kg",
-            seller: "Kano Export Hub",
-            rating: 4.8,
-            image: "/images/logo.jpg"
-        },
-        {
-            id: 2,
-            name: "Tiger Nuts",
-            price: 2800,
-            unit: "kg",
-            seller: "Lagos Agro Ventures",
-            rating: 4.7,
-            image: "/images/logo.jpg"
-        },
-        {
-            id: 3,
-            name: "Sesame Seeds",
-            price: 4200,
-            unit: "kg",
-            seller: "Benue Farms Alliance",
-            rating: 4.9,
-            image: "/images/logo.jpg"
-        }
-    ];
 
     const getStatusBadge = (status: string) => {
         const badges: Record<string, { bg: string; text: string; label: string }> = {

@@ -1,14 +1,43 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 export default function HubHero() {
+    // Hero background image slider
+    const heroImages = [
+        "/images/hero-1.jpg",
+        "/images/hero-2.jpg",
+        "/images/hero-3.jpg",
+    ];
+    const [currentHeroImage, setCurrentHeroImage] = useState(0);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentHeroImage((prev) => (prev + 1) % heroImages.length);
+        }, 6000);
+        return () => clearInterval(timer);
+    }, [heroImages.length]);
+
     return (
         <div className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-linear-to-br from-primary via-primary/80 to-blue-600 dark:from-primary/90 dark:via-primary/70 dark:to-blue-700">
-            {/* Animated background elements */}
+            {/* Background Image Slider */}
             <div className="absolute inset-0 overflow-hidden">
+                {heroImages.map((img, index) => (
+                    <div
+                        key={index}
+                        className={`absolute inset-0 transition-opacity duration-2000 ${index === currentHeroImage ? "opacity-20" : "opacity-0"
+                            }`}
+                        style={{
+                            backgroundImage: `url('${img}')`,
+                            backgroundSize: "cover",
+                            backgroundPosition: "center",
+                        }}
+                    />
+                ))}
+                {/* Animated overlay elements */}
                 <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse" />
                 <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000" />
             </div>
@@ -39,8 +68,7 @@ export default function HubHero() {
 
                 {/* Subtitle */}
                 <p className="text-xl md:text-2xl text-white/90 mb-12 max-w-3xl mx-auto animate-[slideInUp_0.8s_ease-out_0.2s_both]">
-                    Your complete platform for agricultural exports, marketplace trading,
-                    land investment, education, and financial empowerment
+                    Powering Nigeria's Agro Trade, Export & Farm Investment
                 </p>
 
                 {/* CTA Buttons */}
@@ -49,14 +77,14 @@ export default function HubHero() {
                         href="/marketplace"
                         className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-primary font-bold rounded-xl hover:bg-slate-50 transition-all shadow-lg hover:shadow-xl hover:scale-105"
                     >
-                        Explore Marketplace
+                        Start Trading Agro Products
                         <ArrowRight className="w-5 h-5" />
                     </Link>
                     <Link
                         href="/academy"
                         className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-bold rounded-xl hover:bg-white/20 transition-all border-2 border-white/30"
                     >
-                        Start Learning
+                        Learn Export and Agro Business
                     </Link>
                 </div>
             </div>

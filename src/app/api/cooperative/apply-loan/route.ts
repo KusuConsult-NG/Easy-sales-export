@@ -40,9 +40,19 @@ export async function POST(request: NextRequest) {
         }
 
         const membershipData = membershipDoc.data();
-        if (membershipData.membershipStatus !== "approved") {
+
+        // Check membership status - must be active (not just approved)
+        if (membershipData.membershipStatus !== "active") {
             return NextResponse.json(
-                { success: false, message: "Your membership must be approved before applying for loans" },
+                { success: false, message: "Your membership must be active before applying for loans. Please complete registration payment." },
+                { status: 403 }
+            );
+        }
+
+        // Check membership tier - must be Premium for loans
+        if (membershipData.membershipTier !== "premium") {
+            return NextResponse.json(
+                { success: false, message: "Only Premium members (₦20,000 tier) can apply for loans. Please upgrade your membership." },
                 { status: 403 }
             );
         }
@@ -68,6 +78,50 @@ export async function POST(request: NextRequest) {
                     message: `Loan amount must be between ₦${product.minAmount.toLocaleString()} and ₦${product.maxAmount.toLocaleString()}`
                 },
                 { status: 400 }
+            );
+        }
+
+        // ELIGIBILITY CHECK #1: Check savings requirement (must have 2x loan amount in savings)
+        const totalSavings = membershipData.totalContributions || 0;
+        const requiredSavings = amount * 2;
+
+        if (totalSavings < requiredSavings) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Insufficient savings. You need at least ₦${requiredSavings.toLocaleString()} in contributions (2x loan amount). Current savings: ₦${totalSavings.toLocaleString()}`
+                },
+                { status: 403 }
+            );
+        }
+
+        // ELIGIBILITY CHECK #2: Check for existing active loans
+        const { collection: collectionFn, query, where, getDocs } = await import("firebase/firestore");
+        const existingLoansQuery = query(
+            collectionFn(db, "loan_applications"),
+            where("userId", "==", userId),
+            where("status", "in", ["pending", "approved", "active"])
+        );
+        const existingLoansSnapshot = await getDocs(existingLoansQuery);
+
+        if (!existingLoansSnapshot.empty) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "You already have an active or pending loan. Please clear existing loans before applying for a new one."
+                },
+                { status: 403 }
+            );
+        }
+
+        // ELIGIBILITY CHECK #3: Check payment status (no outstanding debts)
+        if (membershipData.paymentStatus !== "completed") {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Your membership payment is not complete. Please settle all outstanding payments before applying for loans."
+                },
+                { status: 403 }
             );
         }
 

@@ -10,8 +10,7 @@ import { CheckCircle } from "lucide-react";
 
 interface TierSelectionStepProps {
     data: {
-        tier: "basic" | "premium" | "gold" | "";
-        paymentCycle: "monthly" | "annual";
+        tier: "basic" | "premium" | "";
     };
     onChange: (data: any) => void;
     onNext: () => void;
@@ -22,51 +21,33 @@ export default function TierSelectionStep({ data, onChange, onNext }: TierSelect
         {
             id: "basic" as const,
             name: "Basic",
-            monthlyPrice: 5000,
+            price: 10000, // One-time payment
             features: [
-                "5% interest on savings",
-                "Access to microloans",
-                "Monthly financial literacy training",
-                "Community networking",
+                "Access to cooperative loans",
+                "2x contribution loan limit",
+                "Monthly interest rate: 2.5%",
+                "6-month maximum repayment period",
+                "Group savings benefits",
             ],
             color: "from-blue-500 to-cyan-500"
         },
         {
             id: "premium" as const,
             name: "Premium",
-            monthlyPrice: 15000,
+            price: 20000, // One-time payment
             features: [
-                "8% interest on savings",
-                "Priority loan approval",
-                "Business development workshops",
-                "Export opportunities access",
-                "Quarterly dividends",
+                "Access to cooperative loans",
+                "3x contribution loan limit",
+                "Monthly interest rate: 2%",
+                "12-month maximum repayment period",
+                "Priority loan processing",
+                "Export aggregation priority slots",
+                "Group savings benefits",
             ],
             color: "from-purple-500 to-pink-500",
             popular: true
-        },
-        {
-            id: "gold" as const,
-            name: "Gold",
-            monthlyPrice: 30000,
-            features: [
-                "12% interest on savings",
-                "Unlimited loan access",
-                "One-on-one business mentorship",
-                "Investment opportunities",
-                "Premium networking events",
-                "Annual profit sharing",
-            ],
-            color: "from-yellow-500 to-orange-500"
         }
     ];
-
-    const calculatePrice = (monthlyPrice: number) => {
-        if (data.paymentCycle === "annual") {
-            return monthlyPrice * 12 * 0.9; // 10% discount for annual
-        }
-        return monthlyPrice;
-    };
 
     const handleContinue = () => {
         if (!data.tier) {
@@ -88,46 +69,25 @@ export default function TierSelectionStep({ data, onChange, onNext }: TierSelect
                 </p>
             </div>
 
-            {/* Payment Cycle Toggle */}
-            <div className="flex justify-center">
-                <div className="inline-flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-                    <button
-                        onClick={() => onChange({ ...data, paymentCycle: "monthly" })}
-                        className={`px-6 py-2 rounded-lg font-semibold transition-all ${data.paymentCycle === "monthly"
-                                ? "bg-white dark:bg-slate-700 text-purple-600 shadow-md"
-                                : "text-slate-600 dark:text-slate-400"
-                            }`}
-                    >
-                        Monthly
-                    </button>
-                    <button
-                        onClick={() => onChange({ ...data, paymentCycle: "annual" })}
-                        className={`px-6 py-2 rounded-lg font-semibold transition-all relative ${data.paymentCycle === "annual"
-                                ? "bg-white dark:bg-slate-700 text-purple-600 shadow-md"
-                                : "text-slate-600 dark:text-slate-400"
-                            }`}
-                    >
-                        Annual
-                        <span className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
-                            Save 10%
-                        </span>
-                    </button>
-                </div>
+            {/* Info Banner */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 max-w-2xl mx-auto">
+                <p className="text-sm text-blue-800 dark:text-blue-300 text-center">
+                    💡 <strong>One-Time Registration Fee</strong> - Select your membership tier below. This is a one-time payment that grants lifetime cooperative membership.
+                </p>
             </div>
 
             {/* Tiers Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {tiers.map((tier) => {
                     const isSelected = data.tier === tier.id;
-                    const price = calculatePrice(tier.monthlyPrice);
 
                     return (
                         <button
                             key={tier.id}
                             onClick={() => onChange({ ...data, tier: tier.id })}
                             className={`relative text-left p-6 rounded-2xl border-2 transition-all ${isSelected
-                                    ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg scale-105"
-                                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-purple-300 hover:shadow-md"
+                                ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 shadow-lg scale-105"
+                                : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-purple-300 hover:shadow-md"
                                 }`}
                         >
                             {tier.popular && (
@@ -154,20 +114,12 @@ export default function TierSelectionStep({ data, onChange, onNext }: TierSelect
 
                             <div className="mb-4">
                                 <span className="text-3xl font-bold text-slate-900 dark:text-white">
-                                    ₦{price.toLocaleString()}
+                                    ₦{tier.price.toLocaleString()}
                                 </span>
-                                <span className="text-slate-600 dark:text-slate-400">
-                                    /{data.paymentCycle === "monthly" ? "month" : "year"}
+                                <span className="text-slate-600 dark:text-slate-400 text-sm ml-2">
+                                    one-time
                                 </span>
                             </div>
-
-                            {data.paymentCycle === "annual" && (
-                                <div className="mb-4 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                                    <p className="text-sm text-green-700 dark:text-green-300">
-                                        Save ₦{(tier.monthlyPrice * 12 * 0.1).toLocaleString()} per year
-                                    </p>
-                                </div>
-                            )}
 
                             <ul className="space-y-2">
                                 {tier.features.map((feature, idx) => (
@@ -185,10 +137,9 @@ export default function TierSelectionStep({ data, onChange, onNext }: TierSelect
             </div>
 
             {/* Info Banner */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-                <p className="text-sm text-blue-800 dark:text-blue-300">
-                    💡 <strong>Note:</strong> Your initial payment covers your first {data.paymentCycle === "monthly" ? "month" : "year"} of membership.
-                    Subsequent payments will be {data.paymentCycle === "monthly" ? "monthly" : "annually"} on the same date.
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
+                <p className="text-sm text-green-800 dark:text-green-300">
+                    ✅ <strong>Lifetime Membership:</strong> This is a one-time registration fee. Once approved, you'll have permanent access to all cooperative benefits including savings and loans.
                 </p>
             </div>
 

@@ -287,6 +287,84 @@ export async function getUserProgressAction(
 }
 
 /**
+ * Get user's aggregate progress across all courses
+ */
+export async function getUserAggregateProgressAction(userId: string): Promise<{
+    totalCourses: number;
+    completedCourses: number;
+    inProgressCourses: number;
+    totalHoursLearned: number;
+    certificatesEarned: number;
+    totalLessons: number;
+    completedLessons: number;
+    overallProgress: number;
+    enrolledCourses: UserProgress[];
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== userId) {
+            return {
+                totalCourses: 0,
+                completedCourses: 0,
+                inProgressCourses: 0,
+                totalHoursLearned: 0,
+                certificatesEarned: 0,
+                totalLessons: 0,
+                completedLessons: 0,
+                overallProgress: 0,
+                enrolledCourses: [],
+            };
+        }
+
+        // Fetch all course progress records
+        const progressQuery = query(collection(db, `user_progress/${userId}/courses`));
+        const snapshot = await getDocs(progressQuery);
+        const enrolledCourses = snapshot.docs.map(doc => doc.data() as UserProgress);
+
+        const completedCourses = enrolledCourses.filter(p => p.completedAt).length;
+        const inProgressCourses = enrolledCourses.length - completedCourses;
+        const totalCompletedLessons = enrolledCourses.reduce((sum, p) => sum + p.completedLessons.length, 0);
+
+        // Calculate total lessons across all enrolled courses
+        let totalLessons = 0;
+        for (const progress of enrolledCourses) {
+            const courseDoc = await getDoc(doc(db, "academy_courses", progress.courseId));
+            if (courseDoc.exists()) {
+                const course = courseDoc.data() as Course;
+                totalLessons += course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
+            }
+        }
+
+        const overallProgress = totalLessons > 0 ? Math.round((totalCompletedLessons / totalLessons) * 100) : 0;
+
+        return {
+            totalCourses: enrolledCourses.length,
+            completedCourses,
+            inProgressCourses,
+            totalHoursLearned: totalCompletedLessons * 0.5, // Estimate 30 min per lesson
+            certificatesEarned: completedCourses, // One certificate per completed course
+            totalLessons,
+            completedLessons: totalCompletedLessons,
+            overallProgress,
+            enrolledCourses,
+        };
+    } catch (error) {
+        console.error("Failed to fetch aggregate progress:", error);
+        return {
+            totalCourses: 0,
+            completedCourses: 0,
+            inProgressCourses: 0,
+            totalHoursLearned: 0,
+            certificatesEarned: 0,
+            totalLessons: 0,
+            completedLessons: 0,
+            overallProgress: 0,
+            enrolledCourses: [],
+        };
+    }
+}
+
+/**
  * Get live sessions
  */
 export async function getLiveSessionsAction(courseId?: string): Promise<LiveSession[]> {
@@ -303,13 +381,78 @@ export async function getLiveSessionsAction(courseId?: string): Promise<LiveSess
             id: doc.id,
             ...doc.data(),
         })) as LiveSession[];
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as LiveSession[];
     } catch (error) {
         console.error("Failed to fetch live sessions:", error);
         return [];
+    }
+}
+
+/**
+ * APPLICATION SUBMISSION
+ */
+
+export interface AcademyApplicationData {
+    personalInfo: {
+        fullName: string;
+        email: string;
+        phone: string;
+        dateOfBirth: string;
+        state: string;
+        occupation: string;
+    };
+    education: {
+        educationLevel: string;
+        fieldOfStudy: string;
+        yearsExperience: number;
+        currentRole: string;
+    };
+    interests: {
+        learningPaths: string[];
+        topics: string;
+        goals: string;
+    };
+}
+
+/**
+ * Submit Academy learner application
+ */
+export async function submitAcademyApplicationAction(
+    applicationData: AcademyApplicationData
+): Promise<{ success: boolean; error?: string; applicationId?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Authentication required" };
+        }
+
+        // Generate unique application ID
+        const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        // Save to Firestore
+        await setDoc(doc(db, "ACADEMY_APPLICATIONS", applicationId), {
+            ...applicationData,
+            userId: session.user.id,
+            applicationId,
+            status: "pending",
+            submittedAt: Timestamp.now(),
+            reviewedAt: null,
+            reviewedBy: null,
+            notes: "",
+        });
+
+        // Create audit log
+        await createAuditLog({
+            action: "user_update",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "academy_application",
+            details: `Learner application submitted for ${applicationData.personalInfo.fullName}`,
+        });
+
+        return { success: true, applicationId };
+    } catch (error) {
+        console.error("Academy application submission error:", error);
+        return { success: false, error: "Failed to submit application. Please try again." };
     }
 }
 

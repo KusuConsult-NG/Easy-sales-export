@@ -700,3 +700,56 @@ export async function getProductAction(productId: string) {
         return { success: false, error: error.message };
     }
 }
+
+/**
+ * Get recommended products for buyers
+ * Returns recent active products with good ratings
+ */
+export async function getRecommendedProductsAction(limit: number = 3) {
+    try {
+        const productsRef = collection(db, COLLECTIONS.PRODUCTS);
+        const q = query(
+            productsRef,
+            where("status", "==", "active"),
+            where("availableQuantity", ">", 0)
+        );
+
+        const snapshot = await getDocs(q);
+        let products = snapshot.docs.map(doc => doc.data() as Product);
+
+        // Sort by rating and views to get best products
+        products = products
+            .sort((a, b) => {
+                // Prioritize products with ratings, then views
+                const scoreA = (a.rating || 0) * 10 + (a.views || 0);
+                const scoreB = (b.rating || 0) * 10 + (b.views || 0);
+                return scoreB - scoreA;
+            })
+            .slice(0, limit);
+
+        // Fetch seller names for each product
+        const productsWithSellers = await Promise.all(
+            products.map(async (product) => {
+                let sellerName = "Unknown Seller";
+                if (product.sellerId) {
+                    const userRef = doc(db, COLLECTIONS.USERS, product.sellerId);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        const userData = userSnap.data();
+                        sellerName = userData.businessName || userData.displayName || "Unknown Seller";
+                    }
+                }
+                return {
+                    ...product,
+                    sellerName,
+                };
+            })
+        );
+
+        return { success: true, products: productsWithSellers };
+    } catch (error: any) {
+        console.error("Get recommended products error:", error);
+        return { success: false, error: error.message, products: [] };
+    }
+}
+

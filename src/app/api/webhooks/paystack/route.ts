@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * Handle successful payment
- * Updates cooperative membership and creates audit log
+ * Routes to appropriate handler based on payment purpose
  */
 async function handleSuccessfulPayment(paymentData: any) {
     try {
@@ -92,7 +92,7 @@ async function handleSuccessfulPayment(paymentData: any) {
 
         // Extract metadata
         const userId = metadata?.userId;
-        // const contributionType = metadata?.type || 'contribution'; // Unused
+        const purpose = metadata?.purpose; // 'cooperative_membership_registration' or 'contribution'
 
         if (!userId) {
             logger.error('Missing userId in payment metadata', undefined, { reference });
@@ -101,10 +101,8 @@ async function handleSuccessfulPayment(paymentData: any) {
 
         // IDEMPOTENCY CHECK:
         // Check if this payment reference has already been processed
-        // We check the audit logs for a 'contribution_made' action with this targetId
         const auditSnapshot = await db.collection('audit_logs')
             .where('targetId', '==', reference)
-            .where('action', '==', 'contribution_made')
             .limit(1)
             .get();
 
@@ -123,64 +121,122 @@ async function handleSuccessfulPayment(paymentData: any) {
 
         const amountInNaira = amount / 100; // Convert kobo to naira
 
-        // Update cooperative membership
-        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-
-        await db.runTransaction(async (transaction) => {
-            const membershipDoc = await transaction.get(membershipRef);
-
-            if (!membershipDoc.exists) {
-                // Create new membership if doesn't exist? OR fail.
-                // For robustness, log and fail, or create basic. 
-                // Assuming user exists if they are paying.
-                // logger.error('Membership not found for user', undefined, { userId });
-                // throw new Error("Membership not found");
-                // Actually, let's create it if missing, or update
-                // But better to just update.
-                throw new Error(`Membership not found for user ${userId}`);
-            }
-
-            const currentTotal = membershipDoc.data()?.totalContributions || 0;
-            const newTotal = currentTotal + amountInNaira;
-            const newTier = calculateUserTier(newTotal);
-
-            transaction.update(membershipRef, {
-                totalContributions: FieldValue.increment(amountInNaira),
-                tier: newTier,
-                lastContributionAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-
-            // Create audit log WITHIN the transaction (or mainly just ensure atomic update of member)
-            // But audit log is a new doc, usually separate.
-        });
-
-        // Audit Log (Admin SDK)
-        await db.collection('audit_logs').add({
-            action: 'contribution_made',
-            userId,
-            userEmail: customer.email,
-            targetId: reference,
-            targetType: 'payment',
-            metadata: {
-                amount: amountInNaira,
-                paymentReference: reference,
-                paymentChannel: verification.data.channel,
-            },
-            details: `Contribution of ₦${amountInNaira.toLocaleString()} processed successfully`,
-            timestamp: FieldValue.serverTimestamp(), // Admin SDK uses timestamp
-            performedBy: 'system',
-            ipAddress: 'webhook'
-        });
+        // Route to appropriate handler based on purpose
+        if (purpose === 'cooperative_membership_registration') {
+            await handleMembershipRegistrationPayment(userId, amountInNaira, reference, customer, verification);
+        } else {
+            await handleContributionPayment(userId, amountInNaira, reference, customer, verification);
+        }
 
         logger.info('Payment processed successfully', {
             reference,
             userId,
             amount: amountInNaira,
+            purpose,
         });
 
     } catch (error) {
         logger.error('Error processing successful payment', error instanceof Error ? error : undefined);
         throw error;
     }
+}
+
+/**
+ * Handle membership registration payment
+ * Activates membership upon successful payment
+ */
+async function handleMembershipRegistrationPayment(
+    userId: string,
+    amountInNaira: number,
+    reference: string,
+    customer: any,
+    verification: any
+) {
+    const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+
+    await db.runTransaction(async (transaction) => {
+        const membershipDoc = await transaction.get(membershipRef);
+
+        if (!membershipDoc.exists) {
+            throw new Error(`Membership not found for user ${userId}`);
+        }
+
+        // Update membership status to active and mark payment as completed
+        transaction.update(membershipRef, {
+            membershipStatus: 'active',
+            paymentStatus: 'completed',
+            paymentReference: reference,
+            paymentDate: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+    });
+
+    // Audit Log for membership registration
+    await db.collection('audit_logs').add({
+        action: 'membership_registration_completed',
+        userId,
+        userEmail: customer.email,
+        targetId: reference,
+        targetType: 'membership_payment',
+        metadata: {
+            amount: amountInNaira,
+            paymentReference: reference,
+            paymentChannel: verification.data.channel,
+        },
+        details: `Cooperative membership registration fee of ₦${amountInNaira.toLocaleString()} processed successfully`,
+        timestamp: FieldValue.serverTimestamp(),
+        performedBy: 'system',
+        ipAddress: 'webhook'
+    });
+}
+
+/**
+ * Handle contribution payment
+ * Updates user tier based on total contributions
+ */
+async function handleContributionPayment(
+    userId: string,
+    amountInNaira: number,
+    reference: string,
+    customer: any,
+    verification: any
+) {
+    const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+
+    await db.runTransaction(async (transaction) => {
+        const membershipDoc = await transaction.get(membershipRef);
+
+        if (!membershipDoc.exists) {
+            throw new Error(`Membership not found for user ${userId}`);
+        }
+
+        const currentTotal = membershipDoc.data()?.totalContributions || 0;
+        const newTotal = currentTotal + amountInNaira;
+        const newTier = calculateUserTier(newTotal);
+
+        transaction.update(membershipRef, {
+            totalContributions: FieldValue.increment(amountInNaira),
+            tier: newTier,
+            lastContributionAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+    });
+
+    // Audit Log for contribution
+    await db.collection('audit_logs').add({
+        action: 'contribution_made',
+        userId,
+        userEmail: customer.email,
+        targetId: reference,
+        targetType: 'payment',
+        metadata: {
+            amount: amountInNaira,
+            paymentReference: reference,
+            paymentChannel: verification.data.channel,
+        },
+        details: `Contribution of ₦${amountInNaira.toLocaleString()} processed successfully`,
+        timestamp: FieldValue.serverTimestamp(),
+        performedBy: 'system',
+        ipAddress: 'webhook'
+    });
 }

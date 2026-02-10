@@ -81,7 +81,7 @@ export default function FarmNationPropertiesPage() {
                 <div className="max-w-7xl mx-auto px-8">
                     <div className="flex items-center gap-3 mb-4">
                         <Home className="w-8 h-8" />
-                        <h1 className="text-4xl font-bold">Browse Agricultural Properties</h1>
+                        <h1 className="text-4xl font-bold">Browse Agricultural Farms</h1>
                     </div>
                     <p className="text-teal-100 text-lg max-w-2xl">
                         Find verified agricultural land and facilities across Nigeria
@@ -99,7 +99,7 @@ export default function FarmNationPropertiesPage() {
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                                 <input
                                     type="text"
-                                    placeholder="Search properties by location or type..."
+                                    placeholder="Search farms by location or type..."
                                     className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
                                 />
                             </div>
@@ -113,6 +113,8 @@ export default function FarmNationPropertiesPage() {
                             <option>Fish Farms</option>
                             <option>Greenhouses</option>
                             <option>Leasing Options</option>
+                            <option>Lease</option>
+                            <option>Invest</option>
                         </select>
 
                         {/* Location Filter */}
@@ -140,7 +142,7 @@ export default function FarmNationPropertiesPage() {
                 {/* Results Header */}
                 <div className="flex items-center justify-between mb-6">
                     <p className="text-slate-600 dark:text-slate-400">
-                        Showing <span className="font-bold text-slate-900 dark:text-white">{properties.length}</span> properties
+                        Showing <span className="font-bold text-slate-900 dark:text-white">{properties.length}</span> farms
                     </p>
                     <select className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm">
                         <option>Sort by: Newest</option>

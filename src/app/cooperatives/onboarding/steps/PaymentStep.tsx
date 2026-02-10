@@ -10,8 +10,7 @@ import { CheckCircle, CreditCard, Building2, Smartphone } from "lucide-react";
 
 interface PaymentStepProps {
     tierData: {
-        tier: "basic" | "premium" | "gold";
-        paymentCycle: "monthly" | "annual";
+        tier: "basic" | "premium";
     };
     onComplete: () => void;
     onBack: () => void;
@@ -19,25 +18,15 @@ interface PaymentStepProps {
 
 export default function PaymentStep({ tierData, onComplete, onBack }: PaymentStepProps) {
     const tierPrices = {
-        basic: 5000,
-        premium: 15000,
-        gold: 30000
+        basic: 10000,  // One-time payment
+        premium: 20000 // One-time payment
     };
 
-    const calculateAmount = () => {
-        const monthlyPrice = tierPrices[tierData.tier];
-        if (tierData.paymentCycle === "annual") {
-            return monthlyPrice * 12 * 0.9; // 10% discount
-        }
-        return monthlyPrice;
-    };
-
-    const amount = calculateAmount();
+    const amount = tierPrices[tierData.tier];
 
     const tierNames = {
         basic: "Basic",
-        premium: "Premium",
-        gold: "Gold"
+        premium: "Premium"
     };
 
     const handlePaystackPayment = () => {
@@ -81,19 +70,11 @@ export default function PaymentStep({ tierData, onComplete, onBack }: PaymentSte
                             </span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-purple-800 dark:text-purple-300">Payment Cycle:</span>
-                            <span className="font-semibold text-purple-900 dark:text-purple-100 capitalize">
-                                {tierData.paymentCycle}
+                            <span className="text-purple-800 dark:text-purple-300">Payment Type:</span>
+                            <span className="font-semibold text-purple-900 dark:text-purple-100">
+                                One-Time Registration Fee
                             </span>
                         </div>
-                        {tierData.paymentCycle === "annual" && (
-                            <div className="flex justify-between text-green-600">
-                                <span>Annual Discount (10%):</span>
-                                <span className="font-semibold">
-                                    -₦{(tierPrices[tierData.tier] * 12 * 0.1).toLocaleString()}
-                                </span>
-                            </div>
-                        )}
                         <div className="pt-3 border-t-2 border-purple-300 dark:border-purple-700">
                             <div className="flex justify-between items-baseline">
                                 <span className="text-lg font-bold text-purple-900 dark:text-purple-100">

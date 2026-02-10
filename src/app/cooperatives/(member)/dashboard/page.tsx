@@ -12,7 +12,6 @@ import {
     Wallet,
     TrendingUp,
     CreditCard,
-    Calendar,
     ArrowRight,
     Award,
     PlusCircle,
@@ -117,12 +116,6 @@ export default function CooperativeDashboardPage() {
         .filter(t => t.type === 'interest') // Assuming 'interest' type exists or we strictly mock it as 0
         .reduce((sum, t) => sum + t.amount, 0);
 
-    // Mock Next Payment (since we don't have a schedule DB yet)
-    const nextPaymentDue = new Date();
-    nextPaymentDue.setMonth(nextPaymentDue.getMonth() + 1);
-    nextPaymentDue.setDate(1); // 1st of next month
-    const contributionAmount = membership.monthlyTarget;
-
 
     return (
         <div className="space-y-8">
@@ -137,7 +130,7 @@ export default function CooperativeDashboardPage() {
             </div>
 
             {/* Membership Info Card */}
-            <div className="bg-linear-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
+            <div className="bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
                 <div className="flex items-start justify-between mb-4">
                     <div>
                         <p className="text-purple-100 mb-1">Membership ID</p>
@@ -147,15 +140,9 @@ export default function CooperativeDashboardPage() {
                         <span className="font-semibold capitalize">{membership.membershipTier}</span>
                     </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <p className="text-purple-100 text-sm mb-1">Member Since</p>
-                        <p className="font-semibold">{formatDate(membership.memberSince)}</p>
-                    </div>
-                    <div>
-                        <p className="text-purple-100 text-sm mb-1">Next Payment</p>
-                        <p className="font-semibold">{formatDate(nextPaymentDue)}</p>
-                    </div>
+                <div>
+                    <p className="text-purple-100 text-sm mb-1">Membership Status</p>
+                    <p className="font-semibold capitalize">{membership.membershipStatus}</p>
                 </div>
             </div>
 
@@ -320,32 +307,6 @@ export default function CooperativeDashboardPage() {
                                 </div>
                             ))
                         )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Next Payment Alert */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6">
-                <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shrink-0">
-                        <Calendar className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="font-bold text-blue-900 dark:text-blue-200 mb-1">
-                            Next Payment Due
-                        </h3>
-                        <p className="text-blue-800 dark:text-blue-300 mb-3">
-                            Your next monthly contribution of{" "}
-                            <span className="font-bold">{formatCurrency(contributionAmount)}</span>{" "}
-                            is due on {formatDate(nextPaymentDue)}.
-                        </p>
-                        <Link
-                            href="/cooperatives/contribute"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                        >
-                            Pay Now
-                            <ArrowRight className="w-4 h-4" />
-                        </Link>
                     </div>
                 </div>
             </div>

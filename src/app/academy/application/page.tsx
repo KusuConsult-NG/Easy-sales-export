@@ -7,6 +7,7 @@ import PersonalInfoStep from "./steps/PersonalInfoStep";
 import EducationStep from "./steps/EducationStep";
 import InterestsStep from "./steps/InterestsStep";
 import ReviewStep from "./ReviewStep";
+import { submitAcademyApplicationAction } from "@/app/actions/academy";
 
 interface PersonalInfoData {
     fullName: string;
@@ -155,17 +156,17 @@ export default function AcademyApplicationPage() {
         setIsSubmitting(true);
 
         try {
-            // TODO: Implement actual submission
-            // const response = await submitAcademyApplicationAction({
-            //     personalInfo,
-            //     education,
-            //     interests
-            // });
+            const response = await submitAcademyApplicationAction({
+                personalInfo,
+                education,
+                interests
+            });
 
-            // Simulate API call
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-
-            router.push("/academy/application/success");
+            if (response.success) {
+                router.push("/academy/application/success");
+            } else {
+                setErrors({ submit: response.error || "Failed to submit application" });
+            }
         } catch (error) {
             console.error("Application submission error:", error);
             setErrors({ submit: "Failed to submit application. Please try again." });

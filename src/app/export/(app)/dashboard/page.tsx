@@ -18,6 +18,7 @@ import {
     PieChart,
     AlertCircle,
 } from "lucide-react";
+import { getUserExportStatsAction, getUserExportInvestmentsAction } from "@/app/actions/export";
 
 interface PortfolioStats {
     totalInvested: number;
@@ -37,39 +38,39 @@ interface ActiveInvestment {
 
 export default function ExportDashboardPage() {
     const [stats, setStats] = useState<PortfolioStats>({
-        totalInvested: 2500000,
-        activeInvestments: 3,
-        totalReturns: 450000,
-        pendingReturns: 180000,
+        totalInvested: 0,
+        activeInvestments: 0,
+        totalReturns: 0,
+        pendingReturns: 0,
     });
 
-    const [investments, setInvestments] = useState<ActiveInvestment[]>([
-        {
-            id: "1",
-            commodity: "Yam Tubers Export - UK",
-            amount: 1000000,
-            expectedReturn: 220000,
-            status: "active",
-            daysRemaining: 45,
-        },
-        {
-            id: "2",
-            commodity: "Sesame Seeds - Dubai",
-            amount: 750000,
-            expectedReturn: 150000,
-            status: "active",
-            daysRemaining: 78,
-        },
-        {
-            id: "3",
-            commodity: "Hibiscus Export - USA",
-            amount: 750000,
-            expectedReturn: 135000,
-            status: "active",
-            daysRemaining: 92,
-        },
-    ]);
-    const [loading, setLoading] = useState(false);
+    const [investments, setInvestments] = useState<ActiveInvestment[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function loadDashboardData() {
+            try {
+                const [statsResult, investmentsResult] = await Promise.all([
+                    getUserExportStatsAction(),
+                    getUserExportInvestmentsAction()
+                ]);
+
+                if (statsResult.success && statsResult.data) {
+                    setStats(statsResult.data);
+                }
+
+                if (investmentsResult.success && investmentsResult.data) {
+                    setInvestments(investmentsResult.data as ActiveInvestment[]);
+                }
+            } catch (error) {
+                console.error("Failed to load dashboard:", error);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        loadDashboardData();
+    }, []);
 
     if (loading) {
         return (

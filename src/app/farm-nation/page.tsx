@@ -65,7 +65,7 @@ export default function FarmNationLandingPage() {
                             href="/farm-nation/properties"
                             className="group inline-flex items-center gap-3 bg-white text-teal-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-teal-500/50 transition-all hover:scale-105"
                         >
-                            Browse Properties
+                            Browse Farms
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </Link>
                     </div>
@@ -103,7 +103,7 @@ export default function FarmNationLandingPage() {
             {/* Categories */}
             <div className="max-w-7xl mx-auto px-8 py-16">
                 <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-12">
-                    Property Categories
+                    Farm Categories
                 </h2>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-12">
@@ -120,7 +120,7 @@ export default function FarmNationLandingPage() {
             {/* Featured Properties */}
             <div className="max-w-7xl mx-auto px-8 py-16">
                 <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-4">
-                    Featured Properties
+                    Featured Farms
                 </h2>
                 <p className="text-center text-slate-600 dark:text-slate-400 mb-12 max-w-2xl mx-auto">
                     Premium agricultural properties verified and ready for investment
@@ -170,7 +170,7 @@ export default function FarmNationLandingPage() {
                         href="/farm-nation/properties"
                         className="inline-flex items-center gap-2 px-8 py-3 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 transition"
                     >
-                        View All Properties
+                        View All Farms
                         <ArrowRight className="w-5 h-5" />
                     </Link>
                 </div>
@@ -236,7 +236,7 @@ export default function FarmNationLandingPage() {
                             href="/farm-nation/properties"
                             className="group inline-flex items-center gap-3 bg-white text-teal-600 px-10 py-5 rounded-xl font-bold text-lg shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                         >
-                            Explore Properties
+                            Explore Farms
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </Link>
                     </div>

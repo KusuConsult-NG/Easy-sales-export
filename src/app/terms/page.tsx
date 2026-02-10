@@ -171,8 +171,8 @@ export default function TermsPage() {
                             If you have questions about these Terms and Conditions, please contact us:
                         </p>
                         <div className="space-y-2 text-slate-700 dark:text-slate-300">
-                            <p><strong>Email:</strong> <a href={`mailto:${COMPANY_INFO.email}`} className="text-primary hover:underline">{COMPANY_INFO.email}</a></p>
-                            <p><strong>Phone:</strong> <a href={`tel:${COMPANY_INFO.phone}`} className="text-primary hover:underline">{COMPANY_INFO.phone}</a></p>
+                            <p><strong>Email:</strong> <a href={`mailto:${COMPANY_INFO.contact.general.email}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.email}</a></p>
+                            <p><strong>Phone:</strong> <a href={`tel:${COMPANY_INFO.contact.general.phone}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.phone}</a></p>
                         </div>
                     </section>
                 </div>

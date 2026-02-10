@@ -119,7 +119,7 @@ export default function ForgotPasswordPage() {
                             <p className="text-sm text-center text-blue-200">
                                 Need help?{" "}
                                 <a
-                                    href={`mailto:${COMPANY_INFO.email}`}
+                                    href={`mailto:${COMPANY_INFO.contact.general.email}`}
                                     className="text-white underline hover:text-blue-300"
                                 >
                                     Contact Support

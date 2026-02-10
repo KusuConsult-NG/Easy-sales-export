@@ -135,11 +135,6 @@ export async function getPropertyByIdAction(propertyId: string) {
         const propertyDoc = await getDoc(propertyRef);
 
         if (!propertyDoc.exists()) {
-            // Fallback to mock data for development
-            const mockProperty = getMockProperties().find(p => p.id === propertyId);
-            if (mockProperty) {
-                return { success: true, property: mockProperty };
-            }
             return { success: false, error: "Property not found" };
         }
 
@@ -158,172 +153,11 @@ export async function getPropertyByIdAction(propertyId: string) {
         return { success: true, property };
     } catch (error: any) {
         console.error("Get property error:", error);
-        // Fallback to mock data on error
-        const mockProperty = getMockProperties().find(p => p.id === propertyId);
-        if (mockProperty) {
-            return { success: true, property: mockProperty };
-        }
         return { success: false, error: error.message };
     }
 }
 
-// Mock properties for development
-function getMockProperties(): Property[] {
-    return [
-        {
-            id: "1",
-            name: "Prime Farmland in Kaduna",
-            location: "Zaria",
-            state: "kaduna",
-            lga: "Zaria",
-            price: 5000000,
-            size: 10,
-            type: "sale",
-            category: "farming-arable",
-            images: ["/images/logo.jpg"],
-            description: "Fertile land suitable for cassava, yam, and maize cultivation. The soil is rich in nutrients and perfect for high-yield farming. Located in a secure area with easy access to markets and transportation.",
-            ownerId: "mock-owner-1",
-            ownerName: "Musa Ibrahim",
-            ownerEmail: "musa.ibrahim@example.com",
-            ownerPhone: "+234 803 123 4567",
-            status: "available",
-            verified: true,
-            features: ["Fertile Soil", "Water Access", "Road Access", "Security", "Good Drainage"],
-            documents: {},
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            viewCount: 45,
-            favoriteCount: 12,
-        },
-        {
-            id: "2",
-            name: "Riverside Farm Plot",
-            location: "Makurdi",
-            state: "benue",
-            lga: "Makurdi",
-            price: 3500000,
-            size: 5,
-            type: "sale",
-            category: "farming-irrigated",
-            images: ["/images/logo.jpg"],
-            description: "Access to water, perfect for rice farming. Located near the Benue River with natural irrigation possibilities. The land has been surveyed and all documents are in order.",
-            ownerId: "mock-owner-2",
-            ownerName: "Esther Ade",
-            ownerEmail: "esther.ade@example.com",
-            ownerPhone: "+234 805 234 5678",
-            status: "available",
-            verified: true,
-            features: ["River Access", "Irrigation Ready", "Surveyed Land", "Title Documents", "Flat Terrain"],
-            documents: {},
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            viewCount: 32,
-            favoriteCount: 8,
-        },
-        {
-            id: "3",
-            name: "Large Scale farmland",
-            location: "Plateau State",
-            state: "plateau",
-            lga: "Jos North",
-            price: 12000000,
-            size: 25,
-            type: "sale",
-            category: "farming-commercial",
-            images: ["/images/logo.jpg"],
-            description: "Ideal for large-scale agricultural projects. The land spans 25 hectares with excellent soil composition and climate for various crops. Perfect for commercial farming operations.",
-            ownerId: "mock-owner-3",
-            ownerName: "Chinedu Okafor",
-            ownerEmail: "chinedu.okafor@example.com",
-            ownerPhone: "+234 807 345 6789",
-            status: "available",
-            verified: false,
-            features: ["Large Expanse", "Fertile Soil", "Good Climate", "Road Access", "Electricity Available"],
-            documents: {},
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            viewCount: 67,
-            favoriteCount: 23,
-        },
-        {
-            id: "4",
-            name: "Farmland for Lease",
-            location: "Kano",
-            state: "kano",
-            lga: "Kano Municipal",
-            price: 500000,
-            size: 3,
-            type: "lease",
-            category: "leasing",
-            images: ["/images/logo.jpg"],
-            description: "1-year lease, ready for immediate farming. Perfect for small-scale farmers looking to start their agricultural journey without heavy capital investment.",
-            ownerId: "mock-owner-4",
-            ownerName: "Aisha Mohammed",
-            ownerEmail: "aisha.mohammed@example.com",
-            ownerPhone: "+234 809 456 7890",
-            status: "available",
-            verified: true,
-            features: ["Immediate Availability", "Flexible Terms", "Water Access", "Security"],
-            documents: {},
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            leaseDuration: 12,
-            viewCount: 28,
-            favoriteCount: 5,
-        },
-        {
-            id: "5",
-            name: "Irrigated Farmland",
-            location: "Sokoto",
-            state: "sokoto",
-            lga: "Sokoto South",
-            price: 800000,
-            size: 8,
-            type: "lease",
-            category: "leasing",
-            images: ["/images/logo.jpg"],
-            description: "2-year lease with irrigation system. The property comes with a functional irrigation setup, making it ideal for year-round farming.",
-            ownerId: "mock-owner-5",
-            ownerName: "Aminu Yusuf",
-            ownerEmail: "aminu.yusuf@example.com",
-            ownerPhone: "+234 810 567 8901",
-            status: "available",
-            verified: true,
-            features: ["Irrigation System", "Long Lease", "Water Assured", "Good Soil"],
-            documents: {},
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            leaseDuration: 24,
-            viewCount: 41,
-            favoriteCount: 15,
-        },
-        {
-            id: "6",
-            name: "Mixed-Use Agricultural Land",
-            location: "Enugu",
-            state: "enugu",
-            lga: "Enugu North",
-            price: 8000000,
-            size: 15,
-            type: "sale",
-            category: "mixed-use",
-            images: ["/images/logo.jpg"],
-            description: "Strategic location, suitable for mixed farming. The land is versatile and can support multiple agricultural activities including crop cultivation and livestock rearing.",
-            ownerId: "mock-owner-6",
-            ownerName: "Ngozi Okeke",
-            ownerEmail: "ngozi.okeke@example.com",
-            ownerPhone: "+234 812 678 9012",
-            status: "available",
-            verified: true,
-            features: ["Versatile Land", "Strategic Location", "Multiple Use", "Good Access", "Title Documents"],
-            documents: {},
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            viewCount: 53,
-            favoriteCount: 19,
-        },
-    ];
-}
+
 
 /**
  * List a new property

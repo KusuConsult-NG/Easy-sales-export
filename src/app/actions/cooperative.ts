@@ -87,6 +87,24 @@ export async function registerCooperativeMemberAction(
             membershipTier: formData.get("membershipTier") as "basic" | "premium",
         };
 
+        // Extract document data (uploaded to Firebase Storage)
+        const documents = {
+            validId: formData.get("validIdUrl") ? {
+                name: formData.get("validIdName") as string,
+                url: formData.get("validIdUrl") as string,
+            } : undefined,
+            passportPhoto: formData.get("passportPhotoUrl") ? {
+                name: formData.get("passportPhotoName") as string,
+                url: formData.get("passportPhotoUrl") as string,
+            } : undefined,
+            proofOfAddress: formData.get("proofOfAddressUrl") ? {
+                name: formData.get("proofOfAddressName") as string,
+                url: formData.get("proofOfAddressUrl") as string,
+            } : undefined,
+        };
+
+        const bvn = formData.get("bvn") as string || undefined;
+
         // Validate with Zod
         const validationResult = cooperativeMembershipSchema.safeParse(rawData);
         if (!validationResult.success) {
@@ -118,6 +136,13 @@ export async function registerCooperativeMemberAction(
                 phone: validatedData.nextOfKinPhone,
                 address: validatedData.nextOfKinAddress,
             },
+            // Documents
+            documents: {
+                validId: documents.validId,
+                passportPhoto: documents.passportPhoto,
+                proofOfAddress: documents.proofOfAddress,
+            },
+            bvn: bvn,
             membershipTier: validatedData.membershipTier,
             registrationFee,
             membershipStatus: "pending" as const,
