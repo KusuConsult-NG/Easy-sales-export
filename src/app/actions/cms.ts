@@ -92,7 +92,7 @@ export async function getActiveAnnouncementsAction(
 
         const q = db.collection("announcements").where("active", "==", true);
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         return snapshot.docs
             .map((doc) => {
@@ -118,7 +118,7 @@ export async function getActiveAnnouncementsAction(
                 }
 
                 // Filter by expiry
-                if (announcement.expiresAt && announcement.expiresAt.seconds < now.seconds) {
+                if (announcement.expiresAt && new Date(announcement.expiresAt as any).getTime() < now.getTime()) {
                     return false;
                 }
 
@@ -138,9 +138,9 @@ export async function deactivateAnnouncementAction(
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const announcementRef = doc(db, "announcements", announcementId);
+        const announcementRef = db.collection("announcements").doc(announcementId);
 
-        await updateDoc(announcementRef, {
+        await announcementRef.update({
             active: false,
         });
 
@@ -214,7 +214,7 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
 
         const q = db.collection("banners").where("active", "==", true);
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         return snapshot.docs
             .map((doc) => {
@@ -254,9 +254,9 @@ export async function deactivateBannerAction(
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const bannerRef = doc(db, "banners", bannerId);
+        const bannerRef = db.collection("banners").doc(bannerId);
 
-        await updateDoc(bannerRef, {
+        await bannerRef.update({
             active: false,
         });
 
