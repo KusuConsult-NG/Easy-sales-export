@@ -45,7 +45,8 @@ export async function uploadResourceAction(formData: FormData): Promise<{
 
         // Check if user is admin
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
@@ -216,7 +217,8 @@ export async function deleteResourceAction(resourceId: string): Promise<{
 
         // Check if user is admin
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
@@ -263,7 +265,8 @@ export async function updateResourceAction(
 
         // Check if user is admin
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 

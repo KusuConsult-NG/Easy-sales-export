@@ -38,7 +38,8 @@ export async function getCooperativeStatsAction(): Promise<{
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -147,7 +148,8 @@ export async function getAllMembersAction(options?: {
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -186,7 +188,8 @@ export async function updateMemberStatusAction(
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -223,7 +226,8 @@ export async function getAllTransactionsAction(options?: {
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -280,7 +284,8 @@ export async function getContributionReportsAction(options?: {
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -382,7 +387,8 @@ export async function getRecentActivityAction(): Promise<{
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 

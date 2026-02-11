@@ -1,7 +1,7 @@
 'use server';
 
-import { db } from '@/lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { auth } from '@/lib/auth';
 
 export interface SendBulkEmailState {
@@ -70,13 +70,13 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         });
 
         // Log email in database
-        await db.collection('email_history').add({
+        await (db as any).collection('email_history').add({
             recipients: recipients,
             subject,
             body,
             recipientCount: emails.length,
             sentBy: session.user.id,
-            sentAt: new Date(),
+            sentAt: FieldValue.serverTimestamp(),
             status: 'sent'
         });
 
@@ -113,13 +113,13 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
         }
 
         // Create announcement in database
-        const announcementRef = await db.collection('announcements').add({
+        const announcementRef = await (db as any).collection('announcements').add({
             title,
             message,
             priority,
             active: true,
             createdBy: session.user.id,
-            createdAt: new Date()
+            createdAt: FieldValue.serverTimestamp()
         });
 
         return {

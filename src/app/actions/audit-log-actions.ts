@@ -25,38 +25,39 @@ export async function getAuditLogsAction(filters: {
 
         // Check if user is admin
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
-        let q = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"));
+        let q = db.collection("audit_logs").orderBy("timestamp", "desc");
 
         // Apply filters
         if (filters.userId) {
-            q = query(q, where("userId", "==", filters.userId));
+            q = q.where("userId", "==", filters.userId);
         }
 
         if (filters.userEmail) {
-            q = query(q, where("userEmail", "==", filters.userEmail));
+            q = q.where("userEmail", "==", filters.userEmail);
         }
 
         if (filters.action) {
-            q = query(q, where("action", "==", filters.action));
+            q = q.where("action", "==", filters.action);
         }
 
         if (filters.severity) {
-            q = query(q, where("severity", "==", filters.severity));
+            q = q.where("severity", "==", filters.severity);
         }
 
         if (filters.startDate) {
-            q = query(q, where("timestamp", ">=", Timestamp.fromDate(new Date(filters.startDate))));
+            q = q.where("timestamp", ">=", new Date(filters.startDate));
         }
 
         if (filters.endDate) {
-            q = query(q, where("timestamp", "<=", Timestamp.fromDate(new Date(filters.endDate))));
+            q = q.where("timestamp", "<=", new Date(filters.endDate));
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         const logs = snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -93,7 +94,8 @@ export async function exportAuditLogsCSV(filters: {
 
         // Check if user is admin
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
@@ -153,17 +155,17 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
 
         // Check if user is admin
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || userDoc.data().role !== "admin") {
+        const userData = userDoc.data();
+        if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
-        const q = db.collection("audit_logs").where("timestamp", ">=", Timestamp.fromDate(startDate)
-        );
+        const q = db.collection("audit_logs").where("timestamp", ">=", startDate);
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
         const logs = snapshot.docs.map((doc) => doc.data()) as AuditLogEntry[];
 
         // Calculate statistics

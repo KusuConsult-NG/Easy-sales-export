@@ -1,6 +1,8 @@
 "use server";
 
-import { db, storage } from "@/lib/firebase-admin";
+import { db } from "@/lib/firebase-admin";
+import { storage } from "@/lib/firebase";
+import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { createAuditLog } from "@/lib/audit-log";
@@ -19,7 +21,7 @@ export interface Certificate {
     issueDate?: Date;
     expiryDate?: Date;
     issuer?: string;
-    uploadedAt: Timestamp;
+    uploadedAt: Date | any;
     size: number;
 }
 
@@ -96,7 +98,7 @@ export async function uploadCertificateAction(
 export async function getUserCertificatesAction(userId: string): Promise<Certificate[]> {
     try {
         const q = db.collection("certificates").where("userId", "==", userId);
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -116,8 +118,8 @@ export async function deleteCertificateAction(
     userId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const certRef = doc(db, "certificates", certificateId);
-        const certDoc = await getDoc(certRef);
+        const certRef = db.collection("certificates").doc(certificateId);
+        const certDoc = await certRef.get();
 
         if (!certDoc.exists) {
             return { success: false, error: "Certificate not found" };
@@ -134,7 +136,7 @@ export async function deleteCertificateAction(
         // await deleteObject(ref(storage, cert.fileUrl));
 
         // Delete from Firestore
-        await deleteDoc(certRef);
+        await certRef.delete();
 
         await createAuditLog({
             action: "user_update",
@@ -158,9 +160,9 @@ export async function deleteCertificateAction(
  */
 export async function completeOnboardingAction(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const userRef = doc(db, COLLECTIONS.USERS, userId);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-        await updateDoc(userRef, {
+        await userRef.update( {
             onboardingCompleted: true,
             onboardingCompletedAt: FieldValue.serverTimestamp(),
         });
@@ -183,8 +185,8 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
  */
 export async function checkOnboardingStatusAction(userId: string): Promise<boolean> {
     try {
-        const userRef = doc(db, COLLECTIONS.USERS, userId);
-        const userDoc = await getDoc(userRef);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
             return false;
