@@ -83,7 +83,7 @@ function MarketplaceRegisterContent() {
                 <div className="absolute top-1/2 -right-32 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl opacity-50" />
             </div>
 
-            <div className="relative w-full max-w-5xl bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2">
+            <div className="relative w-full max-w-5xl bg-white dark:bg-slate-800 rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2">
                 {/* Left Side - Information & Branding */}
                 <div className="hidden lg:block relative bg-linear-to-br from-green-600 to-emerald-700 p-12 text-white">
                     <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
@@ -125,10 +125,10 @@ function MarketplaceRegisterContent() {
                 </div>
 
                 {/* Right Side - Registration Form */}
-                <div className="p-8 lg:p-12 overflow-y-auto max-h-[90vh]">
-                    <div className="lg:hidden mb-8 text-center">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Join Marketplace</h2>
-                        <p className="text-slate-500 dark:text-slate-400">Powered by Easy Sales Export</p>
+                <div className="p-6 md:p-8 lg:p-12 overflow-y-auto max-h-[90vh]">
+                    <div className="lg:hidden mb-6 md:mb-8 text-center">
+                        <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">Join Marketplace</h2>
+                        <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">Powered by Easy Sales Export</p>
                     </div>
 
                     <form action={formAction} className="space-y-5">

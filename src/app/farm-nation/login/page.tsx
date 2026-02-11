@@ -53,18 +53,18 @@ function FarmNationLoginContent() {
             </div>
 
             <div className="relative w-full max-w-md">
-                <div className="text-center mb-8 relative z-10">
-                    <Link href="/farm-nation" className="inline-flex items-center justify-center mb-6 hover:opacity-90 transition-opacity">
-                        <div className="w-16 h-16 bg-linear-to-br from-teal-600 to-cyan-700 rounded-2xl flex items-center justify-center shadow-xl shadow-teal-500/20 text-white transform rotate-3 hover:rotate-6 transition-transform">
-                            <Sprout className="w-8 h-8" />
+                <div className="text-center mb-6 md:mb-8 relative z-10">
+                    <Link href="/farm-nation" className="inline-flex items-center justify-center mb-4 md:mb-6 hover:opacity-90 transition-opacity">
+                        <div className="w-12 h-12 md:w-16 md:h-16 bg-linear-to-br from-teal-600 to-cyan-700 rounded-2xl flex items-center justify-center shadow-xl shadow-teal-500/20 text-white transform rotate-3 hover:rotate-6 transition-transform">
+                            <Sprout className="w-6 h-6 md:w-8 md:h-8" />
                         </div>
                     </Link>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h1>
-                    <p className="text-slate-500 dark:text-slate-400">Sign in to your Farm Nation account</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h1>
+                    <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">Sign in to your Farm Nation account</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-2xl border border-slate-100 dark:border-slate-700 relative z-10 backdrop-blur-sm">
-                    <form action={formAction} className="space-y-6">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl md:rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-100 dark:border-slate-700 relative z-10 backdrop-blur-sm">
+                    <form action={formAction} className="space-y-5 md:space-y-6">
                         <input type="hidden" name="redirectTo" value={callbackUrl} />
 
                         {state.error && (
