@@ -19,7 +19,12 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import {
     contributionSchema,
     cooperativeMembershipSchema,
-    type MembershipRegistrationState
+    loanApplicationSchema,
+    fixedSavingsSchema,
+    type MembershipRegistrationState,
+    type LoanApplicationState,
+    type FixedSavingsState,
+    type WithdrawalActionState
 } from "@/lib/types/cooperative";
 import type {
     CooperativeMembership,
@@ -501,5 +506,281 @@ export async function getUserTierAction(): Promise<{
     } catch (error) {
         console.error("Failed to get user tier:", error);
         return { tier: null, totalContributions: 0 };
+    }
+}
+
+// ============================================
+// LOAN MANAGEMENT (PRD Phase 2)
+// ============================================
+
+export async function applyForLoanAction(
+    prevState: LoanApplicationState,
+    formData: FormData
+): Promise<LoanApplicationState> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "You must be logged in to apply for a loan", success: false };
+        }
+
+        const userId = session.user.id;
+
+        // Parse and validate
+        const rawData = {
+            productId: formData.get("productId") as string,
+            amount: Number(formData.get("amount")),
+            purpose: formData.get("purpose") as string,
+        };
+
+        const validationResult = loanApplicationSchema.safeParse(rawData);
+        if (!validationResult.success) {
+            return {
+                error: validationResult.error.issues[0]?.message || "Invalid loan application",
+                success: false
+            };
+        }
+
+        const { productId, amount, purpose } = validationResult.data;
+
+        // Verify membership and eligibility
+        const membershipsRef = collection(db, COLLECTIONS.COOPERATIVE_MEMBERS);
+        const q = query(membershipsRef, where("userId", "==", userId));
+        const membershipSnapshot = await getDocs(q);
+
+        if (membershipSnapshot.empty) {
+            return { error: "You must be a cooperative member to apply for a loan", success: false };
+        }
+
+        const membershipDoc = membershipSnapshot.docs[0];
+        const membershipData = membershipDoc.data();
+
+        // 1. Check for active loans (Prevent multiple active loans if policy requires)
+        const loansRef = collection(db, "cooperative_loans");
+        const activeLoanQuery = query(
+            loansRef,
+            where("memberId", "==", userId),
+            where("status", "in", ["pending", "approved", "disbursed"])
+        );
+        const activeLoans = await getDocs(activeLoanQuery);
+
+        if (!activeLoans.empty) {
+            return { error: "You already have an active or pending loan application", success: false };
+        }
+
+        // 2. Check Loan Limit (e.g., 3x Savings Balance)
+        const savingsBalance = membershipData.savingsBalance || 0;
+        const maxLoanAmount = savingsBalance * 3;
+
+        if (amount > maxLoanAmount) {
+            return {
+                error: `Loan amount exceeds your limit of ₦${maxLoanAmount.toLocaleString()} (3x Savings)`,
+                success: false
+            };
+        }
+
+        // 3. Get Loan Product Details (Simulated/fetched)
+        let interestRate = 5; // Default 5%
+        let durationMonths = 6;
+
+        const productRef = doc(db, "cooperative_loan_products", productId);
+        const productDoc = await getDoc(productRef);
+        if (productDoc.exists()) {
+            const prod = productDoc.data();
+            interestRate = prod.interestRate;
+            durationMonths = prod.durationMonths;
+        }
+
+        const interestAmount = amount * (interestRate / 100);
+        const totalRepayment = amount + interestAmount;
+        const monthlyPayment = totalRepayment / durationMonths;
+
+        // Create Loan Application
+        await addDoc(loansRef, {
+            memberId: userId,
+            productId,
+            amount,
+            purpose,
+            interestAmount,
+            totalRepayment,
+            monthlyPayment,
+            durationMonths,
+            status: "pending",
+            appliedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: "Loan application submitted successfully. It is now under review."
+        };
+
+    } catch (error) {
+        console.error("Loan application failed:", error);
+        return {
+            error: error instanceof Error ? error.message : "Failed to submit loan application",
+            success: false
+        };
+    }
+}
+
+// ============================================
+// FIXED SAVINGS (PRD Phase 2)
+// ============================================
+
+export async function createFixedSavingsAction(
+    prevState: FixedSavingsState,
+    formData: FormData
+): Promise<FixedSavingsState> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "You must be logged in", success: false };
+        }
+
+        const userId = session.user.id;
+
+        const rawData = {
+            amount: Number(formData.get("amount")),
+            durationMonths: Number(formData.get("durationMonths")),
+        };
+
+        const validationResult = fixedSavingsSchema.safeParse(rawData);
+        if (!validationResult.success) {
+            return {
+                error: validationResult.error.issues[0]?.message || "Invalid input",
+                success: false
+            };
+        }
+
+        const { amount, durationMonths } = validationResult.data;
+
+        // Check wallet/savings balance to ensure they have funds to lock
+        const membershipsRef = collection(db, COLLECTIONS.COOPERATIVE_MEMBERS);
+        const q = query(membershipsRef, where("userId", "==", userId));
+        const membershipSnapshot = await getDocs(q);
+
+        if (membershipSnapshot.empty) {
+            return { error: "Membership not found", success: false };
+        }
+
+        const membershipDoc = membershipSnapshot.docs[0];
+        const currentSavings = membershipDoc.data().savingsBalance || 0;
+
+        if (currentSavings < amount) {
+            return { error: "Insufficient savings balance to create this fixed savings plan", success: false };
+        }
+
+        // Deduct from main savings
+        await updateDoc(membershipDoc.ref, {
+            savingsBalance: increment(-amount)
+        });
+
+        // Create Fixed Savings Record
+        await addDoc(collection(db, "cooperative_fixed_savings"), {
+            memberId: userId,
+            amount,
+            durationMonths,
+            startDate: serverTimestamp(),
+            status: "active",
+            interestRate: 10, // Example: 10% p.a.
+            createdAt: serverTimestamp(),
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: `Fixed savings plan of ₦${amount.toLocaleString()} created successfully.`
+        };
+
+    } catch (error) {
+        console.error("Fixed savings creation failed:", error);
+        return {
+            error: error instanceof Error ? error.message : "Failed to create fixed savings plan",
+            success: false
+        };
+    }
+}
+
+// ============================================
+// WITHDRAWALS
+// ============================================
+
+export async function submitWithdrawalAction(
+    prevState: WithdrawalActionState,
+    formData: FormData
+): Promise<WithdrawalActionState> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { error: "Unauthorized", success: false };
+
+        const amount = Number(formData.get("amount"));
+        if (!amount || amount <= 0) return { error: "Invalid amount", success: false };
+
+        const userId = session.user.id;
+
+        // Check balance
+        const membershipsRef = collection(db, COLLECTIONS.COOPERATIVE_MEMBERS);
+        const q = query(membershipsRef, where("userId", "==", userId));
+        const membershipSnapshot = await getDocs(q);
+
+        if (membershipSnapshot.empty) return { error: "Membership not found", success: false };
+
+        const membershipDoc = membershipSnapshot.docs[0];
+        const balance = membershipDoc.data().savingsBalance || 0;
+
+        if (balance < amount) {
+            return { error: "Insufficient funds", success: false };
+        }
+
+        // Create withdrawal request
+        await addDoc(collection(db, "cooperative_withdrawals"), {
+            userId,
+            amount,
+            status: "pending",
+            createdAt: serverTimestamp(),
+        });
+
+        return { error: null, success: true, message: "Withdrawal request submitted for review" };
+    } catch (error) {
+        return { error: "Failed to submit withdrawal", success: false };
+    }
+}
+
+// ============================================
+// DIRECTORY
+// ============================================
+
+export async function getDirectoryMembersAction(): Promise<{
+    success: boolean;
+    data?: any[];
+    error?: string;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { error: "Unauthorized", success: false };
+
+        const membershipsRef = collection(db, COLLECTIONS.COOPERATIVE_MEMBERS);
+        const q = query(membershipsRef, where("membershipStatus", "==", "approved")); // Only approved members
+        const snapshot = await getDocs(q);
+
+        const members = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                name: `${data.firstName} ${data.lastName}`,
+                role: data.membershipTier === "premium" ? "Premium Member" : "Basic Member",
+                location: `${data.lga}, ${data.stateOfOrigin}`,
+                occupation: data.occupation,
+                joined: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : "Recent",
+                image: data.documents?.passportPhoto?.url || null
+            };
+        });
+
+        return { success: true, data: members };
+    } catch (error) {
+        console.error("Failed to fetch directory:", error);
+        return { error: "Failed to load directory", success: false };
     }
 }

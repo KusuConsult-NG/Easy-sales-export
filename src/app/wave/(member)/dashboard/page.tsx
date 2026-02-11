@@ -66,17 +66,17 @@ export default function WaveDashboardPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-pink-600" />
+            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
+        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900">
             <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* Hero Welcome Section */}
-                <div className="bg-linear-to-r from-pink-600 to-purple-600 rounded-3xl p-8 mb-8 text-white relative overflow-hidden">
+                <div className="bg-linear-to-r from-emerald-700 to-emerald-700 rounded-3xl p-8 mb-8 text-white relative overflow-hidden">
                     <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-4">
@@ -85,16 +85,16 @@ export default function WaveDashboardPage() {
                             </div>
                             <div>
                                 <h1 className="text-3xl font-bold">Welcome to WAVE</h1>
-                                <p className="text-pink-100">Women Agripreneurs Value-creation Empowerment</p>
+                                <p className="text-emerald-100">Women Agripreneurs Value-creation Empowerment</p>
                             </div>
                         </div>
-                        <p className="text-lg text-pink-50 mb-6">
+                        <p className="text-lg text-emerald-50 mb-6">
                             Your journey to agricultural excellence continues here. Access resources, join training, and grow your business.
                         </p>
                         <div className="flex gap-4">
                             <button
                                 onClick={() => router.push("/wave/resources")}
-                                className="px-6 py-3 bg-white text-pink-600 font-semibold rounded-xl hover:bg-pink-50 transition flex items-center gap-2"
+                                className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-xl hover:bg-emerald-50 transition flex items-center gap-2"
                             >
                                 <BookOpen className="w-5 h-5" />
                                 Browse Resources
@@ -127,10 +127,10 @@ export default function WaveDashboardPage() {
 
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                                <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+                                <Calendar className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
                             </div>
-                            <Sparkles className="w-5 h-5 text-purple-500" />
+                            <Sparkles className="w-5 h-5 text-emerald-600" />
                         </div>
                         <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                             {stats.trainingsRegistered}
@@ -140,8 +140,8 @@ export default function WaveDashboardPage() {
 
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                                <Award className="w-6 h-6 text-green-600 dark:text-green-400" />
+                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+                                <Award className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
                             </div>
                             <TrendingUp className="w-5 h-5 text-green-500" />
                         </div>
@@ -153,8 +153,8 @@ export default function WaveDashboardPage() {
 
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-pink-100 dark:bg-pink-900/30 rounded-xl flex items-center justify-center">
-                                <Heart className="w-6 h-6 text-pink-600 dark:text-pink-400" />
+                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+                                <Heart className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
                             </div>
                         </div>
                         <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
@@ -170,12 +170,12 @@ export default function WaveDashboardPage() {
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                <BookOpen className="w-5 h-5 text-pink-600" />
+                                <BookOpen className="w-5 h-5 text-emerald-700" />
                                 Recent Resources
                             </h2>
                             <button
                                 onClick={() => router.push("/wave/resources")}
-                                className="text-sm text-pink-600 hover:text-pink-700 font-semibold flex items-center gap-1"
+                                className="text-sm text-emerald-700 hover:text-emerald-700 font-semibold flex items-center gap-1"
                             >
                                 View All
                                 <ArrowRight className="w-4 h-4" />
@@ -197,7 +197,7 @@ export default function WaveDashboardPage() {
                                             {resource.description}
                                         </p>
                                         <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                            <span className="px-2 py-1 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 rounded-full">
+                                            <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full">
                                                 {resource.category}
                                             </span>
                                             <span className="flex items-center gap-1">
@@ -219,12 +219,12 @@ export default function WaveDashboardPage() {
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                <Calendar className="w-5 h-5 text-purple-600" />
+                                <Calendar className="w-5 h-5 text-emerald-700" />
                                 Upcoming Training
                             </h2>
                             <button
                                 onClick={() => router.push("/wave/training")}
-                                className="text-sm text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-1"
+                                className="text-sm text-emerald-700 hover:text-emerald-700 font-semibold flex items-center gap-1"
                             >
                                 View All
                                 <ArrowRight className="w-4 h-4" />
@@ -272,9 +272,9 @@ export default function WaveDashboardPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <button
                             onClick={() => router.push("/wave/profile")}
-                            className="p-4 bg-linear-to-br from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-emerald-50 to-emerald-50 dark:from-emerald-900/20 dark:to-emerald-900/20 rounded-xl hover:shadow-md transition text-left"
                         >
-                            <Heart className="w-8 h-8 text-pink-600 mb-2" />
+                            <Heart className="w-8 h-8 text-emerald-700 mb-2" />
                             <h3 className="font-semibold text-gray-900 dark:text-white">My Profile</h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
                                 View and update your information
@@ -283,7 +283,7 @@ export default function WaveDashboardPage() {
 
                         <button
                             onClick={() => router.push("/wave/resources")}
-                            className="p-4 bg-linear-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-blue-50 to-emerald-50 dark:from-blue-900/20 dark:to-emerald-900/20 rounded-xl hover:shadow-md transition text-left"
                         >
                             <BookOpen className="w-8 h-8 text-blue-600 mb-2" />
                             <h3 className="font-semibold text-gray-900 dark:text-white">Learning Resources</h3>
@@ -294,9 +294,9 @@ export default function WaveDashboardPage() {
 
                         <button
                             onClick={() => router.push("/wave/training")}
-                            className="p-4 bg-linear-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-emerald-50 to-emerald-50 dark:from-emerald-900/20 dark:to-emerald-900/20 rounded-xl hover:shadow-md transition text-left"
                         >
-                            <Calendar className="w-8 h-8 text-purple-600 mb-2" />
+                            <Calendar className="w-8 h-8 text-emerald-700 mb-2" />
                             <h3 className="font-semibold text-gray-900 dark:text-white">Training Events</h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
                                 Register for workshops & webinars

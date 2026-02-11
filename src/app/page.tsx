@@ -126,7 +126,7 @@ export default function HubPage() {
                                 education, and access to global trade opportunities.
                             </p>
                             <Link
-                                href="/auth/register"
+                                href="/auth/get-started"
                                 className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl hover:scale-105"
                             >
                                 Get Started Free

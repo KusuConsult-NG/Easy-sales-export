@@ -10,7 +10,7 @@ import { CheckCircle, ArrowRight, Calendar, Mail, Bell } from "lucide-react";
 
 export default function ApplicationSuccessPage() {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 flex items-center justify-center px-4 py-12">
+        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center px-4 py-12">
             <div className="max-w-2xl w-full">
                 {/* Success Icon */}
                 <div className="text-center mb-8">
@@ -27,7 +27,7 @@ export default function ApplicationSuccessPage() {
 
                 {/* Application Info */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 mb-8">
-                    <div className="border-l-4 border-rose-600 pl-4 mb-6">
+                    <div className="border-l-4 border-emerald-700 pl-4 mb-6">
                         <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
                             Application ID
                         </p>
@@ -38,7 +38,7 @@ export default function ApplicationSuccessPage() {
 
                     <div className="space-y-4">
                         <div className="flex items-start gap-3">
-                            <Mail className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                            <Mail className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
                             <div>
                                 <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
                                     Confirmation Email Sent
@@ -49,7 +49,7 @@ export default function ApplicationSuccessPage() {
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
-                            <Bell className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                            <Bell className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
                             <div>
                                 <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
                                     Stay Updated
@@ -69,7 +69,7 @@ export default function ApplicationSuccessPage() {
                     <div className="space-y-6">
                         <div className="flex gap-4">
                             <div className="flex-shrink-0">
-                                <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center text-rose-600 font-bold">
+                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     1
                                 </div>
                             </div>
@@ -85,7 +85,7 @@ export default function ApplicationSuccessPage() {
 
                         <div className="flex gap-4">
                             <div className="flex-shrink-0">
-                                <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center text-rose-600 font-bold">
+                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     2
                                 </div>
                             </div>
@@ -101,7 +101,7 @@ export default function ApplicationSuccessPage() {
 
                         <div className="flex gap-4">
                             <div className="flex-shrink-0">
-                                <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center text-rose-600 font-bold">
+                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     3
                                 </div>
                             </div>
@@ -117,7 +117,7 @@ export default function ApplicationSuccessPage() {
 
                         <div className="flex gap-4">
                             <div className="flex-shrink-0">
-                                <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center text-rose-600 font-bold">
+                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     4
                                 </div>
                             </div>
@@ -133,7 +133,7 @@ export default function ApplicationSuccessPage() {
 
                         <div className="flex gap-4">
                             <div className="flex-shrink-0">
-                                <div className="w-10 h-10 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center text-rose-600 font-bold">
+                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     5
                                 </div>
                             </div>
@@ -153,7 +153,7 @@ export default function ApplicationSuccessPage() {
                 <div className="flex flex-col sm:flex-row gap-4">
                     <Link
                         href="/wave"
-                        className="flex-1 flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-xl font-semibold transition-all"
+                        className="flex-1 flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-semibold transition-all"
                     >
                         Back to WAVE Home
                         <ArrowRight className="w-4 h-4" />

@@ -178,11 +178,14 @@ export default function AcademyApplicationPage() {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-12">
-                <div className="max-w-4xl mx-auto px-6">
+            <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white py-12">
+                <div className="max-w-4xl mx-auto px-6 text-center">
                     <h1 className="text-3xl md:text-4xl font-bold mb-2">Academy Learner Application</h1>
-                    <p className="text-blue-100">
+                    <p className="text-blue-100 mb-2">
                         Join thousands of successful agripreneurs who transformed their careers
+                    </p>
+                    <p className="text-xs text-blue-200/80 uppercase tracking-widest font-semibold">
+                        Powered by Easy Sales Export
                     </p>
                 </div>
             </div>

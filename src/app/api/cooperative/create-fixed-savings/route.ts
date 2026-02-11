@@ -61,27 +61,74 @@ export async function POST(request: NextRequest) {
         const maturityDate = new Date();
         maturityDate.setMonth(maturityDate.getMonth() + durationMonths);
 
-        // Create fixed savings plan
-        const plansRef = collection(db, "fixed_savings_plans");
-        const planDoc = await addDoc(plansRef, {
-            memberId: userId,
-            amount,
-            startDate,
-            maturityDate,
-            durationMonths,
-            interestRate,
-            projectedProfit,
-            status: "active",
-            createdAt: new Date(),
+        // 🔒 SECURITY FIX: Use Transaction for Atomic Balance Deduction & Plan Creation
+        const { runTransaction, serverTimestamp } = await import('firebase/firestore');
+        const { COLLECTIONS } = await import('@/lib/types/firestore');
+
+        const result = await runTransaction(db, async (transaction) => {
+            // Re-read member doc within transaction
+            const freshMemberDoc = await transaction.get(memberRef);
+            if (!freshMemberDoc.exists()) {
+                throw "Member not found";
+            }
+
+            const userData = freshMemberDoc.data();
+            const currentBalance = userData.savingsBalance || 0;
+
+            if (currentBalance < amount) {
+                throw `Insufficient savings balance. You have ₦${currentBalance.toLocaleString()} but need ₦${amount.toLocaleString()}. Please contribute more funds first.`;
+            }
+
+            // Deduct from savings balance
+            transaction.update(memberRef, {
+                savingsBalance: currentBalance - amount,
+                updatedAt: serverTimestamp()
+            });
+
+            // Create fixed savings plan
+            const planRef = doc(collection(db, "fixed_savings_plans"));
+            transaction.set(planRef, {
+                memberId: userId,
+                amount,
+                startDate: serverTimestamp(), // Use server timestamp
+                maturityDate: new Date(Date.now() + durationMonths * 30 * 24 * 60 * 60 * 1000), // Approx match
+                durationMonths,
+                interestRate,
+                projectedProfit,
+                status: "active",
+                createdAt: serverTimestamp(),
+            });
+
+            // Create transaction record
+            const txRef = doc(collection(db, "transactions"));
+            transaction.set(txRef, {
+                userId,
+                type: "fixed_savings_funding",
+                amount,
+                description: `Funded ${durationMonths}-month fixed savings plan`,
+                status: "completed",
+                date: serverTimestamp(),
+            });
+
+            return planRef.id;
         });
 
         return NextResponse.json({
             success: true,
             message: "Fixed savings plan created successfully",
-            planId: planDoc.id,
+            planId: result,
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to create fixed savings plan:", error);
+
+        // Handle custom errors
+        if (typeof error === 'string') {
+            return NextResponse.json(
+                { success: false, message: error },
+                { status: 400 }
+            );
+        }
+
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

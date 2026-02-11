@@ -73,11 +73,31 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const membershipData = membershipDoc.data();
+        const tier = membershipData.membershipTier || "basic";
+        const expectedAmount = tier === "premium" ? 20000 : 10000;
+        const paidAmount = verifyData.data.amount / 100; // Paystack amount is in kobo
+
+        // 🔒 SECURITY FIX: Validate Amount
+        // Allow 1 naira variance for potential rounding issues, though unlikely with Paystack
+        if (paidAmount < expectedAmount - 1) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Insufficient payment amount. Expected ₦${expectedAmount.toLocaleString()}, received ₦${paidAmount.toLocaleString()}`
+                },
+                { status: 400 }
+            );
+        }
+
         // Update payment status
         await updateDoc(membershipRef, {
             paymentStatus: "completed",
             paymentVerifiedAt: new Date(),
             updatedAt: new Date(),
+            // Ensure savings/loan balances are initialized if not already
+            savingsBalance: membershipData.savingsBalance || 0,
+            loanBalance: membershipData.loanBalance || 0,
         });
 
         return NextResponse.json({

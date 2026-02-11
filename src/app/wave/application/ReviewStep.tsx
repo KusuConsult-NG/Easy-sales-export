@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { ChevronLeft, CheckCircle, Edit, Loader2, FileText } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import type { WaveApplicationData } from "./page";
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 
 export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit }: Props) {
     const [termsAccepted, setTermsAccepted] = useState(false);
+    const { showToast } = useToast();
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("en-NG", {
@@ -29,7 +31,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
 
     const handleSubmit = async () => {
         if (!termsAccepted) {
-            alert("Please accept the terms and conditions to continue");
+            showToast("Please accept the terms and conditions to continue", "error");
             return;
         }
         await onSubmit();
@@ -53,7 +55,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         </h3>
                         <button
                             onClick={() => onEdit(0)}
-                            className="flex items-center gap-1 text-sm text-rose-600 hover:text-rose-700 font-semibold"
+                            className="flex items-center gap-1 text-sm text-emerald-700 hover:text-emerald-700 font-semibold"
                         >
                             <Edit className="w-4 h-4" />
                             Edit
@@ -87,7 +89,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         </h3>
                         <button
                             onClick={() => onEdit(1)}
-                            className="flex items-center gap-1 text-sm text-rose-600 hover:text-rose-700 font-semibold"
+                            className="flex items-center gap-1 text-sm text-emerald-700 hover:text-emerald-700 font-semibold"
                         >
                             <Edit className="w-4 h-4" />
                             Edit
@@ -121,7 +123,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         </h3>
                         <button
                             onClick={() => onEdit(2)}
-                            className="flex items-center gap-1 text-sm text-rose-600 hover:text-rose-700 font-semibold"
+                            className="flex items-center gap-1 text-sm text-emerald-700 hover:text-emerald-700 font-semibold"
                         >
                             <Edit className="w-4 h-4" />
                             Edit
@@ -134,7 +136,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         </div>
                         <div>
                             <p className="text-slate-600 dark:text-slate-400">Funding Needed</p>
-                            <p className="font-medium text-slate-900 dark:text-white text-xl text-rose-600">
+                            <p className="font-medium dark:text-white text-xl text-emerald-700">
                                 {formatCurrency(data.fundingNeeded)}
                             </p>
                         </div>
@@ -153,7 +155,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                         </h3>
                         <button
                             onClick={() => onEdit(3)}
-                            className="flex items-center gap-1 text-sm text-rose-600 hover:text-rose-700 font-semibold"
+                            className="flex items-center gap-1 text-sm text-emerald-700 hover:text-emerald-700 font-semibold"
                         >
                             <Edit className="w-4 h-4" />
                             Edit
@@ -179,7 +181,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                             type="checkbox"
                             checked={termsAccepted}
                             onChange={(e) => setTermsAccepted(e.target.checked)}
-                            className="mt-1 w-5 h-5 text-rose-600 border-slate-300 rounded focus:ring-rose-500"
+                            className="mt-1 w-5 h-5 text-emerald-700 border-slate-300 rounded focus:ring-emerald-600"
                         />
                         <div className="text-sm">
                             <p className="font-semibold text-slate-900 dark:text-white mb-1">
@@ -209,7 +211,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                 <button
                     onClick={handleSubmit}
                     disabled={!termsAccepted || submitting}
-                    className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-10 py-4 rounded-xl font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-700 text-white px-10 py-4 rounded-xl font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {submitting ? (
                         <>

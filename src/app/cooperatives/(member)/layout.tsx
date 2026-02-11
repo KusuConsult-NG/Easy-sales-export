@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp, getApps } from "firebase-admin/app";
+import { getAdminDb } from "@/lib/firebase-admin";
 import CooperativeSidebar from "./CooperativeSidebar";
 
 export default async function CooperativeMemberLayout({
@@ -32,6 +33,12 @@ export default async function CooperativeMemberLayout({
         redirect("/auth/login?redirect=/cooperatives");
     }
 
+    let userProfile = {
+        firstName: "",
+        lastName: "",
+        tier: ""
+    };
+
     // Verify session and check access
     try {
         const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
@@ -42,6 +49,18 @@ export default async function CooperativeMemberLayout({
         if (!accessResult.hasAccess) {
             redirect(accessResult.redirectTo || "/cooperatives/onboarding");
         }
+
+        // Fetch membership details for Sidebar
+        const db = getAdminDb();
+        const memberSnapshot = await db.collection("cooperative_members").doc(userId).get();
+        if (memberSnapshot.exists) {
+            const data = memberSnapshot.data();
+            userProfile = {
+                firstName: data?.firstName || "",
+                lastName: data?.lastName || "",
+                tier: data?.membershipTier || ""
+            };
+        }
     } catch (error) {
         console.error("Session verification failed:", error);
         redirect("/auth/login?redirect=/cooperatives");
@@ -50,7 +69,7 @@ export default async function CooperativeMemberLayout({
     return (
         <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* Sidebar */}
-            <CooperativeSidebar />
+            <CooperativeSidebar user={userProfile} />
 
             {/* Main Content */}
             <main className="flex-1 lg:ml-64">

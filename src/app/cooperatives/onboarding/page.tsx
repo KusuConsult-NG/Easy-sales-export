@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registerCooperativeMemberAction } from "@/app/actions/cooperative";
 import { CooperativeErrorBoundary } from "@/components/errors/CooperativeErrorBoundary";
+import { useToast } from "@/contexts/ToastContext";
 
 // Steps
 import TierSelectionStep from "./steps/TierSelectionStep";
@@ -22,6 +23,7 @@ import PaymentStep from "./steps/PaymentStep";
 
 function CooperativeOnboardingContent() {
     const router = useRouter();
+    const { showToast } = useToast();
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -125,12 +127,12 @@ function CooperativeOnboardingContent() {
                 // Redirect to Paystack
                 window.location.href = result.paymentUrl;
             } else {
-                alert(result.error || "Registration failed. Please try again.");
+                showToast(result.error || "Registration failed. Please try again.", "error");
                 setIsSubmitting(false);
             }
         } catch (error) {
             console.error("Registration error:", error);
-            alert("An unexpected error occurred.");
+            showToast("An unexpected error occurred.", "error");
             setIsSubmitting(false);
         }
     };
@@ -150,6 +152,10 @@ function CooperativeOnboardingContent() {
                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
                         Cooperative Membership Application
                     </h1>
+                    <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400">
+                        <span>Powered by</span>
+                        <span className="font-bold text-purple-600">Easy Sales Export</span>
+                    </div>
                 </div>
             </div>
 
@@ -230,6 +236,7 @@ function CooperativeOnboardingContent() {
                         tierData={tierData as { tier: "basic" | "premium" }}
                         onComplete={handleComplete}
                         onBack={() => setCurrentStep(4)}
+                        isSubmitting={isSubmitting}
                     />
                 )}
             </div>

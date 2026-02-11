@@ -17,6 +17,7 @@ import {
     EyeOff,
     CheckCircle,
     XCircle,
+    Sparkles,
 } from "lucide-react";
 import { COMPANY_INFO } from "@/lib/constants";
 import { registerAction } from "@/app/actions/auth";
@@ -24,22 +25,21 @@ import { useToast } from "@/contexts/ToastContext";
 
 const initialState = { error: "", success: false };
 
-function RegisterContent() {
+function WaveRegisterContent() {
     const { showToast } = useToast();
     const searchParams = useSearchParams();
     const router = useRouter();
     const { data: session } = useSession();
 
-    // Get pre-selected values from URL
-    const platformParams = searchParams.getAll("platforms[]");
-    const callbackUrl = searchParams.get("callbackUrl") || "";
+    // Default valid callback or dashboard
+    const callbackUrl = searchParams.get("callbackUrl") || "/wave/dashboard";
 
     const [formData, setFormData] = useState({
         fullName: "",
         email: "",
         phone: "",
-        gender: "",
-        platforms: platformParams.length > 0 ? platformParams : [] as string[],
+        gender: "female", // Hardcoded
+        platforms: ["wave"], // Hardcoded
         password: "",
         confirmPassword: "",
         acceptTerms: false,
@@ -81,7 +81,7 @@ function RegisterContent() {
             color = "bg-blue-500";
         } else {
             label = "Strong";
-            color = "bg-green-500";
+            color = "bg-emerald-500";
         }
 
         return { score, label, color };
@@ -114,44 +114,28 @@ function RegisterContent() {
         },
     ];
 
-    const handlePlatformChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const platform = e.target.value;
-        setFormData(prev => ({
-            ...prev,
-            platforms: e.target.checked
-                ? [...prev.platforms, platform]
-                : prev.platforms.filter(p => p !== platform)
-        }));
-    };
-
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-900 via-primary to-slate-900 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+        <div className="min-h-screen bg-linear-to-br from-stone-900 via-emerald-900 to-stone-900 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5" />
 
             <div className="relative w-full max-w-2xl my-8">
                 {/* Logo & Title */}
                 <div className="text-center mb-8">
                     <Link href="/" className="flex items-center justify-center gap-3 mb-4 hover:opacity-80 transition-opacity">
-                        <Image
-                            src="/images/logo.jpg"
-                            alt={COMPANY_INFO.name}
-                            width={64}
-                            height={64}
-                            className="w-16 h-16 rounded-2xl border-2 border-white/20"
-                        />
-                        <div className="text-left">
-                            <h2 className="text-xl font-bold text-white">{COMPANY_INFO.name}</h2>
-                            <p className="text-sm text-blue-300">{COMPANY_INFO.tagline}</p>
+                        <div className="w-16 h-16 bg-emerald-800 rounded-2xl flex items-center justify-center border-2 border-emerald-400/20 shadow-2xl shadow-emerald-900/50">
+                            <Sparkles className="w-8 h-8 text-emerald-100" />
                         </div>
                     </Link>
-                    <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
-                    <p className="text-blue-200">Join Nigeria's leading ag-export platform</p>
+                    <h1 className="text-3xl font-bold text-white mb-2">WAVE Program Registration</h1>
+                    <p className="text-emerald-200">Women's Agribusiness Venture Empowerment</p>
                 </div>
 
                 {/* Registration Form */}
-                <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 elevation-3">
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/20">
                     <form action={formAction} className="space-y-6">
                         <input type="hidden" name="callbackUrl" value={callbackUrl} />
+                        <input type="hidden" name="platforms[]" value="wave" />
+                        <input type="hidden" name="gender" value="female" />
 
                         {/* Server error display */}
                         {state.error && (
@@ -164,11 +148,11 @@ function RegisterContent() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Full Name */}
                             <div>
-                                <label htmlFor="register-fullname" className="block text-sm font-semibold text-white mb-2">
+                                <label htmlFor="register-fullname" className="block text-sm font-semibold text-emerald-100 mb-2">
                                     Full Name <span className="text-red-300">*</span>
                                 </label>
                                 <div className="relative">
-                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
+                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
                                     <input
                                         id="register-fullname"
                                         type="text"
@@ -176,9 +160,9 @@ function RegisterContent() {
                                         autoComplete="name"
                                         value={formData.fullName}
                                         onChange={handleInputChange}
-                                        className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.fullName ? "border-red-400" : "border-white/20"
-                                            } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
-                                        placeholder="John Doe"
+                                        className={`w-full pl-11 pr-4 py-3 bg-white/5 border ${errors.fullName ? "border-red-400" : "border-white/10"
+                                            } rounded-xl text-white placeholder:text-emerald-200/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
+                                        placeholder="Jane Doe"
                                         disabled={isPending}
                                         required
                                     />
@@ -193,11 +177,11 @@ function RegisterContent() {
 
                             {/* Phone */}
                             <div>
-                                <label htmlFor="register-phone" className="block text-sm font-semibold text-white mb-2">
+                                <label htmlFor="register-phone" className="block text-sm font-semibold text-emerald-100 mb-2">
                                     Phone Number
                                 </label>
                                 <div className="relative">
-                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
+                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
                                     <input
                                         id="register-phone"
                                         type="tel"
@@ -205,8 +189,8 @@ function RegisterContent() {
                                         autoComplete="tel"
                                         value={formData.phone}
                                         onChange={handleInputChange}
-                                        className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.phone ? "border-red-400" : "border-white/20"
-                                            } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
+                                        className={`w-full pl-11 pr-4 py-3 bg-white/5 border ${errors.phone ? "border-red-400" : "border-white/10"
+                                            } rounded-xl text-white placeholder:text-emerald-200/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
                                         placeholder="+234 XXX XXX XXXX"
                                         disabled={isPending}
                                     />
@@ -219,99 +203,27 @@ function RegisterContent() {
                                 )}
                             </div>
 
-                            {/* Gender */}
-                            <div>
-                                <label className="block text-sm font-semibold text-white mb-2">
-                                    Gender <span className="text-red-300">*</span>
-                                </label>
-                                <div className="relative">
-                                    <select
-                                        name="gender"
-                                        value={formData.gender}
-                                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                                        className={`w-full px-4 py-3 bg-white/10 border ${errors.gender ? "border-red-400" : "border-white/20"
-                                            } rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all appearance-none cursor-pointer`}
-                                        disabled={isPending}
-                                        required
-                                    >
-                                        <option value="" className="bg-slate-800">Select Gender</option>
-                                        <option value="female" className="bg-slate-800">Female</option>
-                                        <option value="male" className="bg-slate-800">Male</option>
-                                    </select>
-                                </div>
-                                {errors.gender && (
-                                    <p className="mt-1 text-sm text-red-300 flex items-center gap-1">
-                                        <AlertCircle className="w-4 h-4" />
-                                        {errors.gender}
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Platform Selection */}
+                            {/* Gender (Hidden/Fixed) Info Box */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-white mb-3">
-                                    Select Platforms <span className="text-red-300">*</span>
-                                </label>
-                                <p className="text-xs text-blue-200/70 mb-3">
-                                    Choose all platforms you're interested in. You can request access to more later.
-                                </p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {[
-                                        { id: "marketplace", label: "Marketplace", desc: "Buy & sell agricultural products" },
-                                        { id: "export", label: "Export Windows", desc: "Invest in export opportunities" },
-                                        { id: "cooperatives", label: "Cooperatives", desc: "Join cooperatives & access loans" },
-                                        { id: "farm-nation", label: "Farm Nation", desc: "Land investment & fractional ownership" },
-                                        { id: "academy", label: "Academy", desc: "Learn agricultural best practices" },
-                                        { id: "wave", label: "WAVE Program", desc: "Women empowerment & business training" },
-                                    ].map(platform => (
-                                        <label
-                                            key={platform.id}
-                                            className={`flex items-start gap-3 p-3 bg-white/5 border rounded-xl cursor-pointer transition ${formData.platforms.includes(platform.id)
-                                                ? "border-blue-400 bg-blue-500/10"
-                                                : "border-white/10 hover:bg-white/10"
-                                                }`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                name="platforms[]"
-                                                value={platform.id}
-                                                checked={formData.platforms.includes(platform.id)}
-                                                onChange={handlePlatformChange}
-                                                className="mt-1 w-4 h-4 rounded accent-blue-500"
-                                                disabled={isPending}
-                                            />
-                                            <div className="flex-1">
-                                                <div className="font-semibold text-white text-sm">{platform.label}</div>
-                                                <div className="text-xs text-blue-200/70">{platform.desc}</div>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-                                {errors.platforms && (
-                                    <p className="mt-2 text-sm text-red-300 flex items-center gap-1">
-                                        <AlertCircle className="w-4 h-4" />
-                                        {errors.platforms}
-                                    </p>
-                                )}
-                                {/* WAVE auto-enabled for females */}
-                                {formData.gender === "female" && (
-                                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-                                        <div className="flex items-center gap-2 text-blue-200">
-                                            <CheckCircle className="w-4 h-4 text-blue-300" />
-                                            <span className="text-sm font-medium">WAVE Program automatically enabled for female users</span>
-                                        </div>
+                                <div className="p-4 bg-white/10 border border-white/20 rounded-xl flex items-center gap-4 shadow-lg shadow-black/10 backdrop-blur-sm">
+                                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center shrink-0 border border-white/30">
+                                        <User className="w-5 h-5 text-white" />
                                     </div>
-                                )}
+                                    <div className="text-sm">
+                                        <p className="font-bold text-white text-base">Women-Only Program</p>
+                                        <p className="text-white/80 leading-relaxed font-medium">This program is exclusively designed to empower women in agriculture.</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         {/* Email */}
                         <div>
-                            <label htmlFor="register-email" className="block text-sm font-semibold text-white mb-2">
+                            <label htmlFor="register-email" className="block text-sm font-semibold text-emerald-100 mb-2">
                                 Email Address
                             </label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
                                 <input
                                     id="register-email"
                                     type="email"
@@ -319,8 +231,8 @@ function RegisterContent() {
                                     autoComplete="email"
                                     value={formData.email}
                                     onChange={handleInputChange}
-                                    className={`w-full pl-11 pr-4 py-3 bg-white/10 border ${errors.email ? "border-red-400" : "border-white/20"
-                                        } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
+                                    className={`w-full pl-11 pr-4 py-3 bg-white/5 border ${errors.email ? "border-red-400" : "border-white/10"
+                                        } rounded-xl text-white placeholder:text-emerald-200/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
                                     placeholder="your.email@example.com"
                                     disabled={isPending}
                                 />
@@ -335,11 +247,11 @@ function RegisterContent() {
 
                         {/* Password */}
                         <div>
-                            <label htmlFor="register-password" className="block text-sm font-semibold text-white mb-2">
+                            <label htmlFor="register-password" className="block text-sm font-semibold text-emerald-100 mb-2">
                                 Password
                             </label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
                                 <input
                                     id="register-password"
                                     type={showPassword ? "text" : "password"}
@@ -347,15 +259,15 @@ function RegisterContent() {
                                     autoComplete="new-password"
                                     value={formData.password}
                                     onChange={handleInputChange}
-                                    className={`w-full pl-11 pr-11 py-3 bg-white/10 border ${errors.password ? "border-red-400" : "border-white/20"
-                                        } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
+                                    className={`w-full pl-11 pr-11 py-3 bg-white/5 border ${errors.password ? "border-red-400" : "border-white/10"
+                                        } rounded-xl text-white placeholder:text-emerald-200/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
                                     placeholder="••••••••"
                                     disabled={isPending}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-300 hover:text-white transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-white transition-colors"
                                     disabled={isPending}
                                 >
                                     {showPassword ? (
@@ -379,7 +291,7 @@ function RegisterContent() {
                                         <span className="text-xs text-white font-semibold">
                                             Password Strength: {passwordStrength.label}
                                         </span>
-                                        <span className="text-xs text-blue-200">
+                                        <span className="text-xs text-emerald-200">
                                             {passwordStrength.score}/5
                                         </span>
                                     </div>
@@ -395,14 +307,14 @@ function RegisterContent() {
                                         {passwordRequirements.map((req, index) => (
                                             <div
                                                 key={index}
-                                                className="flex items-center gap-2 text-xs text-blue-200"
+                                                className="flex items-center gap-2 text-xs text-emerald-200"
                                             >
                                                 {req.met ? (
-                                                    <CheckCircle className="w-4 h-4 text-green-400" />
+                                                    <CheckCircle className="w-4 h-4 text-emerald-400" />
                                                 ) : (
-                                                    <XCircle className="w-4 h-4 text-blue-400" />
+                                                    <XCircle className="w-4 h-4 text-emerald-600/50" />
                                                 )}
-                                                <span className={req.met ? "text-green-300" : ""}>
+                                                <span className={req.met ? "text-emerald-300" : "opacity-50"}>
                                                     {req.label}
                                                 </span>
                                             </div>
@@ -414,25 +326,25 @@ function RegisterContent() {
 
                         {/* Confirm Password */}
                         <div>
-                            <label className="block text-sm font-semibold text-white mb-2">
+                            <label className="block text-sm font-semibold text-emerald-100 mb-2">
                                 Confirm Password
                             </label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
                                 <input
                                     type={showConfirmPassword ? "text" : "password"}
                                     name="confirmPassword"
                                     value={formData.confirmPassword}
                                     onChange={handleInputChange}
-                                    className={`w-full pl-11 pr-11 py-3 bg-white/10 border ${errors.confirmPassword ? "border-red-400" : "border-white/20"
-                                        } rounded-xl text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all`}
+                                    className={`w-full pl-11 pr-11 py-3 bg-white/5 border ${errors.confirmPassword ? "border-red-400" : "border-white/10"
+                                        } rounded-xl text-white placeholder:text-emerald-200/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all`}
                                     placeholder="••••••••"
                                     disabled={isPending}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-300 hover:text-white transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-white transition-colors"
                                     disabled={isPending}
                                 >
                                     {showConfirmPassword ? (
@@ -452,27 +364,27 @@ function RegisterContent() {
 
                         {/* Terms & Conditions */}
                         <div>
-                            <label className="flex items-start gap-3 text-sm text-blue-200 cursor-pointer">
+                            <label className="flex items-start gap-3 text-sm text-emerald-200 cursor-pointer">
                                 <input
                                     type="checkbox"
                                     name="acceptTerms"
                                     checked={formData.acceptTerms}
                                     onChange={handleInputChange}
-                                    className="mt-0.5 w-4 h-4 rounded accent-blue-500"
+                                    className="mt-0.5 w-4 h-4 rounded accent-emerald-500"
                                     disabled={isPending}
                                 />
                                 <span>
                                     I agree to the{" "}
                                     <Link
                                         href="/terms"
-                                        className="text-white underline hover:text-blue-300"
+                                        className="text-emerald-400 underline hover:text-emerald-300"
                                     >
                                         Terms and Conditions
                                     </Link>{" "}
                                     and{" "}
                                     <Link
                                         href="/privacy"
-                                        className="text-white underline hover:text-blue-300"
+                                        className="text-emerald-400 underline hover:text-emerald-300"
                                     >
                                         Privacy Policy
                                     </Link>
@@ -490,7 +402,7 @@ function RegisterContent() {
                         <button
                             type="submit"
                             disabled={isPending}
-                            className="w-full px-6 py-4 bg-linear-to-r from-primary to-blue-700 text-white font-bold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all elevation-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            className="w-full px-6 py-4 bg-linear-to-r from-emerald-600 to-emerald-800 text-white font-bold rounded-xl hover:from-emerald-700 hover:to-emerald-900 transition-all shadow-lg hover:shadow-emerald-900/50 flex items-center justify-center gap-2"
                         >
                             {isPending ? (
                                 <>
@@ -498,17 +410,17 @@ function RegisterContent() {
                                     Creating Account...
                                 </>
                             ) : (
-                                "Create Account"
+                                "Join WAVE Program"
                             )}
                         </button>
                     </form>
 
                     {/* Login Link */}
                     <div className="mt-6 text-center">
-                        <p className="text-blue-200">
+                        <p className="text-emerald-200/60">
                             Already have an account?{" "}
                             <Link
-                                href="/auth/login"
+                                href="/wave/login"
                                 className="text-white font-semibold hover:underline"
                             >
                                 Sign in
@@ -518,22 +430,22 @@ function RegisterContent() {
                 </div>
 
                 {/* Footer */}
-                <p className="mt-8 text-center text-sm text-blue-200/60">
-                    {COMPANY_INFO.copyright}
+                <p className="mt-8 text-center text-sm text-emerald-200/40 uppercase tracking-widest font-semibold">
+                    Implemented by Easy Sales Export
                 </p>
             </div>
         </div>
     );
 }
 
-export default function RegisterPage() {
+export default function WaveRegisterPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-white animate-spin" />
+            <div className="min-h-screen bg-stone-900 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
             </div>
         }>
-            <RegisterContent />
+            <WaveRegisterContent />
         </Suspense>
     );
 }

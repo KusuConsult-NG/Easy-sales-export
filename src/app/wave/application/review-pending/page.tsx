@@ -14,12 +14,12 @@ export default function ReviewPendingPage() {
     const expectedReviewDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 px-4 py-12">
+        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 px-4 py-12">
             <div className="max-w-3xl mx-auto">
                 {/* Back Link */}
                 <Link
                     href="/wave"
-                    className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 mb-8 transition-colors"
+                    className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-500 mb-8 transition-colors"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back to WAVE Home
@@ -106,8 +106,8 @@ export default function ReviewPendingPage() {
                     </div>
 
                     {/* Timeline Note */}
-                    <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-4">
-                        <p className="text-sm text-rose-700 dark:text-rose-300">
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 dark:border-emerald-800 rounded-xl p-4">
+                        <p className="text-sm text-emerald-700 dark:text-emerald-400">
                             <strong>Estimated Review Time:</strong> 3-5 business days. We'll notify you via email once a decision has been made.
                         </p>
                     </div>
@@ -120,7 +120,7 @@ export default function ReviewPendingPage() {
                     </h2>
                     <div className="space-y-4">
                         <div className="flex items-start gap-3">
-                            <FileText className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                            <FileText className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
                             <div>
                                 <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
                                     Document Verification
@@ -131,7 +131,7 @@ export default function ReviewPendingPage() {
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
-                            <Phone className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                            <Phone className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
                             <div>
                                 <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
                                     Possible Interview
@@ -142,7 +142,7 @@ export default function ReviewPendingPage() {
                             </div>
                         </div>
                         <div className="flex items-start gap-3">
-                            <Mail className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                            <Mail className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
                             <div>
                                 <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
                                     Email Notification
@@ -163,7 +163,7 @@ export default function ReviewPendingPage() {
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <a
                             href="mailto:wave@easysalesexport.com"
-                            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold transition-all"
+                            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-700 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-all"
                         >
                             <Mail className="w-4 h-4" />
                             Email Support

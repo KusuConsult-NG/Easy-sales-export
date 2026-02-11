@@ -154,10 +154,11 @@ export async function registerAction(prevState: any, formData: FormData) {
         });
 
         // REGISTRATION MUST ESTABLISH SESSION — DO NOT MODIFY
-        // Determine primary app based on assigned roles
-        const primaryApp = getPrimaryApp(userProfile.roles);
+        // Determine primary app or use callback URL
+        const callbackUrl = formData.get("callbackUrl") as string;
+        const primaryApp = callbackUrl || getPrimaryApp(userProfile.roles);
 
-        // Auto sign-in after registration and redirect to primary app
+        // Auto sign-in after registration and redirect to primary app or callback
         // redirect:false prevents session from being established on client
         // We MUST redirect to allow session cookie to be set
         await signIn("credentials", {

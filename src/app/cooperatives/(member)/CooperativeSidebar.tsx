@@ -35,18 +35,34 @@ const navItems = [
     { icon: Users, label: "Directory", href: "/cooperatives/directory" },
 ];
 
-export default function CooperativeSidebar() {
+interface CooperativeSidebarProps {
+    user?: {
+        firstName: string;
+        lastName: string;
+        tier: string;
+    };
+}
+
+export default function CooperativeSidebar({ user }: CooperativeSidebarProps) {
     const pathname = usePathname();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+
+    const initials = user?.firstName && user?.lastName
+        ? `${user.firstName[0]}${user.lastName[0]}`
+        : "ME";
+
+    const fullName = user?.firstName && user?.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : "Member";
 
     return (
         <>
             {/* Mobile Menu Button */}
             <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-purple-600 text-white rounded-lg shadow-lg"
+                className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-purple-900 text-white rounded-lg shadow-lg"
             >
                 {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -59,7 +75,7 @@ export default function CooperativeSidebar() {
                 {/* Header */}
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800">
                     <Link href="/cooperatives" className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
+                        <div className="w-10 h-10 bg-linear-to-br from-purple-800 to-indigo-900 rounded-xl flex items-center justify-center">
                             <Award className="w-6 h-6 text-white" />
                         </div>
                         <div>
@@ -81,7 +97,7 @@ export default function CooperativeSidebar() {
                                 href={item.href}
                                 onClick={() => setMobileMenuOpen(false)}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
-                                    ? "bg-purple-600 text-white shadow-lg shadow-purple-600/30"
+                                    ? "bg-purple-900 text-white shadow-lg shadow-purple-900/30"
                                     : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                                     }`}
                             >
@@ -92,25 +108,26 @@ export default function CooperativeSidebar() {
                     })}
                 </nav>
 
-                {/* User Info (Mock) */}
+                {/* User Info */}
                 <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 dark:border-slate-800">
                     <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-white font-bold">
-                            JD
+                        <div className="w-10 h-10 bg-linear-to-br from-purple-800 to-indigo-900 rounded-full flex items-center justify-center text-white font-bold">
+                            {initials}
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm text-slate-900 dark:text-white truncate">
-                                John Doe
+                                {fullName}
                             </p>
                             <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-semibold rounded-full">
-                                    Premium
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-900 dark:text-purple-300 text-xs font-semibold rounded-full capitalize">
+                                    {user?.tier || "Basic"}
                                 </span>
                             </div>
                         </div>
                     </div>
                 </div>
             </aside>
+
 
             {/* Mobile Overlay */}
             {mobileMenuOpen && (

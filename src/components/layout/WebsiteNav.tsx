@@ -25,7 +25,7 @@ export default function WebsiteNav() {
                 <div className="flex justify-between items-center h-20">
                     {/* Logo */}
                     <Link href="/dashboard" className="flex items-center gap-3 group">
-                        <div className="relative w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+                        <div className="relative w-12 h-12 bg-linear-to-br from-orange-700 to-amber-700 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
                             <span className="text-white font-bold text-xl">ES</span>
                         </div>
                         <div className="hidden sm:block">
@@ -57,8 +57,8 @@ export default function WebsiteNav() {
                             Sign In
                         </button>
                         <button
-                            onClick={() => router.push("/auth/register")}
-                            className="px-6 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-semibold rounded-xl hover:from-orange-700 hover:to-amber-700 shadow-lg hover:shadow-xl transition-all"
+                            onClick={() => router.push("/auth/get-started")}
+                            className="px-6 py-2.5 bg-linear-to-r from-orange-700 to-amber-700 text-white font-semibold rounded-xl hover:from-orange-700 hover:to-amber-700 shadow-lg hover:shadow-xl transition-all"
                         >
                             Get Started
                         </button>
@@ -100,10 +100,10 @@ export default function WebsiteNav() {
                             </button>
                             <button
                                 onClick={() => {
-                                    router.push("/auth/register");
+                                    router.push("/auth/get-started");
                                     setIsMobileMenuOpen(false);
                                 }}
-                                className="w-full px-6 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-semibold rounded-xl hover:from-orange-700 hover:to-amber-700 shadow-lg transition-all"
+                                className="w-full px-6 py-2.5 bg-linear-to-r from-orange-700 to-amber-700 text-white font-semibold rounded-xl hover:from-orange-700 hover:to-amber-700 shadow-lg transition-all"
                             >
                                 Get Started
                             </button>

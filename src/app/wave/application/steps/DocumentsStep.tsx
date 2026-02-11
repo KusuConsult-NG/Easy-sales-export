@@ -111,7 +111,7 @@ export default function DocumentsStep({ data, updateData, onNext, onBack }: Prop
                     <div className="flex-1">
                         <h4 className="font-semibold text-slate-900 dark:text-white mb-1">
                             {label}
-                            {required && <span className="text-rose-600 ml-1">*</span>}
+                            {required && <span className="text-emerald-700 ml-1">*</span>}
                         </h4>
                         <p className="text-sm text-slate-600 dark:text-slate-400">
                             Max 5MB • JPG, PNG, or PDF
@@ -124,7 +124,7 @@ export default function DocumentsStep({ data, updateData, onNext, onBack }: Prop
 
                 {!file ? (
                     <label className="block cursor-pointer">
-                        <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 hover:border-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-all">
+                        <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 hover:border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all">
                             <div className="flex flex-col items-center text-center">
                                 <Upload className="w-8 h-8 text-slate-400 mb-2" />
                                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -144,7 +144,7 @@ export default function DocumentsStep({ data, updateData, onNext, onBack }: Prop
                     </label>
                 ) : (
                     <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-700 rounded-xl p-4">
-                        <FileText className="w-5 h-5 text-rose-600 shrink-0" />
+                        <FileText className="w-5 h-5 text-emerald-700 shrink-0" />
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
                                 {file.name}
@@ -221,7 +221,7 @@ export default function DocumentsStep({ data, updateData, onNext, onBack }: Prop
                 </button>
                 <button
                     onClick={handleNext}
-                    className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-xl font-bold transition-all"
+                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold transition-all"
                 >
                     Continue to Review
                     <ChevronRight className="w-5 h-5" />

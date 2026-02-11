@@ -56,8 +56,8 @@ export default function WaveProfilePage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-pink-600" />
+            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
             </div>
         );
     }
@@ -71,13 +71,13 @@ export default function WaveProfilePage() {
         : "N/A";
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 py-8">
+        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 py-8">
             <div className="max-w-5xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
                     <button
                         onClick={() => router.push("/wave/dashboard")}
-                        className="text-pink-600 hover:text-pink-700 font-semibold mb-4 flex items-center gap-2"
+                        className="text-emerald-700 hover:text-emerald-700 font-semibold mb-4 flex items-center gap-2"
                     >
                         ← Back to Dashboard
                     </button>
@@ -92,7 +92,7 @@ export default function WaveProfilePage() {
                 {/* Profile Card */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-8 border border-gray-100 dark:border-gray-700">
                     <div className="flex items-start gap-6">
-                        <div className="w-24 h-24 bg-linear-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white text-3xl font-bold">
+                        <div className="w-24 h-24 bg-linear-to-br from-emerald-500 to-emerald-700 rounded-full flex items-center justify-center text-white text-3xl font-bold">
                             <Heart className="w-12 h-12" />
                         </div>
                         <div className="flex-1">
@@ -103,11 +103,11 @@ export default function WaveProfilePage() {
                                 Member since {enrolledDate}
                             </p>
                             <div className="flex items-center gap-3">
-                                <span className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full text-sm font-semibold flex items-center gap-2">
+                                <span className="px-4 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400 rounded-full text-sm font-semibold flex items-center gap-2">
                                     <CheckCircle className="w-4 h-4" />
                                     Active Member
                                 </span>
-                                <span className="px-4 py-2 bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300 rounded-full text-sm font-semibold">
+                                <span className="px-4 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-sm font-semibold">
                                     {stats.daysActive} Days Active
                                 </span>
                             </div>
@@ -136,8 +136,8 @@ export default function WaveProfilePage() {
 
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                                <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+                                <Calendar className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
                             </div>
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">Training</p>
@@ -153,8 +153,8 @@ export default function WaveProfilePage() {
 
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center gap-4 mb-4">
-                            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                                <Award className="w-6 h-6 text-green-600 dark:text-green-400" />
+                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
+                                <Award className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
                             </div>
                             <div>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">Completed</p>
@@ -172,7 +172,7 @@ export default function WaveProfilePage() {
                 {/* Progress Section */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-8 border border-gray-100 dark:border-gray-700">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                        <TrendingUp className="w-6 h-6 text-pink-600" />
+                        <TrendingUp className="w-6 h-6 text-emerald-700" />
                         Your Progress
                     </h3>
 
@@ -182,13 +182,13 @@ export default function WaveProfilePage() {
                             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                                 Engagement Level
                             </span>
-                            <span className="text-sm font-semibold text-pink-600">
+                            <span className="text-sm font-semibold text-emerald-700">
                                 {Math.min(100, Math.round((stats.resourcesAccessed * 10 + stats.trainingsCompleted * 20) / 3))}%
                             </span>
                         </div>
                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                             <div
-                                className="bg-linear-to-r from-pink-500 to-purple-600 h-3 rounded-full transition-all duration-500"
+                                className="bg-linear-to-r from-emerald-500 to-emerald-700 h-3 rounded-full transition-all duration-500"
                                 style={{
                                     width: `${Math.min(100, Math.round((stats.resourcesAccessed * 10 + stats.trainingsCompleted * 20) / 3))}%`,
                                 }}
@@ -205,13 +205,13 @@ export default function WaveProfilePage() {
                         <div className="flex items-center gap-3">
                             <div
                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${memberData?.active
-                                        ? "bg-green-100 dark:bg-green-900/30"
+                                        ? "bg-emerald-100 dark:bg-emerald-900/30"
                                         : "bg-gray-100 dark:bg-gray-700"
                                     }`}
                             >
                                 <CheckCircle
                                     className={`w-5 h-5 ${memberData?.active
-                                            ? "text-green-600 dark:text-green-400"
+                                            ? "text-emerald-700 dark:text-emerald-500"
                                             : "text-gray-400"
                                         }`}
                                 />
@@ -225,13 +225,13 @@ export default function WaveProfilePage() {
                         <div className="flex items-center gap-3">
                             <div
                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.resourcesAccessed > 0
-                                        ? "bg-green-100 dark:bg-green-900/30"
+                                        ? "bg-emerald-100 dark:bg-emerald-900/30"
                                         : "bg-gray-100 dark:bg-gray-700"
                                     }`}
                             >
                                 <CheckCircle
                                     className={`w-5 h-5 ${stats.resourcesAccessed > 0
-                                            ? "text-green-600 dark:text-green-400"
+                                            ? "text-emerald-700 dark:text-emerald-500"
                                             : "text-gray-400"
                                         }`}
                                 />
@@ -245,13 +245,13 @@ export default function WaveProfilePage() {
                         <div className="flex items-center gap-3">
                             <div
                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.trainingsRegistered > 0
-                                        ? "bg-green-100 dark:bg-green-900/30"
+                                        ? "bg-emerald-100 dark:bg-emerald-900/30"
                                         : "bg-gray-100 dark:bg-gray-700"
                                     }`}
                             >
                                 <CheckCircle
                                     className={`w-5 h-5 ${stats.trainingsRegistered > 0
-                                            ? "text-green-600 dark:text-green-400"
+                                            ? "text-emerald-700 dark:text-emerald-500"
                                             : "text-gray-400"
                                         }`}
                                 />
@@ -265,13 +265,13 @@ export default function WaveProfilePage() {
                         <div className="flex items-center gap-3">
                             <div
                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.trainingsCompleted > 0
-                                        ? "bg-green-100 dark:bg-green-900/30"
+                                        ? "bg-emerald-100 dark:bg-emerald-900/30"
                                         : "bg-gray-100 dark:bg-gray-700"
                                     }`}
                             >
                                 <CheckCircle
                                     className={`w-5 h-5 ${stats.trainingsCompleted > 0
-                                            ? "text-green-600 dark:text-green-400"
+                                            ? "text-emerald-700 dark:text-emerald-500"
                                             : "text-gray-400"
                                         }`}
                                 />
@@ -285,15 +285,15 @@ export default function WaveProfilePage() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="bg-linear-to-r from-pink-600 to-purple-600 rounded-2xl p-8 text-white">
+                <div className="bg-linear-to-r from-emerald-700 to-emerald-700 rounded-2xl p-8 text-white">
                     <h3 className="text-2xl font-bold mb-4">Continue Your Journey</h3>
-                    <p className="text-pink-100 mb-6">
+                    <p className="text-emerald-100 mb-6">
                         Keep growing your skills and building your agribusiness with WAVE resources and training.
                     </p>
                     <div className="flex flex-wrap gap-4">
                         <button
                             onClick={() => router.push("/wave/resources")}
-                            className="px-6 py-3 bg-white text-pink-600 font-semibold rounded-xl hover:bg-pink-50 transition"
+                            className="px-6 py-3 bg-white text-emerald-700 font-semibold rounded-xl hover:bg-emerald-50 transition"
                         >
                             Browse Resources
                         </button>

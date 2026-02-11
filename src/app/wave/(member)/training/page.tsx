@@ -91,7 +91,7 @@ export default function WaveTrainingPage() {
             case "upcoming":
                 return "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300";
             case "ongoing":
-                return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300";
+                return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400";
             case "completed":
                 return "bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300";
             case "cancelled":
@@ -103,8 +103,8 @@ export default function WaveTrainingPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-pink-600" />
+            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
             </div>
         );
     }
@@ -114,13 +114,13 @@ export default function WaveTrainingPage() {
     const completedEvents = events.filter((e) => e.status === "completed");
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900 py-8">
+        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
                     <button
                         onClick={() => router.push("/wave/dashboard")}
-                        className="text-pink-600 hover:text-pink-700 font-semibold mb-4 flex items-center gap-2"
+                        className="text-emerald-700 hover:text-emerald-700 font-semibold mb-4 flex items-center gap-2"
                     >
                         ← Back to Dashboard
                     </button>
@@ -145,7 +145,7 @@ export default function WaveTrainingPage() {
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center justify-between mb-2">
                             <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Enrolled</h3>
-                            <CheckCircle className="w-5 h-5 text-green-600" />
+                            <CheckCircle className="w-5 h-5 text-emerald-700" />
                         </div>
                         <p className="text-3xl font-bold text-gray-900 dark:text-white">{registeredEventIds.size}</p>
                     </div>
@@ -196,12 +196,12 @@ export default function WaveTrainingPage() {
                                         {/* Details */}
                                         <div className="space-y-3 mb-4">
                                             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                                <User className="w-4 h-4 text-pink-600" />
+                                                <User className="w-4 h-4 text-emerald-700" />
                                                 <span className="font-medium">Instructor:</span> {event.instructor}
                                             </div>
 
                                             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                                <Calendar className="w-4 h-4 text-purple-600" />
+                                                <Calendar className="w-4 h-4 text-emerald-700" />
                                                 <span className="font-medium">Date:</span>{" "}
                                                 {new Date(event.date).toLocaleDateString("en-US", {
                                                     weekday: "long",
@@ -217,7 +217,7 @@ export default function WaveTrainingPage() {
                                             </div>
 
                                             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                                <Users className="w-4 h-4 text-green-600" />
+                                                <Users className="w-4 h-4 text-emerald-700" />
                                                 <span className="font-medium">Capacity:</span> {event.currentParticipants}/{event.maxParticipants} enrolled
                                             </div>
 
@@ -231,7 +231,7 @@ export default function WaveTrainingPage() {
 
                                         {/* Action Button */}
                                         {isRegistered ? (
-                                            <div className="flex items-center gap-2 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-green-700 dark:text-green-300 font-semibold">
+                                            <div className="flex items-center gap-2 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-emerald-800 dark:text-emerald-400 font-semibold">
                                                 <CheckCircle className="w-5 h-5" />
                                                 You're Registered
                                             </div>
@@ -244,7 +244,7 @@ export default function WaveTrainingPage() {
                                             <button
                                                 onClick={() => event.id && handleRegister(event.id)}
                                                 disabled={isRegistering}
-                                                className="w-full px-4 py-3 bg-pink-600 text-white font-semibold rounded-xl hover:bg-pink-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                                                className="w-full px-4 py-3 bg-emerald-700 text-white font-semibold rounded-xl hover:bg-emerald-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
                                             >
                                                 {isRegistering ? (
                                                     <>
@@ -280,7 +280,7 @@ export default function WaveTrainingPage() {
                                 >
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                                        <span className="text-green-700 dark:text-green-300 font-semibold text-sm">LIVE NOW</span>
+                                        <span className="text-emerald-800 dark:text-emerald-400 font-semibold text-sm">LIVE NOW</span>
                                     </div>
                                     <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                                         {event.title}
@@ -291,7 +291,7 @@ export default function WaveTrainingPage() {
                                             href={event.meetingLink}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition"
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 text-white font-semibold rounded-lg hover:bg-green-700 transition"
                                         >
                                             <Video className="w-4 h-4" />
                                             Join Now

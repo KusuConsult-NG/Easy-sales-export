@@ -6,7 +6,7 @@
 
 "use client";
 
-import { CheckCircle, CreditCard, Building2, Smartphone } from "lucide-react";
+import { CheckCircle, CreditCard, Loader2 } from "lucide-react";
 
 interface PaymentStepProps {
     tierData: {
@@ -14,9 +14,10 @@ interface PaymentStepProps {
     };
     onComplete: () => void;
     onBack: () => void;
+    isSubmitting?: boolean;
 }
 
-export default function PaymentStep({ tierData, onComplete, onBack }: PaymentStepProps) {
+export default function PaymentStep({ tierData, onComplete, onBack, isSubmitting = false }: PaymentStepProps) {
     const tierPrices = {
         basic: 10000,  // One-time payment
         premium: 20000 // One-time payment
@@ -27,21 +28,6 @@ export default function PaymentStep({ tierData, onComplete, onBack }: PaymentSte
     const tierNames = {
         basic: "Basic",
         premium: "Premium"
-    };
-
-    const handlePaystackPayment = () => {
-        // In production, integrate with Paystack
-        alert("Paystack integration coming soon!");
-        // For now, simulate success
-        setTimeout(() => {
-            onComplete();
-        }, 1000);
-    };
-
-    const handleBankTransfer = () => {
-        // Show bank details modal or navigate to pending payment page
-        alert("Bank transfer details will be shown");
-        onComplete();
     };
 
     return (
@@ -92,73 +78,32 @@ export default function PaymentStep({ tierData, onComplete, onBack }: PaymentSte
             {/* Payment Methods */}
             <div className="max-w-2xl mx-auto space-y-4">
                 <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-4">
-                    Choose Payment Method
+                    Select Payment Method
                 </h3>
 
                 {/* Paystack */}
                 <button
-                    onClick={handlePaystackPayment}
-                    className="w-full flex items-center justify-between p-6 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group"
+                    onClick={onComplete}
+                    disabled={isSubmitting}
+                    className="w-full flex items-center justify-between p-6 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center group-hover:bg-purple-600 transition-colors">
-                            <CreditCard className="w-6 h-6 text-purple-600 group-hover:text-white" />
+                            {isSubmitting ? (
+                                <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                            ) : (
+                                <CreditCard className="w-6 h-6 text-purple-600 group-hover:text-white" />
+                            )}
                         </div>
                         <div className="text-left">
                             <p className="font-semibold text-slate-900 dark:text-white">
-                                Card Payment (Paystack)
+                                {isSubmitting ? "Initializing Payment..." : "Pay with Paystack"}
                             </p>
                             <p className="text-sm text-slate-600 dark:text-slate-400">
-                                Pay with debit/credit card or bank account
+                                {isSubmitting ? "Please wait while we redirect you" : "Debit/Credit Card, Bank Transfer, USSD"}
                             </p>
                         </div>
                     </div>
-                    <span className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm font-semibold rounded-lg">
-                        Recommended
-                    </span>
-                </button>
-
-                {/* Bank Transfer */}
-                <button
-                    onClick={handleBankTransfer}
-                    className="w-full flex items-center justify-between p-6 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group"
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center group-hover:bg-blue-600 transition-colors">
-                            <Building2 className="w-6 h-6 text-blue-600 group-hover:text-white" />
-                        </div>
-                        <div className="text-left">
-                            <p className="font-semibold text-slate-900 dark:text-white">
-                                Bank Transfer
-                            </p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
-                                Transfer to our bank account directly
-                            </p>
-                        </div>
-                    </div>
-                </button>
-
-                {/* USSD */}
-                <button
-                    disabled
-                    className="w-full flex items-center justify-between p-6 border-2 border-slate-200 dark:border-slate-700 rounded-xl opacity-50 cursor-not-allowed"
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
-                            <Smartphone className="w-6 h-6 text-slate-400" />
-                        </div>
-                        <div className="text-left">
-                            <p className="font-semibold text-slate-600 dark:text-slate-400">
-                                USSD Payment
-                            </p>
-                            <p className="text-sm text-slate-500 dark:text-slate-500">
-                                Coming soon
-                            </p>
-                        </div>
-                    </div>
-                    <span className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 text-sm font-semibold rounded-lg">
-                        Coming Soon
-                    </span>
                 </button>
             </div>
 

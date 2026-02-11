@@ -213,7 +213,7 @@ function checkWaveAccess(user: UserWithServices): ServiceAccessResult {
     if (!registration) {
         return {
             hasAccess: false,
-            redirectTo: "/wave/onboarding",
+            redirectTo: "/wave/application",
             message: "Apply to join the WAVE program"
         };
     }
@@ -221,7 +221,7 @@ function checkWaveAccess(user: UserWithServices): ServiceAccessResult {
     if (registration.status === "pending" || registration.status === "under_review") {
         return {
             hasAccess: false,
-            redirectTo: "/wave/onboarding/pending",
+            redirectTo: "/wave/application/review-pending",
             message: "Your application is under review",
             registrationStatus: registration.status
         };
@@ -230,8 +230,8 @@ function checkWaveAccess(user: UserWithServices): ServiceAccessResult {
     if (registration.status === "rejected") {
         return {
             hasAccess: false,
-            redirectTo: "/wave/onboarding/rejected",
-            message: "Your application was not approved",
+            redirectTo: "/wave/application",
+            message: "Your application was not approved. You may try again.",
             registrationStatus: registration.status
         };
     }
@@ -242,7 +242,7 @@ function checkWaveAccess(user: UserWithServices): ServiceAccessResult {
 
     return {
         hasAccess: false,
-        redirectTo: "/wave/onboarding",
+        redirectTo: "/wave/application",
         message: "Apply to join the WAVE program"
     };
 }

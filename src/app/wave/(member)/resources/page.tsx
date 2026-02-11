@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { checkWaveEligibilityAction } from "@/app/actions/wave";
 import { getResourcesAction, downloadResourceAction, type WaveResource } from "@/app/actions/resource-actions";
+import { useToast } from "@/contexts/ToastContext";
 
 const categoryIcons = {
     document: FileText,
@@ -33,6 +34,7 @@ const categoryColors = {
 export default function WaveResourcesPage() {
     const router = useRouter();
     const { data: session, status: sessionStatus } = useSession();
+    const { showToast } = useToast();
     const [checking, setChecking] = useState(true);
     const [resources, setResources] = useState<WaveResource[]>([]);
     const [filteredResources, setFilteredResources] = useState<WaveResource[]>([]);
@@ -101,7 +103,7 @@ export default function WaveResourcesPage() {
 
         setFilteredResources(filtered);
     }, [selectedCategory, searchQuery, resources]);
-
+    // ...
     async function handleDownload(resource: WaveResource) {
         if (!resource.id) return;
 
@@ -118,8 +120,9 @@ export default function WaveResourcesPage() {
                     r.id === resource.id ? { ...r, downloads: r.downloads + 1 } : r
                 )
             );
+            showToast("Resource download started", "success");
         } else {
-            alert(result.error || "Failed to download resource");
+            showToast(result.error || "Failed to download resource", "error");
         }
 
         setDownloading(null);
@@ -133,19 +136,19 @@ export default function WaveResourcesPage() {
 
     if (checking || sessionStatus === "loading") {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-purple-300 animate-spin" />
+            <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+        <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
                     <h1 className="text-4xl font-bold text-white mb-2">WAVE Resource Library</h1>
-                    <p className="text-purple-200">
+                    <p className="text-emerald-200">
                         Training materials, templates, and guides for women entrepreneurs
                     </p>
                 </div>
@@ -155,23 +158,23 @@ export default function WaveResourcesPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Search */}
                         <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-300" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
                             <input
                                 type="text"
                                 placeholder="Search resources..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder:text-purple-200/50 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder:text-emerald-200/50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                             />
                         </div>
 
                         {/* Category Filter */}
                         <div className="relative">
-                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-300" />
+                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-400" />
                             <select
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                             >
                                 <option value="all">All Categories</option>
                                 <option value="document">Documents</option>
@@ -183,7 +186,7 @@ export default function WaveResourcesPage() {
                     </div>
 
                     {/* Results Count */}
-                    <div className="mt-4 text-sm text-purple-200">
+                    <div className="mt-4 text-sm text-emerald-200">
                         Showing {filteredResources.length} of {resources.length} resources
                     </div>
                 </div>
@@ -191,13 +194,13 @@ export default function WaveResourcesPage() {
                 {/* Resources Grid */}
                 {loading ? (
                     <div className="flex items-center justify-center py-20">
-                        <Loader2 className="w-8 h-8 text-purple-300 animate-spin" />
+                        <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
                     </div>
                 ) : filteredResources.length === 0 ? (
                     <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-12 text-center">
-                        <BookOpen className="w-16 h-16 text-purple-300 mx-auto mb-4" />
+                        <BookOpen className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-white mb-2">No resources found</h3>
-                        <p className="text-purple-200">
+                        <p className="text-emerald-200">
                             {searchQuery || selectedCategory !== "all"
                                 ? "Try adjusting your search or filters"
                                 : "Resources will appear here once uploaded by administrators"}
@@ -228,12 +231,12 @@ export default function WaveResourcesPage() {
                                     <h3 className="text-lg font-semibold text-white mb-2 line-clamp-2">
                                         {resource.title}
                                     </h3>
-                                    <p className="text-sm text-purple-200 mb-4 line-clamp-3">
+                                    <p className="text-sm text-emerald-200 mb-4 line-clamp-3">
                                         {resource.description}
                                     </p>
 
                                     {/* Meta Info */}
-                                    <div className="flex items-center justify-between text-xs text-purple-300 mb-4">
+                                    <div className="flex items-center justify-between text-xs text-emerald-400 mb-4">
                                         <span>{formatFileSize(resource.fileSize)}</span>
                                         <span>{resource.downloads} downloads</span>
                                     </div>
@@ -242,7 +245,7 @@ export default function WaveResourcesPage() {
                                     <button
                                         onClick={() => handleDownload(resource)}
                                         disabled={downloading === resource.id}
-                                        className="w-full px-4 py-3 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-500/50 text-white rounded-xl font-medium transition flex items-center justify-center space-x-2"
+                                        className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/50 text-white rounded-xl font-medium transition flex items-center justify-center space-x-2"
                                     >
                                         {downloading === resource.id ? (
                                             <>

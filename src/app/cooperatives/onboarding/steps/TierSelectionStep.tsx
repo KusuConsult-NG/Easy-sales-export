@@ -7,6 +7,7 @@
 "use client";
 
 import { CheckCircle } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 interface TierSelectionStepProps {
     data: {
@@ -17,6 +18,7 @@ interface TierSelectionStepProps {
 }
 
 export default function TierSelectionStep({ data, onChange, onNext }: TierSelectionStepProps) {
+    const { showToast } = useToast();
     const tiers = [
         {
             id: "basic" as const,
@@ -51,7 +53,7 @@ export default function TierSelectionStep({ data, onChange, onNext }: TierSelect
 
     const handleContinue = () => {
         if (!data.tier) {
-            alert("Please select a membership tier");
+            showToast("Please select a membership tier", "error");
             return;
         }
         onNext();
@@ -106,7 +108,7 @@ export default function TierSelectionStep({ data, onChange, onNext }: TierSelect
                                 </div>
                             )}
 
-                            <div className={`w-full h-1.5 bg-gradient-to-r ${tier.color} rounded-full mb-4`}></div>
+                            <div className={`w-full h-1.5 bg-linear-to-r ${tier.color} rounded-full mb-4`}></div>
 
                             <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
                                 {tier.name}

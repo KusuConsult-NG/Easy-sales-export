@@ -10,10 +10,12 @@ import {
 import { calculateEarningsAction } from "@/app/actions/wave";
 import type { MemberEarnings } from "@/app/actions/wave";
 import { formatCurrency } from "@/lib/utils";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function WaveEarningsPage() {
     const { data: session, status } = useSession();
     const router = useRouter();
+    const { showToast } = useToast();
 
     const [earnings, setEarnings] = useState<MemberEarnings | null>(null);
     const [loading, setLoading] = useState(true);
@@ -37,6 +39,7 @@ export default function WaveEarningsPage() {
             setEarnings(result);
         } catch (error) {
             console.error("Failed to load earnings:", error);
+            showToast("Failed to load earnings data", "error");
         } finally {
             setLoading(false);
         }
@@ -44,22 +47,22 @@ export default function WaveEarningsPage() {
 
     const handleWithdraw = async () => {
         // In production, call withdrawEarningsAction
-        alert(`Withdrawal request for ₦${parseFloat(withdrawalAmount).toLocaleString()} submitted!`);
+        showToast(`Withdrawal request for ₦${parseFloat(withdrawalAmount).toLocaleString()} submitted!`, "success");
         setShowWithdrawalModal(false);
         setWithdrawalAmount("");
     };
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-linear-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-purple-600" />
+            <div className="min-h-screen bg-linear-to-br from-emerald-50 to-emerald-50 dark:from-gray-900 dark:to-emerald-900/20 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
             </div>
         );
     }
 
     if (!earnings) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-emerald-50 to-emerald-50 dark:from-gray-900 dark:to-emerald-900/20 flex items-center justify-center">
                 <div className="text-center">
                     <p className="text-gray-600 dark:text-gray-400">Failed to load earnings data</p>
                 </div>
@@ -68,7 +71,7 @@ export default function WaveEarningsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-purple-900/20 py-8 px-4">
+        <div className="min-h-screen bg-linear-to-br from-emerald-50 to-emerald-50 dark:from-gray-900 dark:to-emerald-900/20 py-8 px-4">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
@@ -83,15 +86,15 @@ export default function WaveEarningsPage() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     {/* Total Earnings */}
-                    <div className="bg-linear-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
+                    <div className="bg-linear-to-br from-emerald-700 to-emerald-700 rounded-2xl p-6 text-white shadow-xl">
                         <div className="flex items-center justify-between mb-2">
                             <DollarSign className="w-8 h-8" />
-                            <span className="text-purple-200 text-sm">All Time</span>
+                            <span className="text-emerald-200 text-sm">All Time</span>
                         </div>
                         <p className="text-3xl font-bold mb-1">
                             {formatCurrency(earnings.totalEarnings)}
                         </p>
-                        <p className="text-purple-200 text-sm">Total Earnings</p>
+                        <p className="text-emerald-200 text-sm">Total Earnings</p>
                     </div>
 
                     {/* Pending Amount */}
@@ -108,7 +111,7 @@ export default function WaveEarningsPage() {
                     {/* Paid Amount */}
                     <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-xl">
                         <div className="flex items-center justify-between mb-2">
-                            <CheckCircle className="w-8 h-8 text-green-600" />
+                            <CheckCircle className="w-8 h-8 text-emerald-700" />
                         </div>
                         <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                             {formatCurrency(earnings.paidAmount)}
@@ -136,7 +139,7 @@ export default function WaveEarningsPage() {
                     <button
                         onClick={() => setShowWithdrawalModal(true)}
                         disabled={earnings.paidAmount === 0}
-                        className="flex-1 px-6 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="flex-1 px-6 py-4 bg-emerald-700 hover:bg-emerald-700 text-white rounded-xl font-bold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         <ArrowDownCircle className="w-5 h-5" />
                         Withdraw Earnings
@@ -208,12 +211,12 @@ export default function WaveEarningsPage() {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900 dark:text-white">
                                                 {formatCurrency(txn.saleAmount)}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-purple-600">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-emerald-700">
                                                 {formatCurrency(txn.commission)}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-center">
                                                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${txn.status === "paid"
-                                                    ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                                                    ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-green-400"
                                                     : "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400"
                                                     }`}>
                                                     {txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}
@@ -235,7 +238,7 @@ export default function WaveEarningsPage() {
                                 Withdraw Earnings
                             </h2>
                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                                Available balance: <span className="font-bold text-purple-600">{formatCurrency(earnings.paidAmount)}</span>
+                                Available balance: <span className="font-bold text-emerald-700">{formatCurrency(earnings.paidAmount)}</span>
                             </p>
 
                             <div className="mb-6">
@@ -248,7 +251,7 @@ export default function WaveEarningsPage() {
                                     onChange={(e) => setWithdrawalAmount(e.target.value)}
                                     max={earnings.paidAmount}
                                     placeholder="Enter amount"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-600"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-700"
                                 />
                                 <p className="mt-2 text-xs text-gray-500">
                                     Minimum withdrawal: ₦5,000
@@ -265,7 +268,7 @@ export default function WaveEarningsPage() {
                                 <button
                                     onClick={handleWithdraw}
                                     disabled={!withdrawalAmount || parseFloat(withdrawalAmount) < 5000 || parseFloat(withdrawalAmount) > earnings.paidAmount}
-                                    className="flex-1 px-4 py-3 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex-1 px-4 py-3 bg-emerald-700 text-white font-semibold rounded-xl hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Confirm Withdrawal
                                 </button>

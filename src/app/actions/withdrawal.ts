@@ -51,7 +51,7 @@ export async function submitWithdrawalRequestAction(
         }
 
         const membership = membershipDoc.data();
-        const availableBalance = membership.totalContributions || 0;
+        const availableBalance = membership.savingsBalance || 0;
 
         // Validate balance
         if (data.amount > availableBalance) {

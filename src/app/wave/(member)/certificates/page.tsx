@@ -43,7 +43,7 @@ export default function CertificatesPage() {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <Loader2 className="w-12 h-12 animate-spin text-rose-600" />
+                <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
             </div>
         );
     }
@@ -76,8 +76,8 @@ export default function CertificatesPage() {
 
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-xl flex items-center justify-center">
-                            <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
+                        <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
+                            <TrendingUp className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-slate-900 dark:text-white">{certCounts.achievement}</p>
@@ -88,8 +88,8 @@ export default function CertificatesPage() {
 
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/20 rounded-xl flex items-center justify-center">
-                            <Award className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                        <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
+                            <Award className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-slate-900 dark:text-white">{certCounts.completion}</p>
@@ -100,8 +100,8 @@ export default function CertificatesPage() {
 
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-rose-100 dark:bg-rose-900/20 rounded-xl flex items-center justify-center">
-                            <Star className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+                        <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
+                            <Star className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-slate-900 dark:text-white">{certificates.length}</p>
@@ -137,8 +137,8 @@ export default function CertificatesPage() {
                                 {/* Certificate Header */}
                                 <div className="flex items-start gap-4 mb-4">
                                     <div className={`w-14 h-14 ${cert.certificateType === 'training' ? 'bg-blue-600' :
-                                            cert.certificateType === 'achievement' ? 'bg-green-600' :
-                                                'bg-purple-600'
+                                            cert.certificateType === 'achievement' ? 'bg-emerald-700' :
+                                                'bg-emerald-700'
                                         } rounded-xl flex items-center justify-center shrink-0`}>
                                         {cert.certificateType === 'training' && <BookOpen className="w-7 h-7 text-white" />}
                                         {cert.certificateType === 'achievement' && <TrendingUp className="w-7 h-7 text-white" />}
@@ -158,13 +158,13 @@ export default function CertificatesPage() {
                                 <div className="flex items-center gap-2 mb-4 text-sm text-slate-600 dark:text-slate-400">
                                     <Calendar className="w-4 h-4" />
                                     <span>Issued on {new Date(cert.issuedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                                    <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 ml-2" />
-                                    <span className="text-green-600 dark:text-green-400 font-medium">Verified</span>
+                                    <CheckCircle className="w-4 h-4 text-emerald-700 dark:text-emerald-500 ml-2" />
+                                    <span className="text-emerald-700 dark:text-emerald-500 font-medium">Verified</span>
                                 </div>
 
                                 {/* Actions */}
                                 <div className="flex gap-3">
-                                    <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg transition-colors">
+                                    <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors">
                                         <Download className="w-4 h-4" />
                                         Download PDF
                                     </button>
@@ -190,7 +190,7 @@ export default function CertificatesPage() {
                     </p>
                     <Link
                         href="/wave/training"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-lg transition-colors"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-700 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
                     >
                         <BookOpen className="w-5 h-5" />
                         Start Training
@@ -199,9 +199,9 @@ export default function CertificatesPage() {
             )}
 
             {/* Information Card */}
-            <div className="bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-900/10 dark:to-pink-900/10 border border-rose-200 dark:border-rose-800 rounded-2xl p-6">
+            <div className="bg-gradient-to-br from-emerald-50 to-emerald-50 dark:from-emerald-900/10 dark:to-emerald-900/10 border border-emerald-300 dark:border-emerald-800 rounded-2xl p-6">
                 <div className="flex gap-4">
-                    <div className="w-12 h-12 bg-rose-600 rounded-xl flex items-center justify-center shrink-0">
+                    <div className="w-12 h-12 bg-emerald-700 rounded-xl flex items-center justify-center shrink-0">
                         <Star className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -210,19 +210,19 @@ export default function CertificatesPage() {
                         </h4>
                         <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
                             <li className="flex items-start gap-2">
-                                <span className="text-rose-600 dark:text-rose-400">•</span>
+                                <span className="text-emerald-700 dark:text-emerald-500">•</span>
                                 <span>Complete training courses and assessments</span>
                             </li>
                             <li className="flex items-start gap-2">
-                                <span className="text-rose-600 dark:text-rose-400">•</span>
+                                <span className="text-emerald-700 dark:text-emerald-500">•</span>
                                 <span>Achieve business milestones (first sale, revenue targets, etc.)</span>
                             </li>
                             <li className="flex items-start gap-2">
-                                <span className="text-rose-600 dark:text-rose-400">•</span>
+                                <span className="text-emerald-700 dark:text-emerald-500">•</span>
                                 <span>Successfully complete WAVE program phases</span>
                             </li>
                             <li className="flex items-start gap-2">
-                                <span className="text-rose-600 dark:text-rose-400">•</span>
+                                <span className="text-emerald-700 dark:text-emerald-500">•</span>
                                 <span>Receive special recognition for outstanding contributions</span>
                             </li>
                         </ul>

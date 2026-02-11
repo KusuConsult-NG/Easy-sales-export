@@ -5,30 +5,30 @@ import { ShieldAlert, ArrowLeft, Users, GraduationCap, Sprout } from "lucide-rea
 
 export default function WaveAccessDeniedPage() {
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-900 via-rose-900 to-slate-900 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
 
             <div className="relative w-full max-w-2xl">
                 <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 elevation-3">
                     {/* Icon Header */}
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center w-20 h-20 bg-rose-500/20 rounded-full mb-4">
-                            <ShieldAlert className="w-10 h-10 text-rose-300" />
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-emerald-600/20 rounded-full mb-4">
+                            <ShieldAlert className="w-10 h-10 text-emerald-400" />
                         </div>
                         <h1 className="text-3xl font-bold text-white mb-2">
                             WAVE Program - Female Exlusive
                         </h1>
-                        <p className="text-rose-200">
+                        <p className="text-emerald-300">
                             Access Restricted
                         </p>
                     </div>
 
                     {/* Explanation */}
-                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-6 mb-6">
+                    <div className="bg-emerald-600/10 border border-emerald-600/30 rounded-xl p-6 mb-6">
                         <h2 className="text-lg font-semibold text-white mb-2">
                             Women in Agri-Ventures Excellence (WAVE)
                         </h2>
-                        <p className="text-rose-100 leading-relaxed">
+                        <p className="text-emerald-100 leading-relaxed">
                             The WAVE program is exclusively designed for female participants to empower women in agricultural exports.
                             This program provides specialized resources, training, and support tailored to the unique needs and challenges  faced by women entrepreneurs in Nigeria's agricultural sector.
                         </p>
@@ -45,11 +45,11 @@ export default function WaveAccessDeniedPage() {
                                 className="block bg-white/5 hover:bg-white/10 border border-white/20 rounded-xl p-4 transition group"
                             >
                                 <div className="flex items-start space-x-4">
-                                    <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center shrink-0">
-                                        <Sprout className="w-5 h-5 text-green-300" />
+                                    <div className="w-10 h-10 bg-emerald-600/20 rounded-lg flex items-center justify-center shrink-0">
+                                        <Sprout className="w-5 h-5 text-emerald-400" />
                                     </div>
                                     <div>
-                                        <h4 className="text-white font-medium mb-1 group-hover:text-green-300 transition">
+                                        <h4 className="text-white font-medium mb-1 group-hover:text-emerald-400 transition">
                                             Farm Nation
                                         </h4>
                                         <p className="text-sm text-blue-200">
@@ -83,11 +83,11 @@ export default function WaveAccessDeniedPage() {
                                 className="block bg-white/5 hover:bg-white/10 border border-white/20 rounded-xl p-4 transition group"
                             >
                                 <div className="flex items-start space-x-4">
-                                    <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center shrink-0">
-                                        <Users className="w-5 h-5 text-purple-300" />
+                                    <div className="w-10 h-10 bg-emerald-600/20 rounded-lg flex items-center justify-center shrink-0">
+                                        <Users className="w-5 h-5 text-emerald-400" />
                                     </div>
                                     <div>
-                                        <h4 className="text-white font-medium mb-1 group-hover:text-purple-300 transition">
+                                        <h4 className="text-white font-medium mb-1 group-hover:text-emerald-400 transition">
                                             Cooperatives
                                         </h4>
                                         <p className="text-sm text-blue-200">

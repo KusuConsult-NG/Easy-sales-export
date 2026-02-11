@@ -113,7 +113,7 @@ export default function CooperativeDashboardPage() {
     const activeLoans = membership.loanBalance;
     const availableLoanLimit = totalSavings * 3;
     const interestEarned = transactions
-        .filter(t => t.type === 'interest') // Assuming 'interest' type exists or we strictly mock it as 0
+        .filter(t => t.type === 'interest')
         .reduce((sum, t) => sum + t.amount, 0);
 
 
@@ -130,7 +130,7 @@ export default function CooperativeDashboardPage() {
             </div>
 
             {/* Membership Info Card */}
-            <div className="bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
+            <div className="bg-linear-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white shadow-xl">
                 <div className="flex items-start justify-between mb-4">
                     <div>
                         <p className="text-purple-100 mb-1">Membership ID</p>

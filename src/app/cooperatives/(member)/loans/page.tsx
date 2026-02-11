@@ -1,3 +1,5 @@
+// ... (This is just a placeholder, I will use the actual content in the tool call)
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -9,6 +11,9 @@ import {
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
+import { useActionState } from "react";
+import { applyForLoanAction } from "@/app/actions/cooperative";
+import { Loader2 } from "lucide-react";
 
 type LoanProduct = {
     id: string;
@@ -320,20 +325,20 @@ export default function LoansPage() {
                                                     </p>
                                                 </div>
                                                 <div className={`px-3 py-1 rounded-full ${app.status === "approved" || app.status === "active"
-                                                        ? "bg-green-100 dark:bg-green-900/30"
-                                                        : app.status === "pending" || app.status === "disbursed"
-                                                            ? "bg-yellow-100 dark:bg-yellow-900/30"
-                                                            : app.status === "rejected"
-                                                                ? "bg-red-100 dark:bg-red-900/30"
-                                                                : "bg-blue-100 dark:bg-blue-900/30"
+                                                    ? "bg-green-100 dark:bg-green-900/30"
+                                                    : app.status === "pending" || app.status === "disbursed"
+                                                        ? "bg-yellow-100 dark:bg-yellow-900/30"
+                                                        : app.status === "rejected"
+                                                            ? "bg-red-100 dark:bg-red-900/30"
+                                                            : "bg-blue-100 dark:bg-blue-900/30"
                                                     }`}>
                                                     <span className={`text-xs font-bold ${app.status === "approved" || app.status === "active"
-                                                            ? "text-green-700 dark:text-green-400"
-                                                            : app.status === "pending" || app.status === "disbursed"
-                                                                ? "text-yellow-700 dark:text-yellow-400"
-                                                                : app.status === "rejected"
-                                                                    ? "text-red-700 dark:text-red-400"
-                                                                    : "text-blue-700 dark:text-blue-400"
+                                                        ? "text-green-700 dark:text-green-400"
+                                                        : app.status === "pending" || app.status === "disbursed"
+                                                            ? "text-yellow-700 dark:text-yellow-400"
+                                                            : app.status === "rejected"
+                                                                ? "text-red-700 dark:text-red-400"
+                                                                : "text-blue-700 dark:text-blue-400"
                                                         }`}>
                                                         {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                                                     </span>
@@ -374,6 +379,160 @@ export default function LoansPage() {
                     </>
                 )}
             </div>
+
+            {/* Application Modal */}
+            {selectedProduct && (
+                <LoanApplicationModal
+                    product={selectedProduct}
+                    onClose={() => setSelectedProduct(null)}
+                    onSuccess={() => {
+                        setSelectedProduct(null);
+                        fetchApplications();
+                    }}
+                />
+            )}
         </div>
     );
 }
+
+function LoanApplicationModal({
+    product,
+    onClose,
+    onSuccess
+}: {
+    product: LoanProduct;
+    onClose: () => void;
+    onSuccess: () => void;
+}) {
+    const initialState = {
+        error: null,
+        success: false,
+        message: ""
+    } as any; // Casting to avoid strict type issues with generic ActionState vs specific
+
+    const [state, action, isPending] = useActionState(applyForLoanAction, initialState);
+
+    useEffect(() => {
+        if (state.success) {
+            // Wait a bit to show success message then close
+            const timer = setTimeout(() => {
+                onSuccess();
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [state.success, onSuccess]);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                {state.success ? (
+                    <div className="p-12 text-center">
+                        <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                            Application Submitted!
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Your loan application for {formatCurrency(product.minAmount)} has been received.
+                        </p>
+                    </div>
+                ) : (
+                    <form action={action} className="p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                                Apply for {product.name}
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                            >
+                                <ArrowLeft className="w-6 h-6 rotate-180" />
+                            </button>
+                        </div>
+
+                        <input type="hidden" name="productId" value={product.id} />
+
+                        <div className="space-y-4">
+                            {state.error && (
+                                <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-xl flex items-start gap-2">
+                                    <AlertCircle className="w-5 h-5 shrink-0" />
+                                    <span>{state.error}</span>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    Loan Amount (₦)
+                                </label>
+                                <input
+                                    name="amount"
+                                    type="number"
+                                    defaultValue={product.minAmount}
+                                    min={product.minAmount}
+                                    max={product.maxAmount}
+                                    required
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Range: {formatCurrency(product.minAmount)} - {formatCurrency(product.maxAmount)}
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                    Purpose of Loan
+                                </label>
+                                <textarea
+                                    name="purpose"
+                                    required
+                                    minLength={10}
+                                    placeholder="Describe why you need this loan..."
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                                />
+                            </div>
+
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600 dark:text-slate-400">Interest Rate</span>
+                                    <span className="font-semibold text-slate-900 dark:text-white">{product.interestRate}%</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600 dark:text-slate-400">Duration</span>
+                                    <span className="font-semibold text-slate-900 dark:text-white">{product.durationMonths} months</span>
+                                </div>
+                            </div>
+
+                            <div className="pt-4">
+                                <button
+                                    type="submit"
+                                    disabled={isPending}
+                                    className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isPending ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Submitting...
+                                        </>
+                                    ) : (
+                                        "Submit Application"
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    disabled={isPending}
+                                    className="w-full mt-3 py-3 text-slate-600 dark:text-slate-400 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                )}
+            </div>
+        </div>
+    );
+}
+

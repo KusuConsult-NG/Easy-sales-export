@@ -90,7 +90,7 @@ export default function EligibilityStep({ data, updateData, onNext }: Props) {
                         type="text"
                         value={data.fullName}
                         onChange={(e) => updateData({ fullName: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                         placeholder="Enter your full name"
                     />
                     {errors.fullName && (
@@ -111,7 +111,7 @@ export default function EligibilityStep({ data, updateData, onNext }: Props) {
                             type="email"
                             value={data.email}
                             onChange={(e) => updateData({ email: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                             placeholder="you@example.com"
                         />
                         {errors.email && (
@@ -130,7 +130,7 @@ export default function EligibilityStep({ data, updateData, onNext }: Props) {
                             type="tel"
                             value={data.phone}
                             onChange={(e) => updateData({ phone: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                             placeholder="08012345678"
                         />
                         {errors.phone && (
@@ -152,7 +152,7 @@ export default function EligibilityStep({ data, updateData, onNext }: Props) {
                             type="date"
                             value={data.dateOfBirth}
                             onChange={(e) => updateData({ dateOfBirth: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                         />
                         {errors.dateOfBirth && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
@@ -166,15 +166,39 @@ export default function EligibilityStep({ data, updateData, onNext }: Props) {
                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
                             Gender * (Female only)
                         </label>
-                        <select
-                            value={data.gender}
-                            onChange={(e) => updateData({ gender: e.target.value as "female" | "male" | "" })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
-                        >
-                            <option value="">Select gender</option>
-                            <option value="female">Female</option>
-                            <option value="male">Male</option>
-                        </select>
+                        <div className="flex gap-4">
+                            <label className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.gender === "female"
+                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                }`}>
+                                <input
+                                    type="radio"
+                                    name="gender"
+                                    value="female"
+                                    checked={data.gender === "female"}
+                                    onChange={(e) => updateData({ gender: "female" })}
+                                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <span className="font-medium">Female</span>
+                            </label>
+                            <label className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-not-allowed opacity-60 ${data.gender === "male"
+                                    ? "border-red-300 bg-red-50 text-red-700"
+                                    : "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-400"
+                                }`}>
+                                <input
+                                    type="radio"
+                                    name="gender"
+                                    value="male"
+                                    checked={data.gender === "male"}
+                                    disabled={true}
+                                    className="w-4 h-4 text-slate-400"
+                                />
+                                <span className="font-medium">Male</span>
+                            </label>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                            * The WAVE program is exclusively for women in agriculture.
+                        </p>
                         {errors.gender && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                                 <AlertCircle className="w-4 h-4" />
@@ -192,7 +216,7 @@ export default function EligibilityStep({ data, updateData, onNext }: Props) {
                     <select
                         value={data.stateOfResidence}
                         onChange={(e) => updateData({ stateOfResidence: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                     >
                         <option value="">Select state</option>
                         {NIGERIAN_STATES.map((state) => (
@@ -211,14 +235,14 @@ export default function EligibilityStep({ data, updateData, onNext }: Props) {
 
                 {/* Female-only notice */}
                 {data.gender === "female" && (
-                    <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-4">
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-300 dark:border-emerald-800 rounded-xl p-4">
                         <div className="flex items-start gap-3">
-                            <CheckCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                            <CheckCircle className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
                             <div>
-                                <h4 className="font-semibold text-rose-900 dark:text-rose-200 mb-1">
+                                <h4 className="font-semibold text-emerald-900 dark:text-emerald-300 mb-1">
                                     Eligibility Confirmed
                                 </h4>
-                                <p className="text-sm text-rose-700 dark:text-rose-300">
+                                <p className="text-sm text-emerald-700 dark:text-emerald-400">
                                     Great! As a female Nigerian farmer, you're eligible for the WAVE program. Continue with your application.
                                 </p>
                             </div>
@@ -231,7 +255,7 @@ export default function EligibilityStep({ data, updateData, onNext }: Props) {
             <div className="mt-8">
                 <button
                     onClick={handleNext}
-                    className="w-full bg-rose-600 hover:bg-rose-700 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2"
+                    className="w-full bg-emerald-700 hover:bg-emerald-700 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2"
                 >
                     Continue
                     <CheckCircle className="w-5 h-5" />

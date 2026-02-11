@@ -212,13 +212,13 @@ export default function CooperativeLandingPage() {
                         {/* Desktop CTAs */}
                         <div className="hidden lg:flex items-center gap-4">
                             <Link
-                                href="/auth/login?redirect=/cooperatives"
+                                href="/cooperatives/login"
                                 className="text-sm font-medium text-slate-600 hover:text-purple-600 transition"
                             >
                                 Login
                             </Link>
                             <Link
-                                href="/cooperatives/onboarding"
+                                href="/cooperatives/register"
                                 className="bg-linear-to-r from-purple-600 to-indigo-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition"
                             >
                                 Become a Member
@@ -248,13 +248,13 @@ export default function CooperativeLandingPage() {
                             ))}
                             <div className="mt-4 px-4 space-y-2">
                                 <Link
-                                    href="/auth/login?redirect=/cooperatives"
+                                    href="/cooperatives/login"
                                     className="block w-full text-center py-2 text-slate-600 border border-slate-300 rounded-lg"
                                 >
                                     Login
                                 </Link>
                                 <Link
-                                    href="/cooperatives/onboarding"
+                                    href="/cooperatives/register"
                                     className="block w-full text-center bg-linear-to-r from-purple-600 to-indigo-600 text-white py-2 rounded-lg font-semibold"
                                 >
                                     Become a Member
@@ -285,7 +285,7 @@ export default function CooperativeLandingPage() {
                     </h2>
 
                     <Link
-                        href="/cooperatives/onboarding"
+                        href="/cooperatives/register"
                         className="inline-flex items-center gap-3 bg-linear-to-r from-purple-600 to-indigo-600 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-purple-500/50 transition-all hover:scale-105"
                     >
                         <span>Become a Member</span>
@@ -343,7 +343,7 @@ export default function CooperativeLandingPage() {
                     {/* CTA */}
                     <div className="text-center">
                         <Link
-                            href="/cooperatives/onboarding"
+                            href="/cooperatives/register"
                             className="inline-flex items-center gap-2 bg-linear-to-r from-purple-600 to-purple-600 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-2xl transition"
                         >
                             Position Yourself for WAVE, Investment & Market Access

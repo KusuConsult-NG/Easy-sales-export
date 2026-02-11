@@ -94,7 +94,7 @@ export default function ExperienceStep({ data, updateData, onNext, onBack }: Pro
                     <select
                         value={data.agriculturalActivity}
                         onChange={(e) => updateData({ agriculturalActivity: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                     >
                         <option value="">Select activity</option>
                         {AGRICULTURAL_ACTIVITIES.map((activity) => (
@@ -122,7 +122,7 @@ export default function ExperienceStep({ data, updateData, onNext, onBack }: Pro
                             min="1"
                             value={data.yearsOfExperience || ""}
                             onChange={(e) => updateData({ yearsOfExperience: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                             placeholder="e.g., 5"
                         />
                         {errors.yearsOfExperience && (
@@ -140,7 +140,7 @@ export default function ExperienceStep({ data, updateData, onNext, onBack }: Pro
                         <select
                             value={data.farmSize}
                             onChange={(e) => updateData({ farmSize: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                         >
                             <option value="">Select size</option>
                             {FARM_SIZES.map((size) => (
@@ -166,7 +166,7 @@ export default function ExperienceStep({ data, updateData, onNext, onBack }: Pro
                     <select
                         value={data.monthlyRevenue}
                         onChange={(e) => updateData({ monthlyRevenue: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                     >
                         <option value="">Select revenue range</option>
                         {REVENUE_RANGES.map((range) => (
@@ -192,7 +192,7 @@ export default function ExperienceStep({ data, updateData, onNext, onBack }: Pro
                         value={data.currentChallenges}
                         onChange={(e) => updateData({ currentChallenges: e.target.value })}
                         rows={5}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white resize-none"
+                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white resize-none"
                         placeholder="Describe the main challenges you face in your agricultural business..."
                     />
                     <div className="flex items-center justify-between mt-1">
@@ -220,7 +220,7 @@ export default function ExperienceStep({ data, updateData, onNext, onBack }: Pro
                 </button>
                 <button
                     onClick={handleNext}
-                    className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-xl font-bold transition-all"
+                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold transition-all"
                 >
                     Continue
                     <ChevronRight className="w-5 h-5" />

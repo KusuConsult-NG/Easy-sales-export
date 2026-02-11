@@ -84,8 +84,8 @@ export default function WAVELiveTrainingPage() {
                             </div>
 
                             {isTrainer && (
-                                <div className="bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-lg">
-                                    <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                                <div className="bg-emerald-100 dark:bg-emerald-900/30 px-3 py-1 rounded-lg">
+                                    <span className="text-sm font-semibold text-emerald-800 dark:text-green-400">
                                         Trainer
                                     </span>
                                 </div>

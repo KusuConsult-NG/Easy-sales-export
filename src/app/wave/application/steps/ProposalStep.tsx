@@ -79,7 +79,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                         type="text"
                         value={data.businessName}
                         onChange={(e) => updateData({ businessName: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                         placeholder="e.g., Green Valley Tomato Farm"
                     />
                     {errors.businessName && (
@@ -99,7 +99,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                         value={data.businessDescription}
                         onChange={(e) => updateData({ businessDescription: e.target.value })}
                         rows={6}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white resize-none"
+                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white resize-none"
                         placeholder="Describe your agricultural business idea, what you plan to do, and how it addresses market needs..."
                     />
                     <div className="flex items-center justify-between mt-1">
@@ -130,7 +130,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                             type="text"
                             value={data.targetMarket}
                             onChange={(e) => updateData({ targetMarket: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                             placeholder="e.g., Local retailers, Restaurants"
                         />
                         {errors.targetMarket && (
@@ -156,7 +156,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                                 step="10000"
                                 value={data.fundingNeeded || ""}
                                 onChange={(e) => updateData({ fundingNeeded: parseInt(e.target.value) || 0 })}
-                                className="w-full pl-8 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                                className="w-full pl-8 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                                 placeholder="500000"
                             />
                         </div>
@@ -183,7 +183,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                                 type="text"
                                 value={data.shortTermGoals}
                                 onChange={(e) => updateData({ shortTermGoals: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                                 placeholder="e.g., Acquire equipment and start production"
                             />
                             {errors.shortTermGoals && (
@@ -202,7 +202,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                                 type="text"
                                 value={data.mediumTermGoals}
                                 onChange={(e) => updateData({ mediumTermGoals: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                                 placeholder="e.g., Establish market presence and distribution"
                             />
                             {errors.mediumTermGoals && (
@@ -221,7 +221,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                                 type="text"
                                 value={data.longTermGoals}
                                 onChange={(e) => updateData({ longTermGoals: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
                                 placeholder="e.g., Scale operations and achieve profitability"
                             />
                             {errors.longTermGoals && (
@@ -243,7 +243,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                         value={data.expectedImpact}
                         onChange={(e) => updateData({ expectedImpact: e.target.value })}
                         rows={4}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 dark:bg-slate-700 dark:text-white resize-none"
+                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white resize-none"
                         placeholder="How will your business impact your community, create jobs, or contribute to food security?"
                     />
                     {errors.expectedImpact && (
@@ -266,7 +266,7 @@ export default function ProposalStep({ data, updateData, onNext, onBack }: Props
                 </button>
                 <button
                     onClick={handleNext}
-                    className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-xl font-bold transition-all"
+                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold transition-all"
                 >
                     Continue
                     <ChevronRight className="w-5 h-5" />

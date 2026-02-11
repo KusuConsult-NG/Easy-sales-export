@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
+import { useToast } from "@/contexts/ToastContext";
 
 type FixedSavingsPlan = {
     id: string;
@@ -24,6 +25,7 @@ type FixedSavingsPlan = {
 
 export default function FixedSavingsPage() {
     const router = useRouter();
+    const { showToast } = useToast();
     const [plans, setPlans] = useState<FixedSavingsPlan[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showCalculator, setShowCalculator] = useState(false);
@@ -82,12 +84,12 @@ export default function FixedSavingsPage() {
 
     const handleCreatePlan = async () => {
         if (amount < 50000) {
-            alert("Minimum amount is ₦50,000");
+            showToast("Minimum amount is ₦50,000", "error");
             return;
         }
 
         if (duration < 1 || duration > 12) {
-            alert("Duration must be between 1 and 12 months");
+            showToast("Duration must be between 1 and 12 months", "error");
             return;
         }
 
@@ -106,14 +108,14 @@ export default function FixedSavingsPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Fixed savings plan created successfully!");
+                showToast("Fixed savings plan created successfully!", "success");
                 setShowCalculator(false);
                 fetchPlans();
             } else {
-                alert(data.message || "Failed to create plan");
+                showToast(data.message || "Failed to create plan", "error");
             }
         } catch (error) {
-            alert("An error occurred while creating the plan");
+            showToast("An error occurred while creating the plan", "error");
         } finally {
             setIsCreating(false);
         }

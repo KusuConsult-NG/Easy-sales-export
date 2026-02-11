@@ -62,6 +62,14 @@ export default function WaveLandingPage() {
                 <span className="font-semibold text-sm">Home</span>
             </Link>
 
+            {/* Login Button (Fixed Top-Right) */}
+            <Link
+                href="/wave/login"
+                className="fixed top-6 right-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-green-700 dark:text-green-400 px-6 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-green-200 dark:border-green-800 font-bold"
+            >
+                <span>Login</span>
+            </Link>
+
             {/* Hero Section with Carousel */}
             <section className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
                 {/* Background Pattern */}
@@ -95,7 +103,7 @@ export default function WaveLandingPage() {
 
                     {/* CTA Button */}
                     <Link
-                        href="/wave/application"
+                        href="/wave/register"
                         className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-green-500/50 transition-all hover:scale-105"
                     >
                         <span>Register Now</span>
@@ -242,7 +250,7 @@ export default function WaveLandingPage() {
                     {/* CTA */}
                     <div className="text-center mt-12">
                         <Link
-                            href="/wave/application"
+                            href="/wave/register"
                             className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-green-500/50 transition-all hover:scale-105"
                         >
                             <Users className="w-5 h-5" />
@@ -519,7 +527,7 @@ export default function WaveLandingPage() {
                     </p>
 
                     <Link
-                        href="/wave/application"
+                        href="/wave/register"
                         className="inline-flex items-center gap-3 bg-white text-green-700 px-12 py-6 rounded-xl text-xl font-bold shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                     >
                         <span>Begin Here - Apply Now!</span>

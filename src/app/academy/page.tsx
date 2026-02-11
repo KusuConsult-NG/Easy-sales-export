@@ -66,7 +66,7 @@ export default function AcademyLandingPage() {
                         </p>
                         <div className="flex flex-wrap gap-4">
                             <Link
-                                href="/academy/application"
+                                href="/auth/register?platforms[]=academy&callbackUrl=/academy/application"
                                 className="group inline-flex items-center gap-3 bg-white text-blue-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-blue-500/50 transition-all hover:scale-105"
                             >
                                 Start Learning Today

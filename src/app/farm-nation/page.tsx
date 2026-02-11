@@ -70,13 +70,21 @@ export default function FarmNationLandingPage() {
                         <p className="text-lg mb-8 text-teal-100 max-w-2xl">
                             Discover prime agricultural properties across Nigeria. From farmland to fish ponds, find the perfect space to grow your agribusiness.
                         </p>
-                        <Link
-                            href="/farm-nation/properties"
-                            className="group inline-flex items-center gap-3 bg-white text-teal-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-teal-500/50 transition-all hover:scale-105"
-                        >
-                            Browse Farms
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        </Link>
+                        <div className="flex flex-wrap gap-4">
+                            <Link
+                                href="/farm-nation/properties"
+                                className="group inline-flex items-center gap-3 bg-white text-teal-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-teal-500/50 transition-all hover:scale-105"
+                            >
+                                Browse Farms
+                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                            <Link
+                                href="/auth/register?platforms[]=farm-nation&callbackUrl=/farm-nation"
+                                className="inline-flex items-center gap-3 bg-teal-700/50 text-white border border-teal-400/30 px-8 py-4 rounded-xl font-bold text-lg backdrop-blur-sm hover:bg-teal-700/70 transition-all hover:scale-105"
+                            >
+                                Start Investing
+                            </Link>
+                        </div>
                     </div>
                 </div>
                 {/* Wave SVG */}

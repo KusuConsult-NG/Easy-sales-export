@@ -1,518 +1,372 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, Suspense } from "react";
+import { useActionState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, Users, Shield, DollarSign, CheckCircle, Loader2 } from "lucide-react";
+import {
+    Mail,
+    Lock,
+    User,
+    Phone,
+    AlertCircle,
+    Loader2,
+    Eye,
+    EyeOff,
+    CheckCircle,
+    XCircle,
+    Building2,
+    ArrowRight,
+} from "lucide-react";
+import { registerAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 
-export default function CooperativeRegisterPage() {
-    const router = useRouter();
+const initialState = { error: "", success: false };
+
+function CooperativeRegisterContent() {
     const { showToast } = useToast();
-    const [step, setStep] = useState(1); // 1: Form, 2: Tier Selection, 3: Payment
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Determine callback URL
+    // Default to internal application form which is now at /cooperatives/application
+    // But we might want to redirect to /cooperatives/onboarding (if that's the intro) or /cooperatives/dashboard if they need to apply there
+    // The plan said: Redirect to internal application form (/cooperatives/application).
+    const callbackUrl = searchParams.get("callbackUrl") || "/cooperatives/onboarding";
 
     const [formData, setFormData] = useState({
-        // Personal Information
-        firstName: "",
-        middleName: "",
-        lastName: "",
-        dateOfBirth: "",
-        gender: "male" as "male" | "female",
+        fullName: "",
         email: "",
         phone: "",
-        stateOfOrigin: "",
-        lga: "",
-        residentialAddress: "",
-        occupation: "",
-
-        // Next of Kin
-        nextOfKin: {
-            fullName: "",
-            phone: "",
-            residentialAddress: "",
-        },
-
-        // Membership Tier
-        tier: "basic" as "basic" | "premium",
+        gender: "",
+        platforms: ["cooperatives"], // Hardcoded for Cooperative registration
+        password: "",
+        confirmPassword: "",
+        acceptTerms: false,
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [state, formAction, isPending] = useActionState(registerAction, initialState);
 
-    const validateStep1 = () => {
-        const newErrors: Record<string, string> = {};
+    // Password Strength Logic (reused)
+    const passwordStrength = useMemo(() => {
+        if (!formData.password) return { score: 0, label: "", color: "" };
+        let score = 0;
+        const password = formData.password;
+        if (password.length >= 8) score++;
+        if (password.length >= 12) score++;
+        if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+        if (/\d/.test(password)) score++;
+        if (/[^a-zA-Z0-9]/.test(password)) score++;
+        let label = "", color = "";
+        if (score <= 1) { label = "Weak"; color = "bg-red-500"; }
+        else if (score <= 3) { label = "Fair"; color = "bg-yellow-500"; }
+        else if (score <= 4) { label = "Good"; color = "bg-blue-500"; }
+        else { label = "Strong"; color = "bg-green-500"; }
+        return { score, label, color };
+    }, [formData.password]);
 
-        if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
-        if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
-        if (!formData.dateOfBirth) newErrors.dateOfBirth = "Date of birth is required";
-        if (!formData.email.trim()) newErrors.email = "Email is required";
-        if (!formData.phone.trim()) newErrors.phone = "Phone number is required";
-        if (!formData.stateOfOrigin.trim()) newErrors.stateOfOrigin = "State of origin is required";
-        if (!formData.lga.trim()) newErrors.lga = "LGA is required";
-        if (!formData.residentialAddress.trim()) newErrors.residentialAddress = "Address is required";
-        if (!formData.occupation.trim()) newErrors.occupation = "Occupation is required";
-        if (!formData.nextOfKin.fullName.trim()) newErrors.nextOfKinFullName = "Next of kin name is required";
-        if (!formData.nextOfKin.phone.trim()) newErrors.nextOfKinPhone = "Next of kin phone is required";
-        if (!formData.nextOfKin.residentialAddress.trim()) newErrors.nextOfKinAddress = "Next of kin address is required";
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleNext = () => {
-        if (step === 1 && validateStep1()) {
-            setStep(2);
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        const checked = (e.target as HTMLInputElement).checked;
+        setFormData({
+            ...formData,
+            [name]: type === "checkbox" ? checked : value,
+        });
+        if (errors[name]) {
+            const newErrors = { ...errors };
+            delete newErrors[name];
+            setErrors(newErrors);
         }
     };
 
-    const handleSubmit = async () => {
-        setIsSubmitting(true);
-
-        try {
-            const response = await fetch("/api/cooperatives/register", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(formData),
-            });
-
-            const data = await response.json();
-
-            if (data.success && data.paymentUrl) {
-                showToast("Redirecting to payment...", "success");
-                window.location.href = data.paymentUrl;
-            } else {
-                showToast(data.error || "Registration failed", "error");
-            }
-        } catch (error) {
-            showToast("An error occurred. Please try again.", "error");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const tierPrice = formData.tier === "basic" ? 10000 : 20000;
+    const passwordRequirements = [
+        { label: "At least 8 characters", met: formData.password.length >= 8 },
+        { label: "Uppercase & lowercase letters", met: /[a-z]/.test(formData.password) && /[A-Z]/.test(formData.password) },
+        { label: "At least one number", met: /\d/.test(formData.password) },
+        { label: "Special character (!@#$%^&*)", met: /[^a-zA-Z0-9]/.test(formData.password) },
+    ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
-            <div className="max-w-4xl mx-auto">
-                {/* Header */}
-                <div className="flex items-center gap-4 mb-8">
-                    <Link
-                        href="/cooperatives"
-                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                    >
-                        <ArrowLeft className="w-5 h-5" />
-                    </Link>
-                    <div>
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
-                            Join Cooperative
-                        </h1>
-                        <p className="text-slate-600 dark:text-slate-400">
-                            Register as a cooperative member
-                        </p>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
+            {/* Background Pattern */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-32 -left-32 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl opacity-50" />
+                <div className="absolute top-1/2 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl opacity-50" />
+            </div>
+
+            <div className="relative w-full max-w-5xl bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2">
+                {/* Left Side - Information & Branding (Easy Sales Export Theme) */}
+                <div className="hidden lg:block relative bg-linear-to-br from-purple-900 to-indigo-900 p-12 text-white">
+                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+
+                    <div className="relative z-10 h-full flex flex-col justify-between">
+                        <div>
+                            <Link href="/" className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full mb-8 hover:bg-white/20 transition-all">
+                                <span className="font-bold">Easy Sales Export</span>
+                            </Link>
+                            <h1 className="text-4xl font-bold mb-6">Join the Cooperative</h1>
+                            <p className="text-purple-100 text-lg leading-relaxed mb-8">
+                                Unlock access to shared resources, collective bargaining power, and direct investment opportunities.
+                            </p>
+
+                            <div className="space-y-4">
+                                {[
+                                    "Access to low-interest loans",
+                                    "Bulk purchasing power",
+                                    "Direct market linkages",
+                                    "Expert agricultural training",
+                                    "Investment opportunities"
+                                ].map((benefit, i) => (
+                                    <div key={i} className="flex items-center gap-3">
+                                        <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                                            <CheckCircle className="w-4 h-4 text-white" />
+                                        </div>
+                                        <span className="font-medium text-purple-50">{benefit}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mt-8 pt-8 border-t border-white/20">
+                            <p className="text-sm text-purple-100/80">
+                                &copy; {new Date().getFullYear()} Easy Sales Export. All rights reserved.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
-                {/* Progress Steps */}
-                <div className="flex items-center justify-center gap-4 mb-8">
-                    <div className={`flex items-center gap-2 ${step >= 1 ? "text-green-600" : "text-slate-400"}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? "bg-green-600 text-white" : "bg-slate-200 dark:bg-slate-700"}`}>
-                            {step > 1 ? <CheckCircle className="w-5 h-5" /> : "1"}
-                        </div>
-                        <span className="hidden sm:inline font-semibold">Personal Info</span>
+                {/* Right Side - Registration Form */}
+                <div className="p-8 lg:p-12 overflow-y-auto max-h-[90vh]">
+                    <div className="lg:hidden mb-8 text-center">
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Join Cooperative</h2>
+                        <p className="text-slate-500 dark:text-slate-400">Powered by Easy Sales Export</p>
                     </div>
-                    <div className="w-12 h-0.5 bg-slate-200 dark:bg-slate-700" />
-                    <div className={`flex items-center gap-2 ${step >= 2 ? "text-green-600" : "text-slate-400"}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? "bg-green-600 text-white" : "bg-slate-200 dark:bg-slate-700"}`}>
-                            {step > 2 ? <CheckCircle className="w-5 h-5" /> : "2"}
-                        </div>
-                        <span className="hidden sm:inline font-semibold">Membership Tier</span>
-                    </div>
-                    <div className="w-12 h-0.5 bg-slate-200 dark:bg-slate-700" />
-                    <div className={`flex items-center gap-2 ${step >= 3 ? "text-green-600" : "text-slate-400"}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? "bg-green-600 text-white" : "bg-slate-200 dark:bg-slate-700"}`}>
-                            3
-                        </div>
-                        <span className="hidden sm:inline font-semibold">Payment</span>
-                    </div>
-                </div>
 
-                {/* Step 1: Personal Information */}
-                {step === 1 && (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                            Personal Information
-                        </h2>
+                    <form action={formAction} className="space-y-5">
+                        <input type="hidden" name="callbackUrl" value={callbackUrl} />
+                        <input type="hidden" name="platforms[]" value="cooperatives" />
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* First Name */}
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    First Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.firstName}
-                                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.firstName ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                    placeholder="John"
-                                />
-                                {errors.firstName && <p className="text-red-400 text-sm mt-1">{errors.firstName}</p>}
+                        {state.error && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <p className="text-sm text-red-600">{state.error}</p>
                             </div>
+                        )}
 
-                            {/* Middle Name */}
-                            <div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            {/* Full Name */}
+                            <div className="col-span-full">
                                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Middle Name
+                                    Full Name <span className="text-red-500">*</span>
                                 </label>
-                                <input
-                                    type="text"
-                                    value={formData.middleName}
-                                    onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
-                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    placeholder="Optional"
-                                />
-                            </div>
-
-                            {/* Last Name */}
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Last Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.lastName}
-                                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.lastName ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                    placeholder="Doe"
-                                />
-                                {errors.lastName && <p className="text-red-400 text-sm mt-1">{errors.lastName}</p>}
-                            </div>
-
-                            {/* Date of Birth */}
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Date of Birth *
-                                </label>
-                                <input
-                                    type="date"
-                                    value={formData.dateOfBirth}
-                                    onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.dateOfBirth ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                />
-                                {errors.dateOfBirth && <p className="text-red-400 text-sm mt-1">{errors.dateOfBirth}</p>}
-                            </div>
-
-                            {/* Gender */}
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Gender *
-                                </label>
-                                <select
-                                    value={formData.gender}
-                                    onChange={(e) => setFormData({ ...formData, gender: e.target.value as "male" | "female" })}
-                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
-                                >
-                                    <option value="male">Male</option>
-                                    <option value="female">Female</option>
-                                </select>
+                                <div className="relative">
+                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        name="fullName"
+                                        value={formData.fullName}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.fullName ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 dark:text-white transition-all`}
+                                        placeholder="John Doe"
+                                        disabled={isPending}
+                                        required
+                                    />
+                                </div>
+                                {errors.fullName && <p className="text-red-500 text-xs mt-1">{errors.fullName}</p>}
                             </div>
 
                             {/* Email */}
-                            <div>
+                            <div className="col-span-full">
                                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Email Address *
+                                    Email Address <span className="text-red-500">*</span>
                                 </label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.email ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                    placeholder="john@example.com"
-                                />
-                                {errors.email && <p className="text-red-400 text-sm mt-1">{errors.email}</p>}
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.email ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 dark:text-white transition-all`}
+                                        placeholder="your@email.com"
+                                        disabled={isPending}
+                                        required
+                                    />
+                                </div>
+                                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
                             </div>
 
                             {/* Phone */}
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Phone Number *
+                                    Phone Number
                                 </label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.phone ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                    placeholder="08012345678"
-                                />
-                                {errors.phone && <p className="text-red-400 text-sm mt-1">{errors.phone}</p>}
-                            </div>
-
-                            {/* State of Origin */}
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    State of Origin *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.stateOfOrigin}
-                                    onChange={(e) => setFormData({ ...formData, stateOfOrigin: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.stateOfOrigin ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                    placeholder="Plateau"
-                                />
-                                {errors.stateOfOrigin && <p className="text-red-400 text-sm mt-1">{errors.stateOfOrigin}</p>}
-                            </div>
-
-                            {/* LGA */}
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Local Government Area *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.lga}
-                                    onChange={(e) => setFormData({ ...formData, lga: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.lga ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                    placeholder="Jos North"
-                                />
-                                {errors.lga && <p className="text-red-400 text-sm mt-1">{errors.lga}</p>}
-                            </div>
-
-                            {/* Residential Address */}
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Residential Address *
-                                </label>
-                                <textarea
-                                    value={formData.residentialAddress}
-                                    onChange={(e) => setFormData({ ...formData, residentialAddress: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.residentialAddress ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                    rows={3}
-                                    placeholder="Full residential address"
-                                />
-                                {errors.residentialAddress && <p className="text-red-400 text-sm mt-1">{errors.residentialAddress}</p>}
-                            </div>
-
-                            {/* Occupation */}
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                    Occupation *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.occupation}
-                                    onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
-                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.occupation ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                    placeholder="Farmer, Trader, etc."
-                                />
-                                {errors.occupation && <p className="text-red-400 text-sm mt-1">{errors.occupation}</p>}
-                            </div>
-                        </div>
-
-                        {/* Next of Kin Section */}
-                        <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-700">
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">
-                                Next of Kin Information
-                            </h3>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Next of Kin Name */}
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                        Full Name *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.nextOfKin.fullName}
-                                        onChange={(e) => setFormData({ ...formData, nextOfKin: { ...formData.nextOfKin, fullName: e.target.value } })}
-                                        className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.nextOfKinFullName ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                        placeholder="Next of kin full name"
-                                    />
-                                    {errors.nextOfKinFullName && <p className="text-red-400 text-sm mt-1">{errors.nextOfKinFullName}</p>}
-                                </div>
-
-                                {/* Next of Kin Phone */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                        Phone Number *
-                                    </label>
+                                <div className="relative">
+                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                                     <input
                                         type="tel"
-                                        value={formData.nextOfKin.phone}
-                                        onChange={(e) => setFormData({ ...formData, nextOfKin: { ...formData.nextOfKin, phone: e.target.value } })}
-                                        className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.nextOfKinPhone ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                        placeholder="08012345678"
+                                        name="phone"
+                                        value={formData.phone}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.phone ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 dark:text-white transition-all`}
+                                        placeholder="+234..."
+                                        disabled={isPending}
                                     />
-                                    {errors.nextOfKinPhone && <p className="text-red-400 text-sm mt-1">{errors.nextOfKinPhone}</p>}
                                 </div>
+                                {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
+                            </div>
 
-                                {/* Next of Kin Address */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                                        Residential Address *
-                                    </label>
+                            {/* Gender */}
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Gender <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <select
+                                        name="gender"
+                                        value={formData.gender}
+                                        onChange={handleInputChange}
+                                        className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.gender ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 dark:text-white transition-all appearance-none cursor-pointer`}
+                                        disabled={isPending}
+                                        required
+                                    >
+                                        <option value="">Select Gender</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                    </select>
+                                </div>
+                                {errors.gender && <p className="text-red-500 text-xs mt-1">{errors.gender}</p>}
+                            </div>
+
+                            {/* Password */}
+                            <div className="col-span-full">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Password <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                                     <input
-                                        type="text"
-                                        value={formData.nextOfKin.residentialAddress}
-                                        onChange={(e) => setFormData({ ...formData, nextOfKin: { ...formData.nextOfKin, residentialAddress: e.target.value } })}
-                                        className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.nextOfKinAddress ? "border-red-400" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500`}
-                                        placeholder="Next of kin address"
+                                        type={showPassword ? "text" : "password"}
+                                        name="password"
+                                        value={formData.password}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-11 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.password ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 dark:text-white transition-all`}
+                                        placeholder="Min 8 chars"
+                                        disabled={isPending}
+                                        required
                                     />
-                                    {errors.nextOfKinAddress && <p className="text-red-400 text-sm mt-1">{errors.nextOfKinAddress}</p>}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    >
+                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                                {/* Strength Bar */}
+                                {formData.password && (
+                                    <div className="mt-2 flex gap-1 h-1">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <div
+                                                key={i}
+                                                className={`flex-1 rounded-full bg-slate-200 dark:bg-slate-700 ${i <= passwordStrength.score ? passwordStrength.color : ""
+                                                    }`}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Confirm Password */}
+                            <div className="col-span-full">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Confirm Password <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <input
+                                        type={showConfirmPassword ? "text" : "password"}
+                                        name="confirmPassword"
+                                        value={formData.confirmPassword}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-11 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.confirmPassword ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 dark:text-white transition-all`}
+                                        placeholder="Confirm password"
+                                        disabled={isPending}
+                                        required
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    >
+                                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Next Button */}
-                        <div className="mt-8 flex justify-end">
-                            <button
-                                onClick={handleNext}
-                                className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition shadow-lg"
-                            >
-                                Continue to Tier Selection
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 2: Tier Selection */}
-                {step === 2 && (
-                    <div className="space-y-6">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                            Choose Membership Tier
-                        </h2>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Basic Tier */}
-                            <button
-                                onClick={() => setFormData({ ...formData, tier: "basic" })}
-                                className={`p-6 rounded-2xl border-2 transition ${formData.tier === "basic"
-                                    ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between mb-4">
-                                    <Shield className="w-8 h-8 text-green-600" />
-                                    {formData.tier === "basic" && <CheckCircle className="w-6 h-6 text-green-600" />}
-                                </div>
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                                    Basic Membership
-                                </h3>
-                                <p className="text-3xl font-bold text-green-600 mb-4">
-                                    ₦10,000
-                                </p>
-                                <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
-                                    <li>✓ Savings account</li>
-                                    <li>✓ Loan eligibility</li>
-                                    <li>✓ Member benefits</li>
-                                    <li>✓ Basic support</li>
-                                </ul>
-                            </button>
-
-                            {/* Premium Tier */}
-                            <button
-                                onClick={() => setFormData({ ...formData, tier: "premium" })}
-                                className={`p-6 rounded-2xl border-2 transition ${formData.tier === "premium"
-                                    ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between mb-4">
-                                    <Users className="w-8 h-8 text-green-600" />
-                                    {formData.tier === "premium" && <CheckCircle className="w-6 h-6 text-green-600" />}
-                                </div>
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                                    Premium Membership
-                                </h3>
-                                <p className="text-3xl font-bold text-green-600 mb-4">
-                                    ₦20,000
-                                </p>
-                                <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
-                                    <li>✓ All Basic features</li>
-                                    <li>✓ Higher loan limits</li>
-                                    <li>✓ Priority support</li>
-                                    <li>✓ Exclusive benefits</li>
-                                </ul>
-                            </button>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex justify-between">
-                            <button
-                                onClick={() => setStep(1)}
-                                className="px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl transition hover:bg-slate-300 dark:hover:bg-slate-600"
-                            >
-                                Back
-                            </button>
-                            <button
-                                onClick={() => setStep(3)}
-                                className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition shadow-lg"
-                            >
-                                Continue to Payment
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 3: Payment Confirmation */}
-                {step === 3 && (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                            Payment Summary
-                        </h2>
-
-                        <div className="space-y-4 mb-8">
-                            <div className="flex justify-between items-center py-3 border-b border-slate-200 dark:border-slate-700">
-                                <span className="text-slate-600 dark:text-slate-400">Membership Tier</span>
-                                <span className="font-semibold text-slate-900 dark:text-white capitalize">
-                                    {formData.tier}
+                        {/* Terms */}
+                        <div className="pt-2">
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="acceptTerms"
+                                    checked={formData.acceptTerms}
+                                    onChange={handleInputChange}
+                                    className="mt-1 w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300"
+                                />
+                                <span className="text-sm text-slate-600 dark:text-slate-400">
+                                    I agree to the <Link href="/terms" className="text-purple-600 hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-purple-600 hover:underline">Privacy Policy</Link>.
                                 </span>
-                            </div>
-                            <div className="flex justify-between items-center py-3 border-b border-slate-200 dark:border-slate-700">
-                                <span className="text-slate-600 dark:text-slate-400">Registration Fee</span>
-                                <span className="text-2xl font-bold text-green-600">
-                                    ₦{tierPrice.toLocaleString()}
-                                </span>
-                            </div>
+                            </label>
+                            {errors.acceptTerms && <p className="text-red-500 text-xs mt-1 ml-7">{errors.acceptTerms}</p>}
                         </div>
 
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-8">
-                            <p className="text-sm text-blue-800 dark:text-blue-200">
-                                <DollarSign className="w-4 h-4 inline mr-1" />
-                                After payment, your application will be reviewed by an administrator. You'll receive email notification once approved.
+                        <button
+                            type="submit"
+                            disabled={isPending}
+                            className="w-full py-4 bg-linear-to-r from-purple-800 to-indigo-900 hover:from-purple-900 hover:to-indigo-950 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Registering...
+                                </>
+                            ) : (
+                                <>
+                                    Create Cooperative Account
+                                    <ArrowRight className="w-5 h-5" />
+                                </>
+                            )}
+                        </button>
+
+                        <div className="text-center mt-6">
+                            <p className="text-slate-600 dark:text-slate-400 text-sm">
+                                Already a member?{" "}
+                                <Link href="/cooperatives/login" className="text-purple-600 font-semibold hover:underline">
+                                    Sign In
+                                </Link>
                             </p>
                         </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex justify-between">
-                            <button
-                                onClick={() => setStep(2)}
-                                disabled={isSubmitting}
-                                className="px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl transition hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
-                            >
-                                Back
-                            </button>
-                            <button
-                                onClick={handleSubmit}
-                                disabled={isSubmitting}
-                                className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition shadow-lg flex items-center gap-2 disabled:opacity-50"
-                            >
-                                {isSubmitting ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                        Processing...
-                                    </>
-                                ) : (
-                                    <>
-                                        Proceed to Payment
-                                        <DollarSign className="w-5 h-5" />
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                )}
+                    </form>
+                </div>
             </div>
         </div>
+    );
+}
+
+export default function CooperativeRegisterPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+            </div>
+        }>
+            <CooperativeRegisterContent />
+        </Suspense>
     );
 }
