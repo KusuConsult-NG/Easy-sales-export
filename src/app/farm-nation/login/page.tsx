@@ -33,21 +33,21 @@ function FarmNationLoginContent() {
     }, [state.error, isPending, showToast]);
 
     return (
-        <div className="min-h-screen bg-emerald-950 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background Effects */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-green-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl"></div>
             </div>
 
-            <div className="w-full max-w-md bg-emerald-900/50 backdrop-blur-xl border border-emerald-800 rounded-3xl p-8 shadow-2xl relative z-10">
+            <div className="w-full max-w-md bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-teal-200 dark:border-teal-800 rounded-3xl p-8 shadow-2xl relative z-10">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-800 rounded-2xl mb-4 shadow-lg border border-emerald-700">
-                        <Sprout className="w-8 h-8 text-emerald-400" />
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-teal-600 rounded-2xl mb-4 shadow-lg">
+                        <Sprout className="w-8 h-8 text-white" />
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-                    <p className="text-emerald-200">Sign in to your Farm Nation account</p>
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h1>
+                    <p className="text-slate-600 dark:text-slate-400">Sign in to your Farm Nation account</p>
                 </div>
 
                 {/* Form */}
