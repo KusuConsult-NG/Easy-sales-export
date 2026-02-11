@@ -193,7 +193,7 @@ export async function checkOnboardingStatusAction(userId: string): Promise<boole
         }
 
         const userData = userDoc.data();
-        return userData.onboardingCompleted === true;
+        return userData?.onboardingCompleted === true;
     } catch (error) {
         console.error("Failed to check onboarding status:", error);
         return false;

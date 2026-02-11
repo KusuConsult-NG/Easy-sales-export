@@ -16,10 +16,10 @@ export interface Announcement {
     type: "info" | "warning" | "success" | "emergency";
     targetAudience: "all" | "members" | "exporters" | "admins" | "vendors";
     priority: "low" | "medium" | "high" | "urgent";
-    publishedAt: Timestamp;
-    expiresAt?: Timestamp;
+    publishedAt: Date | any;
+    expiresAt?: Date | any;
     createdBy: string;
-    createdAt: Timestamp;
+    createdAt: Date | any;
     active: boolean;
 }
 
@@ -35,7 +35,7 @@ export interface Banner {
     endDate: Date;
     position: "top" | "bottom" | "popup";
     createdBy: string;
-    createdAt: Timestamp;
+    createdAt: Date | any;
     active: boolean;
 }
 
@@ -59,7 +59,7 @@ export async function createAnnouncementAction(data: {
             targetAudience: data.targetAudience,
             priority: data.priority,
             publishedAt: FieldValue.serverTimestamp(),
-            expiresAt: data.expiresAt ? Timestamp.fromDate(new Date(data.expiresAt)) : undefined,
+            expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
             createdBy: data.adminId,
             createdAt: FieldValue.serverTimestamp(),
             active: true,
