@@ -50,32 +50,32 @@ export default function ExportWindowsLandingPage() {
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-orange-600 via-amber-600 to-yellow-600 text-white">
                 <div className="absolute inset-0 bg-black/10"></div>
-                <div className="relative max-w-7xl mx-auto px-8 py-24">
+                <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
                     <div className="max-w-3xl">
-                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-semibold mb-6">
-                            <Globe className="w-4 h-4" />
+                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-semibold mb-4 md:mb-6">
+                            <Globe className="w-3 h-3 md:w-4 md:h-4" />
                             Export Investment Platform
                         </div>
-                        <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+                        <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 leading-tight">
                             Export Windows
                         </h1>
-                        <p className="text-xl md:text-2xl mb-4 text-orange-50">
+                        <p className="text-lg md:text-xl lg:text-2xl mb-3 md:mb-4 text-orange-50">
                             Invest in Global Trade Opportunities
                         </p>
-                        <p className="text-lg mb-8 text-orange-100 max-w-2xl">
+                        <p className="text-base md:text-lg mb-6 md:mb-8 text-orange-100 max-w-2xl">
                             Fund verified agricultural export contracts and earn attractive returns. Secure escrow protection, transparent tracking, and professional management.
                         </p>
-                        <div className="flex flex-wrap gap-4">
+                        <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4">
                             <Link
                                 href="/export/register"
-                                className="group inline-flex items-center gap-3 bg-white text-orange-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-orange-500/50 transition-all hover:scale-105"
+                                className="group inline-flex items-center justify-center gap-2 md:gap-3 bg-white text-orange-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-orange-500/50 transition-all hover:scale-105"
                             >
                                 Get Started
-                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
                             </Link>
                             <Link
                                 href="/export/login"
-                                className="inline-flex items-center gap-3 bg-orange-700/50 text-white border border-orange-400/30 px-8 py-4 rounded-xl font-bold text-lg backdrop-blur-sm hover:bg-orange-700/70 transition-all hover:scale-105"
+                                className="inline-flex items-center justify-center gap-2 md:gap-3 bg-orange-700/50 text-white border border-orange-400/30 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg backdrop-blur-sm hover:bg-orange-700/70 transition-all hover:scale-105"
                             >
                                 Sign In
                             </Link>
