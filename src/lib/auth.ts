@@ -63,6 +63,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         name: userData.fullName,
                         image: null, // Placeholder for future profile image support
                         roles: userData.roles || [], // Multi-role support
+                        verified: userData.verified ?? true, // Email verification status (default true for existing users)
                     };
                 } catch (error: any) {
                     console.error("Authorization error:", error.message);
@@ -80,6 +81,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.name = user.name;
                 token.image = user.image;
                 token.roles = user.roles; // Multi-role support
+                token.verified = user.verified ?? true; // Email verification status
             }
 
             return token;
@@ -120,6 +122,7 @@ declare module "next-auth" {
         name: string;
         image?: string | null;
         roles: UserRole[]; // Multi-role support
+        verified?: boolean; // Email verification status
     }
 
     interface Session {
