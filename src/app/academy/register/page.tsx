@@ -1,14 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Mail, Lock, AlertCircle, Eye, EyeOff, GraduationCap, User, ArrowRight, Loader2 } from "lucide-react";
+import {
+    Mail,
+    Lock,
+    User,
+    Phone,
+    AlertCircle,
+    Loader2,
+    Eye,
+    EyeOff,
+    CheckCircle,
+    GraduationCap,
+    ArrowRight,
+} from "lucide-react";
 import { registerAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
-import LoadingButton from "@/components/ui/LoadingButton";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 
 const initialState = { error: "", success: false };
 
@@ -17,136 +27,298 @@ function AcademyRegisterContent() {
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get("callbackUrl") || "/academy";
 
-    const registerWithContext = async (prevState: any, formData: FormData) => {
-        formData.append("callbackUrl", callbackUrl);
-        formData.append("role", "learner");
-        formData.append("platforms", "academy");
-        return registerAction(prevState, formData);
+    const [formData, setFormData] = useState({
+        fullName: "",
+        email: "",
+        phone: "",
+        gender: "",
+        platforms: ["academy"],
+        password: "",
+        confirmPassword: "",
+        acceptTerms: false,
+    });
+
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [state, formAction, isPending] = useActionState(registerAction, initialState);
+
+    const passwordStrength = useMemo(() => {
+        if (!formData.password) return { score: 0, label: "", color: "" };
+        let score = 0;
+        const password = formData.password;
+        if (password.length >= 8) score++;
+        if (password.length >= 12) score++;
+        if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+        if (/\d/.test(password)) score++;
+        if (/[^a-zA-Z0-9]/.test(password)) score++;
+        let label = "", color = "";
+        if (score <= 1) { label = "Weak"; color = "bg-red-500"; }
+        else if (score <= 3) { label = "Fair"; color = "bg-yellow-500"; }
+        else if (score <= 4) { label = "Good"; color = "bg-blue-500"; }
+        else { label = "Strong"; color = "bg-green-500"; }
+        return { score, label, color };
+    }, [formData.password]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        const checked = (e.target as HTMLInputElement).checked;
+        setFormData({
+            ...formData,
+            [name]: type === "checkbox" ? checked : value,
+        });
+        if (errors[name]) {
+            const newErrors = { ...errors };
+            delete newErrors[name];
+            setErrors(newErrors);
+        }
     };
 
-    const [state, formAction, isPending] = useActionState(registerWithContext, initialState);
-    const [showPassword, setShowPassword] = useState(false);
-
-    useEffect(() => {
-        if (state.error && !isPending) {
-            showToast(state.error, "error");
-        }
-    }, [state.error, isPending, showToast]);
-
     return (
-        <div className="min-h-screen bg-indigo-950 flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Background Effects */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl opacity-50" />
+                <div className="absolute top-1/2 -right-32 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl opacity-50" />
             </div>
 
-            <div className="w-full max-w-lg bg-indigo-900/50 backdrop-blur-xl border border-indigo-800 rounded-3xl p-8 shadow-2xl relative z-10">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-800 rounded-2xl mb-4 shadow-lg border border-indigo-700">
-                        <GraduationCap className="w-8 h-8 text-indigo-400" />
+            <div className="relative w-full max-w-5xl bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2">
+                <div className="hidden lg:block relative bg-linear-to-br from-blue-600 to-indigo-700 p-12 text-white">
+                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+
+                    <div className="relative z-10 h-full flex flex-col justify-between">
+                        <div>
+                            <Link href="/" className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full mb-8 hover:bg-white/20 transition-all">
+                                <span className="font-bold">Easy Sales Export</span>
+                            </Link>
+                            <h1 className="text-4xl font-bold mb-6">Join Academy</h1>
+                            <p className="text-blue-100 text-lg leading-relaxed mb-8">
+                                Access expert-led courses and accelerate your career with industry certifications.
+                            </p>
+
+                            <div className="space-y-4">
+                                {[
+                                    "Expert-led courses & training",
+                                    "Industry certifications",
+                                    "Live interactive sessions",
+                                    "Self-paced learning",
+                                    "Career advancement resources"
+                                ].map((benefit, i) => (
+                                    <div key={i} className="flex items-center gap-3">
+                                        <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                                            <CheckCircle className="w-4 h-4 text-white" />
+                                        </div>
+                                        <span className="font-medium text-blue-50">{benefit}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mt-8 pt-8 border-t border-white/20">
+                            <p className="text-sm text-blue-100/80">
+                                &copy; {new Date().getFullYear()} Easy Sales Export. All rights reserved.
+                            </p>
+                        </div>
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Join Academy</h1>
-                    <p className="text-indigo-200">Start your learning journey today</p>
                 </div>
 
-                {/* Form */}
-                <form action={formAction} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-indigo-100 ml-1">First Name</label>
-                            <div className="relative group">
-                                <User className="absolute left-3 top-3.5 w-5 h-5 text-indigo-400 group-focus-within:text-indigo-300 transition-colors" />
-                                <input
-                                    type="text"
-                                    name="firstName"
+                <div className="p-8 lg:p-12 overflow-y-auto max-h-[90vh]">
+                    <div className="lg:hidden mb-8 text-center">
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Join Academy</h2>
+                        <p className="text-slate-500 dark:text-slate-400">Powered by Easy Sales Export</p>
+                    </div>
+
+                    <form action={formAction} className="space-y-5">
+                        <input type="hidden" name="callbackUrl" value={callbackUrl} />
+                        <input type="hidden" name="platforms[]" value="academy" />
+
+                        {state.error && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <p className="text-sm text-red-600">{state.error}</p>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div className="col-span-full">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Full Name <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        name="fullName"
+                                        value={formData.fullName}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.fullName ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all`}
+                                        placeholder="John Doe"
+                                        disabled={isPending}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="col-span-full">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Email Address <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        value={formData.email}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.email ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all`}
+                                        placeholder="your@email.com"
+                                        disabled={isPending}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Phone Number
+                                </label>
+                                <div className="relative">
+                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <input
+                                        type="tel"
+                                        name="phone"
+                                        value={formData.phone}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.phone ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all`}
+                                        placeholder="+234..."
+                                        disabled={isPending}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Gender <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    name="gender"
+                                    value={formData.gender}
+                                    onChange={handleInputChange}
+                                    className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.gender ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all appearance-none cursor-pointer`}
+                                    disabled={isPending}
                                     required
-                                    placeholder="First name"
-                                    className="w-full bg-indigo-950/50 border border-indigo-800 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-indigo-700"
-                                />
+                                >
+                                    <option value="">Select Gender</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                </select>
+                            </div>
+
+                            <div className="col-span-full">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Password <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <input
+                                        type={showPassword ? "text" : "password"}
+                                        name="password"
+                                        value={formData.password}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-11 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.password ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all`}
+                                        placeholder="Min 8 chars"
+                                        disabled={isPending}
+                                        required
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    >
+                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                                {formData.password && (
+                                    <div className="mt-2 flex gap-1 h-1">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <div
+                                                key={i}
+                                                className={`flex-1 rounded-full bg-slate-200 dark:bg-slate-700 ${i <= passwordStrength.score ? passwordStrength.color : ""}`}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="col-span-full">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    Confirm Password <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <input
+                                        type={showConfirmPassword ? "text" : "password"}
+                                        name="confirmPassword"
+                                        value={formData.confirmPassword}
+                                        onChange={handleInputChange}
+                                        className={`w-full pl-11 pr-11 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.confirmPassword ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all`}
+                                        placeholder="Confirm password"
+                                        disabled={isPending}
+                                        required
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    >
+                                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-indigo-100 ml-1">Last Name</label>
-                            <div className="relative group">
-                                <User className="absolute left-3 top-3.5 w-5 h-5 text-indigo-400 group-focus-within:text-indigo-300 transition-colors" />
+
+                        <div className="pt-2">
+                            <label className="flex items-start gap-3 cursor-pointer">
                                 <input
-                                    type="text"
-                                    name="lastName"
-                                    required
-                                    placeholder="Last name"
-                                    className="w-full bg-indigo-950/50 border border-indigo-800 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-indigo-700"
+                                    type="checkbox"
+                                    name="acceptTerms"
+                                    checked={formData.acceptTerms}
+                                    onChange={handleInputChange}
+                                    className="mt-1 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                                 />
-                            </div>
+                                <span className="text-sm text-slate-600 dark:text-slate-400">
+                                    I agree to the <Link href="/terms" className="text-blue-600 hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>.
+                                </span>
+                            </label>
                         </div>
-                    </div>
 
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-indigo-100 ml-1">Email Address</label>
-                        <div className="relative group">
-                            <Mail className="absolute left-3 top-3.5 w-5 h-5 text-indigo-400 group-focus-within:text-indigo-300 transition-colors" />
-                            <input
-                                type="email"
-                                name="email"
-                                required
-                                placeholder="Enter your email"
-                                className="w-full bg-indigo-950/50 border border-indigo-800 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-indigo-700"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-indigo-100 ml-1">Password</label>
-                        <div className="relative group">
-                            <Lock className="absolute left-3 top-3.5 w-5 h-5 text-indigo-400 group-focus-within:text-indigo-300 transition-colors" />
-                            <input
-                                type="text"
-                                name="password"
-                                required
-                                minLength={8}
-                                placeholder="Create a password"
-                                className="w-full bg-indigo-950/50 border border-indigo-800 text-white rounded-xl pl-10 pr-12 py-3 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-indigo-700"
-                                style={{ WebkitTextSecurity: showPassword ? "none" : "disc" } as React.CSSProperties}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-3.5 text-indigo-400 hover:text-indigo-300 transition-colors"
-                            >
-                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                            </button>
-                        </div>
-                        <p className="text-xs text-indigo-300 ml-1">Must be at least 8 characters long</p>
-                    </div>
-
-                    {state.error && (
-                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                            <p className="text-sm text-red-200">{state.error}</p>
-                        </div>
-                    )}
-
-                    <LoadingButton
-                        loading={isPending}
-                        type="submit"
-                        loadingText="Creating Account..."
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-indigo-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] group"
-                    >
-                        Create Account
-                        <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform inline-block" />
-                    </LoadingButton>
-
-                    <p className="text-center text-indigo-300 text-sm">
-                        Already have an account?{" "}
-                        <Link
-                            href="/academy/login"
-                            className="text-indigo-400 hover:text-indigo-200 font-bold transition-colors"
+                        <button
+                            type="submit"
+                            disabled={isPending}
+                            className="w-full py-4 bg-linear-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                         >
-                            Sign In
-                        </Link>
-                    </p>
-                </form>
+                            {isPending ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Registering...
+                                </>
+                            ) : (
+                                <>
+                                    Create Academy Account
+                                    <ArrowRight className="w-5 h-5" />
+                                </>
+                            )}
+                        </button>
+
+                        <div className="text-center mt-6">
+                            <p className="text-slate-600 dark:text-slate-400 text-sm">
+                                Already a member?{" "}
+                                <Link href="/academy/login" className="text-blue-600 font-semibold hover:underline">
+                                    Sign In
+                                </Link>
+                            </p>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     );
@@ -155,8 +327,8 @@ function AcademyRegisterContent() {
 export default function AcademyRegisterPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-indigo-950 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
             </div>
         }>
             <AcademyRegisterContent />

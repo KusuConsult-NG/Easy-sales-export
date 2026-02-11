@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
-import { Mail, Lock, AlertCircle, Eye, EyeOff, Ship, Loader2 } from "lucide-react";
+import { Mail, Lock, AlertCircle, Eye, EyeOff, Ship, CheckCircle, ArrowRight, Loader2 } from "lucide-react";
 import { loginAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 
 const initialState = { error: "", success: false };
 
@@ -17,13 +16,14 @@ function ExportLoginContent() {
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get("callbackUrl") || "/export";
 
-    const loginWithCallback = async (prevState: any, formData: FormData) => {
-        formData.append("callbackUrl", callbackUrl);
-        return loginAction(prevState, formData);
-    };
-
-    const [state, formAction, isPending] = useActionState(loginWithCallback, initialState);
+    const [formData, setFormData] = useState({
+        email: "",
+        password: "",
+    });
+    const [rememberMe, setRememberMe] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const [showPassword, setShowPassword] = useState(false);
+    const [state, formAction, isPending] = useActionState(loginAction, initialState);
 
     useEffect(() => {
         if (state.error && !isPending) {
@@ -31,108 +31,163 @@ function ExportLoginContent() {
         }
     }, [state.error, isPending, showToast]);
 
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData({
+            ...formData,
+            [name]: value,
+        });
+        if (errors[name]) {
+            const newErrors = { ...errors };
+            delete newErrors[name];
+            setErrors(newErrors);
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
-            {/* Background Effects */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+            {/* Background Pattern */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-32 -left-32 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl opacity-50" />
+                <div className="absolute bottom-0 -right-32 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl opacity-50" />
+                <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.03]" />
             </div>
 
-            <div className="w-full max-w-md bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-orange-200 dark:border-orange-800 rounded-3xl p-8 shadow-2xl relative z-10">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <Link href="/export" className="inline-flex items-center justify-center mb-4 hover:opacity-90 transition-opacity">
-                        <div className="w-16 h-16 bg-orange-600 rounded-2xl shadow-lg flex items-center justify-center">
-                            <Ship className="w-8 h-8 text-white" />
+            <div className="relative w-full max-w-md">
+                {/* Logo & Header */}
+                <div className="text-center mb-8 relative z-10">
+                    <Link href="/export" className="inline-flex items-center justify-center mb-6 hover:opacity-90 transition-opacity">
+                        <div className="w-16 h-16 bg-linear-to-br from-orange-600 to-amber-700 rounded-2xl flex items-center justify-center shadow-xl shadow-orange-500/20 text-white transform rotate-3 hover:rotate-6 transition-transform">
+                            <Ship className="w-8 h-8" />
                         </div>
                     </Link>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Export Windows</h1>
-                    <p className="text-slate-600 dark:text-slate-400">Login to manage your export portfolio</p>
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h1>
+                    <p className="text-slate-500 dark:text-slate-400">Sign in to your Export account</p>
                 </div>
 
-                {/* Form */}
-                <form action={formAction} className="space-y-6">
-                    <div className="space-y-4">
+                {/* Login Card */}
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-2xl border border-slate-100 dark:border-slate-700 relative z-10 backdrop-blur-sm">
+                    <form action={formAction} className="space-y-6">
+                        <input type="hidden" name="redirectTo" value={callbackUrl} />
+
+                        {state.error && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <p className="text-sm text-red-600">{state.error}</p>
+                            </div>
+                        )}
+
+                        {/* Email Field */}
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Email Address</label>
+                            <label htmlFor="login-email" className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                Email Address
+                            </label>
                             <div className="relative group">
-                                <Mail className="absolute left-3 top-3.5 w-5 h-5 text-orange-600 group-focus-within:text-orange-500 transition-colors" />
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-600 transition-colors" />
                                 <input
+                                    id="login-email"
                                     type="email"
                                     name="email"
+                                    autoComplete="email"
+                                    value={formData.email}
+                                    onChange={handleInputChange}
+                                    className={`w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-900 border ${errors.email ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-all`}
+                                    placeholder="your.email@example.com"
                                     required
-                                    placeholder="Enter your email"
-                                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-orange-600 focus:ring-1 focus:ring-orange-600 transition-all placeholder:text-slate-400"
+                                    disabled={isPending}
                                 />
                             </div>
                         </div>
 
+                        {/* Password Field */}
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Password</label>
+                            <div className="flex items-center justify-between">
+                                <label htmlFor="login-password" className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Password
+                                </label>
+                                <Link
+                                    href="/auth/forgot-password"
+                                    className="text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors hover:underline"
+                                >
+                                    Forgot password?
+                                </Link>
+                            </div>
                             <div className="relative group">
-                                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-orange-600 group-focus-within:text-orange-500 transition-colors" />
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-orange-600 transition-colors" />
                                 <input
-                                    type="text" // preventing autocomplete
+                                    id="login-password"
+                                    type={showPassword ? "text" : "password"}
                                     name="password"
+                                    autoComplete="current-password"
+                                    value={formData.password}
+                                    onChange={handleInputChange}
+                                    className={`w-full pl-11 pr-12 py-3.5 bg-slate-50 dark:bg-slate-900 border ${errors.password ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-all`}
+                                    placeholder="••••••••"
                                     required
-                                    placeholder="Enter your password"
-                                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl pl-10 pr-12 py-3 focus:outline-hidden focus:border-orange-600 focus:ring-1 focus:ring-orange-600 transition-all placeholder:text-slate-400"
-                                    style={{ WebkitTextSecurity: showPassword ? "none" : "disc" } as React.CSSProperties}
+                                    disabled={isPending}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-3.5 text-orange-600 hover:text-orange-500 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                    disabled={isPending}
                                 >
-                                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    {showPassword ? (
+                                        <EyeOff className="w-5 h-5" />
+                                    ) : (
+                                        <Eye className="w-5 h-5" />
+                                    )}
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex items-center justify-between text-sm">
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                            <input
-                                type="checkbox"
-                                className="w-4 h-4 rounded-sm border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-orange-600 focus:ring-orange-600"
-                            />
-                            <span className="text-slate-600 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300 transition-colors">Remember me</span>
-                        </label>
-                        <Link
-                            href="/auth/forgot-password"
-                            className="text-orange-600 hover:text-orange-500 transition-colors font-medium"
-                        >
-                            Forgot Password?
-                        </Link>
-                    </div>
-
-                    {state.error && (
-                        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                            <p className="text-sm text-red-200">{state.error}</p>
+                        <div className="flex items-center">
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className="relative flex items-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={rememberMe}
+                                        onChange={(e) => setRememberMe(e.target.checked)}
+                                        className="peer w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 text-orange-600 focus:ring-orange-500/50 transition-all active:scale-95"
+                                        disabled={isPending}
+                                    />
+                                    <CheckCircle className="absolute w-3.5 h-3.5 text-white pointer-events-none opacity-0 peer-checked:opacity-100 left-0.5 top-0.5 transition-opacity" />
+                                </div>
+                                <span className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">Remember me</span>
+                            </label>
                         </div>
-                    )}
 
-                    <LoadingButton
-                        loading={isPending}
-                        type="submit"
-                        loadingText="Signing In..."
-                        className="w-full bg-linear-to-r from-orange-600 to-amber-600 hover:opacity-90 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
-                    >
-                        Sign In
-                    </LoadingButton>
-
-                    <p className="text-center text-slate-600 dark:text-slate-400 text-sm">
-                        New on Export Windows?{" "}
-                        <Link
-                            href="/export/register"
-                            className="text-orange-600 hover:text-orange-500 font-bold transition-colors"
+                        {/* Submit Button */}
+                        <LoadingButton
+                            type="submit"
+                            variant="secondary"
+                            loading={isPending}
+                            loadingText="Signing in..."
+                            className="w-full py-2.5 bg-linear-to-r from-orange-600 to-amber-700 hover:from-orange-700 hover:to-amber-800 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all border-0 flex items-center justify-center gap-2"
                         >
-                            Start Investing
-                        </Link>
-                    </p>
-                </form>
+                            Sign In
+                            <ArrowRight className="w-5 h-5" />
+                        </LoadingButton>
+                    </form>
+
+                    {/* Register Link */}
+                    <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700 text-center">
+                        <p className="text-slate-600 dark:text-slate-400">
+                            New to Export Windows?{" "}
+                            <Link
+                                href="/export/register"
+                                className="text-orange-600 font-bold hover:text-orange-700 hover:underline transition-all"
+                            >
+                                Create Account
+                            </Link>
+                        </p>
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400 relative z-10">
+                    &copy; {new Date().getFullYear()} Easy Sales Export
+                </p>
             </div>
         </div>
     );
@@ -141,7 +196,7 @@ function ExportLoginContent() {
 export default function ExportLoginPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
             </div>
         }>
