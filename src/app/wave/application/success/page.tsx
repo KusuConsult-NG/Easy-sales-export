@@ -10,7 +10,7 @@ import { CheckCircle, ArrowRight, Calendar, Mail, Bell } from "lucide-react";
 
 export default function ApplicationSuccessPage() {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center px-4 py-12">
+        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center px-4 py-12">
             <div className="max-w-2xl w-full">
                 {/* Success Icon */}
                 <div className="text-center mb-8">
@@ -68,7 +68,7 @@ export default function ApplicationSuccessPage() {
                         What Happens Next?                    </h2>
                     <div className="space-y-6">
                         <div className="flex gap-4">
-                            <div className="flex-shrink-0">
+                            <div className="shrink-0">
                                 <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     1
                                 </div>
@@ -84,7 +84,7 @@ export default function ApplicationSuccessPage() {
                         </div>
 
                         <div className="flex gap-4">
-                            <div className="flex-shrink-0">
+                            <div className="shrink-0">
                                 <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     2
                                 </div>
@@ -100,7 +100,7 @@ export default function ApplicationSuccessPage() {
                         </div>
 
                         <div className="flex gap-4">
-                            <div className="flex-shrink-0">
+                            <div className="shrink-0">
                                 <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     3
                                 </div>
@@ -116,7 +116,7 @@ export default function ApplicationSuccessPage() {
                         </div>
 
                         <div className="flex gap-4">
-                            <div className="flex-shrink-0">
+                            <div className="shrink-0">
                                 <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     4
                                 </div>
@@ -132,7 +132,7 @@ export default function ApplicationSuccessPage() {
                         </div>
 
                         <div className="flex gap-4">
-                            <div className="flex-shrink-0">
+                            <div className="shrink-0">
                                 <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
                                     5
                                 </div>
@@ -150,7 +150,7 @@ export default function ApplicationSuccessPage() {
                 </div>
 
                 {/* Next Step: Cooperative Registration */}
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl shadow-xl p-8 mb-8 border-2 border-blue-200 dark:border-blue-800">
+                <div className="bg-linear-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl shadow-xl p-8 mb-8 border-2 border-blue-200 dark:border-blue-800">
                     <div className="flex items-start gap-4 mb-4">
                         <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
                             <ArrowRight className="w-6 h-6 text-white" />
