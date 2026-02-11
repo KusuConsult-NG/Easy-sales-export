@@ -149,21 +149,62 @@ export default function ApplicationSuccessPage() {
                     </div>
                 </div>
 
+                {/* Next Step: Cooperative Registration */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl shadow-xl p-8 mb-8 border-2 border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start gap-4 mb-4">
+                        <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                            <ArrowRight className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                                Ready for the Next Step?
+                            </h2>
+                            <p className="text-slate-700 dark:text-slate-300 mb-4">
+                                As a WAVE participant, you're eligible to join our Cooperative program! Get access to:
+                            </p>
+                            <ul className="space-y-2 mb-6">
+                                <li className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                    <CheckCircle className="w-5 h-5 text-blue-600" />
+                                    Cooperative savings and loan products
+                                </li>
+                                <li className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                    <CheckCircle className="w-5 h-5 text-blue-600" />
+                                    Access to member dividends and shares
+                                </li>
+                                <li className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                    <CheckCircle className="w-5 h-5 text-blue-600" />
+                                    Financial literacy training and support
+                                </li>
+                                <li className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                    <CheckCircle className="w-5 h-5 text-blue-600" />
+                                    Community of women entrepreneurs
+                                </li>
+                            </ul>
+                            <Link
+                                href="/cooperative/register"
+                                className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl hover:scale-105"
+                            >
+                                Continue to Cooperative Registration
+                                <ArrowRight className="w-5 h-5" />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Actions */}
                 <div className="flex flex-col sm:flex-row gap-4">
                     <Link
                         href="/wave"
-                        className="flex-1 flex items-center justify-center gap-2 bg-emerald-700 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-semibold transition-all"
+                        className="flex-1 flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-xl font-semibold transition-all"
                     >
                         Back to WAVE Home
-                        <ArrowRight className="w-4 h-4" />
                     </Link>
                     <Link
                         href="/wave/application/review-pending"
                         className="flex-1 flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-xl font-semibold transition-all"
                     >
                         <Calendar className="w-4 h-4" />
-                        Check Status
+                        Check Application Status
                     </Link>
                 </div>
             </div>
