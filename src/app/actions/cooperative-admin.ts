@@ -153,7 +153,7 @@ export async function getAllMembersAction(options?: {
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = query(db.collection("cooperative_members"), orderBy("createdAt", "desc"));
+        let q = db.collection("cooperative_members").orderBy("createdAt", "desc");
 
         if (options?.status && options.status !== "all") {
             q = query(q, where("membershipStatus", "==", options.status));
@@ -231,7 +231,7 @@ export async function getAllTransactionsAction(options?: {
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = query(db.collection("cooperative_transactions"), orderBy("date", "desc"));
+        let q = db.collection("cooperative_transactions").orderBy("date", "desc");
 
         if (options?.type && options.type !== "all") {
             q = query(q, where("type", "==", options.type));

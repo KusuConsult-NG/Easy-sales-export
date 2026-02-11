@@ -88,7 +88,7 @@ export async function getActiveAnnouncementsAction(
     targetAudience: string = "all"
 ): Promise<Announcement[]> {
     try {
-        const now = FieldValue.serverTimestamp();
+        const now = new Date();
 
         const q = db.collection("announcements").where("active", "==", true);
 
