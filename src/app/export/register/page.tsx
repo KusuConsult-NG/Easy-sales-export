@@ -122,9 +122,9 @@ function ExportRegisterContent() {
                 </div>
 
                 <div className="p-6 md:p-8 lg:p-12 overflow-y-auto max-h-[90vh]">
-                    <div className="lg:hidden mb-8 text-center">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Join Export Windows</h2>
-                        <p className="text-slate-500 dark:text-slate-400">Powered by Easy Sales Export</p>
+                    <div className="lg:hidden mb-6 md:mb-8 text-center">
+                        <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">Join Export Windows</h2>
+                        <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">Powered by Easy Sales Export</p>
                     </div>
 
                     <form action={formAction} className="space-y-5">
