@@ -31,32 +31,32 @@ export default async function MarketplaceLandingPage() {
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-green-600 via-emerald-600 to-teal-600 text-white">
                 <div className="absolute inset-0 bg-black/10"></div>
-                <div className="relative max-w-7xl mx-auto px-8 py-24">
+                <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
                     <div className="max-w-3xl">
-                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-semibold mb-6">
-                            <ShoppingCart className="w-4 h-4" />
+                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-semibold mb-4 md:mb-6">
+                            <ShoppingCart className="w-3 h-3 md:w-4 md:h-4" />
                             Agricultural Marketplace
                         </div>
-                        <h1 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
+                        <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 leading-tight">
                             Digital Marketplace
                         </h1>
-                        <p className="text-xl md:text-2xl mb-4 text-green-50">
+                        <p className="text-lg md:text-xl lg:text-2xl mb-3 md:mb-4 text-green-50">
                             Buy & Sell Quality Agricultural Products
                         </p>
-                        <p className="text-lg mb-8 text-green-100 max-w-2xl">
+                        <p className="text-base md:text-lg mb-6 md:mb-8 text-green-100 max-w-2xl">
                             Connect with verified buyers and sellers across Nigeria. Trade premium agricultural commodities with confidence and security.
                         </p>
-                        <div className="flex flex-wrap gap-4">
+                        <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4">
                             <Link
                                 href="/marketplace/products"
-                                className="group inline-flex items-center gap-3 bg-white text-green-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-green-500/50 transition-all hover:scale-105"
+                                className="group inline-flex items-center justify-center gap-2 md:gap-3 bg-white text-green-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-green-500/50 transition-all hover:scale-105"
                             >
                                 Browse Products
-                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
                             </Link>
                             <Link
                                 href="/marketplace/onboarding"
-                                className="group inline-flex items-center gap-3 bg-white/10 backdrop-blur-sm border-2 border-white text-white px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/20 transition-all"
+                                className="group inline-flex items-center justify-center gap-2 md:gap-3 bg-white/10 backdrop-blur-sm border-2 border-white text-white px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg hover:bg-white/20 transition-all"
                             >
                                 Become a Seller
                             </Link>
@@ -72,23 +72,23 @@ export default async function MarketplaceLandingPage() {
             </div>
 
             {/* Stats Section */}
-            <div className="max-w-7xl mx-auto px-8 -mt-16 relative z-10">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-green-600 mb-2">5,000+</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Products Listed</div>
+            <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-16 relative z-10">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-12 md:mb-16">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">5,000+</div>
+                        <div className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-medium">Products Listed</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-green-600 mb-2">12,000+</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Active Traders</div>
+                    <div className="bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">12,000+</div>
+                        <div className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-medium">Active Traders</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-green-600 mb-2">₦2.5B+</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Total Traded</div>
+                    <div className="bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">₦2.5B+</div>
+                        <div className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-medium">Total Traded</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-green-600 mb-2">4.7/5</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Seller Rating</div>
+                    <div className="bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">4.7/5</div>
+                        <div className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-medium">Seller Rating</div>
                     </div>
                 </div>
             </div>
