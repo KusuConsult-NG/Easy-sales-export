@@ -39,7 +39,7 @@ export default function QuizPage({ params }: QuizPageProps) {
 
     useEffect(() => {
         if (status === "unauthenticated") {
-            router.push("/auth/login");
+            router.push("/academy/login");
         }
     }, [status, router]);
 

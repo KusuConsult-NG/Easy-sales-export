@@ -22,7 +22,7 @@ export default function AcademyLiveClassPage() {
                 const sessionData = await sessionResponse.json();
 
                 if (!sessionData.success || !sessionData.user) {
-                    router.push("/auth/login");
+                    router.push("/academy/login");
                     return;
                 }
 
@@ -38,7 +38,7 @@ export default function AcademyLiveClassPage() {
 
             } catch (error) {
                 console.error("Failed to fetch data:", error);
-                router.push("/auth/login");
+                router.push("/academy/login");
             } finally {
                 setIsLoading(false);
             }

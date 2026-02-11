@@ -24,7 +24,7 @@ export default function CertificatePage() {
 
         async function fetchCertificateData() {
             if (status === "unauthenticated") {
-                router.push("/auth/login");
+                router.push("/academy/login");
                 return;
             }
 

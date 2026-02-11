@@ -30,7 +30,7 @@ export default async function CooperativeMemberLayout({
 
     // Check if user is authenticated
     if (!sessionCookie) {
-        redirect("/auth/login?redirect=/cooperatives");
+        redirect("/cooperatives/login?redirect=/cooperatives");
     }
 
     let userProfile = {
@@ -63,7 +63,7 @@ export default async function CooperativeMemberLayout({
         }
     } catch (error) {
         console.error("Session verification failed:", error);
-        redirect("/auth/login?redirect=/cooperatives");
+        redirect("/cooperatives/login?redirect=/cooperatives");
     }
 
     return (

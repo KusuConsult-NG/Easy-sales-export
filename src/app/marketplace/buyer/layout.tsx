@@ -34,7 +34,7 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
     const sessionCookie = cookieStore.get("session")?.value;
 
     if (!sessionCookie) {
-        redirect("/auth/login");
+        redirect("/marketplace/login");
     }
 
     try {
@@ -56,6 +56,6 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
         return <BuyerLayoutContent>{children}</BuyerLayoutContent>;
     } catch (error) {
         console.error("Buyer access check error:", error);
-        redirect("/auth/login");
+        redirect("/marketplace/login");
     }
 }

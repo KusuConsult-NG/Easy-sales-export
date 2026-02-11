@@ -29,7 +29,7 @@ export default async function WaveMemberLayout({
 
     // Check if user is authenticated
     if (!sessionCookie) {
-        redirect("/auth/login?redirect=/wave");
+        redirect("/wave/login?redirect=/wave");
     }
 
     // Verify session and check access
@@ -44,7 +44,7 @@ export default async function WaveMemberLayout({
         }
     } catch (error) {
         console.error("Session verification failed:", error);
-        redirect("/auth/login?redirect=/wave");
+        redirect("/wave/login?redirect=/wave");
     }
 
     return (

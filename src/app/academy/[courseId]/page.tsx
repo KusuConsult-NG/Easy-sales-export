@@ -34,7 +34,7 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
 
     useEffect(() => {
         if (status === "unauthenticated") {
-            router.push("/auth/login");
+            router.push("/academy/login");
         }
     }, [status, router]);
 

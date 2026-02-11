@@ -81,10 +81,11 @@ export async function middleware(request: NextRequest) {
             const now = Date.now();
 
             if (now - lastActivityTime > SESSION_TIMEOUT_MS) {
-                // Session expired
-                const loginUrl = new URL("/auth/login", request.url);
+                // Session expired - redirect to module-specific login
+                const { getLoginUrl } = await import('@/lib/auth-redirect');
+                const loginPath = getLoginUrl(pathname, pathname);
+                const loginUrl = new URL(loginPath, request.url);
                 loginUrl.searchParams.set("error", "session_expired");
-                loginUrl.searchParams.set("callbackUrl", pathname);
 
                 const response = NextResponse.redirect(loginUrl);
                 response.cookies.delete("lastActivity");
@@ -98,10 +99,11 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith(route)
     );
 
-    // Redirect unauthenticated users to login
+    // Redirect unauthenticated users to module-specific login
     if (isProtectedRoute && !session) {
-        const loginUrl = new URL("/auth/login", request.url);
-        loginUrl.searchParams.set("callbackUrl", pathname);
+        const { getLoginUrl } = await import('@/lib/auth-redirect');
+        const loginPath = getLoginUrl(pathname, pathname);
+        const loginUrl = new URL(loginPath, request.url);
         return NextResponse.redirect(loginUrl);
     }
 

@@ -72,13 +72,13 @@ export default function MarketplaceOnboarding() {
     const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState<Partial<OnboardingData>>({});
 
-    // AUTH GATE: Redirect unauthenticated users to registration
+    // AUTH GATE: Redirect unauthenticated users to marketplace registration
     useEffect(() => {
         if (status === "loading") return; // Wait for session check
 
         if (status === "unauthenticated" || !session) {
-            // Redirect to registration with return URL
-            router.replace("/auth/register?returnUrl=/marketplace/onboarding");
+            // Redirect to marketplace-specific registration
+            router.replace("/marketplace/register?returnUrl=/marketplace/onboarding");
         }
     }, [session, status, router]);
 

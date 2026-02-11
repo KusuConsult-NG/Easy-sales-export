@@ -39,7 +39,7 @@ export default async function SellerLayout({ children }: { children: React.React
     const sessionCookie = cookieStore.get("session")?.value;
 
     if (!sessionCookie) {
-        redirect("/auth/login");
+        redirect("/marketplace/login");
     }
 
     try {
@@ -61,6 +61,6 @@ export default async function SellerLayout({ children }: { children: React.React
         return <SellerLayoutContent>{children}</SellerLayoutContent>;
     } catch (error) {
         console.error("Seller access check error:", error);
-        redirect("/auth/login");
+        redirect("/marketplace/login");
     }
 }
