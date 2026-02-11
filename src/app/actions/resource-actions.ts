@@ -3,19 +3,6 @@
 import { auth } from "@/lib/auth";
 import { db, storage } from "@/lib/firebase";
 import {
-    doc,
-    collection,
-    addDoc,
-    getDoc,
-    getDocs,
-    updateDoc,
-    query,
-    where,
-    orderBy,
-    Timestamp,
-    increment
-} from "firebase/firestore";
-import {
     ref,
     uploadBytes,
     getDownloadURL,
@@ -56,8 +43,8 @@ export async function uploadResourceAction(formData: FormData): Promise<{
         }
 
         // Check if user is admin
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
@@ -116,7 +103,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
             fileName: file.name,
             fileSize: file.size,
             fileType: file.type,
-            uploadedAt: Timestamp.now(),
+            uploadedAt: FieldValue.serverTimestamp(),
             uploadedBy: session.user.id,
             uploadedByName: session.user.name || "Unknown",
             downloads: 0,
@@ -124,7 +111,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
             isActive: true,
         };
 
-        const docRef = await addDoc(collection(db, "wave_resources"), resourceData);
+        const docRef = await db.collection("wave_resources").add(resourceData);
 
         // Create audit log
         await createAuditLog({
@@ -147,7 +134,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
 export async function getResourcesAction(category?: string): Promise<WaveResource[]> {
     try {
         let q = query(
-            collection(db, "wave_resources"),
+            db.collection("wave_resources"),
             where("isActive", "==", true),
             orderBy("uploadedAt", "desc")
         );
@@ -183,17 +170,17 @@ export async function downloadResourceAction(resourceId: string): Promise<{
             return { success: false, error: "Authentication required" };
         }
 
-        const resourceRef = doc(db, "wave_resources", resourceId);
+        const resourceRef = db.collection("wave_resources").doc(resourceId);
         const resourceDoc = await getDoc(resourceRef);
 
-        if (!resourceDoc.exists()) {
+        if (!resourceDoc.exists) {
             return { success: false, error: "Resource not found" };
         }
 
         const resource = resourceDoc.data() as WaveResource;
 
         // Increment download count
-        await updateDoc(resourceRef, {
+        await resourceRef.update({
             downloads: increment(1),
         });
 
@@ -227,15 +214,15 @@ export async function deleteResourceAction(resourceId: string): Promise<{
         }
 
         // Check if user is admin
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
-        const resourceRef = doc(db, "wave_resources", resourceId);
+        const resourceRef = db.collection("wave_resources").doc(resourceId);
 
         // Soft delete
-        await updateDoc(resourceRef, {
+        await resourceRef.update({
             isActive: false,
         });
 
@@ -274,14 +261,14 @@ export async function updateResourceAction(
         }
 
         // Check if user is admin
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
-        const resourceRef = doc(db, "wave_resources", resourceId);
+        const resourceRef = db.collection("wave_resources").doc(resourceId);
 
-        await updateDoc(resourceRef, {
+        await resourceRef.update({
             title,
             description,
             tags: tags ? tags.split(",").map(t => t.trim()) : [],

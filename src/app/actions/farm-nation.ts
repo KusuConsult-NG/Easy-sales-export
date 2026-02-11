@@ -1,20 +1,8 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    addDoc,
-    updateDoc,
-    query,
-    where,
-    orderBy,
-    Timestamp,
-    serverTimestamp,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -83,7 +71,7 @@ export async function getPropertiesAction(filters?: {
     maxSize?: number;
 }) {
     try {
-        const propertiesRef = collection(db, COLLECTIONS.FARM_NATION_PROPERTIES);
+        const propertiesRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES);
         const q = query(propertiesRef, where("status", "in", ["available", "pending"]), orderBy("createdAt", "desc"));
 
         const snapshot = await getDocs(q);
@@ -131,15 +119,15 @@ export async function getPropertiesAction(filters?: {
  */
 export async function getPropertyByIdAction(propertyId: string) {
     try {
-        const propertyRef = doc(db, COLLECTIONS.FARM_NATION_PROPERTIES, propertyId);
+        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         const propertyDoc = await getDoc(propertyRef);
 
-        if (!propertyDoc.exists()) {
+        if (!propertyDoc.exists) {
             return { success: false, error: "Property not found" };
         }
 
         // Increment view count
-        await updateDoc(propertyRef, {
+        await propertyRef.update({
             viewCount: (propertyDoc.data().viewCount || 0) + 1,
         });
 
@@ -170,10 +158,10 @@ export async function listPropertyAction(input: PropertyListingInput) {
         }
 
         // Check user tier (Premium required)
-        const userRef = doc(db, COLLECTIONS.USERS, session.user.id);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
         const userDoc = await getDoc(userRef);
 
-        if (!userDoc.exists()) {
+        if (!userDoc.exists) {
             return { success: false, error: "User not found" };
         }
 
@@ -208,11 +196,11 @@ export async function listPropertyAction(input: PropertyListingInput) {
             documents: {},
             viewCount: 0,
             favoriteCount: 0,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await addDoc(collection(db, COLLECTIONS.FARM_NATION_PROPERTIES), property);
+        const docRef = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).add(property);
 
         return {
             success: true,
@@ -235,7 +223,7 @@ export async function getMyPropertiesAction() {
             return { success: false, error: "Unauthorized" };
         }
 
-        const propertiesRef = collection(db, COLLECTIONS.FARM_NATION_PROPERTIES);
+        const propertiesRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES);
         const q = query(
             propertiesRef,
             where("ownerId", "==", session.user.id),
@@ -276,10 +264,10 @@ export async function initiatePropertyPurchaseAction(
         }
 
         // Verify property exists and is available
-        const propertyRef = doc(db, COLLECTIONS.FARM_NATION_PROPERTIES, propertyId);
+        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         const propertyDoc = await getDoc(propertyRef);
 
-        if (!propertyDoc.exists()) {
+        if (!propertyDoc.exists) {
             return { success: false, error: "Property not found" };
         }
 
@@ -289,10 +277,10 @@ export async function initiatePropertyPurchaseAction(
         }
 
         // Check user tier
-        const userRef = doc(db, COLLECTIONS.USERS, session.user.id);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
         const userDoc = await getDoc(userRef);
 
-        if (!userDoc.exists()) {
+        if (!userDoc.exists) {
             return { success: false, error: "User not found" };
         }
 
@@ -320,19 +308,18 @@ export async function initiatePropertyPurchaseAction(
             status: "pending_payment",
             escrowAmount: property.price,
             escrowStatus: "pending",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
-        const requestRef = await addDoc(
-            collection(db, COLLECTIONS.FARM_NATION_TRANSACTIONS),
-            purchaseRequest
+        const requestRef = await 
+            db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).add(purchaseRequest
         );
 
         // Mark property as pending
-        await updateDoc(propertyRef, {
+        await propertyRef.update({
             status: "pending",
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -357,7 +344,7 @@ export async function getMyPurchaseRequestsAction() {
             return { success: false, error: "Unauthorized" };
         }
 
-        const requestsRef = collection(db, COLLECTIONS.FARM_NATION_TRANSACTIONS);
+        const requestsRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS);
         const q = query(
             requestsRef,
             where("buyerId", "==", session.user.id),

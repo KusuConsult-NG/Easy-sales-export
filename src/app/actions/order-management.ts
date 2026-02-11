@@ -5,17 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-    updateDoc,
-    doc,
-    orderBy,
-    getDoc,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
@@ -36,7 +26,7 @@ export async function getSellerOrdersAction(filters?: {
         const userId = session.user.id;
 
         // Verify user is a seller
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
 
         if (!hasRole(userData?.roles || [], "seller")) {
@@ -45,7 +35,7 @@ export async function getSellerOrdersAction(filters?: {
 
         // Build query
         let q = query(
-            collection(db, COLLECTIONS.ORDERS),
+            db.collection(COLLECTIONS.ORDERS),
             where("sellerId", "==", userId),
             orderBy("createdAt", "desc")
         );
@@ -87,9 +77,9 @@ export async function updateOrderStatusAction(
         const userId = session.user.id;
 
         // Get order
-        const orderDoc = await getDoc(doc(db, COLLECTIONS.ORDERS, orderId));
+        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
 
-        if (!orderDoc.exists()) {
+        if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
         }
 
@@ -118,7 +108,7 @@ export async function updateOrderStatusAction(
             updateData.deliveredAt = new Date();
         }
 
-        await updateDoc(doc(db, COLLECTIONS.ORDERS, orderId), updateData);
+        await db.collection(COLLECTIONS.ORDERS).doc(orderId).update(updateData);
 
         return { success: true };
     } catch (error: any) {
@@ -144,7 +134,7 @@ export async function getBuyerOrdersAction(filters?: {
 
         // Build query
         let q = query(
-            collection(db, COLLECTIONS.ORDERS),
+            db.collection(COLLECTIONS.ORDERS),
             where("buyerId", "==", userId),
             orderBy("createdAt", "desc")
         );
@@ -182,9 +172,9 @@ export async function confirmDeliveryAction(orderId: string) {
         const userId = session.user.id;
 
         // Get order
-        const orderDoc = await getDoc(doc(db, COLLECTIONS.ORDERS, orderId));
+        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
 
-        if (!orderDoc.exists()) {
+        if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
         }
 
@@ -201,7 +191,7 @@ export async function confirmDeliveryAction(orderId: string) {
         }
 
         // Update order
-        await updateDoc(doc(db, COLLECTIONS.ORDERS, orderId), {
+        await db.collection(COLLECTIONS.ORDERS).doc(orderId).update({
             buyerConfirmed: true,
             buyerConfirmedAt: new Date(),
             status: "completed",

@@ -5,18 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-    getDoc,
-    addDoc,
-    updateDoc,
-    doc,
-    orderBy,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
@@ -45,8 +34,8 @@ export async function createDisputeAction(params: {
         }
 
         // Get order and verify ownership
-        const orderDoc = await getDoc(doc(db, COLLECTIONS.ORDERS, orderId));
-        if (!orderDoc.exists()) {
+        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
+        if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
         }
 
@@ -66,7 +55,7 @@ export async function createDisputeAction(params: {
 
         // Check if dispute already exists for this order
         const existingDisputeQuery = query(
-            collection(db, COLLECTIONS.DISPUTES),
+            db.collection(COLLECTIONS.DISPUTES),
             where("orderId", "==", orderId),
             where("status", "in", ["open", "under_review"])
         );
@@ -88,10 +77,10 @@ export async function createDisputeAction(params: {
             updatedAt: new Date(),
         };
 
-        const disputeRef = await addDoc(collection(db, COLLECTIONS.DISPUTES), disputeData);
+        const disputeRef = await db.collection(COLLECTIONS.DISPUTES).add(disputeData);
 
         // Update order status
-        await updateDoc(doc(db, COLLECTIONS.ORDERS, orderId), {
+        await db.collection(COLLECTIONS.ORDERS).doc(orderId).update({
             status: "disputed",
             disputeId: disputeRef.id,
             updatedAt: new Date(),
@@ -116,7 +105,7 @@ export async function getBuyerDisputesAction() {
         const userId = session.user.id;
 
         const q = query(
-            collection(db, COLLECTIONS.DISPUTES),
+            db.collection(COLLECTIONS.DISPUTES),
             where("buyerId", "==", userId),
             orderBy("createdAt", "desc")
         );
@@ -152,7 +141,7 @@ export async function getSellerDisputesAction() {
         const userId = session.user.id;
 
         const q = query(
-            collection(db, COLLECTIONS.DISPUTES),
+            db.collection(COLLECTIONS.DISPUTES),
             where("sellerId", "==", userId),
             orderBy("createdAt", "desc")
         );
@@ -190,20 +179,20 @@ export async function getAdminDisputesAction(filters?: {
         const userId = session.user.id;
 
         // Verify admin role
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
             return { success: false, error: "Not authorized as admin" };
         }
 
         let q = query(
-            collection(db, COLLECTIONS.DISPUTES),
+            db.collection(COLLECTIONS.DISPUTES),
             orderBy("createdAt", "desc")
         );
 
         if (filters?.status) {
             q = query(
-                collection(db, COLLECTIONS.DISPUTES),
+                db.collection(COLLECTIONS.DISPUTES),
                 where("status", "==", filters.status),
                 orderBy("createdAt", "desc")
             );
@@ -239,15 +228,15 @@ export async function getDisputeByIdAction(disputeId: string) {
         }
         const userId = session.user.id;
 
-        const disputeDoc = await getDoc(doc(db, COLLECTIONS.DISPUTES, disputeId));
-        if (!disputeDoc.exists()) {
+        const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();
+        if (!disputeDoc.exists) {
             return { success: false, error: "Dispute not found" };
         }
 
         const dispute = disputeDoc.data() as Dispute;
 
         // Check authorization
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         const isAdmin = hasRole(userData?.roles || [], "admin");
         const isBuyer = dispute.buyerId === userId;
@@ -289,15 +278,15 @@ export async function updateDisputeStatusAction(
         const userId = session.user.id;
 
         // Verify admin role
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
             return { success: false, error: "Not authorized as admin" };
         }
 
         // Get dispute
-        const disputeDoc = await getDoc(doc(db, COLLECTIONS.DISPUTES, disputeId));
-        if (!disputeDoc.exists()) {
+        const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();
+        if (!disputeDoc.exists) {
             return { success: false, error: "Dispute not found" };
         }
 
@@ -317,11 +306,11 @@ export async function updateDisputeStatusAction(
             updateData.refundAmount = refundAmount;
         }
 
-        await updateDoc(doc(db, COLLECTIONS.DISPUTES, disputeId), updateData);
+        await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).update(updateData);
 
         // Update order status based on resolution
-        const orderDoc = await getDoc(doc(db, COLLECTIONS.ORDERS, dispute.orderId));
-        if (orderDoc.exists()) {
+        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(dispute.orderId).get();
+        if (orderDoc.exists) {
             let newOrderStatus: string;
 
             if (resolution === "refund_buyer") {
@@ -332,7 +321,7 @@ export async function updateDisputeStatusAction(
                 newOrderStatus = "completed"; // partial refund still completes order
             }
 
-            await updateDoc(doc(db, COLLECTIONS.ORDERS, dispute.orderId), {
+            await db.collection(COLLECTIONS.ORDERS).doc(dispute.orderId).update({
                 status: newOrderStatus,
                 updatedAt: new Date(),
             });

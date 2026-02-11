@@ -45,9 +45,9 @@ export async function initializeEnrollmentPaymentAction(
 
         // Check if already enrolled
         const enrollmentId = `${session.user.id}_${courseId}`;
-        const existingEnrollment = await getDoc(doc(db, COLLECTIONS.ENROLLMENTS, enrollmentId));
+        const existingEnrollment = await db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId).get();
 
-        if (existingEnrollment.exists()) {
+        if (existingEnrollment.exists) {
             return { error: "You are already enrolled in this course", success: false };
         }
 
@@ -67,7 +67,7 @@ export async function initializeEnrollmentPaymentAction(
         );
 
         // Save pending enrollment with payment reference
-        await setDoc(doc(db, COLLECTIONS.ENROLLMENTS, enrollmentId), {
+        await db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId).set({
             userId: session.user.id,
             courseId,
             fullName,
@@ -77,8 +77,8 @@ export async function initializeEnrollmentPaymentAction(
             paymentReference: reference,
             status: "pending_payment", // pending_payment | active | completed | dropped
             progress: 0,
-            enrollmentDate: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            enrollmentDate: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -114,10 +114,10 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = doc(db, "processedPayments", reference);
-        const existingPayment = await getDoc(processedRef);
+        const processedRef = db.collection("processedPayments").doc(reference);
+        const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists()) {
+        if (existingPayment.exists) {
             return {
                 error: "Payment has already been processed",
                 success: false
@@ -150,21 +150,21 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         }
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
-        await runTransaction(db, async (transaction) => {
+        await db.runTransaction(async (transaction) => {
             // Update enrollment status
-            const enrollmentRef = doc(db, COLLECTIONS.ENROLLMENTS, enrollmentId);
+            const enrollmentRef = db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId);
             transaction.update(enrollmentRef, {
                 status: "active",
                 paymentStatus: "paid",
-                paymentVerifiedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+                paymentVerifiedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
 
             // Increment course student count
-            const courseRef = doc(db, COLLECTIONS.COURSES, metadata.courseId);
+            const courseRef = db.collection(COLLECTIONS.COURSES).doc(metadata.courseId);
             const courseSnap = await transaction.get(courseRef);
-            if (courseSnap.exists()) {
-                const currentStudents = courseSnap.data().students || 0;
+            if (courseSnap.exists) {
+                const currentStudents = courseSnap.data()!.students || 0;
                 transaction.update(courseRef, {
                     students: currentStudents + 1,
                 });
@@ -172,7 +172,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
 
             // Mark payment as processed
             transaction.set(processedRef, {
-                processedAt: serverTimestamp(),
+                processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
                 amount: amountInNaira,
                 type: "academy_enrollment",

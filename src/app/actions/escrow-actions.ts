@@ -1,19 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    addDoc,
-    updateDoc,
-    doc,
-    getDoc,
-    query,
-    where,
-    getDocs,
-    orderBy,
-    Timestamp,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";
@@ -37,7 +25,7 @@ export async function getUserEscrowTransactions(): Promise<{ success: boolean; t
 
         // Query transactions where user is buyer OR seller
         const q = query(
-            collection(db, COLLECTIONS.ESCROW_TRANSACTIONS),
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS),
             where("participants", "array-contains", userId),
             orderBy("createdAt", "desc")
         );
@@ -95,10 +83,10 @@ export async function updateEscrowStatus(
         escrowStatusSchema.parse(status);
 
         // Get transaction
-        const txRef = doc(db, COLLECTIONS.ESCROW_TRANSACTIONS, transactionId);
+        const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
         const txDoc = await getDoc(txRef);
 
-        if (!txDoc.exists()) {
+        if (!txDoc.exists) {
             return { success: false, error: "Transaction not found" };
         }
 
@@ -129,7 +117,7 @@ export async function updateEscrowStatus(
         }
 
         // Update status
-        await updateDoc(txRef, {
+        await txRef.update({
             status,
             updatedAt: new Date(),
             [`${status}At`]: new Date(), // e.g., deliveredAt, completedAt
@@ -169,10 +157,10 @@ export async function createEscrowDispute(
         }
 
         // Get transaction
-        const txRef = doc(db, COLLECTIONS.ESCROW_TRANSACTIONS, transactionId);
+        const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
         const txDoc = await getDoc(txRef);
 
-        if (!txDoc.exists()) {
+        if (!txDoc.exists) {
             return { success: false, error: "Transaction not found" };
         }
 
@@ -195,7 +183,7 @@ export async function createEscrowDispute(
 
         // Check for existing active dispute
         const existingDisputeQuery = query(
-            collection(db, COLLECTIONS.DISPUTES),
+            db.collection(COLLECTIONS.DISPUTES),
             where("orderId", "==", transactionId),
             where("status", "in", ["open", "under_review"])
         );
@@ -218,10 +206,10 @@ export async function createEscrowDispute(
             updatedAt: new Date(),
         };
 
-        const disputeRef = await addDoc(collection(db, COLLECTIONS.DISPUTES), disputeData);
+        const disputeRef = await db.collection(COLLECTIONS.DISPUTES).add(disputeData);
 
         // Update transaction status
-        await updateDoc(txRef, {
+        await txRef.update({
             status: "disputed",
             disputeId: disputeRef.id,
             updatedAt: new Date(),
@@ -255,10 +243,10 @@ export async function releaseEscrowFunds(
         const userId = session.user.id;
 
         // Get transaction
-        const txRef = doc(db, COLLECTIONS.ESCROW_TRANSACTIONS, transactionId);
+        const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
         const txDoc = await getDoc(txRef);
 
-        if (!txDoc.exists()) {
+        if (!txDoc.exists) {
             return { success: false, error: "Transaction not found" };
         }
 
@@ -300,10 +288,10 @@ export async function releaseEscrowFunds(
             },
         };
 
-        await addDoc(collection(db, "paymentInstructions"), paymentInstructionData);
+        await db.collection("paymentInstructions").add(paymentInstructionData);
 
         // Update escrow status
-        await updateDoc(txRef, {
+        await txRef.update({
             status: "completed",
             releasedAt: new Date(),
             releasedBy: userId,
@@ -354,10 +342,10 @@ export async function refundEscrowToBuyer(
         const userId = session.user.id;
 
         // Get transaction
-        const txRef = doc(db, COLLECTIONS.ESCROW_TRANSACTIONS, transactionId);
+        const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
         const txDoc = await getDoc(txRef);
 
-        if (!txDoc.exists()) {
+        if (!txDoc.exists) {
             return { success: false, error: "Transaction not found" };
         }
 
@@ -395,10 +383,10 @@ export async function refundEscrowToBuyer(
             },
         };
 
-        await addDoc(collection(db, "paymentInstructions"), refundInstructionData);
+        await db.collection("paymentInstructions").add(refundInstructionData);
 
         // Update escrow status
-        await updateDoc(txRef, {
+        await txRef.update({
             status: "cancelled",
             refundedAt: new Date(),
             refundedBy: userId,

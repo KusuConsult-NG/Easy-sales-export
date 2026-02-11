@@ -6,19 +6,8 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    getDocs,
-    getDoc,
-    doc,
-    query,
-    where,
-    orderBy,
-    updateDoc,
-    Timestamp,
-    limit,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 // ============================================================================
 // ADMIN DASHBOARD STATS
@@ -48,13 +37,13 @@ export async function getCooperativeStatsAction(): Promise<{
         }
 
         // Check admin role
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
         // Get all members
-        const membersSnap = await getDocs(collection(db, "cooperative_members"));
+        const membersSnap = await db.collection("cooperative_members").get();
         const members = membersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         const totalMembers = members.length;
@@ -63,7 +52,7 @@ export async function getCooperativeStatsAction(): Promise<{
         const suspendedMembers = members.filter((m: any) => m.membershipStatus === "suspended").length;
 
         // Get all transactions
-        const transactionsSnap = await getDocs(collection(db, "cooperative_transactions"));
+        const transactionsSnap = await db.collection("cooperative_transactions").get();
         const transactions = transactionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         // Calculate contribution totals
@@ -86,7 +75,7 @@ export async function getCooperativeStatsAction(): Promise<{
             .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
         // Get all loans
-        const loansSnap = await getDocs(collection(db, "cooperative_loans"));
+        const loansSnap = await db.collection("cooperative_loans").get();
         const loans = loansSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         const totalLoans = loans.reduce((sum: number, l: any) => sum + (l.amount || 0), 0);
@@ -157,12 +146,12 @@ export async function getAllMembersAction(options?: {
         }
 
         // Check admin role
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = query(collection(db, "cooperative_members"), orderBy("createdAt", "desc"));
+        let q = query(db.collection("cooperative_members"), orderBy("createdAt", "desc"));
 
         if (options?.status && options.status !== "all") {
             q = query(q, where("membershipStatus", "==", options.status));
@@ -196,14 +185,14 @@ export async function updateMemberStatusAction(
         }
 
         // Check admin role
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
-        await updateDoc(doc(db, "cooperative_members", memberId), {
+        await db.collection("cooperative_members").doc(memberId).update({
             membershipStatus: status,
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return { success: true };
@@ -233,12 +222,12 @@ export async function getAllTransactionsAction(options?: {
         }
 
         // Check admin role
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = query(collection(db, "cooperative_transactions"), orderBy("date", "desc"));
+        let q = query(db.collection("cooperative_transactions"), orderBy("date", "desc"));
 
         if (options?.type && options.type !== "all") {
             q = query(q, where("type", "==", options.type));
@@ -290,15 +279,15 @@ export async function getContributionReportsAction(options?: {
         }
 
         // Check admin role
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
         // Get all contributions
         const transactionsSnap = await getDocs(
             query(
-                collection(db, "cooperative_transactions"),
+                db.collection("cooperative_transactions"),
                 where("type", "==", "contribution"),
                 where("status", "==", "completed")
             )
@@ -392,14 +381,14 @@ export async function getRecentActivityAction(): Promise<{
         }
 
         // Check admin role
-        const userDoc = await getDoc(doc(db, "users", session.user.id));
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const userDoc = await db.collection("users").doc(session.user.id).get();
+        if (!userDoc.exists || userDoc.data().role !== "admin") {
             return { success: false, error: "Unauthorized" };
         }
 
         // Get recent transactions
         const transactionsSnap = await getDocs(
-            query(collection(db, "cooperative_transactions"), orderBy("date", "desc"), limit(10))
+            query(db.collection("cooperative_transactions"), orderBy("date", "desc"), limit(10))
         );
 
         const activities = transactionsSnap.docs.map((doc) => {

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 
@@ -84,7 +85,7 @@ export interface LiveSession {
  */
 export async function getCoursesAction(): Promise<Course[]> {
     try {
-        const snapshot = await getDocs(collection(db, "academy_courses"));
+        const snapshot = await db.collection("academy_courses").get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -101,9 +102,9 @@ export async function getCoursesAction(): Promise<Course[]> {
  */
 export async function getCourseByIdAction(courseId: string): Promise<Course | null> {
     try {
-        const courseDoc = await getDoc(doc(db, "academy_courses", courseId));
+        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
 
-        if (!courseDoc.exists()) {
+        if (!courseDoc.exists) {
             return null;
         }
 
@@ -134,7 +135,7 @@ export async function enrollInCourseAction(
         const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
         const progressDoc = await getDoc(progressRef);
 
-        if (progressDoc.exists()) {
+        if (progressDoc.exists) {
             return { success: false, error: "Already enrolled in this course" };
         }
 
@@ -145,8 +146,8 @@ export async function enrollInCourseAction(
             completedModules: [],
             quizScores: {},
             overallProgress: 0,
-            startedAt: Timestamp.now(),
-            lastAccessedAt: Timestamp.now(),
+            startedAt: FieldValue.serverTimestamp(),
+            lastAccessedAt: FieldValue.serverTimestamp(),
         };
 
         await setDoc(progressRef, progress);
@@ -182,7 +183,7 @@ export async function completeLessonAction(
         const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
         const progressDoc = await getDoc(progressRef);
 
-        if (!progressDoc.exists()) {
+        if (!progressDoc.exists) {
             return { success: false, error: "Not enrolled in this course" };
         }
 
@@ -190,18 +191,18 @@ export async function completeLessonAction(
 
         if (!progress.completedLessons.includes(lessonId)) {
             progress.completedLessons.push(lessonId);
-            progress.lastAccessedAt = Timestamp.now();
+            progress.lastAccessedAt = FieldValue.serverTimestamp();
 
             // Calculate overall progress
-            const courseDoc = await getDoc(doc(db, "academy_courses", courseId));
-            if (courseDoc.exists()) {
+            const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+            if (courseDoc.exists) {
                 const course = courseDoc.data() as Course;
                 const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
                 progress.overallProgress = Math.round((progress.completedLessons.length / totalLessons) * 100);
 
                 // Check if course is complete
                 if (progress.completedLessons.length === totalLessons) {
-                    progress.completedAt = Timestamp.now();
+                    progress.completedAt = FieldValue.serverTimestamp();
                 }
             }
 
@@ -233,17 +234,17 @@ export async function submitQuizScoreAction(
         const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
         const progressDoc = await getDoc(progressRef);
 
-        if (!progressDoc.exists()) {
+        if (!progressDoc.exists) {
             return { success: false, error: "Not enrolled in this course" };
         }
 
         const progress = progressDoc.data() as UserProgress;
         progress.quizScores[moduleId] = score;
-        progress.lastAccessedAt = Timestamp.now();
+        progress.lastAccessedAt = FieldValue.serverTimestamp();
 
         // Check if module is complete (quiz passed)
-        const courseDoc = await getDoc(doc(db, "academy_courses", courseId));
-        if (courseDoc.exists()) {
+        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        if (courseDoc.exists) {
             const course = courseDoc.data() as Course;
             const module = course.modules.find((m) => m.id === moduleId);
 
@@ -272,9 +273,9 @@ export async function getUserProgressAction(
     courseId: string
 ): Promise<UserProgress | null> {
     try {
-        const progressDoc = await getDoc(doc(db, `user_progress/${userId}/courses/${courseId}`));
+        const progressDoc = await db.collection(`user_progress/${userId}/courses/${courseId}`).get();
 
-        if (!progressDoc.exists()) {
+        if (!progressDoc.exists) {
             return null;
         }
 
@@ -316,7 +317,7 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
         }
 
         // Fetch all course progress records
-        const progressQuery = query(collection(db, `user_progress/${userId}/courses`));
+        const progressQuery = db.collection(`user_progress/${userId}/courses`);
         const snapshot = await getDocs(progressQuery);
         const enrolledCourses = snapshot.docs.map(doc => doc.data() as UserProgress);
 
@@ -327,8 +328,8 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
         // Calculate total lessons across all enrolled courses
         let totalLessons = 0;
         for (const progress of enrolledCourses) {
-            const courseDoc = await getDoc(doc(db, "academy_courses", progress.courseId));
-            if (courseDoc.exists()) {
+            const courseDoc = await db.collection("academy_courses").doc(progress.courseId).get();
+            if (courseDoc.exists) {
                 const course = courseDoc.data() as Course;
                 totalLessons += course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
             }
@@ -368,13 +369,13 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
  */
 export async function getLiveSessionsAction(courseId?: string): Promise<LiveSession[]> {
     try {
-        let q = query(collection(db, "academy_live_sessions"));
+        let q = db.collection("academy_live_sessions");
 
         if (courseId) {
-            q = query(q, where("courseId", "==", courseId));
+            q = q.where("courseId", "==", courseId);
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -428,12 +429,12 @@ export async function submitAcademyApplicationAction(
         const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         // Save to Firestore
-        await setDoc(doc(db, "ACADEMY_APPLICATIONS", applicationId), {
+        await db.collection("ACADEMY_APPLICATIONS").doc(applicationId).set({
             ...applicationData,
             userId: session.user.id,
             applicationId,
             status: "pending",
-            submittedAt: Timestamp.now(),
+            submittedAt: FieldValue.serverTimestamp(),
             reviewedAt: null,
             reviewedBy: null,
             notes: "",
@@ -466,11 +467,11 @@ export async function createCourseAction(data: Partial<Course>): Promise<{ succe
             return { success: false, error: "Unauthorized" };
         }
 
-        const docRef = await addDoc(collection(db, "academy_courses"), {
+        const docRef = await db.collection("academy_courses").add({
             ...data,
             instructorId: session.user.id, // Ensure instructor is linked
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
             modules: [],
             status: "draft",
         });
@@ -496,9 +497,9 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
             return { success: false, error: "Unauthorized" };
         }
 
-        await updateDoc(doc(db, "academy_courses", courseId), {
+        await db.collection("academy_courses").doc(courseId).update({
             ...data,
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await createAuditLog({
@@ -523,9 +524,9 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
             return { success: false, error: "Unauthorized" };
         }
 
-        await updateDoc(doc(db, "academy_courses", courseId), {
+        await db.collection("academy_courses").doc(courseId).update({
             modules,
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await createAuditLog({

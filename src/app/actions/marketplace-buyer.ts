@@ -6,17 +6,7 @@
 
 "use server";
 
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    getDocs,
-    query,
-    where,
-    orderBy,
-    limit,
-    getDoc,
-    doc
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
 
@@ -38,7 +28,7 @@ export interface ProductFilters {
 export async function getProductsAction(filters?: ProductFilters) {
     try {
         let productsQuery = query(
-            collection(db, COLLECTIONS.PRODUCTS),
+            db.collection(COLLECTIONS.PRODUCTS),
             where("status", "==", "active")
         );
 
@@ -100,9 +90,9 @@ export async function getProductsAction(filters?: ProductFilters) {
  */
 export async function getProductByIdAction(productId: string) {
     try {
-        const productDoc = await getDoc(doc(db, COLLECTIONS.PRODUCTS, productId));
+        const productDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
 
-        if (!productDoc.exists()) {
+        if (!productDoc.exists) {
             return { success: false, error: "Product not found" };
         }
 
@@ -121,7 +111,7 @@ export async function getProductByIdAction(productId: string) {
 export async function getFeaturedProductsAction() {
     try {
         const productsQuery = query(
-            collection(db, COLLECTIONS.PRODUCTS),
+            db.collection(COLLECTIONS.PRODUCTS),
             where("status", "==", "active"),
             orderBy("orders", "desc"),
             limit(8)
@@ -143,7 +133,7 @@ export async function getFeaturedProductsAction() {
 export async function getProductsByCategoryAction(category: string) {
     try {
         const productsQuery = query(
-            collection(db, COLLECTIONS.PRODUCTS),
+            db.collection(COLLECTIONS.PRODUCTS),
             where("status", "==", "active"),
             where("category", "==", category)
         );

@@ -1,17 +1,7 @@
 "use server";
 
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
 import { auth } from "@/lib/auth";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-    doc,
-    setDoc,
-    orderBy,
-    Timestamp
-} from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 export type ExportOpportunity = {
@@ -34,7 +24,7 @@ export type ExportOpportunity = {
 export async function getExportOpportunities() {
     try {
         const q = query(
-            collection(db, "export_opportunities"),
+            db.collection("export_opportunities"),
             orderBy("createdAt", "desc")
         );
 
@@ -151,8 +141,8 @@ export async function seedExportOpportunities() {
 
     try {
         const promises = opportunities.map(async (opp) => {
-            const docRef = doc(collection(db, "export_opportunities"));
-            await setDoc(docRef, opp);
+            const docRef = doc(db.collection("export_opportunities"));
+            await docRef.set(opp);
         });
 
         await Promise.all(promises);
@@ -168,11 +158,11 @@ export async function seedExportOpportunities() {
  */
 export async function getExportOpportunityById(id: string) {
     try {
-        const docRef = doc(db, "export_opportunities", id);
+        const docRef = db.collection("export_opportunities").doc(id);
         // Correct way to get document
         const snapshot = await import("firebase/firestore").then(fs => fs.getDoc(docRef));
 
-        if (!snapshot.exists()) {
+        if (!snapshot.exists) {
             return { success: false, error: "Opportunity not found" };
         }
 

@@ -5,15 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    addDoc,
-    updateDoc,
-    doc,
-    getDoc,
-    serverTimestamp,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, Product } from "@/lib/types/marketplace";
 
@@ -55,9 +47,9 @@ export async function createOrderAction(
         // Fetch product details for all items
         const orderItems = await Promise.all(
             items.map(async (item) => {
-                const productDoc = await getDoc(doc(db, COLLECTIONS.PRODUCTS, item.productId));
+                const productDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(item.productId).get();
 
-                if (!productDoc.exists()) {
+                if (!productDoc.exists) {
                     throw new Error(`Product ${item.productId} not found`);
                 }
 
@@ -85,8 +77,8 @@ export async function createOrderAction(
         const total = subtotal + deliveryFee;
 
         // Get seller ID from first product (multi-vendor orders handled separately later)
-        const firstProduct = await getDoc(doc(db, COLLECTIONS.PRODUCTS, items[0].productId));
-        const sellerId = firstProduct.exists() ? (firstProduct.data() as Product).sellerId : "";
+        const firstProduct = await db.collection(COLLECTIONS.PRODUCTS).doc(items[0].productId).get();
+        const sellerId = firstProduct.exists ? (firstProduct.data() as Product).sellerId : "";
 
         // Create order document
         const orderData: Partial<Order> = {
@@ -112,11 +104,11 @@ export async function createOrderAction(
             updatedAt: new Date(),
         };
 
-        const orderRef = await addDoc(collection(db, COLLECTIONS.ORDERS), orderData);
+        const orderRef = await db.collection(COLLECTIONS.ORDERS).add(orderData);
         const orderId = orderRef.id;
 
         // Update order with ID
-        await updateDoc(orderRef, { id: orderId });
+        await orderRef.update({ id: orderId });
 
         // In production, initialize Paystack payment here
         // For now, return success with orderId
@@ -146,9 +138,9 @@ export async function getOrderByIdAction(orderId: string) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const orderDoc = await getDoc(doc(db, COLLECTIONS.ORDERS, orderId));
+        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
 
-        if (!orderDoc.exists()) {
+        if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
         }
 
@@ -181,9 +173,9 @@ export async function updateOrderPaymentAction(
             return { success: false, error: "Not authenticated" };
         }
 
-        const orderDoc = await getDoc(doc(db, COLLECTIONS.ORDERS, orderId));
+        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
 
-        if (!orderDoc.exists()) {
+        if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
         }
 
@@ -193,7 +185,7 @@ export async function updateOrderPaymentAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        await updateDoc(doc(db, COLLECTIONS.ORDERS, orderId), {
+        await db.collection(COLLECTIONS.ORDERS).doc(orderId).update({
             paymentStatus: paymentStatus === "success" ? "paid" : "failed",
             paymentReference,
             status: paymentStatus === "success" ? "confirmed" : "cancelled",

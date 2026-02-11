@@ -5,19 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-    getDoc,
-    addDoc,
-    updateDoc,
-    doc,
-    orderBy,
-    limit,
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { ProductReview, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
@@ -56,8 +44,8 @@ export async function createReviewAction(params: {
         }
 
         // Get order and verify
-        const orderDoc = await getDoc(doc(db, COLLECTIONS.ORDERS, orderId));
-        if (!orderDoc.exists()) {
+        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
+        if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
         }
 
@@ -81,7 +69,7 @@ export async function createReviewAction(params: {
 
         // Check if already reviewed this product from this order
         const existingReviewQuery = query(
-            collection(db, COLLECTIONS.PRODUCT_REVIEWS),
+            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
             where("userId", "==", userId),
             where("productId", "==", productId),
             where("orderId", "==", orderId)
@@ -105,7 +93,7 @@ export async function createReviewAction(params: {
             createdAt: new Date(),
         };
 
-        await addDoc(collection(db, COLLECTIONS.PRODUCT_REVIEWS), reviewData);
+        await db.collection(COLLECTIONS.PRODUCT_REVIEWS).add(reviewData);
 
         return { success: true };
     } catch (error: any) {
@@ -126,7 +114,7 @@ export async function getProductReviewsAction(
 ) {
     try {
         let q = query(
-            collection(db, COLLECTIONS.PRODUCT_REVIEWS),
+            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
             where("productId", "==", productId),
             where("status", "==", "approved"),
             orderBy("createdAt", "desc"),
@@ -135,7 +123,7 @@ export async function getProductReviewsAction(
 
         if (filters?.rating) {
             q = query(
-                collection(db, COLLECTIONS.PRODUCT_REVIEWS),
+                db.collection(COLLECTIONS.PRODUCT_REVIEWS),
                 where("productId", "==", productId),
                 where("status", "==", "approved"),
                 where("rating", "==", filters.rating),
@@ -177,7 +165,7 @@ export async function getUserReviewsAction() {
         const userId = session.user.id;
 
         const q = query(
-            collection(db, COLLECTIONS.PRODUCT_REVIEWS),
+            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
             where("userId", "==", userId),
             orderBy("createdAt", "desc")
         );
@@ -227,8 +215,8 @@ export async function updateReviewAction(
         }
 
         // Get review
-        const reviewDoc = await getDoc(doc(db, COLLECTIONS.PRODUCT_REVIEWS, reviewId));
-        if (!reviewDoc.exists()) {
+        const reviewDoc = await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId).get();
+        if (!reviewDoc.exists) {
             return { success: false, error: "Review not found" };
         }
 
@@ -248,7 +236,7 @@ export async function updateReviewAction(
         }
 
         // Update review
-        await updateDoc(doc(db, COLLECTIONS.PRODUCT_REVIEWS, reviewId), {
+        await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId).update({
             rating,
             comment: comment.trim(),
             status: "pending", // Re-trigger moderation
@@ -278,15 +266,15 @@ export async function moderateReviewAction(
         const userId = session.user.id;
 
         // Verify admin role
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
             return { success: false, error: "Not authorized as admin" };
         }
 
         // Get review
-        const reviewDoc = await getDoc(doc(db, COLLECTIONS.PRODUCT_REVIEWS, reviewId));
-        if (!reviewDoc.exists()) {
+        const reviewDoc = await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId).get();
+        if (!reviewDoc.exists) {
             return { success: false, error: "Review not found" };
         }
 
@@ -301,7 +289,7 @@ export async function moderateReviewAction(
             updateData.rejectionReason = rejectionReason;
         }
 
-        await updateDoc(doc(db, COLLECTIONS.PRODUCT_REVIEWS, reviewId), updateData);
+        await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId).update(updateData);
 
         return { success: true };
     } catch (error: any) {
@@ -316,7 +304,7 @@ export async function moderateReviewAction(
 export async function getSellerRatingAction(sellerId: string) {
     try {
         const q = query(
-            collection(db, COLLECTIONS.PRODUCT_REVIEWS),
+            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
             where("sellerId", "==", sellerId),
             where("status", "==", "approved")
         );
@@ -374,21 +362,21 @@ export async function getAdminReviewsAction(statusFilter?: "pending" | "approved
         const userId = session.user.id;
 
         // Verify admin role
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
             return { success: false, error: "Not authorized as admin" };
         }
 
         let q = query(
-            collection(db, COLLECTIONS.PRODUCT_REVIEWS),
+            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
             orderBy("createdAt", "desc"),
             limit(100)
         );
 
         if (statusFilter) {
             q = query(
-                collection(db, COLLECTIONS.PRODUCT_REVIEWS),
+                db.collection(COLLECTIONS.PRODUCT_REVIEWS),
                 where("status", "==", statusFilter),
                 orderBy("createdAt", "desc"),
                 limit(100)

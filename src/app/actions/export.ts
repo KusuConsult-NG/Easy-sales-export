@@ -1,18 +1,7 @@
 "use server";
 
-import { db } from "@/lib/firebase";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-    doc,
-    setDoc,
-    updateDoc,
-    serverTimestamp,
-    orderBy,
-    getDoc
-} from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
@@ -118,19 +107,19 @@ export async function createExportWindowAction(
         }
 
         // Save to Firestore
-        const exportWindowRef = doc(collection(db, COLLECTIONS.EXPORT_WINDOWS));
-        await setDoc(exportWindowRef, {
+        const exportWindowRef = doc(db.collection(COLLECTIONS.EXPORT_WINDOWS));
+        await exportWindowRef.set({
             orderId,
             commodity: validatedData.commodity,
             quantity: validatedData.quantity,
             amount: validatedData.amount,
             status: "pending",
             userId: session.user.id,
-            orderDate: serverTimestamp(),
+            orderDate: FieldValue.serverTimestamp(),
             deliveryDate: validatedData.deliveryDate ? new Date(validatedData.deliveryDate) : null,
             escrowReleaseDate: escrowReleaseDate,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -164,10 +153,10 @@ export async function updateExportStatusAction(
             return { error: "Authentication required", success: false };
         }
 
-        const exportRef = doc(db, COLLECTIONS.EXPORT_WINDOWS, exportId);
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await getDoc(exportRef);
 
-        if (!exportDoc.exists()) {
+        if (!exportDoc.exists) {
             return { error: "Export window not found", success: false };
         }
 
@@ -177,9 +166,9 @@ export async function updateExportStatusAction(
         }
 
         // Update status
-        await updateDoc(exportRef, {
+        await exportRef.update({
             status: newStatus,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -212,7 +201,7 @@ export async function getExportWindowsAction(
 
         // Build query
         let exportsQuery = query(
-            collection(db, COLLECTIONS.EXPORT_WINDOWS),
+            db.collection(COLLECTIONS.EXPORT_WINDOWS),
             where("userId", "==", userId),
             orderBy("createdAt", "desc")
         );
@@ -220,7 +209,7 @@ export async function getExportWindowsAction(
         // Apply status filter if provided
         if (statusFilter && statusFilter !== "all") {
             exportsQuery = query(
-                collection(db, COLLECTIONS.EXPORT_WINDOWS),
+                db.collection(COLLECTIONS.EXPORT_WINDOWS),
                 where("userId", "==", userId),
                 where("status", "==", statusFilter),
                 orderBy("createdAt", "desc")
@@ -285,10 +274,10 @@ export async function getExportWindowDetailsAction(
             return { error: "Authentication required", success: false };
         }
 
-        const exportRef = doc(db, COLLECTIONS.EXPORT_WINDOWS, exportId);
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await getDoc(exportRef);
 
-        if (!exportDoc.exists()) {
+        if (!exportDoc.exists) {
             return { error: "Export window not found", success: false };
         }
 
@@ -357,27 +346,27 @@ export async function submitExportOnboardingAction(
             bank: onboardingData.bank,
             terms: onboardingData.terms,
             status: "pending_review",
-            submittedAt: serverTimestamp(),
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            submittedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
         // Save to Firestore
-        const onboardingRef = doc(collection(db, "export_onboarding"));
-        await setDoc(onboardingRef, fullApplication);
+        const onboardingRef = doc(db.collection("export_onboarding"));
+        await onboardingRef.set(fullApplication);
 
         // Update user document to mark export service registration
-        const userRef = doc(db, COLLECTIONS.USERS, userId);
-        await updateDoc(userRef, {
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        await userRef.update({
             services: {
                 export: {
                     registered: true,
                     status: "pending_approval",
                     applicationId,
-                    appliedAt: serverTimestamp(),
+                    appliedAt: FieldValue.serverTimestamp(),
                 },
             },
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -417,7 +406,7 @@ export async function getUserExportInvestmentsAction(): Promise<{
 
         // Fetch user's export windows
         const exportsQuery = query(
-            collection(db, COLLECTIONS.EXPORT_WINDOWS),
+            db.collection(COLLECTIONS.EXPORT_WINDOWS),
             where("userId", "==", userId),
             where("status", "in", ["pending", "in_transit", "delivered"]),
             orderBy("createdAt", "desc")
@@ -485,7 +474,7 @@ export async function getUserExportStatsAction(): Promise<{
 
         // Fetch all user's export windows
         const exportsQuery = query(
-            collection(db, COLLECTIONS.EXPORT_WINDOWS),
+            db.collection(COLLECTIONS.EXPORT_WINDOWS),
             where("userId", "==", userId)
         );
 
