@@ -156,14 +156,14 @@ export async function getAllMembersAction(options?: {
         let q = db.collection("cooperative_members").orderBy("createdAt", "desc");
 
         if (options?.status && options.status !== "all") {
-            q = query(q, where("membershipStatus", "==", options.status));
+            q = q.where("membershipStatus", "==", options.status);
         }
 
         if (options?.limit) {
-            q = query(q, limit(options.limit));
+            q = q.limit(options.limit);
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
         const members = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -234,18 +234,18 @@ export async function getAllTransactionsAction(options?: {
         let q = db.collection("cooperative_transactions").orderBy("date", "desc");
 
         if (options?.type && options.type !== "all") {
-            q = query(q, where("type", "==", options.type));
+            q = q.where("type", "==", options.type);
         }
 
         if (options?.status && options.status !== "all") {
-            q = query(q, where("status", "==", options.status));
+            q = q.where("status", "==", options.status);
         }
 
         if (options?.limit) {
-            q = query(q, limit(options.limit));
+            q = q.limit(options.limit);
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
         const transactions = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -290,12 +290,12 @@ export async function getContributionReportsAction(options?: {
         }
 
         // Get all contributions
-        const transactionsSnap = await getDocs(
-            query(
+        const transactionsSnap = await db.collection("cooperative_transactions")
+            
                 db.collection("cooperative_transactions"),
-                where("type", "==", "contribution"),
+                .where("type", "==", "contribution"),
                 where("status", "==", "completed")
-            )
+            .get()
         );
 
         const contributions = transactionsSnap.docs.map((doc) => ({
