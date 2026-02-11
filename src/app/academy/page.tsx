@@ -215,7 +215,7 @@ export default function AcademyLandingPage() {
 
             {/* Learning Paths */}
             <div className="max-w-7xl mx-auto px-8 py-16">
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800 rounded-3xl p-12">
+                <div className="bg-linear-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800 rounded-3xl p-12">
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
                         Learning Paths
                     </h2>

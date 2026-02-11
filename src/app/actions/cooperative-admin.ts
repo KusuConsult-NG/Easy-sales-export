@@ -291,12 +291,9 @@ export async function getContributionReportsAction(options?: {
 
         // Get all contributions
         const transactionsSnap = await db.collection("cooperative_transactions")
-            
-                db.collection("cooperative_transactions"),
-                .where("type", "==", "contribution"),
-                where("status", "==", "completed")
-            .get()
-        );
+            .where("type", "==", "contribution")
+            .where("status", "==", "completed")
+            .get();
 
         const contributions = transactionsSnap.docs.map((doc) => ({
             id: doc.id,
@@ -393,9 +390,10 @@ export async function getRecentActivityAction(): Promise<{
         }
 
         // Get recent transactions
-        const transactionsSnap = await getDocs(
-            query(db.collection("cooperative_transactions"), orderBy("date", "desc"), limit(10))
-        );
+        const transactionsSnap = await db.collection("cooperative_transactions")
+            .orderBy("date", "desc")
+            .limit(10)
+            .get();
 
         const activities = transactionsSnap.docs.map((doc) => {
             const data = doc.data();

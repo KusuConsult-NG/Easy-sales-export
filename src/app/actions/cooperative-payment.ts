@@ -84,7 +84,7 @@ export async function verifyContributionPaymentAction(
         const { verifyPaystackPayment } = await import('@/lib/paystack-server');
         const { db } = await import('@/lib/firebase');
         const { COLLECTIONS } = await import('@/lib/types/firestore');
-        const { doc, getDoc, setDoc, runTransaction, serverTimestamp } = await import('firebase/firestore');
+        const { doc, getDoc, setDoc, runTransaction, serverTimestamp, FieldValue } = await import('firebase/firestore');
         const { calculateUserTier } = await import('@/lib/cooperative-tiers');
         const { createAuditLog } = await import('@/lib/audit-log');
 
@@ -92,7 +92,7 @@ export async function verifyContributionPaymentAction(
         const processedRef = doc(db, 'processedPayments', reference);
         const existingPayment = await getDoc(processedRef);
 
-        if (existingPayment.exists) {
+        if (existingPayment.exists()) {
             return {
                 error: 'Payment has already been processed',
                 success: false
@@ -138,7 +138,12 @@ export async function verifyContributionPaymentAction(
                 throw new Error('Membership not found');
             }
 
-            const currentTotal = membershipDoc.data().totalContributions || 0;
+            const membershipData = membershipDoc.data();
+            if (!membershipData) {
+                throw new Error('Membership data not found');
+            }
+
+            const currentTotal = membershipData.totalContributions || 0;
             const newTotal = currentTotal + amountInNaira;
             const newTier = calculateUserTier(newTotal);
 
@@ -146,13 +151,13 @@ export async function verifyContributionPaymentAction(
             transaction.update(membershipRef, {
                 totalContributions: newTotal,
                 tier: newTier,
-                lastContributionAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
+                lastContributionAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
             });
 
             // Mark payment as processed atomically
             transaction.set(processedRef, {
-                processedAt: FieldValue.serverTimestamp(),
+                processedAt: serverTimestamp(),
                 amount: amountInNaira,
                 type: 'contribution',
                 reference,
@@ -161,7 +166,7 @@ export async function verifyContributionPaymentAction(
             return {
                 currentTotal,
                 newTotal,
-                previousTier: membershipDoc.data().tier,
+                previousTier: membershipData.tier,
                 newTier,
             };
         });

@@ -1,15 +1,6 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
-import {
-    collection,
-    query,
-    where,
-    getDocs,
-    doc,
-    getDoc,
-    orderBy,
-    limit
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -82,11 +73,11 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
         const userId = session.user.id;
 
         // Fetch total exports
-        const exportsQuery = query(
-            collection(db, COLLECTIONS.EXPORT_WINDOWS),
-            where("userId", "==", userId)
-        );
-        const exportsSnapshot = await getDocs(exportsQuery);
+        const exportsSnapshot = await db
+            .collection(COLLECTIONS.EXPORT_WINDOWS)
+            .where("userId", "==", userId)
+            .get();
+
         const totalExports = exportsSnapshot.size;
 
         // Count active orders (pending or in_transit)
@@ -101,24 +92,28 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
 
         // Fetch cooperative savings (if user is a member)
         let cooperativeSavings = 0;
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const cooperativeId = userDoc.data()?.cooperativeId;
 
         if (cooperativeId) {
-            const memberDoc = await getDoc(
-                doc(db, COLLECTIONS.COOPERATIVES, cooperativeId, "members", userId)
-            );
+            const memberDoc = await db
+                .collection(COLLECTIONS.COOPERATIVES)
+                .doc(cooperativeId)
+                .collection("members")
+                .doc(userId)
+                .get();
+
             if (memberDoc.exists) {
-                cooperativeSavings = memberDoc.data().balance || 0;
+                cooperativeSavings = memberDoc.data()?.balance || 0;
             }
         }
 
         // Count academy enrollments
-        const enrollmentsQuery = query(
-            collection(db, COLLECTIONS.ENROLLMENTS),
-            where("userId", "==", userId)
-        );
-        const enrollmentsSnapshot = await getDocs(enrollmentsQuery);
+        const enrollmentsSnapshot = await db
+            .collection(COLLECTIONS.ENROLLMENTS)
+            .where("userId", "==", userId)
+            .get();
+
         const academyEnrollments = enrollmentsSnapshot.size;
 
         return {
@@ -154,13 +149,12 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
         const activities: RecentActivity = [];
 
         // Fetch recent export windows
-        const exportsQuery = query(
-            collection(db, COLLECTIONS.EXPORT_WINDOWS),
-            where("userId", "==", userId),
-            orderBy("createdAt", "desc"),
-            limit(3)
-        );
-        const exportsSnapshot = await getDocs(exportsQuery);
+        const exportsSnapshot = await db
+            .collection(COLLECTIONS.EXPORT_WINDOWS)
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .limit(3)
+            .get();
 
         exportsSnapshot.forEach(doc => {
             const data = doc.data();
@@ -175,13 +169,12 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
         });
 
         // Fetch recent notifications
-        const notificationsQuery = query(
-            collection(db, COLLECTIONS.NOTIFICATIONS),
-            where("userId", "==", userId),
-            orderBy("createdAt", "desc"),
-            limit(2)
-        );
-        const notificationsSnapshot = await getDocs(notificationsQuery);
+        const notificationsSnapshot = await db
+            .collection(COLLECTIONS.NOTIFICATIONS)
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .limit(2)
+            .get();
 
         notificationsSnapshot.forEach(doc => {
             const data = doc.data();
@@ -222,12 +215,11 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> {
         const userId = session.user.id;
 
         // Fetch all export windows with escrow
-        const exportsQuery = query(
-            collection(db, COLLECTIONS.EXPORT_WINDOWS),
-            where("userId", "==", userId),
-            where("status", "in", ["in_transit", "delivered"])
-        );
-        const exportsSnapshot = await getDocs(exportsQuery);
+        const exportsSnapshot = await db
+            .collection(COLLECTIONS.EXPORT_WINDOWS)
+            .where("userId", "==", userId)
+            .where("status", "in", ["in_transit", "delivered"])
+            .get();
 
         let totalLocked = 0;
         let pendingRelease = 0;

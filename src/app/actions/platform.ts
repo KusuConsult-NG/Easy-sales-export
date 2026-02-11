@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import {
     waveApplicationSchema,
@@ -91,7 +91,7 @@ export async function submitWaveApplicationAction(
         const applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
         // Save to Firestore
-        await db.doc(COLLECTIONS.WAVE_APPLICATIONS, applicationId).set({
+        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).set({
             ...validatedData,
             userId: session.user.id,
             status: "pending", // pending | approved | rejected
@@ -148,19 +148,16 @@ export async function enrollInCourseAction(
         const validatedData = academyEnrollmentSchema.parse(enrollmentData);
 
         // Check if user already enrolled in this course
-        const existingEnrollmentQuery = await getDoc(
-            doc(db, COLLECTIONS.ENROLLMENTS, `${session.user.id}_${validatedData.courseId}`)
-        );
+        const enrollmentId = `${session.user.id}_${validatedData.courseId}`;
+        const enrollmentRef = db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId);
+        const existingEnrollment = await enrollmentRef.get();
 
-        if (existingEnrollmentQuery.exists) {
+        if (existingEnrollment.exists) {
             return { error: "You are already enrolled in this course", success: false };
         }
 
-        // Generate enrollment ID (composite key: userId_courseId)
-        const enrollmentId = `${session.user.id}_${validatedData.courseId}`;
-
         // Save enrollment to Firestore
-        await db.doc(COLLECTIONS.ENROLLMENTS, enrollmentId).set({
+        await enrollmentRef.set({
             userId: session.user.id,
             courseId: validatedData.courseId,
             fullName: validatedData.fullName,
@@ -173,11 +170,11 @@ export async function enrollInCourseAction(
         });
 
         // Increment course student count (if course document exists)
-        const courseRef = doc(db, COLLECTIONS.COURSES, validatedData.courseId);
-        const courseDoc = await getDoc(courseRef);
+        const courseRef = db.collection(COLLECTIONS.COURSES).doc(validatedData.courseId);
+        const courseDoc = await courseRef.get();
         if (courseDoc.exists) {
-            await updateDoc(courseRef, {
-                students: increment(1),
+            await courseRef.update({
+                students: FieldValue.increment(1),
             });
         }
 
@@ -227,14 +224,13 @@ export async function submitWithdrawalAction(
         const validatedData = withdrawalSchema.parse(withdrawalData);
 
         // Verify user is a member of the cooperative
-        const memberRef = doc(
-            db,
-            COLLECTIONS.COOPERATIVES,
-            validatedData.cooperativeId,
-            "members",
-            session.user.id
-        );
-        const memberDoc = await getDoc(memberRef);
+        const memberRef = db
+            .collection(COLLECTIONS.COOPERATIVES)
+            .doc(validatedData.cooperativeId)
+            .collection("members")
+            .doc(session.user.id);
+
+        const memberDoc = await memberRef.get();
 
         if (!memberDoc.exists) {
             return { error: "You are not a member of this cooperative", success: false };
@@ -243,16 +239,16 @@ export async function submitWithdrawalAction(
         const memberData = memberDoc.data();
 
         // Check if user has sufficient balance
-        if (memberData.balance < validatedData.amount) {
+        if ((memberData?.balance || 0) < validatedData.amount) {
             return {
-                error: `Insufficient balance. Available: ₦${memberData.balance.toLocaleString()}`,
+                error: `Insufficient balance. Available: ₦${(memberData?.balance || 0).toLocaleString()}`,
                 success: false,
             };
         }
 
         // Check minimum balance requirement (e.g., must keep ₦5,000)
         const MIN_BALANCE = 5000;
-        if (memberData.balance - validatedData.amount < MIN_BALANCE) {
+        if ((memberData?.balance || 0) - validatedData.amount < MIN_BALANCE) {
             return {
                 error: `You must maintain a minimum balance of ₦${MIN_BALANCE.toLocaleString()}`,
                 success: false,
@@ -263,7 +259,7 @@ export async function submitWithdrawalAction(
         const withdrawalId = `WD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
         // Save withdrawal request to Firestore
-        await db.doc(COLLECTIONS.WITHDRAWALS, withdrawalId).set({
+        await db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId).set({
             userId: session.user.id,
             cooperativeId: validatedData.cooperativeId,
             amount: validatedData.amount,

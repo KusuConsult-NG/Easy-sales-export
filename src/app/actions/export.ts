@@ -107,7 +107,7 @@ export async function createExportWindowAction(
         }
 
         // Save to Firestore
-        const exportWindowRef = doc(db.collection(COLLECTIONS.EXPORT_WINDOWS));
+        const exportWindowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc();
         await exportWindowRef.set({
             orderId,
             commodity: validatedData.commodity,
@@ -154,14 +154,15 @@ export async function updateExportStatusAction(
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
-        const exportDoc = await getDoc(exportRef);
+        const exportDoc = await exportRef.get();
 
         if (!exportDoc.exists) {
             return { error: "Export window not found", success: false };
         }
 
+        const data = exportDoc.data();
         // Verify ownership (unless admin)
-        if (exportDoc.data().userId !== session.user.id && !session.user.roles?.includes("admin")) {
+        if (data?.userId !== session.user.id && !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized to update this export", success: false };
         }
 
@@ -200,38 +201,36 @@ export async function getExportWindowsAction(
         const userId = session.user.id;
 
         // Build query
-        let exportsQuery = query(
-            db.collection(COLLECTIONS.EXPORT_WINDOWS),
-            where("userId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
+        let exportsQuery = db.collection(COLLECTIONS.EXPORT_WINDOWS)
+            .where("userId", "==", userId);
 
         // Apply status filter if provided
         if (statusFilter && statusFilter !== "all") {
-            exportsQuery = query(
-                db.collection(COLLECTIONS.EXPORT_WINDOWS),
-                where("userId", "==", userId),
-                where("status", "==", statusFilter),
-                orderBy("createdAt", "desc")
-            );
+            exportsQuery = exportsQuery.where("status", "==", statusFilter);
         }
 
-        const snapshot = await getDocs(exportsQuery);
+        // Apply sorting
+        exportsQuery = exportsQuery.orderBy("createdAt", "desc");
 
-        let exports: ExportWindow[] = snapshot.docs.map(doc => ({
-            id: doc.id,
-            orderId: doc.data().orderId,
-            commodity: doc.data().commodity,
-            quantity: doc.data().quantity,
-            amount: doc.data().amount,
-            status: doc.data().status,
-            userId: doc.data().userId,
-            orderDate: doc.data().orderDate?.toDate() || new Date(),
-            deliveryDate: doc.data().deliveryDate?.toDate(),
-            escrowReleaseDate: doc.data().escrowReleaseDate?.toDate(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        }));
+        const snapshot = await exportsQuery.get();
+
+        let exports: ExportWindow[] = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                orderId: data.orderId,
+                commodity: data.commodity,
+                quantity: data.quantity,
+                amount: data.amount,
+                status: data.status,
+                userId: data.userId,
+                orderDate: data.orderDate?.toDate() || new Date(),
+                deliveryDate: data.deliveryDate?.toDate(),
+                escrowReleaseDate: data.escrowReleaseDate?.toDate(),
+                createdAt: data.createdAt?.toDate() || new Date(),
+                updatedAt: data.updatedAt?.toDate() || new Date(),
+            };
+        });
 
         // Apply client-side date filtering
         if (fromDate || toDate) {
@@ -275,18 +274,22 @@ export async function getExportWindowDetailsAction(
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
-        const exportDoc = await getDoc(exportRef);
+        const exportDoc = await exportRef.get();
 
         if (!exportDoc.exists) {
             return { error: "Export window not found", success: false };
         }
 
+        const data = exportDoc.data();
+        if (!data) {
+            return { error: "Export window data is missing", success: false };
+        }
+
         // Verify ownership (unless admin)
-        if (exportDoc.data().userId !== session.user.id && !session.user.roles?.includes("admin")) {
+        if (data.userId !== session.user.id && !session.user.roles?.includes("admin")) {
             return { error: "Unauthorized to view this export", success: false };
         }
 
-        const data = exportDoc.data();
         const exportWindow: ExportWindow = {
             id: exportDoc.id,
             orderId: data.orderId,
@@ -352,7 +355,7 @@ export async function submitExportOnboardingAction(
         };
 
         // Save to Firestore
-        const onboardingRef = doc(db.collection("export_onboarding"));
+        const onboardingRef = db.collection("export_onboarding").doc();
         await onboardingRef.set(fullApplication);
 
         // Update user document to mark export service registration
@@ -405,14 +408,11 @@ export async function getUserExportInvestmentsAction(): Promise<{
         const userId = session.user.id;
 
         // Fetch user's export windows
-        const exportsQuery = query(
-            db.collection(COLLECTIONS.EXPORT_WINDOWS),
-            where("userId", "==", userId),
-            where("status", "in", ["pending", "in_transit", "delivered"]),
-            orderBy("createdAt", "desc")
-        );
-
-        const snapshot = await getDocs(exportsQuery);
+        const snapshot = await db.collection(COLLECTIONS.EXPORT_WINDOWS)
+            .where("userId", "==", userId)
+            .where("status", "in", ["pending", "in_transit", "delivered"])
+            .orderBy("createdAt", "desc")
+            .get();
 
         const investments = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -473,12 +473,9 @@ export async function getUserExportStatsAction(): Promise<{
         const userId = session.user.id;
 
         // Fetch all user's export windows
-        const exportsQuery = query(
-            db.collection(COLLECTIONS.EXPORT_WINDOWS),
-            where("userId", "==", userId)
-        );
-
-        const snapshot = await getDocs(exportsQuery);
+        const snapshot = await db.collection(COLLECTIONS.EXPORT_WINDOWS)
+            .where("userId", "==", userId)
+            .get();
 
         let totalInvested = 0;
         let activeInvestments = 0;
