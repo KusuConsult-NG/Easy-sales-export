@@ -79,7 +79,7 @@ export default function FarmNationLandingPage() {
                                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                             </Link>
                             <Link
-                                href="/auth/register?platforms[]=farm-nation&callbackUrl=/farm-nation"
+                                href="/farm-nation/register"
                                 className="inline-flex items-center gap-3 bg-teal-700/50 text-white border border-teal-400/30 px-8 py-4 rounded-xl font-bold text-lg backdrop-blur-sm hover:bg-teal-700/70 transition-all hover:scale-105"
                             >
                                 Start Investing
