@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog, logAdminAction } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 
@@ -32,11 +32,11 @@ export interface LandListing {
     verificationStatus?: {
         verified: boolean;
         verifiedBy?: string;
-        verifiedAt?: Timestamp;
+        verifiedAt?: FieldValue | Timestamp;
         rejectionReason?: string;
     };
-    createdAt: Timestamp;
-    updatedAt: Timestamp;
+    createdAt: FieldValue | Timestamp;
+    updatedAt: FieldValue | Timestamp;
 }
 
 /**
@@ -89,8 +89,8 @@ async function submitForVerificationAction(
     ownerId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const listingRef = doc(db, "land_listings", listingId);
-        const listingDoc = await getDoc(listingRef);
+        const listingRef = db.collection("land_listings").doc(listingId);
+        const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
             return { success: false, error: "Listing not found" };
@@ -102,7 +102,7 @@ async function submitForVerificationAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        await updateDoc(listingRef, {
+        await listingRef.update({
             status: "pending_verification",
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -122,14 +122,14 @@ export async function verifyLandListingAction(
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const listingRef = doc(db, "land_listings", listingId);
-        const listingDoc = await getDoc(listingRef);
+        const listingRef = db.collection("land_listings").doc(listingId);
+        const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
             return { success: false, error: "Listing not found" };
         }
 
-        await updateDoc(listingRef, {
+        await listingRef.update({
             status: "verified",
             verificationStatus: {
                 verified: true,
@@ -162,14 +162,14 @@ export async function rejectLandListingAction(
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const listingRef = doc(db, "land_listings", listingId);
-        const listingDoc = await getDoc(listingRef);
+        const listingRef = db.collection("land_listings").doc(listingId);
+        const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
             return { success: false, error: "Listing not found" };
         }
 
-        await updateDoc(listingRef, {
+        await listingRef.update({
             status: "rejected",
             verificationStatus: {
                 verified: false,
@@ -212,16 +212,13 @@ export async function searchLandListingsAction(filters: {
         let q = db.collection("land_listings").where("status", "==", "verified");
 
         if (filters.state) {
-            q = query(q, where("location.state", "==", filters.state));
+            q = q.where("location.state", "==", filters.state);
         }
         if (filters.category) {
-            q = query(q, where("category", "==", filters.category));
-        }
-        if (filters.category) {
-            q = query(q, where("category", "==", filters.category));
+            q = q.where("category", "==", filters.category);
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
         let results = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -260,9 +257,9 @@ export async function searchLandListingsAction(filters: {
  */
 export async function getPendingLandListingsAction(): Promise<LandListing[]> {
     try {
-        const q = db.collection("land_listings").where("status", "==", "pending_verification");
-
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection("land_listings")
+            .where("status", "==", "pending_verification")
+            .get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -360,8 +357,8 @@ export async function submitLandListingAction(data: {
  */
 export async function getPropertyByIdAction(id: string): Promise<LandListing | null> {
     try {
-        const docRef = doc(db, "land_listings", id);
-        const docSnap = await getDoc(docRef);
+        const docRef = db.collection("land_listings").doc(id);
+        const docSnap = await docRef.get();
 
         if (docSnap.exists) {
             return { id: docSnap.id, ...docSnap.data() } as LandListing;
@@ -427,8 +424,10 @@ export async function submitLandInquiryAction(data: {
  */
 export async function getLandInquiriesAction(userId: string): Promise<{ success: boolean; inquiries?: any[]; error?: string }> {
     try {
-        const q = db.collection("land_inquiries").where("listingOwnerId", "==", userId).orderBy("createdAt", "desc");
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection("land_inquiries")
+            .where("listingOwnerId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .get();
         const inquiries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         return { success: true, inquiries };
     } catch (error: any) {
@@ -442,8 +441,8 @@ export async function getLandInquiriesAction(userId: string): Promise<{ success:
  */
 export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ success: boolean; inquiry?: any; error?: string }> {
     try {
-        const docRef = doc(db, "land_inquiries", inquiryId);
-        const docSnap = await getDoc(docRef);
+        const docRef = db.collection("land_inquiries").doc(inquiryId);
+        const docSnap = await docRef.get();
 
         if (docSnap.exists) {
             return { success: true, inquiry: { id: docSnap.id, ...docSnap.data() } };

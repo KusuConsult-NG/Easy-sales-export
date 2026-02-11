@@ -2,13 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
-import { storage } from "@/lib/firebase";
-import {
-    ref,
-    uploadBytes,
-    getDownloadURL,
-    deleteObject
-} from "firebase/storage";
+import { getStorage } from "firebase-admin/storage";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
 
 export interface WaveResource {
@@ -20,7 +15,7 @@ export interface WaveResource {
     fileName: string;
     fileSize: number;
     fileType: string;
-    uploadedAt: Timestamp;
+    uploadedAt: FieldValue | Timestamp;
     uploadedBy: string;
     uploadedByName: string;
     downloads: number;
@@ -44,7 +39,8 @@ export async function uploadResourceAction(formData: FormData): Promise<{
         }
 
         // Check if user is admin
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userRef = db.collection("users").doc(session.user.id);
+        const userDoc = await userRef.get();
         const userData = userDoc.data();
         if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
@@ -70,7 +66,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
         }
 
         // Validate file type
-        const allowedTypes = {
+        const allowedTypes: Record<string, string[]> = {
             document: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
             video: ["video/mp4", "video/quicktime"],
             template: ["application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
@@ -86,15 +82,22 @@ export async function uploadResourceAction(formData: FormData): Promise<{
         const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
         const storagePath = `wave_resources/${category}/${timestamp}_${sanitizedFileName}`;
 
-        // Upload to Firebase Storage
-        const storageRef = ref(storage, storagePath);
+        // Upload to Firebase Storage using Admin SDK
+        const bucket = getStorage().bucket();
+        const fileRef = bucket.file(storagePath);
         const arrayBuffer = await file.arrayBuffer();
-        const snapshot = await uploadBytes(storageRef, arrayBuffer, {
-            contentType: file.type,
+        const buffer = Buffer.from(arrayBuffer);
+
+        await fileRef.save(buffer, {
+            metadata: {
+                contentType: file.type,
+            },
         });
 
-        // Get download URL
-        const fileUrl = await getDownloadURL(snapshot.ref);
+        // Make file public or generate signed URL
+        // For simplicity, we'll make it public assuming resources are public
+        await fileRef.makePublic();
+        const fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
 
         // Create Firestore record
         const resourceData: Omit<WaveResource, "id"> = {
@@ -135,17 +138,15 @@ export async function uploadResourceAction(formData: FormData): Promise<{
  */
 export async function getResourcesAction(category?: string): Promise<WaveResource[]> {
     try {
-        let q = query(
-            db.collection("wave_resources"),
-            where("isActive", "==", true),
-            orderBy("uploadedAt", "desc")
-        );
+        let query = db.collection("wave_resources")
+            .where("isActive", "==", true)
+            .orderBy("uploadedAt", "desc");
 
         if (category) {
-            q = query(q, where("category", "==", category));
+            query = query.where("category", "==", category);
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await query.get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -173,7 +174,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{
         }
 
         const resourceRef = db.collection("wave_resources").doc(resourceId);
-        const resourceDoc = await getDoc(resourceRef);
+        const resourceDoc = await resourceRef.get();
 
         if (!resourceDoc.exists) {
             return { success: false, error: "Resource not found" };
@@ -183,7 +184,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{
 
         // Increment download count
         await resourceRef.update({
-            downloads: increment(1),
+            downloads: FieldValue.increment(1),
         });
 
         // Create audit log
@@ -216,7 +217,8 @@ export async function deleteResourceAction(resourceId: string): Promise<{
         }
 
         // Check if user is admin
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userRef = db.collection("users").doc(session.user.id);
+        const userDoc = await userRef.get();
         const userData = userDoc.data();
         if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
@@ -264,7 +266,8 @@ export async function updateResourceAction(
         }
 
         // Check if user is admin
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userRef = db.collection("users").doc(session.user.id);
+        const userDoc = await userRef.get();
         const userData = userDoc.data();
         if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };

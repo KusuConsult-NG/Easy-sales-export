@@ -31,21 +31,21 @@ export async function updateExportStatusAction(
             return { error: "Missing required fields", success: false };
         }
 
-        const exportRef = doc(db, COLLECTIONS.EXPORT_WINDOWS, exportId);
-        const exportDoc = await getDoc(exportRef);
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        const exportDoc = await exportRef.get();
 
         if (!exportDoc.exists) {
             return { error: "Export window not found", success: false };
         }
 
         // Verify ownership (unless admin)
-        const exportData = exportDoc.data();
+        const exportData = exportDoc.data()!;
         if (exportData.userId !== session.user.id && !session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return { error: "Unauthorized to update this export", success: false };
         }
 
         // Update status
-        await updateDoc(exportRef, {
+        await exportRef.update({
             status: newStatus,
             updatedAt: FieldValue.serverTimestamp(),
         });

@@ -18,7 +18,7 @@ export async function updateCourseProgress(
     data: z.infer<typeof courseProgressSchema>
 ) {
     const session = await auth();
-    if (!session) {
+    if (!session?.user) {
         return { success: false, error: "Unauthorized" };
     }
 
@@ -26,13 +26,10 @@ export async function updateCourseProgress(
         const validated = courseProgressSchema.parse(data);
 
         // Check if progress record exists
-        const progressQuery = query(
-            collection(db, 'course_progress'),
-            where('userId', '==', session.user.id),
-            where('courseId', '==', validated.courseId)
-        );
-
-        const snapshot = await getDocs(progressQuery);
+        const snapshot = await db.collection('course_progress')
+            .where('userId', '==', session.user.id)
+            .where('courseId', '==', validated.courseId)
+            .get();
 
         if (snapshot.empty) {
             // Create new progress record
@@ -48,7 +45,7 @@ export async function updateCourseProgress(
         } else {
             // Update existing progress
             const progressDoc = snapshot.docs[0];
-            await db.doc('course_progress', progressDoc.id).update({
+            await progressDoc.ref.update({
                 progressPercent: validated.progressPercent,
                 lastWatchedSecond: validated.lastWatchedSecond,
                 completed: validated.progressPercent >= 95,
@@ -94,7 +91,7 @@ export async function enrollInCourse(
     data: z.infer<typeof courseEnrollmentSchema>
 ) {
     const session = await auth();
-    if (!session) {
+    if (!session?.user) {
         return { success: false, error: "Unauthorized" };
     }
 
@@ -102,13 +99,10 @@ export async function enrollInCourse(
         const validated = courseEnrollmentSchema.parse(data);
 
         // Check if already enrolled
-        const enrollmentQuery = query(
-            collection(db, 'course_enrollments'),
-            where('userId', '==', session.user.id),
-            where('courseId', '==', validated.courseId)
-        );
-
-        const snapshot = await getDocs(enrollmentQuery);
+        const snapshot = await db.collection('course_enrollments')
+            .where('userId', '==', session.user.id)
+            .where('courseId', '==', validated.courseId)
+            .get();
 
         if (!snapshot.empty) {
             return { success: false, error: "Already enrolled in this course" };
@@ -166,18 +160,15 @@ export async function enrollInCourse(
  */
 export async function getCourseProgress(courseId: string) {
     const session = await auth();
-    if (!session) {
+    if (!session?.user) {
         return { success: false, error: "Unauthorized", progress: null };
     }
 
     try {
-        const progressQuery = query(
-            collection(db, 'course_progress'),
-            where('userId', '==', session.user.id),
-            where('courseId', '==', courseId)
-        );
-
-        const snapshot = await getDocs(progressQuery);
+        const snapshot = await db.collection('course_progress')
+            .where('userId', '==', session.user.id)
+            .where('courseId', '==', courseId)
+            .get();
 
         if (snapshot.empty) {
             return {
@@ -211,18 +202,15 @@ export async function getCourseProgress(courseId: string) {
  */
 export async function getUserEnrolledCourses() {
     const session = await auth();
-    if (!session) {
+    if (!session?.user) {
         return { success: false, error: "Unauthorized", courses: [] };
     }
 
     try {
-        const enrollmentsQuery = query(
-            collection(db, 'course_enrollments'),
-            where('userId', '==', session.user.id),
-            where('status', '==', 'active')
-        );
-
-        const snapshot = await getDocs(enrollmentsQuery);
+        const snapshot = await db.collection('course_enrollments')
+            .where('userId', '==', session.user.id)
+            .where('status', '==', 'active')
+            .get();
 
         const enrollments = snapshot.docs.map(doc => ({
             id: doc.id,
@@ -244,25 +232,22 @@ export async function getUserEnrolledCourses() {
  */
 export async function completeCourse(courseId: string) {
     const session = await auth();
-    if (!session) {
+    if (!session?.user) {
         return { success: false, error: "Unauthorized" };
     }
 
     try {
-        const progressQuery = query(
-            collection(db, 'course_progress'),
-            where('userId', '==', session.user.id),
-            where('courseId', '==', courseId)
-        );
-
-        const snapshot = await getDocs(progressQuery);
+        const snapshot = await db.collection('course_progress')
+            .where('userId', '==', session.user.id)
+            .where('courseId', '==', courseId)
+            .get();
 
         if (snapshot.empty) {
             return { success: false, error: "No progress record found" };
         }
 
         const progressDoc = snapshot.docs[0];
-        await db.doc('course_progress', progressDoc.id).update({
+        await progressDoc.ref.update({
             completed: true,
             completedAt: FieldValue.serverTimestamp(),
             progressPercent: 100,
@@ -292,20 +277,17 @@ export async function completeCourse(courseId: string) {
  */
 export async function generateCourseCertificate(courseId: string, courseTitle: string) {
     const session = await auth();
-    if (!session) {
+    if (!session?.user) {
         return { success: false, error: "Unauthorized" };
     }
 
     try {
         // Verify course is completed
-        const progressQuery = query(
-            collection(db, 'course_progress'),
-            where('userId', '==', session.user.id),
-            where('courseId', '==', courseId),
-            where('completed', '==', true)
-        );
-
-        const snapshot = await getDocs(progressQuery);
+        const snapshot = await db.collection('course_progress')
+            .where('userId', '==', session.user.id)
+            .where('courseId', '==', courseId)
+            .where('completed', '==', true)
+            .get();
 
         if (snapshot.empty) {
             return { success: false, error: "Course not completed yet" };
@@ -314,13 +296,10 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         const progressData = snapshot.docs[0].data();
 
         // Check if certificate already exists
-        const certQuery = query(
-            collection(db, 'course_certificates'),
-            where('userId', '==', session.user.id),
-            where('courseId', '==', courseId)
-        );
-
-        const certSnapshot = await getDocs(certQuery);
+        const certSnapshot = await db.collection('course_certificates')
+            .where('userId', '==', session.user.id)
+            .where('courseId', '==', courseId)
+            .get();
 
         if (!certSnapshot.empty) {
             // Return existing certificate
@@ -384,18 +363,15 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
  */
 export async function getCourseCertificate(courseId: string) {
     const session = await auth();
-    if (!session) {
+    if (!session?.user) {
         return { success: false, error: "Unauthorized", certificate: null };
     }
 
     try {
-        const certQuery = query(
-            collection(db, 'course_certificates'),
-            where('userId', '==', session.user.id),
-            where('courseId', '==', courseId)
-        );
-
-        const snapshot = await getDocs(certQuery);
+        const snapshot = await db.collection('course_certificates')
+            .where('userId', '==', session.user.id)
+            .where('courseId', '==', courseId)
+            .get();
 
         if (snapshot.empty) {
             return {

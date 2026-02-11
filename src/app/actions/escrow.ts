@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog, logFinancialAction } from "@/lib/audit-log";
 
 /**
@@ -20,11 +20,11 @@ export interface EscrowTransaction {
     productDescription: string;
     status: "pending_payment" | "held" | "released" | "refunded" | "disputed";
     paymentReference?: string;
-    createdAt: Timestamp;
-    paidAt?: Timestamp;
-    releasedAt?: Timestamp;
-    refundedAt?: Timestamp;
-    releaseRequestedAt?: Timestamp;
+    createdAt: FieldValue | Timestamp;
+    paidAt?: FieldValue | Timestamp;
+    releasedAt?: FieldValue | Timestamp;
+    refundedAt?: FieldValue | Timestamp;
+    releaseRequestedAt?: FieldValue | Timestamp;
     releaseRequestedBy?: string;
     releasedBy?: string;
 }
@@ -40,8 +40,8 @@ export interface Dispute {
     status: "open" | "under_review" | "resolved" | "closed";
     resolution?: string;
     resolvedBy?: string;
-    resolvedAt?: Timestamp;
-    createdAt: Timestamp;
+    resolvedAt?: FieldValue | Timestamp;
+    createdAt: FieldValue | Timestamp;
 }
 
 export interface Message {
@@ -50,7 +50,7 @@ export interface Message {
     senderId: string;
     senderName: string;
     message: string;
-    timestamp: Timestamp;
+    timestamp: FieldValue | Timestamp;
     read: boolean;
 }
 
@@ -102,14 +102,14 @@ export async function confirmEscrowPaymentAction(
     paymentReference: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const escrowRef = doc(db, "escrow_transactions", escrowId);
-        const escrowDoc = await getDoc(escrowRef);
+        const escrowRef = db.collection("escrow_transactions").doc(escrowId);
+        const escrowDoc = await escrowRef.get();
 
         if (!escrowDoc.exists) {
             return { success: false, error: "Escrow transaction not found" };
         }
 
-        await updateDoc(escrowRef, {
+        await escrowRef.update({
             status: "held",
             paymentReference,
             paidAt: FieldValue.serverTimestamp(),
@@ -140,8 +140,8 @@ export async function requestEscrowReleaseAction(
     sellerId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const escrowRef = doc(db, "escrow_transactions", escrowId);
-        const escrowDoc = await getDoc(escrowRef);
+        const escrowRef = db.collection("escrow_transactions").doc(escrowId);
+        const escrowDoc = await escrowRef.get();
 
         if (!escrowDoc.exists) {
             return { success: false, error: "Escrow transaction not found" };
@@ -157,7 +157,7 @@ export async function requestEscrowReleaseAction(
             return { success: false, error: "Escrow must be in held status" };
         }
 
-        await updateDoc(escrowRef, {
+        await escrowRef.update({
             releaseRequestedAt: FieldValue.serverTimestamp(),
             releaseRequestedBy: sellerId,
         });
@@ -177,8 +177,8 @@ export async function releaseEscrowAction(
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const escrowRef = doc(db, "escrow_transactions", escrowId);
-        const escrowDoc = await getDoc(escrowRef);
+        const escrowRef = db.collection("escrow_transactions").doc(escrowId);
+        const escrowDoc = await escrowRef.get();
 
         if (!escrowDoc.exists) {
             return { success: false, error: "Escrow transaction not found" };
@@ -186,7 +186,7 @@ export async function releaseEscrowAction(
 
         const escrowData = escrowDoc.data() as EscrowTransaction;
 
-        await updateDoc(escrowRef, {
+        await escrowRef.update({
             status: "released",
             releasedAt: FieldValue.serverTimestamp(),
             releasedBy: adminId,
@@ -222,12 +222,11 @@ export async function createDisputeAction(data: {
 }): Promise<{ success: boolean; error?: string; disputeId?: string }> {
     try {
         // Check if dispute already exists
-        const existingQuery = query(
-            collection(db, "disputes"),
-            where("escrowId", "==", data.escrowId),
-            where("status", "in", ["open", "under_review"])
-        );
-        const existing = await getDocs(existingQuery);
+        const existingQuery = db.collection("disputes")
+            .where("escrowId", "==", data.escrowId)
+            .where("status", "in", ["open", "under_review"]);
+
+        const existing = await existingQuery.get();
 
         if (!existing.empty) {
             return { success: false, error: "An active dispute already exists for this transaction" };
@@ -243,7 +242,7 @@ export async function createDisputeAction(data: {
         const docRef = await db.collection("disputes").add(dispute);
 
         // Update escrow status
-        await db.doc("escrow_transactions", data.escrowId).update({
+        await db.collection("escrow_transactions").doc(data.escrowId).update({
             status: "disputed",
         });
 
@@ -275,8 +274,8 @@ export async function resolveDisputeAction(
     outcome: "release_to_seller" | "refund_to_buyer"
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const disputeRef = doc(db, "disputes", disputeId);
-        const disputeDoc = await getDoc(disputeRef);
+        const disputeRef = db.collection("disputes").doc(disputeId);
+        const disputeDoc = await disputeRef.get();
 
         if (!disputeDoc.exists) {
             return { success: false, error: "Dispute not found" };
@@ -284,7 +283,7 @@ export async function resolveDisputeAction(
 
         const disputeData = disputeDoc.data() as Dispute;
 
-        await updateDoc(disputeRef, {
+        await disputeRef.update({
             status: "resolved",
             resolution,
             resolvedBy: adminId,
@@ -292,8 +291,8 @@ export async function resolveDisputeAction(
         });
 
         // Update escrow based on outcome
-        const escrowRef = doc(db, "escrow_transactions", disputeData.escrowId);
-        await updateDoc(escrowRef, {
+        const escrowRef = db.collection("escrow_transactions").doc(disputeData.escrowId);
+        await escrowRef.update({
             status: outcome === "release_to_seller" ? "released" : "refunded",
             releasedBy: adminId,
             [outcome === "release_to_seller" ? "releasedAt" : "refundedAt"]: FieldValue.serverTimestamp(),
@@ -347,9 +346,10 @@ export async function sendEscrowMessageAction(data: {
  */
 export async function getEscrowMessagesAction(escrowId: string): Promise<Message[]> {
     try {
-        const q = db.collection("escrow_messages").where("escrowId", "==", escrowId);
-
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection("escrow_messages")
+            .where("escrowId", "==", escrowId)
+            .orderBy("timestamp", "asc")
+            .get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -370,8 +370,8 @@ export async function getEscrowTransactionByIdAction(escrowId: string): Promise<
     error?: string
 }> {
     try {
-        const escrowRef = doc(db, "escrow", escrowId);
-        const escrowDoc = await getDoc(escrowRef);
+        const escrowRef = db.collection("escrow_transactions").doc(escrowId);
+        const escrowDoc = await escrowRef.get();
 
         if (!escrowDoc.exists) {
             return { success: false, error: "Escrow transaction not found" };

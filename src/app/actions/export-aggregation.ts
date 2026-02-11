@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
 
 /**
@@ -20,7 +20,7 @@ export interface ExportWindow {
     endDate: Date;
     destination: string;
     status: "open" | "closed" | "in_transit" | "completed";
-    createdAt: Timestamp;
+    createdAt: FieldValue | Timestamp;
     createdBy: string;
 }
 
@@ -33,8 +33,8 @@ export interface ExportSlot {
     volume: number; // in kg
     totalCost: number;
     status: "pending" | "confirmed" | "paid" | "shipped";
-    bookedAt: Timestamp;
-    paidAt?: Timestamp;
+    bookedAt: FieldValue | Timestamp;
+    paidAt?: FieldValue | Timestamp;
 }
 
 /**
@@ -93,7 +93,7 @@ export async function getActiveExportWindowsAction(): Promise<ExportWindow[]> {
     try {
         const q = db.collection("export_windows").where("status", "==", "open");
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -116,8 +116,8 @@ export async function bookExportSlotAction(data: {
     volume: number;
 }): Promise<{ success: boolean; error?: string; slotId?: string }> {
     try {
-        const windowRef = doc(db, "export_windows", data.windowId);
-        const windowDoc = await getDoc(windowRef);
+        const windowRef = db.collection("export_windows").doc(data.windowId);
+        const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
             return { success: false, error: "Export window not found" };
@@ -156,7 +156,7 @@ export async function bookExportSlotAction(data: {
         const slotRef = await db.collection("export_slots").add(slot);
 
         // Update window volume
-        await updateDoc(windowRef, {
+        await windowRef.update({
             currentVolume: windowData.currentVolume + data.volume,
         });
 
@@ -186,7 +186,7 @@ export async function getUserExportSlotsAction(userId: string): Promise<ExportSl
     try {
         const q = db.collection("export_slots").where("userId", "==", userId);
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,

@@ -21,8 +21,8 @@ export interface PaymentRecord {
     purpose: "loan_repayment" | "escrow_payment" | "cooperative_contribution" | "export_slot" | "training_fee";
     relatedId?: string; // ID of related record (loan, escrow, etc.)
     metadata?: Record<string, any>;
-    initiatedAt: Timestamp;
-    completedAt?: Timestamp;
+    initiatedAt: FieldValue | Timestamp;
+    completedAt?: FieldValue | Timestamp;
     paystackResponse?: any;
 }
 

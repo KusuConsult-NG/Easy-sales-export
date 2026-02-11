@@ -13,8 +13,8 @@ import { createAuditLog } from "@/lib/audit-log";
  */
 export async function getFeatureToggle(featureName: string): Promise<boolean> {
     try {
-        const toggleRef = doc(db, COLLECTIONS.FEATURE_TOGGLES, featureName);
-        const toggleDoc = await getDoc(toggleRef);
+        const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
+        const toggleDoc = await toggleRef.get();
 
         if (!toggleDoc.exists) {
             // Return default value
@@ -44,20 +44,20 @@ export async function updateFeatureToggle(
             return { success: false, error: "Unauthorized: Admin access required" };
         }
 
-        const toggleRef = doc(db, COLLECTIONS.FEATURE_TOGGLES, featureName);
-        const toggleDoc = await getDoc(toggleRef);
+        const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
+        const toggleDoc = await toggleRef.get();
 
         const previousState = toggleDoc.exists ? (toggleDoc.data() as FeatureToggle).enabled : DEFAULT_TOGGLES[featureName];
 
         if (toggleDoc.exists) {
             // Update existing toggle
-            await updateDoc(toggleRef, {
+            await toggleRef.update({
                 enabled,
                 updatedAt: FieldValue.serverTimestamp(),
             });
         } else {
             // Create new toggle
-            await setDoc(toggleRef, {
+            await toggleRef.set({
                 id: featureName,
                 name: featureName,
                 description: `Feature toggle for ${featureName}`,
@@ -105,8 +105,8 @@ export async function getAllFeatureToggles(): Promise<{
             return { success: false, error: "Unauthorized: Admin access required" };
         }
 
-        const togglesRef = collection(db, COLLECTIONS.FEATURE_TOGGLES);
-        const snapshot = await getDocs(togglesRef);
+        const togglesRef = db.collection(COLLECTIONS.FEATURE_TOGGLES);
+        const snapshot = await togglesRef.get();
 
         const toggles = snapshot.docs.map(doc => doc.data() as FeatureToggle);
 
@@ -126,8 +126,8 @@ export async function hasFeatureAccess(
     userRole?: string
 ): Promise<boolean> {
     try {
-        const toggleRef = doc(db, COLLECTIONS.FEATURE_TOGGLES, featureName);
-        const toggleDoc = await getDoc(toggleRef);
+        const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
+        const toggleDoc = await toggleRef.get();
 
         if (!toggleDoc.exists) {
             // Feature not found, use default

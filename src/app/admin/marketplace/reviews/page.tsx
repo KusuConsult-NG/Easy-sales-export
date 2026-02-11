@@ -30,6 +30,13 @@ function StarDisplay({ rating }: { rating: number }) {
     );
 }
 
+// Helper to convert FieldValue | Timestamp | Date to Date
+function toDate(value: any): Date {
+    if (value instanceof Date) return value;
+    if (value && typeof value.toDate === 'function') return value.toDate();
+    return new Date();
+}
+
 export default function AdminReviewsPage() {
     const router = useRouter();
     const { showToast } = useToast();
@@ -221,10 +228,10 @@ export default function AdminReviewsPage() {
                                             <StarDisplay rating={review.rating} />
                                             <span
                                                 className={`px-3 py-1 rounded-full text-sm font-semibold ${review.status === "pending"
-                                                        ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200"
-                                                        : review.status === "approved"
-                                                            ? "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200"
-                                                            : "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200"
+                                                    ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200"
+                                                    : review.status === "approved"
+                                                        ? "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200"
+                                                        : "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200"
                                                     }`}
                                             >
                                                 {review.status.charAt(0).toUpperCase() + review.status.slice(1)}
@@ -237,7 +244,7 @@ export default function AdminReviewsPage() {
                                         </div>
                                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                                             Product: {review.productId} • User: {review.userId.slice(0, 12)} •{" "}
-                                            {new Date(review.createdAt).toLocaleDateString()}
+                                            {toDate(review.createdAt).toLocaleDateString()}
                                         </p>
                                         <p className="text-gray-900 dark:text-white mb-4">{review.comment}</p>
                                     </div>
@@ -275,7 +282,7 @@ export default function AdminReviewsPage() {
                                 {review.status !== "pending" && (
                                     <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                                            {review.status === "approved" ? "Approved" : "Rejected"}{review.moderatedAt && ` on ${new Date(review.moderatedAt).toLocaleDateString()}`}
+                                            {review.status === "approved" ? "Approved" : "Rejected"}{review.moderatedAt && ` on ${toDate(review.moderatedAt).toLocaleDateString()}`}
                                         </p>
                                     </div>
                                 )}

@@ -34,13 +34,13 @@ export async function getUserProfileAction() {
         }
 
         const userId = session.user.id;
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) {
             return { success: false, error: "User profile not found" };
         }
 
-        const userData = userDoc.data();
+        const userData = userDoc.data()!;
 
         return {
             success: true,
@@ -82,7 +82,7 @@ export async function updateUserProfileAction(data: {
         const userId = session.user.id;
 
         // Update Firestore
-        await db.doc(COLLECTIONS.USERS, userId).update({
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
             ...validated,
             updatedAt: new Date(),
         });
@@ -120,7 +120,7 @@ export async function updateNotificationPreferencesAction(preferences: {
         const userId = session.user.id;
 
         // Update Firestore
-        await db.doc(COLLECTIONS.USERS, userId).update({
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
             notifications: validated,
             updatedAt: new Date(),
         });

@@ -21,11 +21,11 @@ export interface LoanApplication {
     totalRepayment: number;
     monthlyPayment: number;
     documents?: string[];
-    appliedAt: Timestamp;
-    reviewedAt?: Timestamp;
+    appliedAt: FieldValue | Timestamp;
+    reviewedAt?: FieldValue | Timestamp;
     reviewedBy?: string;
     rejectionReason?: string;
-    disbursedAt?: Timestamp;
+    disbursedAt?: FieldValue | Timestamp;
 }
 
 /**
@@ -386,7 +386,7 @@ export interface RepaymentInstallment {
     totalAmount: number;
     paidAmount: number;
     status: "pending" | "paid" | "overdue" | "partial";
-    paidAt?: Timestamp;
+    paidAt?: FieldValue | Timestamp;
     penaltyAmount?: number;
     daysOverdue?: number;
 }
@@ -435,7 +435,9 @@ export async function getRepaymentScheduleAction(
             loanData.durationMonths
         );
 
-        const startDate = loanData.disbursedAt?.toDate() || new Date();
+        const startDate = (loanData.disbursedAt && 'toDate' in loanData.disbursedAt)
+            ? loanData.disbursedAt.toDate()
+            : new Date();
         const installments: RepaymentInstallment[] = [];
 
         for (let i = 0; i < schedule.length; i++) {

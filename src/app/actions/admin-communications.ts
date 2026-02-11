@@ -20,20 +20,48 @@ export interface CreateAnnouncementState {
  * Get recipient emails based on segment
  */
 async function getRecipientEmails(segment: string): Promise<string[]> {
-    // Query users from Firebase based on filters
-    // Can be implemented with: query(collection(db, \"users\"), where(...))
-    // For now, return empty array - admin can use Firebase Console for advanced queries
-    // For now, return mock emails for demonstration
-    const mockEmails: Record<string, string[]> = {
-        all: ['user1@example.com', 'user2@example.com'],
-        active: ['active@example.com'],
-        verified: ['verified@example.com'],
-        cooperative: ['coop@example.com'],
-        wave: ['wave@example.com'],
-        sellers: ['seller@example.com']
-    };
+    try {
+        let query = db.collection('users');
+        let snapshot;
 
-    return mockEmails[segment] || [];
+        // Simple segmentation based on roles or status
+        // Note: In a real app, you might want to paginate this or use a dedicated email service for large lists
+        switch (segment) {
+            case 'active':
+                snapshot = await query.where('status', '==', 'active').get();
+                break;
+            case 'verified':
+                snapshot = await query.where('verified', '==', true).get();
+                break;
+            case 'sellers':
+                snapshot = await query.where('roles', 'array-contains', 'seller').get();
+                break;
+            case 'cooperative':
+                snapshot = await query.where('roles', 'array-contains', 'cooperative_member').get();
+                break;
+            case 'wave':
+                snapshot = await query.where('roles', 'array-contains', 'wave_student').get();
+                break;
+            case 'all':
+            default:
+                snapshot = await query.get();
+                break;
+        }
+
+        const emails: string[] = [];
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.email) {
+                emails.push(data.email);
+            }
+        });
+
+        // Remove duplicates
+        return [...new Set(emails)];
+    } catch (error) {
+        console.error('Error fetching recipient emails:', error);
+        return [];
+    }
 }
 
 /**
@@ -43,8 +71,16 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
 export async function sendBulkEmailAction(prevState: SendBulkEmailState, formData: FormData): Promise<SendBulkEmailState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes('admin')) {
-            return { success: false, error: 'Unauthorized' };
+        // Check if user is admin
+        const userRef = db.collection('users').doc(session?.user?.id || 'unknown');
+        const userDoc = await userRef.get();
+        const userData = userDoc.data();
+
+        if (!session?.user || !userData?.roles?.includes('admin')) {
+            // simplified check, relying on session claims is faster but verifying in DB is safer for critical actions
+            if (!session?.user?.roles?.includes('admin')) {
+                return { success: false, error: 'Unauthorized' };
+            }
         }
 
         const recipients = formData.get('recipients') as string;
@@ -58,19 +94,27 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         // Get recipient emails
         const emails = await getRecipientEmails(recipients);
 
+        if (emails.length === 0) {
+            return { success: false, error: 'No recipients found for this segment' };
+        }
+
         // Send email via Resend
+        // Note: Resend basic tier has limits. For production bulk email, consider batching or a different provider.
         const { Resend } = await import('resend');
         const resend = new Resend(process.env.RESEND_API_KEY);
 
+        // Batch sending to avoid hitting limits if possible, or send as bcc
+        // For privacy, we should ALWAYS use Bcc for bulk emails
         await resend.emails.send({
             from: 'Easy Sales Export <onboarding@resend.dev>',
-            to: emails,
+            to: 'admin@easysalesexport.com', // Send to admin, bcc everyone else
+            bcc: emails,
             subject: subject,
             html: body
         });
 
         // Log email in database
-        await (db as any).collection('email_history').add({
+        await db.collection('email_history').add({
             recipients: recipients,
             subject,
             body,
@@ -84,11 +128,11 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
             success: true,
             recipientCount: emails.length
         };
-    } catch (error) {
+    } catch (error: any) {
         console.error('Failed to send bulk email:', error);
         return {
             success: false,
-            error: 'Failed to send email. Please try again.'
+            error: error.message || 'Failed to send email. Please try again.'
         };
     }
 }
@@ -100,7 +144,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
 export async function createAnnouncementAction(prevState: CreateAnnouncementState, formData: FormData): Promise<CreateAnnouncementState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes('admin')) {
+        if (!session?.user?.roles?.includes('admin')) {
             return { success: false, error: 'Unauthorized' };
         }
 
@@ -113,7 +157,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
         }
 
         // Create announcement in database
-        const announcementRef = await (db as any).collection('announcements').add({
+        const announcementRef = await db.collection('announcements').add({
             title,
             message,
             priority,

@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { db } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, GeoPoint } from "firebase-admin/firestore";
 import {
     landListingSchema,
     landListingUpdateSchema,
@@ -84,17 +84,17 @@ export async function createLandListing(
  */
 export async function getLandListings(filters?: z.infer<typeof landSearchSchema>) {
     try {
-        let listingsQuery = query(
-            collection(db, 'land_listings'),
-            orderBy('createdAt', 'desc')
-        );
+        let listingsQuery = db.collection('land_listings')
+            .orderBy('createdAt', 'desc');
 
         // Apply status filter if provided
         if (filters?.status) {
-            listingsQuery = db.collection('land_listings').where('status', '==', filters.status).orderBy('createdAt', 'desc');
+            listingsQuery = db.collection('land_listings')
+                .where('status', '==', filters.status)
+                .orderBy('createdAt', 'desc');
         }
 
-        const snapshot = await getDocs(listingsQuery);
+        const snapshot = await listingsQuery.get();
 
         let listings = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -150,18 +150,16 @@ export async function getVerifiedLandListings(filters?: z.infer<typeof landSearc
  */
 export async function getLandListing(listingId: string) {
     try {
-        const listingsQuery = db.collection('land_listings').where('__name__', '==', listingId);
+        const listingDoc = await db.collection('land_listings').doc(listingId).get();
 
-        const snapshot = await getDocs(listingsQuery);
-
-        if (snapshot.empty) {
+        if (!listingDoc.exists) {
             return { success: false, error: "Listing not found", listing: null };
         }
 
-        const data = snapshot.docs[0].data();
+        const data = listingDoc.data()!;
 
         const listing: LandListing = {
-            id: snapshot.docs[0].id,
+            id: listingDoc.id,
             ...data,
             location: {
                 ...data.location,
@@ -192,9 +190,11 @@ export async function getMyLandListings() {
     }
 
     try {
-        const listingsQuery = db.collection('land_listings').where('ownerId', '==', session.user.id).orderBy('createdAt', 'desc');
+        const listingsQuery = db.collection('land_listings')
+            .where('ownerId', '==', session.user.id)
+            .orderBy('createdAt', 'desc');
 
-        const snapshot = await getDocs(listingsQuery);
+        const snapshot = await listingsQuery.get();
 
         const listings = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -256,7 +256,7 @@ export async function updateLandListing(
             } as any;
         }
 
-        await db.doc('land_listings', listingId).update({
+        await db.collection('land_listings').doc(listingId).update({
             ...updateData,
             updatedAt: FieldValue.serverTimestamp(),
             // Reset to pending if content changed
@@ -316,7 +316,7 @@ export async function verifyLandListing(
             updateData.rejectionReason = validated.rejectionReason;
         }
 
-        await db.doc('land_listings', validated.listingId).update(updateData);
+        await db.collection('land_listings').doc(validated.listingId).update(updateData);
 
         // Audit log
         await createAuditLog({
@@ -365,7 +365,7 @@ export async function deleteLandListing(listingId: string) {
         }
 
         // Soft delete by updating status
-        await db.doc('land_listings', listingId).update({
+        await db.collection('land_listings').doc(listingId).update({
             status: 'deleted',
             deletedAt: FieldValue.serverTimestamp(),
             deletedBy: session.user.id,

@@ -1,9 +1,3 @@
-/**
- * Marketplace Server Actions - Buyer Side
- * 
- * Actions for product browsing, cart, and orders
- */
-
 "use server";
 
 import { db } from "@/lib/firebase-admin";
@@ -27,29 +21,27 @@ export interface ProductFilters {
 
 export async function getProductsAction(filters?: ProductFilters) {
     try {
-        let productsQuery = query(
-            db.collection(COLLECTIONS.PRODUCTS),
-            where("status", "==", "active")
-        );
+        let query = db.collection(COLLECTIONS.PRODUCTS)
+            .where("status", "==", "active");
 
         // Apply filters
         if (filters?.category) {
-            productsQuery = query(productsQuery, where("category", "==", filters.category));
+            query = query.where("category", "==", filters.category);
         }
 
         if (filters?.state) {
-            productsQuery = query(productsQuery, where("location.state", "==", filters.state));
+            query = query.where("location.state", "==", filters.state);
         }
 
         if (filters?.bulkAvailable) {
-            productsQuery = query(productsQuery, where("bulkAvailable", "==", true));
+            query = query.where("bulkAvailable", "==", true);
         }
 
         if (filters?.exportReady) {
-            productsQuery = query(productsQuery, where("exportReady", "==", true));
+            query = query.where("exportReady", "==", true);
         }
 
-        const snapshot = await getDocs(productsQuery);
+        const snapshot = await query.get();
         let products = snapshot.docs.map(doc => doc.data() as Product);
 
         // Client-side filters (Firestore limitations)
@@ -90,7 +82,8 @@ export async function getProductsAction(filters?: ProductFilters) {
  */
 export async function getProductByIdAction(productId: string) {
     try {
-        const productDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
+        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
+        const productDoc = await productRef.get();
 
         if (!productDoc.exists) {
             return { success: false, error: "Product not found" };
@@ -110,14 +103,12 @@ export async function getProductByIdAction(productId: string) {
  */
 export async function getFeaturedProductsAction() {
     try {
-        const productsQuery = query(
-            db.collection(COLLECTIONS.PRODUCTS),
-            where("status", "==", "active"),
-            orderBy("orders", "desc"),
-            limit(8)
-        );
+        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
+            .where("status", "==", "active")
+            .orderBy("orders", "desc")
+            .limit(8)
+            .get();
 
-        const snapshot = await getDocs(productsQuery);
         const products = snapshot.docs.map(doc => doc.data() as Product);
 
         return { success: true, products };
@@ -132,13 +123,11 @@ export async function getFeaturedProductsAction() {
  */
 export async function getProductsByCategoryAction(category: string) {
     try {
-        const productsQuery = query(
-            db.collection(COLLECTIONS.PRODUCTS),
-            where("status", "==", "active"),
-            where("category", "==", category)
-        );
+        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
+            .where("status", "==", "active")
+            .where("category", "==", category)
+            .get();
 
-        const snapshot = await getDocs(productsQuery);
         const products = snapshot.docs.map(doc => doc.data() as Product);
 
         return { success: true, products };

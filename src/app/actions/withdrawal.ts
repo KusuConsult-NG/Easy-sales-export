@@ -5,9 +5,9 @@
 'use server';
 
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/types/firestore';
-import { doc, getDoc, setDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import { createAuditLog } from '@/lib/audit-log';
 
 interface WithdrawalRequestData {
@@ -43,14 +43,14 @@ export async function submitWithdrawalRequestAction(
         }
 
         // Check user's cooperative membership
-        const membershipRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
-        const membershipDoc = await getDoc(membershipRef);
+        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        const membershipDoc = await membershipRef.get();
 
         if (!membershipDoc.exists) {
             return { error: 'You are not a member of any cooperative', success: false };
         }
 
-        const membership = membershipDoc.data();
+        const membership = membershipDoc.data()!;
         const availableBalance = membership.savingsBalance || 0;
 
         // Validate balance
@@ -62,8 +62,8 @@ export async function submitWithdrawalRequestAction(
         }
 
         // Create withdrawal request
-        const withdrawalRef = doc(collection(db, COLLECTIONS.WITHDRAWALS));
-        await setDoc(withdrawalRef, {
+        const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc();
+        await withdrawalRef.set({
             userId,
             userEmail,
             userName: session.user.name || userEmail,
@@ -94,14 +94,21 @@ export async function submitWithdrawalRequestAction(
             details: `Withdrawal request of ₦${data.amount.toLocaleString()} submitted`,
         });
 
-        // Send confirmation email
-        const { sendWithdrawalConfirmationEmail } = await import('@/lib/email-notifications');
-        await sendWithdrawalConfirmationEmail(
-            userEmail,
-            session.user.name || userEmail,
-            data.amount,
-            withdrawalRef.id
-        );
+        // Send confirmation email (dynamically imported to avoid build issues if missing)
+        try {
+            const { sendWithdrawalConfirmationEmail } = await import('@/lib/email-notifications');
+            if (sendWithdrawalConfirmationEmail) {
+                await sendWithdrawalConfirmationEmail(
+                    userEmail,
+                    session.user.name || userEmail,
+                    data.amount,
+                    withdrawalRef.id
+                );
+            }
+        } catch (emailError) {
+            console.error('Failed to send confirmation email:', emailError);
+            // Don't fail the request if email fails
+        }
 
 
         return {

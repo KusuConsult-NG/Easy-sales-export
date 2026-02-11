@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { searchLandListingsAction, type LandListing } from "@/app/actions/land-listings";
 import { useSearchParams, useRouter } from "next/navigation";
 
-export default function FarmNationPropertiesPage() {
+function PropertiesContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
 
@@ -286,5 +286,17 @@ export default function FarmNationPropertiesPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function FarmNationPropertiesPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+                <Loader2 className="w-12 h-12 animate-spin text-teal-600" />
+            </div>
+        }>
+            <PropertiesContent />
+        </Suspense>
     );
 }

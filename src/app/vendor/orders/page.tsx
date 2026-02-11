@@ -100,8 +100,8 @@ export default function VendorOrdersPage() {
                                 key={f.key}
                                 onClick={() => setFilterStatus(f.key as any)}
                                 className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${filterStatus === f.key
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
                                     }`}
                             >
                                 {f.label}
@@ -129,13 +129,13 @@ export default function VendorOrdersPage() {
                                             {order.orderNumber}
                                         </h3>
                                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                                            {order.customerName} • {new Date(order.createdAt.toDate()).toLocaleDateString()}
+                                            {order.customerName} • {new Date(order.createdAt).toLocaleDateString()}
                                         </p>
                                     </div>
                                     <span className={`px-4 py-2 rounded-lg font-bold text-sm capitalize ${order.status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                                            order.status === "processing" ? "bg-blue-100 text-blue-700" :
-                                                order.status === "shipped" ? "bg-purple-100 text-purple-700" :
-                                                    "bg-green-100 text-green-700"
+                                        order.status === "processing" ? "bg-blue-100 text-blue-700" :
+                                            order.status === "shipped" ? "bg-purple-100 text-purple-700" :
+                                                "bg-green-100 text-green-700"
                                         }`}>
                                         {order.status}
                                     </span>

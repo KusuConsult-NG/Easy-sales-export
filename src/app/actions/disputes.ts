@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 /**
  * Create a new dispute for an order
@@ -54,12 +55,11 @@ export async function createDisputeAction(params: {
         }
 
         // Check if dispute already exists for this order
-        const existingDisputeQuery = query(
-            db.collection(COLLECTIONS.DISPUTES),
-            where("orderId", "==", orderId),
-            where("status", "in", ["open", "under_review"])
-        );
-        const existingDisputes = await getDocs(existingDisputeQuery);
+        const existingDisputes = await db.collection(COLLECTIONS.DISPUTES)
+            .where("orderId", "==", orderId)
+            .where("status", "in", ["open", "under_review"])
+            .get();
+
         if (!existingDisputes.empty) {
             return { success: false, error: "Active dispute already exists for this order" };
         }
@@ -104,21 +104,19 @@ export async function getBuyerDisputesAction() {
         }
         const userId = session.user.id;
 
-        const q = query(
-            db.collection(COLLECTIONS.DISPUTES),
-            where("buyerId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
+        const snapshot = await db.collection(COLLECTIONS.DISPUTES)
+            .where("buyerId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(q);
         const disputes: Dispute[] = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 ...data,
                 id: doc.id,
-                createdAt: data.createdAt instanceof Date ? data.createdAt : data.createdAt?.toDate(),
-                updatedAt: data.updatedAt instanceof Date ? data.updatedAt : data.updatedAt?.toDate(),
-                resolvedAt: data.resolvedAt instanceof Date ? data.resolvedAt : data.resolvedAt?.toDate(),
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined,
             };
         }) as Dispute[];
 
@@ -140,21 +138,19 @@ export async function getSellerDisputesAction() {
         }
         const userId = session.user.id;
 
-        const q = query(
-            db.collection(COLLECTIONS.DISPUTES),
-            where("sellerId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
+        const snapshot = await db.collection(COLLECTIONS.DISPUTES)
+            .where("sellerId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(q);
         const disputes: Dispute[] = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 ...data,
                 id: doc.id,
-                createdAt: data.createdAt instanceof Date ? data.createdAt : data.createdAt?.toDate(),
-                updatedAt: data.updatedAt instanceof Date ? data.updatedAt : data.updatedAt?.toDate(),
-                resolvedAt: data.resolvedAt instanceof Date ? data.resolvedAt : data.resolvedAt?.toDate(),
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined,
             };
         }) as Dispute[];
 
@@ -185,28 +181,23 @@ export async function getAdminDisputesAction(filters?: {
             return { success: false, error: "Not authorized as admin" };
         }
 
-        let q = query(
-            db.collection(COLLECTIONS.DISPUTES),
-            orderBy("createdAt", "desc")
-        );
+        let query = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", "desc");
 
         if (filters?.status) {
-            q = query(
-                db.collection(COLLECTIONS.DISPUTES),
-                where("status", "==", filters.status),
-                orderBy("createdAt", "desc")
-            );
+            query = db.collection(COLLECTIONS.DISPUTES)
+                .where("status", "==", filters.status)
+                .orderBy("createdAt", "desc");
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await query.get();
         const disputes: Dispute[] = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 ...data,
                 id: doc.id,
-                createdAt: data.createdAt instanceof Date ? data.createdAt : data.createdAt?.toDate(),
-                updatedAt: data.updatedAt instanceof Date ? data.updatedAt : data.updatedAt?.toDate(),
-                resolvedAt: data.resolvedAt instanceof Date ? data.resolvedAt : data.resolvedAt?.toDate(),
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined,
             };
         }) as Dispute[];
 
@@ -249,9 +240,9 @@ export async function getDisputeByIdAction(disputeId: string) {
         const disputeData: Dispute = {
             ...dispute,
             id: disputeDoc.id,
-            createdAt: dispute.createdAt instanceof Date ? dispute.createdAt : (dispute.createdAt as any)?.toDate(),
-            updatedAt: dispute.updatedAt instanceof Date ? dispute.updatedAt : (dispute.updatedAt as any)?.toDate(),
-            resolvedAt: dispute.resolvedAt instanceof Date ? dispute.resolvedAt : (dispute.resolvedAt as any)?.toDate(),
+            createdAt: (dispute.createdAt as any)?.toDate ? (dispute.createdAt as any).toDate() : dispute.createdAt,
+            updatedAt: (dispute.updatedAt as any)?.toDate ? (dispute.updatedAt as any).toDate() : dispute.updatedAt,
+            resolvedAt: (dispute.resolvedAt as any)?.toDate ? (dispute.resolvedAt as any).toDate() : dispute.resolvedAt,
         } as Dispute;
 
         return { success: true, dispute: disputeData };

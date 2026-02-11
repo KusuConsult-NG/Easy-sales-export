@@ -1,8 +1,8 @@
 'use server';
 
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, Timestamp, doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { db } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export interface CreateBookingData {
     exportWindowId: string;
@@ -30,14 +30,14 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
         }
 
         // Check if export window exists and has availability
-        const windowRef = doc(db, 'export_windows', data.exportWindowId);
-        const windowDoc = await getDoc(windowRef);
+        const windowRef = db.collection('export_windows').doc(data.exportWindowId);
+        const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
             return { success: false, error: 'Export window not found' };
         }
 
-        const windowData = windowDoc.data();
+        const windowData = windowDoc.data()!;
         const availableVolume = windowData.targetVolume - windowData.currentVolume;
 
         if (data.quantity > availableVolume) {
@@ -59,8 +59,8 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
         });
 
         // Update export window current volume
-        await updateDoc(windowRef, {
-            currentVolume: increment(data.quantity),
+        await windowRef.update({
+            currentVolume: FieldValue.increment(data.quantity),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -91,11 +91,11 @@ export async function getUserBookingsAction(): Promise<{
             return { success: false, error: 'Not authenticated' };
         }
 
-        const { getDocs, query, where, orderBy } = await import('firebase/firestore');
+        const snapshot = await db.collection('export_bookings')
+            .where('userId', '==', session.user.id)
+            .orderBy('createdAt', 'desc')
+            .get();
 
-        const q = db.collection('export_bookings').where('userId', '==', session.user.id).orderBy('createdAt', 'desc');
-
-        const snapshot = await getDocs(q);
         const bookings = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),

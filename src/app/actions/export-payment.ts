@@ -1,7 +1,3 @@
-/**
- * Export Investment Payment Integration
- * Handles Paystack payments for export window investments
- */
 "use server";
 
 import { auth } from "@/lib/auth";
@@ -51,14 +47,14 @@ export async function initializeInvestmentPaymentAction(
         }
 
         // Check if export window exists and is open
-        const windowRef = doc(db, "exportWindows", windowId);
-        const windowDoc = await getDoc(windowRef);
+        const windowRef = db.collection("exportWindows").doc(windowId);
+        const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
             return { error: "Export window not found", success: false };
         }
 
-        const windowData = windowDoc.data();
+        const windowData = windowDoc.data()!;
 
         if (windowData.status !== "open" && windowData.status !== "active") {
             return { error: "This export window is no longer accepting investments", success: false };
@@ -93,7 +89,7 @@ export async function initializeInvestmentPaymentAction(
 
         // Create pending investment record
         const investmentId = `${session.user.id}_${windowId}_${Date.now()}`;
-        await db.doc("exportInvestments", investmentId).set({
+        await db.collection("exportInvestments").doc(investmentId).set({
             investmentId,
             windowId,
             windowTitle,
@@ -144,8 +140,8 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = doc(db, "processedPayments", reference);
-        const existingPayment = await getDoc(processedRef);
+        const processedRef = db.collection("processedPayments").doc(reference);
+        const existingPayment = await processedRef.get();
 
         if (existingPayment.exists) {
             return {
@@ -187,13 +183,10 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         }
 
         // Find investment record
-        const investmentQuery = await getDocs(
-            query(
-                collection(db, "exportInvestments"),
-                where("paymentReference", "==", reference),
-                limit(1)
-            )
-        );
+        const investmentQuery = await db.collection("exportInvestments")
+            .where("paymentReference", "==", reference)
+            .limit(1)
+            .get();
 
         if (investmentQuery.empty) {
             return { error: "Investment record not found", success: false };
@@ -203,9 +196,9 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         const investmentData = investmentDoc.data();
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
-        await runTransaction(db, async (transaction) => {
+        await db.runTransaction(async (transaction) => {
             // Update investment status
-            const investmentRef = doc(db, "exportInvestments", investmentDoc.id);
+            const investmentRef = db.collection("exportInvestments").doc(investmentDoc.id);
             transaction.update(investmentRef, {
                 status: "active",
                 paymentStatus: "paid",
@@ -214,7 +207,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             });
 
             // Update export window funding
-            const windowRef = doc(db, "exportWindows", windowId);
+            const windowRef = db.collection("exportWindows").doc(windowId);
             const windowSnap = await transaction.get(windowRef);
             const currentFunding = windowSnap.data()?.currentFunding || 0;
             const investorCount = windowSnap.data()?.investorCount || 0;
@@ -226,14 +219,14 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             });
 
             // Update or create investor portfolio
-            const portfolioId = session.user.id;
-            const portfolioRef = doc(db, "investorPortfolios", portfolioId);
+            const portfolioId = session.user.id!;
+            const portfolioRef = db.collection("investorPortfolios").doc(portfolioId);
             const portfolioSnap = await transaction.get(portfolioRef);
 
             if (portfolioSnap.exists) {
-                const currentInvested = portfolioSnap.data().totalInvested || 0;
-                const currentReturns = portfolioSnap.data().totalExpectedReturns || 0;
-                const activeCount = portfolioSnap.data().activeInvestments || 0;
+                const currentInvested = portfolioSnap.data()!.totalInvested || 0;
+                const currentReturns = portfolioSnap.data()!.totalExpectedReturns || 0;
+                const activeCount = portfolioSnap.data()!.activeInvestments || 0;
 
                 transaction.update(portfolioRef, {
                     totalInvested: currentInvested + amountInNaira,

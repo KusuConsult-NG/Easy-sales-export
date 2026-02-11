@@ -19,15 +19,22 @@ function StarDisplay({ rating }: { rating: number }) {
                 <Star
                     key={i}
                     className={`w-4 h-4 ${i < fullStars
-                            ? "fill-yellow-400 text-yellow-400"
-                            : i === fullStars && hasHalfStar
-                                ? "fill-yellow-200 text-yellow-400"
-                                : "text-gray-300"
+                        ? "fill-yellow-400 text-yellow-400"
+                        : i === fullStars && hasHalfStar
+                            ? "fill-yellow-200 text-yellow-400"
+                            : "text-gray-300"
                         }`}
                 />
             ))}
         </div>
     );
+}
+
+// Helper to convert FieldValue | Timestamp | Date to Date
+function toDate(value: any): Date {
+    if (value instanceof Date) return value;
+    if (value && typeof value.toDate === 'function') return value.toDate();
+    return new Date();
 }
 
 export default function ProductReviewsSection({ productId }: ProductReviewsSectionProps) {
@@ -186,7 +193,7 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                                 <StarDisplay rating={review.rating} />
                             </div>
                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                                {new Date(review.createdAt).toLocaleDateString()}
+                                {toDate(review.createdAt).toLocaleDateString()}
                             </span>
                         </div>
 

@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
-import { Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 /**
  * In-App Notification System
@@ -16,8 +16,8 @@ export interface Notification {
     link?: string;
     linkText?: string;
     read: boolean;
-    createdAt: Timestamp;
-    readAt?: Timestamp;
+    createdAt: FieldValue | Timestamp;
+    readAt?: FieldValue | Timestamp;
 }
 
 /**

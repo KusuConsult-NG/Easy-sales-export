@@ -180,6 +180,7 @@ export enum AuditActionType {
     ESCROW_CREATE = 'escrow_create',
     ESCROW_HOLD = 'escrow_hold',
     ESCROW_RELEASE = 'escrow_release',
+    ESCROW_REFUND = 'escrow_refund',
     ESCROW_DISPUTE = 'escrow_dispute',
 
     // Admin actions

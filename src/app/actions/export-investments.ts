@@ -3,6 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 
 export type ExportOpportunity = {
     id: string;
@@ -23,12 +24,9 @@ export type ExportOpportunity = {
  */
 export async function getExportOpportunities() {
     try {
-        const q = query(
-            db.collection("export_opportunities"),
-            orderBy("createdAt", "desc")
-        );
-
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection("export_opportunities")
+            .orderBy("createdAt", "desc")
+            .get();
 
         const opportunities = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -36,8 +34,8 @@ export async function getExportOpportunities() {
                 id: doc.id,
                 ...data,
                 // Convert Timestamps to ISO strings or Dates as needed for serialization
-                openDate: data.openDate?.toDate?.().toISOString() || data.openDate,
-                closeDate: data.closeDate?.toDate?.().toISOString() || data.closeDate,
+                openDate: (data.openDate as Timestamp)?.toDate?.().toISOString() || data.openDate,
+                closeDate: (data.closeDate as Timestamp)?.toDate?.().toISOString() || data.closeDate,
             };
         }) as ExportOpportunity[];
 
@@ -141,7 +139,7 @@ export async function seedExportOpportunities() {
 
     try {
         const promises = opportunities.map(async (opp) => {
-            const docRef = doc(db.collection("export_opportunities"));
+            const docRef = db.collection("export_opportunities").doc();
             await docRef.set(opp);
         });
 
@@ -159,19 +157,18 @@ export async function seedExportOpportunities() {
 export async function getExportOpportunityById(id: string) {
     try {
         const docRef = db.collection("export_opportunities").doc(id);
-        // Correct way to get document
-        const snapshot = await import("firebase/firestore").then(fs => fs.getDoc(docRef));
+        const snapshot = await docRef.get();
 
         if (!snapshot.exists) {
             return { success: false, error: "Opportunity not found" };
         }
 
-        const data = snapshot.data();
+        const data = snapshot.data()!;
         const opportunity = {
             id: snapshot.id,
             ...data,
-            openDate: data.openDate?.toDate?.().toISOString() || data.openDate,
-            closeDate: data.closeDate?.toDate?.().toISOString() || data.closeDate,
+            openDate: (data.openDate as Timestamp)?.toDate?.().toISOString() || data.openDate,
+            closeDate: (data.closeDate as Timestamp)?.toDate?.().toISOString() || data.closeDate,
         } as ExportOpportunity;
 
         return { success: true, data: opportunity };

@@ -1,8 +1,8 @@
 'use server';
 
-import { db } from '@/lib/firebase';
-import { collection, addDoc, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
+import { FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
 
 export interface SendResetEmailState {
@@ -43,7 +43,6 @@ export async function sendResetEmailAction(
             return { success: false, error: 'Invalid email format' };
         }
 
-        // Check if user exists in Firebase Auth
         const auth = getAuth();
         try {
             await auth.getUserByEmail(email);
@@ -65,7 +64,7 @@ export async function sendResetEmailAction(
             token,
             expiry,
             used: false,
-            createdAt: new Date()
+            createdAt: FieldValue.serverTimestamp()
         });
 
         // Send email using Resend
@@ -87,8 +86,6 @@ export async function sendResetEmailAction(
                 <p>If you didn't request this, please ignore this email.</p>
             `
         });
-
-        // console.log(`Password reset email sent to: ${email}`);
 
         return {
             success: true,
@@ -129,14 +126,10 @@ export async function resetPasswordAction(
         }
 
         // Find and validate token in Firestore
-        const resetsRef = collection(db, 'password_resets');
-        const q = query(
-            resetsRef,
-            where('token', '==', token),
-            where('used', '==', false)
-        );
-
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection('password_resets')
+            .where('token', '==', token)
+            .where('used', '==', false)
+            .get();
 
         if (snapshot.empty) {
             return { success: false, error: 'Invalid or expired reset token' };
@@ -153,6 +146,7 @@ export async function resetPasswordAction(
         // Update password in Firebase Auth
         const auth = getAuth();
         try {
+            // Find user again to be sure (since resetData.email is trusted from DB)
             const user = await auth.getUserByEmail(resetData.email);
             await auth.updateUser(user.uid, {
                 password: password
@@ -163,9 +157,9 @@ export async function resetPasswordAction(
         }
 
         // Mark token as used
-        await db.doc('password_resets', resetDoc.id).update({
+        await db.collection('password_resets').doc(resetDoc.id).update({
             used: true,
-            usedAt: new Date()
+            usedAt: FieldValue.serverTimestamp()
         });
 
         return {

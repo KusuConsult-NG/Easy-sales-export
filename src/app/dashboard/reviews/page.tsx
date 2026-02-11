@@ -32,14 +32,21 @@ function StarRating({ rating, onRate }: { rating: number; onRate?: (r: number) =
                 >
                     <Star
                         className={`w-5 h-5 ${star <= (hover || rating)
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-gray-300 dark:text-gray-600"
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-gray-300 dark:text-gray-600"
                             }`}
                     />
                 </button>
             ))}
         </div>
     );
+}
+
+// Helper to convert FieldValue | Timestamp | Date to Date
+function toDate(value: any): Date {
+    if (value instanceof Date) return value;
+    if (value && typeof value.toDate === 'function') return value.toDate();
+    return new Date();
 }
 
 export default function MyReviewsPage() {
@@ -76,7 +83,7 @@ export default function MyReviewsPage() {
     function startEdit(review: ProductReview) {
         // Check if within 30-day window
         const daysSince = Math.floor(
-            (Date.now() - new Date(review.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+            (Date.now() - toDate(review.createdAt).getTime()) / (1000 * 60 * 60 * 24)
         );
 
         if (daysSince > 30) {
@@ -133,7 +140,7 @@ export default function MyReviewsPage() {
 
     const canEdit = (review: ProductReview) => {
         const daysSince = Math.floor(
-            (Date.now() - new Date(review.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+            (Date.now() - toDate(review.createdAt).getTime()) / (1000 * 60 * 60 * 24)
         );
         return daysSince <= 30;
     };
@@ -178,7 +185,7 @@ export default function MyReviewsPage() {
                                             </div>
                                             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                                                 <Calendar className="w-4 h-4" />
-                                                {new Date(review.createdAt).toLocaleDateString()}
+                                                {toDate(review.createdAt).toLocaleDateString()}
                                                 <span
                                                     className={`ml-2 px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
                                                         review.status

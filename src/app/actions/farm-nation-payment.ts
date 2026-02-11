@@ -1,7 +1,3 @@
-/**
- * Farm Nation Payment Integration
- * Handles Paystack payments for land purchases
- */
 "use server";
 
 import { auth } from "@/lib/auth";
@@ -46,14 +42,14 @@ export async function initializePropertyPaymentAction(
         }
 
         // Check if property exists and is available
-        const propertyRef = doc(db, "farmNationProperties", propertyId);
-        const propertyDoc = await getDoc(propertyRef);
+        const propertyRef = db.collection("farmNationProperties").doc(propertyId);
+        const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
             return { error: "Property not found", success: false };
         }
 
-        const propertyData = propertyDoc.data();
+        const propertyData = propertyDoc.data()!;
 
         if (propertyData.status !== "available") {
             return { error: "Property is no longer available", success: false };
@@ -80,7 +76,7 @@ export async function initializePropertyPaymentAction(
 
         // Create pending purchase record
         const purchaseId = `${session.user.id}_${propertyId}_${Date.now()}`;
-        await db.doc("propertyPurchases", purchaseId).set({
+        await db.collection("propertyPurchases").doc(purchaseId).set({
             purchaseId,
             propertyId,
             propertyTitle,
@@ -128,8 +124,8 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = doc(db, "processedPayments", reference);
-        const existingPayment = await getDoc(processedRef);
+        const processedRef = db.collection("processedPayments").doc(reference);
+        const existingPayment = await processedRef.get();
 
         if (existingPayment.exists) {
             return {
@@ -159,18 +155,18 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         }
 
         // Update property ownership
-        const propertyRef = doc(db, "farmNationProperties", propertyId);
-        const propertyDoc = await getDoc(propertyRef);
+        const propertyRef = db.collection("farmNationProperties").doc(propertyId);
+        const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
             return { error: "Property not found", success: false };
         }
 
-        const propertyData = propertyDoc.data();
+        const propertyData = propertyDoc.data()!;
         const amountInNaira = paymentData.data.amount / 100;
 
         // Transfer ownership
-        await db.doc("farmNationProperties", propertyId).update({
+        await propertyRef.update({
             ownerId: session.user.id,
             ownerEmail: session.user.email,
             previousOwnerId: propertyData.ownerId,
@@ -181,17 +177,14 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         });
 
         // Update purchase record
-        const purchaseQuery = await getDocs(
-            query(
-                collection(db, "propertyPurchases"),
-                where("paymentReference", "==", reference),
-                limit(1)
-            )
-        );
+        const purchaseQuery = await db.collection("propertyPurchases")
+            .where("paymentReference", "==", reference)
+            .limit(1)
+            .get();
 
         if (!purchaseQuery.empty) {
             const purchaseDoc = purchaseQuery.docs[0];
-            await db.doc("propertyPurchases", purchaseDoc.id).update({
+            await db.collection("propertyPurchases").doc(purchaseDoc.id).update({
                 status: "completed",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),

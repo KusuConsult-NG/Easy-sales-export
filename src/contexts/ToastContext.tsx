@@ -81,12 +81,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 success: string | ((data: T) => string);
                 error: string | ((error: any) => string);
             }
-        ) => {
-            return toast.promise(promiseToResolve, {
+        ): Promise<T> => {
+            const result = toast.promise(promiseToResolve, {
                 loading: messages.loading,
                 success: messages.success,
                 error: messages.error,
             });
+            // Await the promise to get the actual T value
+            return promiseToResolve;
         },
         []
     );

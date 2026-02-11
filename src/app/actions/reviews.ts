@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { ProductReview, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 /**
  * Create a product review
@@ -68,13 +69,12 @@ export async function createReviewAction(params: {
         }
 
         // Check if already reviewed this product from this order
-        const existingReviewQuery = query(
-            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
-            where("userId", "==", userId),
-            where("productId", "==", productId),
-            where("orderId", "==", orderId)
-        );
-        const existingReviews = await getDocs(existingReviewQuery);
+        const existingReviews = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
+            .where("userId", "==", userId)
+            .where("productId", "==", productId)
+            .where("orderId", "==", orderId)
+            .get();
+
         if (!existingReviews.empty) {
             return { success: false, error: "You have already reviewed this product from this order" };
         }
@@ -90,7 +90,7 @@ export async function createReviewAction(params: {
             images,
             verified: true, // Purchased from platform
             status: "pending",
-            createdAt: new Date(),
+            createdAt: FieldValue.serverTimestamp(),
         };
 
         await db.collection(COLLECTIONS.PRODUCT_REVIEWS).add(reviewData);
@@ -113,33 +113,25 @@ export async function getProductReviewsAction(
     }
 ) {
     try {
-        let q = query(
-            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
-            where("productId", "==", productId),
-            where("status", "==", "approved"),
-            orderBy("createdAt", "desc"),
-            limit(50)
-        );
+        let query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
+            .where("productId", "==", productId)
+            .where("status", "==", "approved")
+            .orderBy("createdAt", "desc")
+            .limit(50);
 
         if (filters?.rating) {
-            q = query(
-                db.collection(COLLECTIONS.PRODUCT_REVIEWS),
-                where("productId", "==", productId),
-                where("status", "==", "approved"),
-                where("rating", "==", filters.rating),
-                orderBy("createdAt", "desc"),
-                limit(50)
-            );
+            query = query.where("rating", "==", filters.rating);
         }
 
-        const snapshot = await getDocs(q);
-        const reviews: ProductReview[] = snapshot.docs.map((doc) => ({
-            ...doc.data(),
-            id: doc.id,
-            createdAt: doc.data().createdAt instanceof Date
-                ? doc.data().createdAt
-                : doc.data().createdAt?.toDate?.() || new Date(),
-        })) as ProductReview[];
+        const snapshot = await query.get();
+        const reviews: ProductReview[] = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                ...data,
+                id: doc.id,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            };
+        }) as ProductReview[];
 
         // Filter by verified if specified
         const filteredReviews = filters?.verified !== undefined
@@ -164,20 +156,19 @@ export async function getUserReviewsAction() {
         }
         const userId = session.user.id;
 
-        const q = query(
-            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
-            where("userId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
+        const snapshot = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(q);
-        const reviews: ProductReview[] = snapshot.docs.map((doc) => ({
-            ...doc.data(),
-            id: doc.id,
-            createdAt: doc.data().createdAt instanceof Date
-                ? doc.data().createdAt
-                : doc.data().createdAt?.toDate?.() || new Date(),
-        })) as ProductReview[];
+        const reviews: ProductReview[] = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                ...data,
+                id: doc.id,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            };
+        }) as ProductReview[];
 
         return { success: true, reviews };
     } catch (error: any) {
@@ -215,7 +206,8 @@ export async function updateReviewAction(
         }
 
         // Get review
-        const reviewDoc = await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId).get();
+        const reviewRef = db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId);
+        const reviewDoc = await reviewRef.get();
         if (!reviewDoc.exists) {
             return { success: false, error: "Review not found" };
         }
@@ -228,19 +220,22 @@ export async function updateReviewAction(
         }
 
         // Check 30-day limit
+        const reviewDate = ('toDate' in review.createdAt && typeof review.createdAt.toDate === 'function')
+            ? review.createdAt.toDate()
+            : (review.createdAt instanceof Date ? review.createdAt : new Date());
         const daysSinceCreation = Math.floor(
-            (Date.now() - new Date(review.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+            (Date.now() - reviewDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         if (daysSinceCreation > 30) {
             return { success: false, error: "Reviews can only be edited within 30 days" };
         }
 
         // Update review
-        await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId).update({
+        await reviewRef.update({
             rating,
             comment: comment.trim(),
             status: "pending", // Re-trigger moderation
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return { success: true };
@@ -273,7 +268,8 @@ export async function moderateReviewAction(
         }
 
         // Get review
-        const reviewDoc = await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId).get();
+        const reviewRef = db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId);
+        const reviewDoc = await reviewRef.get();
         if (!reviewDoc.exists) {
             return { success: false, error: "Review not found" };
         }
@@ -282,14 +278,14 @@ export async function moderateReviewAction(
         const updateData: any = {
             status,
             moderatedBy: userId,
-            moderatedAt: new Date(),
+            moderatedAt: FieldValue.serverTimestamp(),
         };
 
         if (status === "rejected" && rejectionReason) {
             updateData.rejectionReason = rejectionReason;
         }
 
-        await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId).update(updateData);
+        await reviewRef.update(updateData);
 
         return { success: true };
     } catch (error: any) {
@@ -303,13 +299,11 @@ export async function moderateReviewAction(
  */
 export async function getSellerRatingAction(sellerId: string) {
     try {
-        const q = query(
-            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
-            where("sellerId", "==", sellerId),
-            where("status", "==", "approved")
-        );
+        const snapshot = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
+            .where("sellerId", "==", sellerId)
+            .where("status", "==", "approved")
+            .get();
 
-        const snapshot = await getDocs(q);
         const reviews: ProductReview[] = snapshot.docs.map((doc) => doc.data()) as ProductReview[];
 
         if (reviews.length === 0) {
@@ -368,29 +362,26 @@ export async function getAdminReviewsAction(statusFilter?: "pending" | "approved
             return { success: false, error: "Not authorized as admin" };
         }
 
-        let q = query(
-            db.collection(COLLECTIONS.PRODUCT_REVIEWS),
-            orderBy("createdAt", "desc"),
-            limit(100)
-        );
+        let query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
+            .orderBy("createdAt", "desc")
+            .limit(100);
 
         if (statusFilter) {
-            q = query(
-                db.collection(COLLECTIONS.PRODUCT_REVIEWS),
-                where("status", "==", statusFilter),
-                orderBy("createdAt", "desc"),
-                limit(100)
-            );
+            query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
+                .where("status", "==", statusFilter)
+                .orderBy("createdAt", "desc")
+                .limit(100);
         }
 
-        const snapshot = await getDocs(q);
-        const reviews: ProductReview[] = snapshot.docs.map((doc) => ({
-            ...doc.data(),
-            id: doc.id,
-            createdAt: doc.data().createdAt instanceof Date
-                ? doc.data().createdAt
-                : doc.data().createdAt?.toDate?.() || new Date(),
-        })) as ProductReview[];
+        const snapshot = await query.get();
+        const reviews: ProductReview[] = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                ...data,
+                id: doc.id,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            };
+        }) as ProductReview[];
 
         return { success: true, reviews };
     } catch (error: any) {

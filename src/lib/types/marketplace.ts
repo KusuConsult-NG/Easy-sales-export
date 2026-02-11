@@ -5,6 +5,7 @@
  */
 
 import type { UserRole } from "./roles";
+import type { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 // ============================================================================
 // SELLER VERIFICATION
@@ -361,10 +362,10 @@ export interface ProductReview {
     // Admin moderation
     status: "pending" | "approved" | "rejected";
     moderatedBy?: string;
-    moderatedAt?: Date;
+    moderatedAt?: FieldValue | Timestamp | Date;
     rejectionReason?: string;
 
-    updatedAt?: Date;
+    updatedAt?: FieldValue | Timestamp | Date;
 
-    createdAt: Date;
+    createdAt: FieldValue | Timestamp | Date;
 }

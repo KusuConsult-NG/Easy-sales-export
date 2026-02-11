@@ -16,6 +16,14 @@ import { formatCurrency } from "@/lib/utils";
 import { getMembershipAction } from "@/app/actions/cooperative";
 import { getUserLoanApplicationsAction, getRepaymentScheduleAction } from "@/app/actions/loans";
 
+// Helper to convert FieldValue | Timestamp to Date
+function toDate(value: any): Date {
+    if (!value) return new Date();
+    if (value instanceof Date) return value;
+    if (typeof value.toDate === 'function') return value.toDate();
+    return new Date();
+}
+
 export default function MyLoansPage() {
     const [loading, setLoading] = useState(true);
     const [membership, setMembership] = useState<any>(null);
@@ -66,7 +74,7 @@ export default function MyLoansPage() {
                                 })),
                                 nextPaymentDate: nextPayment ? nextPayment.dueDate : null,
                                 nextPaymentAmount: nextPayment ? nextPayment.totalAmount - nextPayment.paidAmount : 0,
-                                startDate: loan.disbursedAt?.toDate?.() || loan.appliedAt?.toDate?.() || new Date(),
+                                startDate: toDate(loan.disbursedAt || loan.appliedAt),
                                 interestRate: loan.interestRate,
                                 duration: loan.durationMonths
                             };
@@ -79,7 +87,7 @@ export default function MyLoansPage() {
                             repaymentSchedule: [],
                             nextPaymentDate: null,
                             nextPaymentAmount: loan.monthlyPayment || 0,
-                            startDate: loan.disbursedAt?.toDate?.() || loan.appliedAt?.toDate?.() || new Date(),
+                            startDate: toDate(loan.disbursedAt) || toDate(loan.appliedAt) || new Date(),
                             interestRate: loan.interestRate,
                             duration: loan.durationMonths
                         };

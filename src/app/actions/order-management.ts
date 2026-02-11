@@ -1,7 +1,3 @@
-/**
- * Server Actions for Order Management (Seller & Buyer)
- */
-
 "use server";
 
 import { auth } from "@/lib/auth";
@@ -9,6 +5,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 /**
  * Get all orders for a seller
@@ -34,23 +31,24 @@ export async function getSellerOrdersAction(filters?: {
         }
 
         // Build query
-        let q = query(
-            db.collection(COLLECTIONS.ORDERS),
-            where("sellerId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
+        let query = db.collection(COLLECTIONS.ORDERS)
+            .where("sellerId", "==", userId)
+            .orderBy("createdAt", "desc");
 
         if (filters?.status) {
-            q = query(q, where("status", "==", filters.status));
+            query = query.where("status", "==", filters.status);
         }
 
-        const snapshot = await getDocs(q);
-        const orders: Order[] = snapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id,
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate(),
-        })) as Order[];
+        const snapshot = await query.get();
+        const orders: Order[] = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                ...data,
+                id: doc.id,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+            };
+        }) as Order[];
 
         return { success: true, orders };
     } catch (error: any) {
@@ -77,7 +75,8 @@ export async function updateOrderStatusAction(
         const userId = session.user.id;
 
         // Get order
-        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
+        const orderRef = db.collection(COLLECTIONS.ORDERS).doc(orderId);
+        const orderDoc = await orderRef.get();
 
         if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
@@ -93,7 +92,7 @@ export async function updateOrderStatusAction(
         // Update order
         const updateData: any = {
             status: newStatus,
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
         if (trackingNumber) {
@@ -101,14 +100,17 @@ export async function updateOrderStatusAction(
         }
 
         if (newStatus === "shipped") {
-            updateData.estimatedDeliveryDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+            // Estimated delivery: 7 days from now
+            const estimatedDate = new Date();
+            estimatedDate.setDate(estimatedDate.getDate() + 7);
+            updateData.estimatedDeliveryDate = estimatedDate;
         }
 
         if (newStatus === "delivered") {
-            updateData.deliveredAt = new Date();
+            updateData.deliveredAt = FieldValue.serverTimestamp();
         }
 
-        await db.collection(COLLECTIONS.ORDERS).doc(orderId).update(updateData);
+        await orderRef.update(updateData);
 
         return { success: true };
     } catch (error: any) {
@@ -133,23 +135,24 @@ export async function getBuyerOrdersAction(filters?: {
         const userId = session.user.id;
 
         // Build query
-        let q = query(
-            db.collection(COLLECTIONS.ORDERS),
-            where("buyerId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
+        let query = db.collection(COLLECTIONS.ORDERS)
+            .where("buyerId", "==", userId)
+            .orderBy("createdAt", "desc");
 
         if (filters?.status) {
-            q = query(q, where("status", "==", filters.status));
+            query = query.where("status", "==", filters.status);
         }
 
-        const snapshot = await getDocs(q);
-        const orders: Order[] = snapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id,
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate(),
-        })) as Order[];
+        const snapshot = await query.get();
+        const orders: Order[] = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                ...data,
+                id: doc.id,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+            };
+        }) as Order[];
 
         return { success: true, orders };
     } catch (error: any) {
@@ -172,7 +175,8 @@ export async function confirmDeliveryAction(orderId: string) {
         const userId = session.user.id;
 
         // Get order
-        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
+        const orderRef = db.collection(COLLECTIONS.ORDERS).doc(orderId);
+        const orderDoc = await orderRef.get();
 
         if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
@@ -191,11 +195,11 @@ export async function confirmDeliveryAction(orderId: string) {
         }
 
         // Update order
-        await db.collection(COLLECTIONS.ORDERS).doc(orderId).update({
+        await orderRef.update({
             buyerConfirmed: true,
-            buyerConfirmedAt: new Date(),
+            buyerConfirmedAt: FieldValue.serverTimestamp(),
             status: "completed",
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // In production, trigger escrow release here

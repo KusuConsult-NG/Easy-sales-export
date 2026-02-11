@@ -19,12 +19,12 @@ export async function setupTestCooperativeAction() {
         const cooperativeId = "coop-ezichi-farmers";
 
         // Check if cooperative already exists
-        const cooperativeRef = doc(db, COLLECTIONS.COOPERATIVES, cooperativeId);
-        const cooperativeDoc = await getDoc(cooperativeRef);
+        const cooperativeRef = db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId);
+        const cooperativeDoc = await cooperativeRef.get();
 
         if (!cooperativeDoc.exists) {
             // Create the cooperative
-            await setDoc(cooperativeRef, {
+            await cooperativeRef.set({
                 id: cooperativeId,
                 name: "Ezichi Farmers Cooperative",
                 description: "A cooperative society for farmers in the Easy Sales Export community",
@@ -40,8 +40,8 @@ export async function setupTestCooperativeAction() {
         }
 
         // FIXED: Use cooperative_members collection (not subcollection) to match getMembershipAction
-        const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, `${cooperativeId}_${userId}`);
-        const memberDoc = await getDoc(memberRef);
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(`${cooperativeId}_${userId}`);
+        const memberDoc = await memberRef.get();
 
         if (memberDoc.exists) {
             return { error: "You are already a member of this cooperative", success: false };
@@ -49,7 +49,7 @@ export async function setupTestCooperativeAction() {
 
         // Add user as member with initial savings
         const initialSavings = 100000; // ₦100,000 for testing
-        await setDoc(memberRef, {
+        await memberRef.set({
             userId,
             cooperativeId,
             savingsBalance: initialSavings,
@@ -60,17 +60,17 @@ export async function setupTestCooperativeAction() {
         });
 
         // Update cooperative totals
-        await updateDoc(cooperativeRef, {
-            memberCount: increment(1),
-            totalSavings: increment(initialSavings),
+        await cooperativeRef.update({
+            memberCount: FieldValue.increment(1),
+            totalSavings: FieldValue.increment(initialSavings),
         });
 
         // Update user document with cooperativeId
-        const userRef = doc(db, COLLECTIONS.USERS, userId);
-        const userDoc = await getDoc(userRef);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
 
         if (userDoc.exists) {
-            await updateDoc(userRef, {
+            await userRef.update({
                 cooperativeId,
                 updatedAt: FieldValue.serverTimestamp(),
             });

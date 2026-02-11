@@ -81,7 +81,7 @@ export async function getUserLoanApplications() {
     try {
         const loansQuery = db.collection('loan_applications').where('userId', '==', session.user.id).orderBy('createdAt', 'desc');
 
-        const snapshot = await getDocs(loansQuery);
+        const snapshot = await loansQuery.get();
 
         const loans = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -113,14 +113,14 @@ export async function getLoanApplication(loanId: string) {
     }
 
     try {
-        const loanRef = doc(db, 'loan_applications', loanId);
-        const loanDoc = await getDocs(db.collection('loan_applications').where('__name__', '==', loanId));
+        const loanRef = db.collection('loan_applications').doc(loanId);
+        const loanDoc = await loanRef.get();
 
-        if (loanDoc.empty) {
+        if (!loanDoc.exists) {
             return { success: false, error: "Loan application not found", loan: null };
         }
 
-        const data = loanDoc.docs[0].data();
+        const data = loanDoc.data()!;
 
         // Check authorization - user can only view their own loans unless admin
         if (data.userId !== session.user.id && !session.user.roles?.includes('admin')) {
@@ -128,7 +128,7 @@ export async function getLoanApplication(loanId: string) {
         }
 
         const loan: LoanApplication = {
-            id: loanDoc.docs[0].id,
+            id: loanDoc.id,
             ...data,
             createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
             updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
@@ -156,7 +156,7 @@ export async function getPendingLoanApplications() {
     try {
         const loansQuery = db.collection('loan_applications').where('status', '==', LoanStatus.PENDING).orderBy('createdAt', 'desc');
 
-        const snapshot = await getDocs(loansQuery);
+        const snapshot = await loansQuery.get();
 
         const loans = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -207,7 +207,7 @@ export async function approveLoanApplication(
             updateData.rejectionReason = validated.rejectionReason;
         }
 
-        await db.doc('loan_applications', validated.loanId).update(updateData);
+        await db.collection('loan_applications').doc(validated.loanId).update(updateData);
 
         // Audit log
         await createAuditLog({
@@ -245,7 +245,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
     }
 
     try {
-        await db.doc('loan_applications', loanId).update({
+        await db.collection('loan_applications').doc(loanId).update({
             status: LoanStatus.DISBURSED,
             disbursedAt: FieldValue.serverTimestamp(),
             disbursedBy: session.user.id,

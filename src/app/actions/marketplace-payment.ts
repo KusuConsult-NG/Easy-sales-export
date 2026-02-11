@@ -1,7 +1,3 @@
-/**
- * Marketplace Payment Integration
- * Handles Paystack payments for product purchases
- */
 "use server";
 
 import { auth } from "@/lib/auth";
@@ -77,7 +73,7 @@ export async function initializeOrderPaymentAction(
 
         // Create pending order record
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
-        await db.doc("marketplaceOrders", orderId).set({
+        await db.collection("marketplaceOrders").doc(orderId).set({
             orderId,
             buyerId: session.user.id,
             buyerEmail,
@@ -135,8 +131,8 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = doc(db, "processedPayments", reference);
-        const existingPayment = await getDoc(processedRef);
+        const processedRef = db.collection("processedPayments").doc(reference);
+        const existingPayment = await processedRef.get();
 
         if (existingPayment.exists) {
             return {
@@ -177,13 +173,10 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         }
 
         // Find order record
-        const orderQuery = await getDocs(
-            query(
-                collection(db, "marketplaceOrders"),
-                where("paymentReference", "==", reference),
-                limit(1)
-            )
-        );
+        const orderQuery = await db.collection("marketplaceOrders")
+            .where("paymentReference", "==", reference)
+            .limit(1)
+            .get();
 
         if (orderQuery.empty) {
             return { error: "Order record not found", success: false };
@@ -193,9 +186,9 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         const orderData = orderDoc.data();
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
-        await runTransaction(db, async (transaction) => {
+        await db.runTransaction(async (transaction) => {
             // Update order status
-            const orderRef = doc(db, "marketplaceOrders", orderDoc.id);
+            const orderRef = db.collection("marketplaceOrders").doc(orderDoc.id);
             transaction.update(orderRef, {
                 paymentStatus: "paid",
                 orderStatus: "processing",

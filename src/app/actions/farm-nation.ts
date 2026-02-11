@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -72,15 +72,20 @@ export async function getPropertiesAction(filters?: {
 }) {
     try {
         const propertiesRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES);
-        const q = query(propertiesRef, where("status", "in", ["available", "pending"]), orderBy("createdAt", "desc"));
+        const snapshot = await propertiesRef
+            .where("status", "in", ["available", "pending"])
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(q);
-        let properties = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate(),
-        })) as Property[];
+        let properties = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+            };
+        }) as Property[];
 
         // Client-side filtering (Firestore has query limitations)
         if (filters) {
@@ -120,22 +125,24 @@ export async function getPropertiesAction(filters?: {
 export async function getPropertyByIdAction(propertyId: string) {
     try {
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
-        const propertyDoc = await getDoc(propertyRef);
+        const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
             return { success: false, error: "Property not found" };
         }
 
+        const data = propertyDoc.data()!;
+
         // Increment view count
         await propertyRef.update({
-            viewCount: (propertyDoc.data().viewCount || 0) + 1,
+            viewCount: (data.viewCount || 0) + 1,
         });
 
         const property = {
             id: propertyDoc.id,
-            ...propertyDoc.data(),
-            createdAt: propertyDoc.data().createdAt?.toDate(),
-            updatedAt: propertyDoc.data().updatedAt?.toDate(),
+            ...data,
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
         } as Property;
 
         return { success: true, property };
@@ -159,13 +166,13 @@ export async function listPropertyAction(input: PropertyListingInput) {
 
         // Check user tier (Premium required)
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
-        const userDoc = await getDoc(userRef);
+        const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
             return { success: false, error: "User not found" };
         }
 
-        const userData = userDoc.data();
+        const userData = userDoc.data()!;
         if (!userData.cooperativeTier || userData.cooperativeTier === "Basic") {
             return {
                 success: false,
@@ -223,20 +230,20 @@ export async function getMyPropertiesAction() {
             return { success: false, error: "Unauthorized" };
         }
 
-        const propertiesRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES);
-        const q = query(
-            propertiesRef,
-            where("ownerId", "==", session.user.id),
-            orderBy("createdAt", "desc")
-        );
+        const snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+            .where("ownerId", "==", session.user.id)
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(q);
-        const properties = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate(),
-        })) as Property[];
+        const properties = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+            };
+        }) as Property[];
 
         return { success: true, properties };
     } catch (error: any) {
@@ -265,7 +272,7 @@ export async function initiatePropertyPurchaseAction(
 
         // Verify property exists and is available
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
-        const propertyDoc = await getDoc(propertyRef);
+        const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
             return { success: false, error: "Property not found" };
@@ -278,13 +285,13 @@ export async function initiatePropertyPurchaseAction(
 
         // Check user tier
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
-        const userDoc = await getDoc(userRef);
+        const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
             return { success: false, error: "User not found" };
         }
 
-        const userData = userDoc.data();
+        const userData = userDoc.data()!;
         if (!userData.cooperativeTier || userData.cooperativeTier === "Basic") {
             return {
                 success: false,
@@ -312,9 +319,7 @@ export async function initiatePropertyPurchaseAction(
             updatedAt: FieldValue.serverTimestamp(),
         };
 
-        const requestRef = await 
-            db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).add(purchaseRequest
-        );
+        const requestRef = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).add(purchaseRequest);
 
         // Mark property as pending
         await propertyRef.update({
@@ -344,20 +349,20 @@ export async function getMyPurchaseRequestsAction() {
             return { success: false, error: "Unauthorized" };
         }
 
-        const requestsRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS);
-        const q = query(
-            requestsRef,
-            where("buyerId", "==", session.user.id),
-            orderBy("createdAt", "desc")
-        );
+        const snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+            .where("buyerId", "==", session.user.id)
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const snapshot = await getDocs(q);
-        const requests = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate(),
-        }));
+        const requests = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+            };
+        });
 
         return { success: true, requests };
     } catch (error: any) {

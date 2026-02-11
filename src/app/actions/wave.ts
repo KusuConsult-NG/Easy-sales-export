@@ -20,9 +20,13 @@ export interface WaveResource {
     fileUrl: string;
     fileName: string;
     fileSize: number;
-    uploadedAt: Timestamp;
+    fileType: string;
+    uploadedAt: FieldValue | Timestamp;
     uploadedBy: string;
+    uploadedByName: string;
     downloads: number;
+    tags?: string[];
+    isActive: boolean;
 }
 
 export interface WaveTrainingEvent {
