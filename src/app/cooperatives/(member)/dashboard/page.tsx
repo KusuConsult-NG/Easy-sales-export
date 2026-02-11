@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
-import { getMembershipAction, getTransactionsAction } from "@/app/actions/cooperative";
+import { getDashboardDataAction } from "@/app/actions/cooperative-dashboard";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
 import { useRouter } from "next/navigation";
 
@@ -35,20 +35,15 @@ export default function CooperativeDashboardPage() {
     useEffect(() => {
         async function loadData() {
             try {
-                const [membershipRes, transactionsRes] = await Promise.all([
-                    getMembershipAction(),
-                    getTransactionsAction()
-                ]);
+                // Single optimized call instead of two separate calls
+                const result = await getDashboardDataAction();
 
-                if (membershipRes.success && membershipRes.data) {
-                    setMembership(membershipRes.data);
-                } else if (membershipRes.error?.includes("no cooperative")) {
-                    // Redirect to onboarding if not a member?
-                    // For now, let's show a "Join Cooperative" state or just handle null
-                }
-
-                if (transactionsRes.success && transactionsRes.data) {
-                    setTransactions(transactionsRes.data);
+                if (result.success && result.membership) {
+                    setMembership(result.membership);
+                    setTransactions(result.transactions);
+                } else if (result.error?.includes("No cooperative")) {
+                    // Not a member - membership will be null
+                    setMembership(null);
                 }
             } catch (error) {
                 console.error("Failed to load dashboard data:", error);
