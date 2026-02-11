@@ -18,8 +18,8 @@ export interface Course {
     level: "beginner" | "intermediate" | "advanced";
     modules: CourseModule[];
     thumbnail?: string;
-    createdAt: Timestamp;
-    updatedAt: Timestamp;
+    createdAt: FieldValue | Timestamp;
+    updatedAt: FieldValue | Timestamp;
 }
 
 export interface CourseModule {
@@ -60,9 +60,9 @@ export interface UserProgress {
     completedModules: string[];
     quizScores: Record<string, number>;
     overallProgress: number;
-    startedAt: Timestamp;
-    lastAccessedAt: Timestamp;
-    completedAt?: Timestamp;
+    startedAt: FieldValue | Timestamp;
+    lastAccessedAt: FieldValue | Timestamp;
+    completedAt?: FieldValue | Timestamp;
 }
 
 export interface LiveSession {
@@ -132,8 +132,8 @@ export async function enrollInCourseAction(
         }
 
         // Check if already enrolled
-        const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
-        const progressDoc = await getDoc(progressRef);
+        const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
+        const progressDoc = await progressRef.get();
 
         if (progressDoc.exists) {
             return { success: false, error: "Already enrolled in this course" };
@@ -150,7 +150,7 @@ export async function enrollInCourseAction(
             lastAccessedAt: FieldValue.serverTimestamp(),
         };
 
-        await setDoc(progressRef, progress);
+        await progressRef.set(progress);
 
         await createAuditLog({
             action: "user_update",
@@ -180,8 +180,8 @@ export async function completeLessonAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
-        const progressDoc = await getDoc(progressRef);
+        const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
+        const progressDoc = await progressRef.get();
 
         if (!progressDoc.exists) {
             return { success: false, error: "Not enrolled in this course" };
@@ -206,7 +206,7 @@ export async function completeLessonAction(
                 }
             }
 
-            await setDoc(progressRef, progress);
+            await progressRef.set(progress);
         }
 
         return { success: true };
@@ -231,8 +231,8 @@ export async function submitQuizScoreAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        const progressRef = doc(db, `user_progress/${userId}/courses/${courseId}`);
-        const progressDoc = await getDoc(progressRef);
+        const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
+        const progressDoc = await progressRef.get();
 
         if (!progressDoc.exists) {
             return { success: false, error: "Not enrolled in this course" };
@@ -252,12 +252,12 @@ export async function submitQuizScoreAction(
                 if (!progress.completedModules.includes(moduleId)) {
                     progress.completedModules.push(moduleId);
                 }
-                await setDoc(progressRef, progress);
+                await progressRef.set(progress);
                 return { success: true, passed: true };
             }
         }
 
-        await setDoc(progressRef, progress);
+        await progressRef.set(progress);
         return { success: true, passed: false };
     } catch (error) {
         console.error("Quiz submission error:", error);
@@ -318,7 +318,7 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
 
         // Fetch all course progress records
         const progressQuery = db.collection(`user_progress/${userId}/courses`);
-        const snapshot = await getDocs(progressQuery);
+        const snapshot = await progressQuery.get();
         const enrolledCourses = snapshot.docs.map(doc => doc.data() as UserProgress);
 
         const completedCourses = enrolledCourses.filter(p => p.completedAt).length;
