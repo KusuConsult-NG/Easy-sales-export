@@ -3,9 +3,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { getRecommendedProductsAction } from "@/app/actions/marketplace";
 
+// Force dynamic rendering (prevent static generation at build time)
+export const dynamic = 'force-dynamic';
+
 export default async function MarketplaceLandingPage() {
-    // Fetch real products
-    const { products } = await getRecommendedProductsAction(3);
+    // Fetch real products (wrapped in try-catch to handle build-time errors gracefully)
+    let products: any[] = [];
+    try {
+        const result = await getRecommendedProductsAction(3);
+        products = result.products || [];
+    } catch (error) {
+        console.error("Failed to fetch recommended products:", error);
+        // Products will remain empty array, component will handle gracefully
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
