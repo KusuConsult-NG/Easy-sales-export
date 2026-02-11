@@ -34,90 +34,90 @@ function MarketplaceRegisterContent() {
     }, [state.error, isPending, showToast]);
 
     return (
-        <div className="min-h-screen bg-violet-950 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background Effects */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-green-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
             </div>
 
-            <div className="w-full max-w-lg bg-violet-900/50 backdrop-blur-xl border border-violet-800 rounded-3xl p-8 shadow-2xl relative z-10">
+            <div className="w-full max-w-lg bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-green-200 dark:border-green-800 rounded-3xl p-8 shadow-2xl relative z-10">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-violet-800 rounded-2xl mb-4 shadow-lg border border-violet-700">
-                        <Store className="w-8 h-8 text-violet-400" />
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-2xl mb-4 shadow-lg">
+                        <Store className="w-8 h-8 text-white" />
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Join Marketplace</h1>
-                    <p className="text-violet-200">Start buying and selling today</p>
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Join Marketplace</h1>
+                    <p className="text-slate-600 dark:text-slate-400">Start buying and selling today</p>
                 </div>
 
                 {/* Form */}
                 <form action={formAction} className="space-y-6">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-violet-100 ml-1">First Name</label>
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">First Name</label>
                             <div className="relative group">
-                                <User className="absolute left-3 top-3.5 w-5 h-5 text-violet-400 group-focus-within:text-violet-300 transition-colors" />
+                                <User className="absolute left-3 top-3.5 w-5 h-5 text-green-600 group-focus-within:text-green-500 transition-colors" />
                                 <input
                                     type="text"
                                     name="firstName"
                                     required
                                     placeholder="First name"
-                                    className="w-full bg-violet-950/50 border border-violet-800 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all placeholder:text-violet-700"
+                                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-green-600 focus:ring-1 focus:ring-green-600 transition-all placeholder:text-slate-400"
                                 />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-violet-100 ml-1">Last Name</label>
+                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Last Name</label>
                             <div className="relative group">
-                                <User className="absolute left-3 top-3.5 w-5 h-5 text-violet-400 group-focus-within:text-violet-300 transition-colors" />
+                                <User className="absolute left-3 top-3.5 w-5 h-5 text-green-600 group-focus-within:text-green-500 transition-colors" />
                                 <input
                                     type="text"
                                     name="lastName"
                                     required
                                     placeholder="Last name"
-                                    className="w-full bg-violet-950/50 border border-violet-800 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all placeholder:text-violet-700"
+                                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-green-600 focus:ring-1 focus:ring-green-600 transition-all placeholder:text-slate-400"
                                 />
                             </div>
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-violet-100 ml-1">Email Address</label>
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Email Address</label>
                         <div className="relative group">
-                            <Mail className="absolute left-3 top-3.5 w-5 h-5 text-violet-400 group-focus-within:text-violet-300 transition-colors" />
+                            <Mail className="absolute left-3 top-3.5 w-5 h-5 text-green-600 group-focus-within:text-green-500 transition-colors" />
                             <input
                                 type="email"
                                 name="email"
                                 required
                                 placeholder="Enter your email"
-                                className="w-full bg-violet-950/50 border border-violet-800 text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all placeholder:text-violet-700"
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl pl-10 pr-4 py-3 focus:outline-hidden focus:border-green-600 focus:ring-1 focus:ring-green-600 transition-all placeholder:text-slate-400"
                             />
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-violet-100 ml-1">Password</label>
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 ml-1">Password</label>
                         <div className="relative group">
-                            <Lock className="absolute left-3 top-3.5 w-5 h-5 text-violet-400 group-focus-within:text-violet-300 transition-colors" />
+                            <Lock className="absolute left-3 top-3.5 w-5 h-5 text-green-600 group-focus-within:text-green-500 transition-colors" />
                             <input
                                 type="text"
                                 name="password"
                                 required
                                 minLength={8}
                                 placeholder="Create a password"
-                                className="w-full bg-violet-950/50 border border-violet-800 text-white rounded-xl pl-10 pr-12 py-3 focus:outline-hidden focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all placeholder:text-violet-700"
+                                className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl pl-10 pr-12 py-3 focus:outline-hidden focus:border-green-600 focus:ring-1 focus:ring-green-600 transition-all placeholder:text-slate-400"
                                 style={{ WebkitTextSecurity: showPassword ? "none" : "disc" } as React.CSSProperties}
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-3.5 text-violet-400 hover:text-violet-300 transition-colors"
+                                className="absolute right-3 top-3.5 text-green-600 hover:text-green-500 transition-colors"
                             >
                                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                             </button>
                         </div>
-                        <p className="text-xs text-violet-300 ml-1">Must be at least 8 characters long</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 ml-1">Must be at least 8 characters long</p>
                     </div>
 
                     {state.error && (
@@ -131,17 +131,17 @@ function MarketplaceRegisterContent() {
                         loading={isPending}
                         type="submit"
                         loadingText="Creating Account..."
-                        className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-violet-900/20 transition-all hover:scale-[1.02] active:scale-[0.98] group"
+                        className="w-full bg-linear-to-r from-green-600 to-emerald-600 hover:opacity-90 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] group"
                     >
                         Create Account
                         <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform inline-block" />
                     </LoadingButton>
 
-                    <p className="text-center text-violet-300 text-sm">
+                    <p className="text-center text-slate-600 dark:text-slate-400 text-sm">
                         Already have an account?{" "}
                         <Link
                             href="/marketplace/login"
-                            className="text-violet-400 hover:text-violet-200 font-bold transition-colors"
+                            className="text-green-600 hover:text-green-500 font-bold transition-colors"
                         >
                             Sign In
                         </Link>
@@ -155,8 +155,8 @@ function MarketplaceRegisterContent() {
 export default function MarketplaceRegisterPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-violet-950 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
             </div>
         }>
             <MarketplaceRegisterContent />
