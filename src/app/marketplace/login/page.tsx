@@ -14,7 +14,7 @@ const initialState = { error: "", success: false };
 function MarketplaceLoginContent() {
     const { showToast } = useToast();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/marketplace";
+    const callbackUrl = searchParams.get("callbackUrl") || "/marketplace/onboarding";
 
     const [formData, setFormData] = useState({
         email: "",

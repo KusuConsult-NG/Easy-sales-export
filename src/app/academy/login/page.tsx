@@ -14,7 +14,7 @@ const initialState = { error: "", success: false };
 function AcademyLoginContent() {
     const { showToast } = useToast();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/academy";
+    const callbackUrl = searchParams.get("callbackUrl") || "/academy/application";
 
     const [formData, setFormData] = useState({
         email: "",

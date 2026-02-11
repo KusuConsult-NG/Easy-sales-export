@@ -14,7 +14,7 @@ const initialState = { error: "", success: false };
 function ExportLoginContent() {
     const { showToast } = useToast();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/export";
+    const callbackUrl = searchParams.get("callbackUrl") || "/export/onboarding";
 
     const [formData, setFormData] = useState({
         email: "",

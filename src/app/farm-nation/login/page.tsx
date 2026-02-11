@@ -14,7 +14,7 @@ const initialState = { error: "", success: false };
 function FarmNationLoginContent() {
     const { showToast } = useToast();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/farm-nation";
+    const callbackUrl = searchParams.get("callbackUrl") || "/farm-nation/onboarding";
 
     const [formData, setFormData] = useState({
         email: "",
