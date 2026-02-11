@@ -47,14 +47,14 @@ export interface EngagementMetrics {
 export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     try {
         // 1. Platform Overview
-        const usersSnapshot = await getDocs(collection(db, "users"));
+        const usersSnapshot = await db.collection("users").get();
         const totalUsers = usersSnapshot.size;
 
         // Active users (users with recent login audit logs in last 30d)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const activeUsersQuery = query(
-            collection(db, "audit_logs"),
+        const activeUsersQuery = 
+            db.collection("audit_logs",
             where("action", "==", "user_login"),
             where("timestamp", ">=", Timestamp.fromDate(thirtyDaysAgo))
         );
@@ -62,11 +62,11 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         const activeUsers = new Set(activeUsersSnapshot.docs.map(d => d.data().userId)).size;
 
         // Revenue & Transactions
-        const transactionsSnapshot = await getDocs(collection(db, "escrow_transactions")); // Assuming this holds main revenue
+        const transactionsSnapshot = await db.collection("escrow_transactions").get(); // Assuming this holds main revenue
         // Also check loan_applications for disbursed loans if that counts as platform volume/revenue
         // For now, let's use Escrow + Loans
 
-        const loansSnapshot = await getDocs(collection(db, "loan_applications"));
+        const loansSnapshot = await db.collection("loan_applications").get();
 
         let totalRevenue = 0;
         let monthlyRevenue = 0;
@@ -89,14 +89,14 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         });
 
         // Pending Approvals
-        const pendingWave = (await getDocs(query(collection(db, "wave_applications"), where("status", "==", "pending")))).size;
-        const pendingLoans = (await getDocs(query(collection(db, "loan_applications"), where("status", "==", "pending")))).size;
-        const pendingLand = (await getDocs(query(collection(db, "land_listings"), where("verificationStatus", "==", "pending")))).size;
+        const pendingWave = (await getDocs(db.collection("wave_applications", where("status", "==", "pending")))).size;
+        const pendingLoans = (await getDocs(db.collection("loan_applications", where("status", "==", "pending")))).size;
+        const pendingLand = (await getDocs(db.collection("land_listings", where("verificationStatus", "==", "pending")))).size;
 
         const pendingApprovals = pendingWave + pendingLoans + pendingLand;
 
-        const pendingEscrows = (await getDocs(query(collection(db, "escrow_transactions"), where("status", "==", "held")))).size;
-        const activeLandListings = (await getDocs(query(collection(db, "land_listings"), where("status", "==", "verified")))).size;
+        const pendingEscrows = (await getDocs(db.collection("escrow_transactions", where("status", "==", "held")))).size;
+        const activeLandListings = (await getDocs(db.collection("land_listings", where("status", "==", "verified")))).size;
 
         // 2. Revenue By Month (Last 6 Months)
         const revenueByMonthMap = new Map<string, number>();
@@ -157,16 +157,16 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         // 4. Module Usage
         // Count documents in key collections
         const moduleUsage = [
-            { name: "Farm Nation", value: (await getDocs(collection(db, "land_listings"))).size },
-            { name: "Academy", value: (await getDocs(collection(db, "course_enrollments"))).size || 0 }, // Assuming collection exists
-            { name: "WAVE", value: (await getDocs(collection(db, "wave_applications"))).size },
-            { name: "Cooperatives", value: (await getDocs(collection(db, "cooperatives"))).size },
-            { name: "Marketplace", value: (await getDocs(collection(db, "products"))).size },
+            { name: "Farm Nation", value: (await db.collection("land_listings").get()).size },
+            { name: "Academy", value: (await db.collection("course_enrollments").get()).size || 0 }, // Assuming collection exists
+            { name: "WAVE", value: (await db.collection("wave_applications").get()).size },
+            { name: "Cooperatives", value: (await db.collection("cooperatives").get()).size },
+            { name: "Marketplace", value: (await db.collection("products").get()).size },
         ];
 
         // 5. Recent Transactions
-        const recentAuditQuery = query(
-            collection(db, "audit_logs"),
+        const recentAuditQuery = 
+            db.collection("audit_logs",
             where("action", "in", ["payment_completed", "escrow_released", "loan_disbursed"]),
             orderBy("timestamp", "desc"),
             firestoreLimit(5)
@@ -224,15 +224,15 @@ export interface FinancialOverview {
 export async function getFinancialOverviewAction(): Promise<FinancialOverview | null> {
     try {
         // Get all escrow transactions
-        const escrowSnapshot = await getDocs(collection(db, "escrow_transactions"));
+        const escrowSnapshot = await db.collection("escrow_transactions").get();
         const totalEscrowVolume = escrowSnapshot.docs.reduce((sum, doc) => {
             const data = doc.data();
             return sum + (data.amount || 0);
         }, 0);
 
         // Get all disbursed loans
-        const loansQuery = query(
-            collection(db, "loan_applications"),
+        const loansQuery = 
+            db.collection("loan_applications",
             where("status", "in", ["approved", "disbursed"])
         );
         const loansSnapshot = await getDocs(loansQuery);
@@ -242,8 +242,8 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview | 
         }, 0);
 
         // Get recent transactions
-        const transactionsQuery = query(
-            collection(db, "audit_logs"),
+        const transactionsQuery = 
+            db.collection("audit_logs",
             where("action", "in", ["payment_completed", "escrow_released", "loan_approved"]),
             orderBy("timestamp", "desc"),
             firestoreLimit(20)
@@ -285,24 +285,24 @@ export async function getEngagementMetricsAction(): Promise<EngagementMetrics | 
         const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
         // Get daily active users
-        const dailyQuery = query(
-            collection(db, "audit_logs"),
+        const dailyQuery = 
+            db.collection("audit_logs",
             where("timestamp", ">=", Timestamp.fromDate(oneDayAgo))
         );
         const dailyDocs = await getDocs(dailyQuery);
         const dailyUsers = new Set(dailyDocs.docs.map((doc) => doc.data().userId));
 
         // Get weekly active users
-        const weeklyQuery = query(
-            collection(db, "audit_logs"),
+        const weeklyQuery = 
+            db.collection("audit_logs",
             where("timestamp", ">=", Timestamp.fromDate(oneWeekAgo))
         );
         const weeklyDocs = await getDocs(weeklyQuery);
         const weeklyUsers = new Set(weeklyDocs.docs.map((doc) => doc.data().userId));
 
         // Get monthly active users
-        const monthlyQuery = query(
-            collection(db, "audit_logs"),
+        const monthlyQuery = 
+            db.collection("audit_logs",
             where("timestamp", ">=", Timestamp.fromDate(oneMonthAgo))
         );
         const monthlyDocs = await getDocs(monthlyQuery);

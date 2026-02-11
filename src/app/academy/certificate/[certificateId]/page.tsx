@@ -114,7 +114,9 @@ export default function CertificatePage() {
     }
 
     const certNumber = `ACAD-${new Date().getFullYear()}-${courseId.substring(0, 6).toUpperCase()}`;
-    const completionDate = progress.completedAt?.toDate() || new Date();
+    const completionDate = progress.completedAt && 'toDate' in progress.completedAt
+        ? progress.completedAt.toDate()
+        : new Date();
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 px-4">

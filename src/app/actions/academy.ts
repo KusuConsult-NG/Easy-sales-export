@@ -273,7 +273,7 @@ export async function getUserProgressAction(
     courseId: string
 ): Promise<UserProgress | null> {
     try {
-        const progressDoc = await db.collection(`user_progress/${userId}/courses/${courseId}`).get();
+        const progressDoc = await db.doc(`user_progress/${userId}/courses/${courseId}`).get();
 
         if (!progressDoc.exists) {
             return null;
@@ -369,13 +369,9 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
  */
 export async function getLiveSessionsAction(courseId?: string): Promise<LiveSession[]> {
     try {
-        let q = db.collection("academy_live_sessions");
-
-        if (courseId) {
-            q = q.where("courseId", "==", courseId);
-        }
-
-        const snapshot = await q.get();
+        const ref = db.collection("academy_live_sessions");
+        const query = courseId ? ref.where("courseId", "==", courseId) : ref;
+        const snapshot = await query.get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
