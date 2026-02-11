@@ -43,9 +43,11 @@ function FarmNationLoginContent() {
             <div className="w-full max-w-md bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-teal-200 dark:border-teal-800 rounded-3xl p-8 shadow-2xl relative z-10">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-teal-600 rounded-2xl mb-4 shadow-lg">
-                        <Sprout className="w-8 h-8 text-white" />
-                    </div>
+                    <Link href="/farm-nation" className="inline-flex items-center justify-center mb-4 hover:opacity-90 transition-opacity">
+                        <div className="w-16 h-16 bg-teal-600 rounded-2xl shadow-lg flex items-center justify-center">
+                            <Sprout className="w-8 h-8 text-white" />
+                        </div>
+                    </Link>
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h1>
                     <p className="text-slate-600 dark:text-slate-400">Sign in to your Farm Nation account</p>
                 </div>

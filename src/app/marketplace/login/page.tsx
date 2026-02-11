@@ -42,9 +42,11 @@ function MarketplaceLoginContent() {
             <div className="w-full max-w-md bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-green-200 dark:border-green-800 rounded-3xl p-8 shadow-2xl relative z-10">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-2xl mb-4 shadow-lg">
-                        <Store className="w-8 h-8 text-white" />
-                    </div>
+                    <Link href="/marketplace" className="inline-flex items-center justify-center mb-4 hover:opacity-90 transition-opacity">
+                        <div className="w-16 h-16 bg-green-600 rounded-2xl shadow-lg flex items-center justify-center">
+                            <Store className="w-8 h-8 text-white" />
+                        </div>
+                    </Link>
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Marketplace Login</h1>
                     <p className="text-slate-600 dark:text-slate-400">Sign in to manage your store or orders</p>
                 </div>

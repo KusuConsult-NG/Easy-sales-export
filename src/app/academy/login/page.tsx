@@ -32,21 +32,23 @@ function AcademyLoginContent() {
     }, [state.error, isPending, showToast]);
 
     return (
-        <div className="min-h-screen bg-indigo-950 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background Effects */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
-                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
             </div>
 
-            <div className="w-full max-w-md bg-indigo-900/50 backdrop-blur-xl border border-indigo-800 rounded-3xl p-8 shadow-2xl relative z-10">
+            <div className="w-full max-w-md bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-blue-200 dark:border-blue-800 rounded-3xl p-8 shadow-2xl relative z-10">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-800 rounded-2xl mb-4 shadow-lg border border-indigo-700">
-                        <GraduationCap className="w-8 h-8 text-indigo-400" />
-                    </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Academy Login</h1>
-                    <p className="text-indigo-200">Access your courses and learning materials</p>
+                    <Link href="/academy" className="inline-flex items-center justify-center mb-4 hover:opacity-90 transition-opacity">
+                        <div className="w-16 h-16 bg-blue-600 rounded-2xl shadow-lg flex items-center justify-center">
+                            <GraduationCap className="w-8 h-8 text-white" />
+                        </div>
+                    </Link>
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Academy Login</h1>
+                    <p className="text-slate-600 dark:text-slate-400">Access your courses and learning materials</p>
                 </div>
 
                 {/* Form */}

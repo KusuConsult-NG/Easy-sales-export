@@ -42,9 +42,11 @@ function ExportLoginContent() {
             <div className="w-full max-w-md bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-orange-200 dark:border-orange-800 rounded-3xl p-8 shadow-2xl relative z-10">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-600 rounded-2xl mb-4 shadow-lg">
-                        <Ship className="w-8 h-8 text-white" />
-                    </div>
+                    <Link href="/export" className="inline-flex items-center justify-center mb-4 hover:opacity-90 transition-opacity">
+                        <div className="w-16 h-16 bg-orange-600 rounded-2xl shadow-lg flex items-center justify-center">
+                            <Ship className="w-8 h-8 text-white" />
+                        </div>
+                    </Link>
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Export Windows</h1>
                     <p className="text-slate-600 dark:text-slate-400">Login to manage your export portfolio</p>
                 </div>
