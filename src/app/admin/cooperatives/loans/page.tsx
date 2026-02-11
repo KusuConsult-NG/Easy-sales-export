@@ -5,6 +5,7 @@ import {
     DollarSign, Users, CheckCircle, XCircle, Clock,
     Search, Filter, Eye, FileText, TrendingUp, Calendar
 } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 
 type LoanApplication = {
@@ -27,6 +28,7 @@ type LoanApplication = {
 type FilterType = "all" | "pending" | "approved" | "rejected";
 
 export default function AdminLoansPage() {
+    const { showToast } = useToast();
     const [applications, setApplications] = useState<LoanApplication[]>([]);
     const [filteredApplications, setFilteredApplications] = useState<LoanApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +57,7 @@ export default function AdminLoansPage() {
             }
         } catch (error) {
             console.error("Failed to fetch loan applications:", error);
+            showToast("Failed to fetch loan applications.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -98,14 +101,14 @@ export default function AdminLoansPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Loan application approved successfully!");
+                showToast("Loan application approved successfully!", "success");
                 fetchApplications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to approve loan");
+                showToast(data.message || "Failed to approve loan", "error");
             }
         } catch (error) {
-            alert("An error occurred while approving the loan");
+            showToast("An error occurred while approving the loan", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -126,14 +129,39 @@ export default function AdminLoansPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Loan application rejected");
+                showToast("Loan application rejected", "success");
                 fetchApplications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to reject loan");
+                showToast(data.message || "Failed to reject loan", "error");
             }
         } catch (error) {
-            alert("An error occurred while rejecting the loan");
+            showToast("An error occurred while rejecting the loan", "error");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleDisburse = async (applicationId: string) => {
+        if (!confirm("Are you sure you want to disburse funds for this loan? This action cannot be undone.")) {
+            return;
+        }
+
+        setIsProcessing(true);
+        try {
+            // Import dynamically or ensure it is imported at top
+            const { disburseLoanAction } = await import("@/app/actions/loans");
+            const result = await disburseLoanAction(applicationId);
+
+            if (result.success) {
+                showToast("Loan funds disbursed successfully!", "success");
+                fetchApplications();
+                setIsDetailsModalOpen(false);
+            } else {
+                showToast(result.error || "Failed to disburse loan", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred while disbursing the loan", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -220,10 +248,10 @@ export default function AdminLoansPage() {
                             <button
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
-                                className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === status
-                                        ? "bg-primary text-white"
-                                        : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
-                                    }`}
+                                className={`px - 4 py - 2 rounded - lg font - medium transition - colors ${filterStatus === status
+                                    ? "bg-primary text-white"
+                                    : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                    } `}
                             >
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                             </button>
@@ -315,13 +343,13 @@ export default function AdminLoansPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${app.status === "pending"
-                                                    ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                                    : app.status === "approved" || app.status === "disbursed" || app.status === "active"
-                                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                                        : app.status === "rejected"
-                                                            ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                                            : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                                                }`}>
+                                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                                : app.status === "approved" || app.status === "disbursed" || app.status === "active"
+                                                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                                    : app.status === "rejected"
+                                                        ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                                        : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                                                } `}>
                                                 {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                                             </span>
                                         </td>
@@ -439,12 +467,12 @@ export default function AdminLoansPage() {
                                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
                                     Status
                                 </h3>
-                                <span className={`inline-flex px-3 py-1 rounded-full text-sm font-bold ${selectedApplication.status === "pending"
-                                        ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                        : selectedApplication.status === "approved" || selectedApplication.status === "disbursed" || selectedApplication.status === "active"
-                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                    }`}>
+                                <span className={`inline - flex px - 3 py - 1 rounded - full text - sm font - bold ${selectedApplication.status === "pending"
+                                    ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                    : selectedApplication.status === "approved" || selectedApplication.status === "disbursed" || selectedApplication.status === "active"
+                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                    } `}>
                                     {selectedApplication.status.charAt(0).toUpperCase() + selectedApplication.status.slice(1)}
                                 </span>
                                 {selectedApplication.rejectionReason && (
@@ -481,6 +509,16 @@ export default function AdminLoansPage() {
                                         Reject
                                     </button>
                                 </>
+                            )}
+                            {selectedApplication.status === "approved" && (
+                                <button
+                                    onClick={() => handleDisburse(selectedApplication.id)}
+                                    disabled={isProcessing}
+                                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all disabled:opacity-50"
+                                >
+                                    <DollarSign className="w-5 h-5 inline mr-2" />
+                                    Disburse Funds
+                                </button>
                             )}
                             <button
                                 onClick={() => setIsDetailsModalOpen(false)}

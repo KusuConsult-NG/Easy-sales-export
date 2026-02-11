@@ -146,23 +146,28 @@ export interface LandListing {
         address: string;
     };
     size: number; // in hectares
-    sizeInAcres: number; // for display
-    pricePerHectare: number;
-    pricePerAcre: number; // for display
-    totalPrice: number;
+    sizeInAcres?: number; // for display
+    pricePerHectare?: number;
+    pricePerAcre?: number; // for display
+    price: number; // Total price
+    totalPrice?: number; // Deprecated, use price
+    category?: string;
     soilType: string;
     waterSource?: string;
     waterAccess: boolean;
     accessibility: string;
     images: string[];
     documents?: {
-        titleDeed?: string;
-        survey?: string;
+        landTitle?: string;
+        surveyPlan?: string;
         photos?: string[];
     };
     ownerId: string;
+    ownerName?: string;
     ownerEmail?: string;
-    status: "available" | "reserved" | "sold";
+    ownerPhone?: string;
+    status: "available" | "reserved" | "sold" | "leased";
+    verified: boolean;
     verificationStatus: "pending" | "approved" | "rejected";
     rejectionReason?: string;
     verifiedBy?: string;
@@ -170,6 +175,10 @@ export interface LandListing {
     listedDate: Date;
     createdAt?: Date;
     updatedAt?: Date;
+    viewCount?: number;
+    type: "sale" | "lease";
+    leaseDuration?: number;
+    features?: string[];
 }
 
 // ===========================

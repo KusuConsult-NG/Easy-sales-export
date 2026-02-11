@@ -90,7 +90,7 @@ export async function registerAction(prevState: any, formData: FormData) {
         });
 
         // Validate platforms (at least one required)
-        const allowedPlatforms = ["marketplace", "export", "cooperatives", "farm-nation", "academy"];
+        const allowedPlatforms = ["marketplace", "export", "cooperatives", "farm-nation", "academy", "wave"];
         if (!platforms || platforms.length === 0) {
             return { error: "Please select at least one platform", success: false };
         }

@@ -5,11 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft } from "lucide-react";
 import { getCourseByIdAction, getUserProgressAction, type Course, type UserProgress } from "@/app/actions/academy";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function CertificatePage() {
     const params = useParams();
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
 
     const courseId = params.certificateId as string;
     const [course, setCourse] = useState<Course | null>(null);
@@ -77,7 +79,7 @@ export default function CertificatePage() {
             });
         } else {
             navigator.clipboard.writeText(shareText + ' ' + window.location.href);
-            alert('Certificate link copied to clipboard!');
+            showToast('Certificate link copied to clipboard!', "success");
         }
     };
 

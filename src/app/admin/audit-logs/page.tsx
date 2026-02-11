@@ -13,7 +13,14 @@ import {
     Filter,
     ChevronDown,
     ChevronUp,
+    Search,
+    Calendar,
+    ArrowUpRight,
+    ArrowDownLeft,
+    RefreshCw,
+    FileText,
 } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import {
     getAuditLogsAction,
     exportAuditLogsCSV,
@@ -30,6 +37,7 @@ const severityConfig = {
 export default function AdminAuditLogsPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
     const [logs, setLogs] = useState<AuditLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
@@ -104,8 +112,9 @@ export default function AdminAuditLogsPage() {
             a.download = `audit-logs-${new Date().toISOString()}.csv`;
             a.click();
             window.URL.revokeObjectURL(url);
+            showToast("Logs exported successfully", "success");
         } else {
-            alert(result.error || "Failed to export logs");
+            showToast(result.error || "Failed to export logs", "error");
         }
 
         setExporting(false);

@@ -136,9 +136,20 @@ export interface LoanApplication {
     userId: string;
     amount: number;
     purpose: string;
-    status: "pending" | "approved" | "rejected" | "disbursed" | "completed";
+    status: "pending" | "approved" | "rejected" | "disbursed" | "repaid" | "completed";
     createdAt: Date;
+    updatedAt?: Date;
     approvedAt?: Date;
+    disbursedAt?: Date;
+    repaidAt?: Date;
+
+    // Financials
+    interestRate?: number;
+    durationMonths?: number;
+    monthlyPayment?: number;
+    totalRepayment?: number;
+    contributionAmount?: number;
+    tier?: string;
 }
 
 export interface Payment {

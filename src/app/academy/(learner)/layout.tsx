@@ -10,6 +10,8 @@ import { checkServiceAccess } from "@/lib/auth/service-access";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp, getApps } from "firebase-admin/app";
 
+import AcademySidebar from "./AcademySidebar";
+
 export default async function AcademyLearnerLayout({
     children,
 }: {
@@ -28,7 +30,7 @@ export default async function AcademyLearnerLayout({
 
     // Check if user is authenticated
     if (!sessionCookie) {
-        redirect("/auth/login?redirect=/academy");
+        redirect("/academy/login");
     }
 
     // Verify session and check access
@@ -43,14 +45,16 @@ export default async function AcademyLearnerLayout({
         }
     } catch (error) {
         console.error("Session verification failed:", error);
-        redirect("/auth/login?redirect=/academy");
+        redirect("/academy/login");
     }
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            {/* Main Content - Full Width */}
-            <main className="w-full">
-                <div className="p-4 lg:p-8">
+            <AcademySidebar />
+
+            {/* Main Content - Offset for sidebar */}
+            <main className="lg:pl-64 min-h-screen transition-all">
+                <div className="p-4 lg:p-8 mt-16 lg:mt-0">
                     {children}
                 </div>
             </main>

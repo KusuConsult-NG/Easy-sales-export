@@ -1,7 +1,8 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     collection,
     doc,
@@ -14,7 +15,6 @@ import {
     orderBy,
     Timestamp,
     serverTimestamp,
-} from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**

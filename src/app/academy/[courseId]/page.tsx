@@ -14,6 +14,7 @@ import {
     type Course,
     type UserProgress
 } from "@/app/actions/academy";
+import { useToast } from "@/contexts/ToastContext";
 
 interface CourseDetailPageProps {
     params: { courseId: string };
@@ -22,6 +23,7 @@ interface CourseDetailPageProps {
 export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
     const [course, setCourse] = useState<Course | null>(null);
     const [progress, setProgress] = useState<UserProgress | null>(null);
     const [loading, setLoading] = useState(true);
@@ -93,8 +95,9 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
 
         if (result.success) {
             await loadCourse(); // Refresh to show enrollment
+            showToast("Successfully enrolled in course!", "success");
         } else {
-            alert(result.error || "Failed to enroll");
+            showToast(result.error || "Failed to enroll", "error");
         }
 
         setEnrolling(false);

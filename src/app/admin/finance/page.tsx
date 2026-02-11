@@ -31,19 +31,16 @@ export default function AdminFinancePage() {
         async function fetchFinancial() {
             setLoading(true);
             try {
-                // Simulate fetch
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                if (mounted) {
+                const data = await getFinancialOverviewAction();
+                if (mounted && data) {
                     setFinancial({
-                        totalRevenue: 45000000,
-                        totalEscrowVolume: 12500000,
-                        totalLoansDisbursed: 7500000,
-                        recentTransactions: [
-                            { id: "TX123", user: "John Doe", amount: 50000, type: "deposit", status: "completed", date: new Date().toISOString() },
-                            { id: "TX124", user: "Jane Smith", amount: 25000, type: "withdrawal", status: "pending", date: new Date().toISOString() },
-                            { id: "TX125", user: "Coop A", amount: 150000, type: "loan_repayment", status: "completed", date: new Date().toISOString() },
-                        ]
+                        totalRevenue: data.totalRevenue,
+                        totalEscrowVolume: data.totalEscrowVolume,
+                        totalLoansDisbursed: data.totalLoansDisbursed,
+                        recentTransactions: data.recentTransactions.map((tx: any) => ({
+                            ...tx,
+                            date: tx.timestamp ? new Date(tx.timestamp.seconds * 1000).toISOString() : new Date().toISOString()
+                        }))
                     });
                 }
             } catch (error) {

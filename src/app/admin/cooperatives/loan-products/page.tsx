@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import {
-    Package, Plus, Pencil, Trash2, DollarSign,
-    Calendar, TrendingUp, X
+    Package, Plus, Edit, Trash2, CheckCircle, XCircle, Loader2, Search, Filter, Briefcase, DollarSign, Pencil, X
 } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 
 type LoanProduct = {
@@ -19,6 +19,7 @@ type LoanProduct = {
 };
 
 export default function LoanProductsPage() {
+    const { showToast } = useToast();
     const [products, setProducts] = useState<LoanProduct[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,6 +49,7 @@ export default function LoanProductsPage() {
             }
         } catch (error) {
             console.error("Failed to fetch products:", error);
+            showToast("Failed to fetch products", "error");
         } finally {
             setIsLoading(false);
         }
@@ -105,14 +107,14 @@ export default function LoanProductsPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert(editingProduct ? "Product updated successfully!" : "Product created successfully!");
+                showToast("Product saved successfully", "success");
                 handleCloseModal();
                 fetchProducts();
             } else {
-                alert(data.message || "Failed to save product");
+                showToast(data.message || "Failed to save product", "error");
             }
         } catch (error) {
-            alert("An error occurred while saving the product");
+            showToast("An error occurred while saving the product", "error");
         }
     };
 
@@ -131,13 +133,13 @@ export default function LoanProductsPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Product deleted successfully");
+                showToast("Product deleted successfully", "success");
                 fetchProducts();
             } else {
-                alert(data.message || "Failed to delete product");
+                showToast(data.message || "Failed to delete product", "error");
             }
         } catch (error) {
-            alert("An error occurred while deleting the product");
+            showToast("An error occurred while deleting the product", "error");
         }
     };
 
@@ -238,8 +240,8 @@ export default function LoanProductsPage() {
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-slate-600 dark:text-slate-400">Status</span>
                                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${product.isActive
-                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                            : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-400"
+                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                        : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-400"
                                         }`}>
                                         {product.isActive ? "Active" : "Inactive"}
                                     </span>

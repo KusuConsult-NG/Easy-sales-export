@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Users, CheckCircle, XCircle, Loader2, AlertCircle, Shield, Search, Download, Filter, ChevronLeft, ChevronRight, MoreHorizontal, Edit, Lock, Unlock } from "lucide-react";
 import { toggleUserVerificationAction, updateUserRolesAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
-import { toast } from "react-hot-toast";
+import { useToast } from "@/contexts/ToastContext";
 
 interface User {
     id: string;
@@ -27,6 +27,7 @@ const ROLES_LIST = [
 ];
 
 export default function AdminUsersPage() {
+    const { showToast } = useToast();
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -233,7 +234,7 @@ export default function AdminUsersPage() {
         if (result.success) {
             setUsers(prev => prev.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u));
         } else {
-            alert(result.error);
+            showToast(result.error, "error");
         }
 
         setProcessingId(null);
@@ -332,11 +333,11 @@ export default function AdminUsersPage() {
         const result = await updateUserRolesAction(selectedUserForModal.id, newRoles);
 
         if (result.success) {
-            toast.success("Roles updated successfully");
+            showToast("Roles updated successfully", "success");
             setUsers(prev => prev.map(u => u.id === selectedUserForModal.id ? { ...u, roles: newRoles, role: newRoles[0] || u.role } : u));
             setIsModalOpen(false);
         } else {
-            toast.error(result.error || "Failed to update roles");
+            showToast(result.error || "Failed to update roles", "error");
         }
         setIsUpdatingRoles(false);
     };

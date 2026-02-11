@@ -18,6 +18,7 @@ import {
 } from "@/app/actions/academy";
 import QuizComponent from "@/components/academy/QuizComponent";
 import DOMPurify from "isomorphic-dompurify";
+import { useToast } from "@/contexts/ToastContext";
 
 interface LessonPageProps {
     params: { courseId: string; lessonId: string };
@@ -26,6 +27,7 @@ interface LessonPageProps {
 export default function LessonPage({ params }: LessonPageProps) {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
     const [course, setCourse] = useState<Course | null>(null);
     const [progress, setProgress] = useState<UserProgress | null>(null);
     const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
@@ -140,8 +142,9 @@ export default function LessonPage({ params }: LessonPageProps) {
 
         if (result.success) {
             await loadLesson(); // Refresh progress
+            showToast("Lesson marked as complete!", "success");
         } else {
-            alert(result.error || "Failed to mark lesson as complete");
+            showToast(result.error || "Failed to mark lesson as complete", "error");
         }
 
         setCompleting(false);

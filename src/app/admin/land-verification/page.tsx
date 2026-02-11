@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MapPin, FileText, CheckCircle, XCircle, Eye, Download, Loader2 } from "lucide-react";
 import { getPendingLandListings, verifyLandListing } from "@/app/actions/admin";
+import { useToast } from "@/contexts/ToastContext";
 import type { LandListing } from "@/types";
 
 export default function LandVerificationPage() {
@@ -11,6 +12,7 @@ export default function LandVerificationPage() {
     const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
+    const { showToast } = useToast();
 
     useEffect(() => {
         let mounted = true;
@@ -35,19 +37,19 @@ export default function LandVerificationPage() {
         const result = await verifyLandListing(listingId, "approved", "");
 
         if (result.success) {
-            alert("Land listing approved successfully!");
+            showToast("Land listing approved successfully!", "success");
             setSelectedListing(null);
             // Manually update state to remove the approved listing
             setListings(prev => prev.filter(l => l.id !== listingId));
         } else {
-            alert(result.error || "Failed to approve listing");
+            showToast(result.error || "Failed to approve listing", "error");
         }
         setActionLoading(false);
     }
 
     async function handleReject(listingId: string) {
         if (!rejectionReason.trim()) {
-            alert("Please provide a reason for rejection");
+            showToast("Please provide a reason for rejection", "error");
             return;
         }
 
@@ -57,13 +59,13 @@ export default function LandVerificationPage() {
         const result = await verifyLandListing(listingId, "rejected", rejectionReason);
 
         if (result.success) {
-            alert("Land listing rejected. Owner has been notified.");
+            showToast("Land listing rejected. Owner has been notified.", "success");
             setSelectedListing(null);
             setRejectionReason("");
             // Manually update state to remove the rejected listing
             setListings(prev => prev.filter(l => l.id !== listingId));
         } else {
-            alert(result.error || "Failed to reject listing");
+            showToast(result.error || "Failed to reject listing", "error");
         }
         setActionLoading(false);
     }
@@ -162,6 +164,9 @@ export default function LandVerificationPage() {
                                         <p className="text-sm text-slate-600 dark:text-slate-400">
                                             {listing.location.state}, {listing.location.lga}
                                         </p>
+                                        <p className="text-xs text-slate-500 mt-1 capitalize">
+                                            {listing.category || "Farmland"}
+                                        </p>
                                     </div>
                                     <span className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 text-xs font-medium rounded-full">
                                         Pending
@@ -173,13 +178,13 @@ export default function LandVerificationPage() {
                                     <div>
                                         <p className="text-xs text-slate-500 dark:text-slate-400">Size</p>
                                         <p className="text-sm font-medium text-slate-900 dark:text-white">
-                                            {listing.sizeInAcres} acres
+                                            {(listing.sizeInAcres || (listing.size * 2.47)).toFixed(2)} acres
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 dark:text-slate-400">Price</p>
                                         <p className="text-sm font-medium text-slate-900 dark:text-white">
-                                            ₦{listing.pricePerAcre.toLocaleString()}/acre
+                                            ₦{(listing.pricePerAcre || (listing.price / (listing.size * 2.47))).toLocaleString(undefined, { maximumFractionDigits: 0 })}/acre
                                         </p>
                                     </div>
                                     <div>
@@ -200,20 +205,20 @@ export default function LandVerificationPage() {
                                 <div className="mb-4">
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Documents</p>
                                     <div className="space-y-2">
-                                        {listing.documents?.titleDeed && (
+                                        {listing.documents?.landTitle && (
                                             <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 p-2 rounded">
                                                 <span className="text-sm text-slate-700 dark:text-slate-300">Title Deed</span>
-                                                <button className="text-blue-600 hover:text-blue-700">
+                                                <a href={listing.documents.landTitle} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
                                                     <Download className="w-4 h-4" />
-                                                </button>
+                                                </a>
                                             </div>
                                         )}
-                                        {listing.documents?.survey && (
+                                        {listing.documents?.surveyPlan && (
                                             <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 p-2 rounded">
                                                 <span className="text-sm text-slate-700 dark:text-slate-300">Survey Plan</span>
-                                                <button className="text-blue-600 hover:text-blue-700">
+                                                <a href={listing.documents.surveyPlan} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
                                                     <Download className="w-4 h-4" />
-                                                </button>
+                                                </a>
                                             </div>
                                         )}
                                     </div>

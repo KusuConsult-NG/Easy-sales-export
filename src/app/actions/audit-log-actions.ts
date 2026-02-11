@@ -1,8 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log";
 
 /**

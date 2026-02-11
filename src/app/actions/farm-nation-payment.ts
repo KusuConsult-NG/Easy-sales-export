@@ -6,8 +6,8 @@
 
 import { auth } from "@/lib/auth";
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc, serverTimestamp, updateDoc, collection, query, where, getDocs, limit } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number {

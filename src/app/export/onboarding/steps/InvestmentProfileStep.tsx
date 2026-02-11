@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { TrendingUp, DollarSign, Target } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 interface InvestmentProfileStepProps {
     onNext: (data: any) => void;
@@ -28,6 +29,7 @@ export function InvestmentProfileStep({
     const [riskTolerance, setRiskTolerance] = useState(
         initialData?.riskTolerance || ""
     );
+    const { showToast } = useToast();
 
     const INVESTMENT_GOALS = [
         "Short-term returns (3-6 months)",
@@ -45,7 +47,7 @@ export function InvestmentProfileStep({
 
     const handleSubmit = () => {
         if (!minInvestment || !maxInvestment || goals.length === 0 || !riskTolerance) {
-            alert("Please fill in all required fields");
+            showToast("Please fill in all required fields", "error");
             return;
         }
 
@@ -134,15 +136,15 @@ export function InvestmentProfileStep({
                                 key={goal}
                                 onClick={() => toggleGoal(goal)}
                                 className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${goals.includes(goal)
-                                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-100"
-                                        : "border-slate-200 dark:border-slate-700 hover:border-orange-300 text-slate-700 dark:text-slate-300"
+                                    ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-100"
+                                    : "border-slate-200 dark:border-slate-700 hover:border-orange-300 text-slate-700 dark:text-slate-300"
                                     }`}
                             >
                                 <div className="flex items-center gap-2">
                                     <div
                                         className={`w-5 h-5 rounded border-2 flex items-center justify-center ${goals.includes(goal)
-                                                ? "border-orange-500 bg-orange-500"
-                                                : "border-slate-300 dark:border-slate-600"
+                                            ? "border-orange-500 bg-orange-500"
+                                            : "border-slate-300 dark:border-slate-600"
                                             }`}
                                     >
                                         {goals.includes(goal) && (
@@ -179,21 +181,21 @@ export function InvestmentProfileStep({
                                 key={risk}
                                 onClick={() => setRiskTolerance(risk)}
                                 className={`p-4 rounded-lg border-2 transition-all ${riskTolerance === risk
-                                        ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
-                                        : "border-slate-200 dark:border-slate-700 hover:border-orange-300"
+                                    ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
+                                    : "border-slate-200 dark:border-slate-700 hover:border-orange-300"
                                     }`}
                             >
                                 <div className="text-center">
                                     <TrendingUp
                                         className={`w-8 h-8 mx-auto mb-2 ${riskTolerance === risk
-                                                ? "text-orange-600"
-                                                : "text-slate-400"
+                                            ? "text-orange-600"
+                                            : "text-slate-400"
                                             }`}
                                     />
                                     <p
                                         className={`font-semibold capitalize ${riskTolerance === risk
-                                                ? "text-orange-900 dark:text-orange-100"
-                                                : "text-slate-700 dark:text-slate-300"
+                                            ? "text-orange-900 dark:text-orange-100"
+                                            : "text-slate-700 dark:text-slate-300"
                                             }`}
                                     >
                                         {risk}

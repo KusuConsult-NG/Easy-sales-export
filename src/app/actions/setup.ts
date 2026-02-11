@@ -1,7 +1,7 @@
 "use server";
 
-import { db } from "@/lib/firebase";
-import { doc, setDoc, updateDoc, increment, serverTimestamp, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 

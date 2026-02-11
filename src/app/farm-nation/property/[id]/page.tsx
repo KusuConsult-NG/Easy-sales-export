@@ -6,10 +6,11 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import {
     ArrowLeft, MapPin, Maximize, DollarSign, Calendar, Heart, Share2,
-    CheckCircle, AlertCircle, Lock, Loader2, Phone, Mail, User
+    CheckCircle, AlertCircle, Lock, Loader2, Phone, Mail, User, Send, X
 } from "lucide-react";
-import { getPropertyByIdAction, type Property } from "@/app/actions/farm-nation";
+import { getPropertyByIdAction, submitLandInquiryAction, type LandListing } from "@/app/actions/land-listings";
 import { getUserTierAction } from "@/app/actions/cooperative";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function PropertyDetailsPage() {
     const params = useParams();
@@ -17,21 +18,32 @@ export default function PropertyDetailsPage() {
     const { data: session, status } = useSession();
     const propertyId = params.id as string;
 
-    const [property, setProperty] = useState<Property | null>(null);
+    const [property, setProperty] = useState<LandListing | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [userTier, setUserTier] = useState<"Basic" | "Premium" | null>(null);
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [showInquiryModal, setShowInquiryModal] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
+    const { showToast } = useToast();
+
+    // Inquiry State
+    const [inquiryForm, setInquiryForm] = useState({
+        name: "",
+        email: "",
+        phone: "",
+        message: ""
+    });
+    const [submittingInquiry, setSubmittingInquiry] = useState(false);
 
     async function loadProperty() {
         try {
             const result = await getPropertyByIdAction(propertyId);
-            if (result.success && result.property) {
-                setProperty(result.property);
+            if (result) {
+                setProperty(result);
             } else {
-                setError(result.error || "Property not found");
+                setError("Property not found");
             }
         } catch (error) {
             setError("Failed to load property details");
@@ -41,39 +53,78 @@ export default function PropertyDetailsPage() {
 
     useEffect(() => {
         loadProperty();
-    }, [params.id]); // Depend only on params.id for property loading
+    }, [propertyId]);
 
     useEffect(() => {
-        if (status === "authenticated") {
-            getUserTierAction().then(({ tier }) => setUserTier(tier));
-        }
-    }, [status]); // Depend only on status for user tier
+        if (status === "authenticated" && session?.user) {
+            // Pre-fill inquiry form
+            setInquiryForm(prev => ({
+                ...prev,
+                name: session.user.name || "",
+                email: session.user.email || ""
+            }));
 
-    const handleExpressInterest = () => {
+            // Check tier
+            try {
+                getUserTierAction().then((res) => {
+                    if (res && res.tier) setUserTier(res.tier as any);
+                }).catch(() => { });
+            } catch (e) {
+                // Ignore if action doesn't exist or fails
+            }
+        }
+    }, [status, session]);
+
+    const handleContactSeller = () => {
         if (status !== "authenticated") {
+            showToast("Please login to contact the seller.", "error");
             router.push("/login");
             return;
         }
+        setShowInquiryModal(true);
+    };
 
-        if (userTier !== "Premium") {
-            setShowUpgradeModal(true);
-            return;
+    const submitInquiry = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!property) return;
+
+        setSubmittingInquiry(true);
+        try {
+            const result = await submitLandInquiryAction({
+                listingId: property.id!,
+                listingTitle: property.title,
+                listingOwnerId: property.ownerId,
+                buyerName: inquiryForm.name,
+                buyerEmail: inquiryForm.email,
+                buyerPhone: inquiryForm.phone,
+                message: inquiryForm.message,
+            });
+
+            if (result.success) {
+                showToast("Inquiry Sent! The seller has been notified.", "success");
+                setShowInquiryModal(false);
+                setInquiryForm({ ...inquiryForm, message: "" });
+            } else {
+                showToast("Failed to send inquiry: " + result.error, "error");
+            }
+        } catch (error) {
+            showToast("An error occurred while sending your inquiry.", "error");
+        } finally {
+            setSubmittingInquiry(false);
         }
-
-        router.push(`/farm-nation/checkout/${propertyId}`);
     };
 
     const handleShare = async () => {
         const url = window.location.href;
         if (navigator.share) {
             await navigator.share({
-                title: property?.name,
+                title: property?.title,
                 text: property?.description,
                 url: url,
             });
         } else {
             navigator.clipboard.writeText(url);
-            alert("Link copied to clipboard!");
+            showToast("Link copied to clipboard!", "success");
         }
     };
 
@@ -94,9 +145,9 @@ export default function PropertyDetailsPage() {
                 <div className="max-w-md text-center">
                     <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Property Not Found</h1>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">{error}</p>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">{error || "This property may have been removed."}</p>
                     <button
-                        onClick={() => router.push("/farm-nation")}
+                        onClick={() => router.push("/farm-nation/properties")}
                         className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition"
                     >
                         Back to Marketplace
@@ -112,7 +163,7 @@ export default function PropertyDetailsPage() {
             <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <button
-                        onClick={() => router.push("/farm-nation")}
+                        onClick={() => router.push("/farm-nation/properties")}
                         className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
                     >
                         <ArrowLeft className="w-5 h-5" />
@@ -143,13 +194,13 @@ export default function PropertyDetailsPage() {
                     {/* Main Content */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Image Gallery */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2">
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm">
                             {property.images && property.images.length > 0 ? (
                                 <div className="relative">
                                     <div className="aspect-video relative bg-slate-200 dark:bg-slate-700">
                                         <Image
                                             src={property.images[currentImageIndex] || "/placeholder-land.jpg"}
-                                            alt={property.name}
+                                            alt={property.title}
                                             fill
                                             className="object-cover"
                                         />
@@ -213,22 +264,19 @@ export default function PropertyDetailsPage() {
                         </div>
 
                         {/* Property Details */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm">
                             <div className="flex items-start justify-between mb-4">
                                 <div>
                                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-                                        {property.name}
+                                        {property.title}
                                     </h1>
                                     <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
                                         <MapPin className="w-4 h-4" />
-                                        <span>{property.location}, {property.lga}, {property.state}</span>
+                                        <span>{property.location.address}, {property.location.lga}, {property.location.state}</span>
                                     </div>
                                 </div>
-                                <div className={`px-4 py-2 rounded-lg font-semibold ${property.type === "sale"
-                                    ? "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400"
-                                    : "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400"
-                                    }`}>
-                                    For {property.type === "sale" ? "Sale" : "Lease"}
+                                <div className="px-4 py-2 rounded-lg font-semibold bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400">
+                                    For Sale
                                 </div>
                             </div>
 
@@ -242,9 +290,6 @@ export default function PropertyDetailsPage() {
                                     <p className="text-2xl font-bold text-slate-900 dark:text-white">
                                         ₦{property.price.toLocaleString()}
                                     </p>
-                                    {property.type === "lease" && property.leaseDuration && (
-                                        <p className="text-xs text-slate-500 mt-1">per year ({property.leaseDuration} months)</p>
-                                    )}
                                 </div>
 
                                 <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4">
@@ -255,7 +300,6 @@ export default function PropertyDetailsPage() {
                                     <p className="text-2xl font-bold text-slate-900 dark:text-white">
                                         {property.size} <span className="text-lg">ha</span>
                                     </p>
-                                    <p className="text-xs text-slate-500 mt-1">hectares</p>
                                 </div>
 
                                 <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4">
@@ -264,9 +308,8 @@ export default function PropertyDetailsPage() {
                                         <span className="text-sm font-semibold">Category</span>
                                     </div>
                                     <p className="text-lg font-bold text-slate-900 dark:text-white capitalize">
-                                        {property.category}
+                                        {property.category || "Farmland"}
                                     </p>
-                                    <p className="text-xs text-slate-500 mt-1">{property.viewCount} views</p>
                                 </div>
                             </div>
 
@@ -279,69 +322,53 @@ export default function PropertyDetailsPage() {
                             </div>
 
                             {/* Features */}
-                            {property.features && property.features.length > 0 && (
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">Features & Amenities</h2>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                        {property.features.map((feature, index) => (
-                                            <div
-                                                key={index}
-                                                className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg"
-                                            >
-                                                <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
-                                                <span className="text-sm font-medium text-slate-900 dark:text-white">{feature}</span>
-                                            </div>
-                                        ))}
+                            <div className="grid grid-cols-2 gap-4">
+                                {property.soilType && (
+                                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                        <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                                        <span className="text-sm font-medium text-slate-900 dark:text-white">Soil: {property.soilType}</span>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                                {property.waterSource && (
+                                    <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                        <CheckCircle className="w-5 h-5 text-blue-600 shrink-0" />
+                                        <span className="text-sm font-medium text-slate-900 dark:text-white">Water: {property.waterSource}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
                     {/* Sidebar */}
                     <div className="lg:col-span-1 space-y-6">
                         {/* CTA Card */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 sticky top-24">
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm sticky top-24">
                             <div className="mb-6">
                                 <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
                                     ₦{property.price.toLocaleString()}
                                 </p>
-                                <p className="text-sm text-slate-500">
-                                    {property.type === "lease" ? "Annual lease price" : "Purchase price"}
-                                </p>
+                                <p className="text-sm text-slate-500">Purchase price</p>
                             </div>
 
-                            {property.status === "available" ? (
+                            {property.status === "verified" ? (
                                 <button
-                                    onClick={handleExpressInterest}
+                                    onClick={handleContactSeller}
                                     className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2"
                                 >
-                                    {userTier === "Premium" ? (
-                                        "Express Interest"
-                                    ) : (
-                                        <>
-                                            <Lock className="w-5 h-5" />
-                                            Upgrade to Purchase
-                                        </>
-                                    )}
+                                    <Mail className="w-5 h-5" />
+                                    Contact Seller
                                 </button>
                             ) : (
                                 <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
                                     <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200 capitalize">
-                                        {property.status === "pending" ? "Sale Pending" : `Already ${property.status}`}
+                                        {property.status === "pending_verification" ? "Verification Pending" : `Status: ${property.status}`}
                                     </p>
                                 </div>
                             )}
-
-                            {userTier !== "Premium" && (
-                                <p className="text-xs text-center text-slate-500 mt-3">
-                                    Premium membership required to purchase properties
-                                </p>
-                            )}
                         </div>
 
-                        {/* Seller Info */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
+                        {/* Seller Info (Protected) */}
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm">
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Seller Information</h3>
 
                             {userTier === "Premium" ? (
@@ -360,39 +387,87 @@ export default function PropertyDetailsPage() {
                                             <p className="font-semibold text-slate-900 dark:text-white">{property.ownerEmail}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <Phone className="w-5 h-5 text-slate-400" />
-                                        <div>
-                                            <p className="text-xs text-slate-500">Phone</p>
-                                            <p className="font-semibold text-slate-900 dark:text-white">{property.ownerPhone}</p>
-                                        </div>
-                                    </div>
                                 </div>
                             ) : (
-                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg cursor-pointer" onClick={() => setShowUpgradeModal(true)}>
                                     <Lock className="w-8 h-8 text-blue-600 mx-auto mb-2" />
                                     <p className="text-sm text-center text-blue-800 dark:text-blue-200">
-                                        Upgrade to Premium to view seller contact information
+                                        Upgrade to Premium to view full seller contact details
                                     </p>
                                 </div>
                             )}
                         </div>
-
-                        {/* Verification Badge */}
-                        {property.verified && (
-                            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <CheckCircle className="w-5 h-5 text-green-600" />
-                                    <p className="font-semibold text-green-800 dark:text-green-200">Verified Property</p>
-                                </div>
-                                <p className="text-xs text-green-700 dark:text-green-300">
-                                    This property has been verified by our team and all documents have been reviewed.
-                                </p>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
+
+            {/* Inquiry Modal */}
+            {showInquiryModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-lg w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Contact Seller</h2>
+                            <button onClick={() => setShowInquiryModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full">
+                                <X className="w-6 h-6 text-slate-500" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={submitInquiry} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-1">Your Name</label>
+                                <input
+                                    type="text"
+                                    value={inquiryForm.name}
+                                    onChange={e => setInquiryForm({ ...inquiryForm, name: e.target.value })}
+                                    required
+                                    className="w-full px-4 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-1">Email</label>
+                                    <input
+                                        type="email"
+                                        value={inquiryForm.email}
+                                        onChange={e => setInquiryForm({ ...inquiryForm, email: e.target.value })}
+                                        required
+                                        className="w-full px-4 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-1">Phone</label>
+                                    <input
+                                        type="tel"
+                                        value={inquiryForm.phone}
+                                        onChange={e => setInquiryForm({ ...inquiryForm, phone: e.target.value })}
+                                        required
+                                        className="w-full px-4 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-1">Message</label>
+                                <textarea
+                                    value={inquiryForm.message}
+                                    onChange={e => setInquiryForm({ ...inquiryForm, message: e.target.value })}
+                                    required
+                                    rows={4}
+                                    className="w-full px-4 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600"
+                                    placeholder="I am interested in this property..."
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={submittingInquiry}
+                                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2"
+                            >
+                                {submittingInquiry ? <Loader2 className="animate-spin" /> : <Send className="w-4 h-4" />}
+                                Send Inquiry
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Upgrade Modal */}
             {showUpgradeModal && (
@@ -403,7 +478,7 @@ export default function PropertyDetailsPage() {
                             Premium Membership Required
                         </h2>
                         <p className="text-slate-600 dark:text-slate-400 text-center mb-6">
-                            Upgrade to Premium (₦20,000 contribution) to purchase or lease properties on Farm Nation.
+                            Upgrade to Premium to view full seller contact details.
                         </p>
                         <div className="flex gap-3">
                             <button

@@ -2,16 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
     Map, MapPin, Upload, FileText, Video,
-    ArrowLeft, Check, X, Plus
+    ArrowLeft, Check, X, Plus, Loader2
 } from "lucide-react";
 import Link from "next/link";
+import { useStorage } from "@/hooks/use-storage";
+import { submitLandListingAction } from "@/app/actions/land-listings";
+import { useToast } from "@/contexts/ToastContext";
 
 type LandCategory = "farmland" | "ranch" | "forest" | "mixed" | "orchard" | "aquaculture";
 
 export default function ListLandPage() {
     const router = useRouter();
+    const { data: session } = useSession();
+    const { showToast } = useToast();
+    const { uploadFile, uploadState } = useStorage();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formData, setFormData] = useState({
@@ -82,50 +89,79 @@ export default function ListLandPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!session?.user) {
+            showToast("Authentication Required: Please login to list your land.", "error");
+            router.push("/login");
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
-            const submitData = new FormData();
-
-            // Add form fields
-            Object.entries(formData).forEach(([key, value]) => {
-                submitData.append(key, String(value));
-            });
-
-            // Calculate total price
-            const totalPrice = formData.size * formData.pricePerUnit;
-            submitData.append("totalPrice", String(totalPrice));
-
-            // Add images
-            media.images.forEach((image, index) => {
-                submitData.append(`image${index}`, image);
-            });
-
-            // Add video
-            if (media.video) {
-                submitData.append("video", media.video);
+            // 1. Upload Images
+            const imageUrls: string[] = [];
+            for (const image of media.images) {
+                const path = `farm-nation/${session.user.id}/images/${Date.now()}_${image.name}`;
+                const url = await uploadFile(image, path);
+                imageUrls.push(url);
             }
 
-            // Add documents
-            if (documents.landTitle) submitData.append("landTitle", documents.landTitle);
-            if (documents.surveyPlan) submitData.append("surveyPlan", documents.surveyPlan);
-            if (documents.taxClearance) submitData.append("taxClearance", documents.taxClearance);
+            // 2. Upload Documents
+            const documentUrls: string[] = [];
+            // Map simplified for MVP - storing URLs in array parallel to type, or could be improved schema
+            // Using simple push for now, ideally map specific document types
+            if (documents.landTitle) {
+                const path = `farm-nation/${session.user.id}/docs/${Date.now()}_title_${documents.landTitle.name}`;
+                const url = await uploadFile(documents.landTitle, path);
+                documentUrls.push(url); // 0 is title
+            }
+            if (documents.surveyPlan) {
+                const path = `farm-nation/${session.user.id}/docs/${Date.now()}_survey_${documents.surveyPlan.name}`;
+                const url = await uploadFile(documents.surveyPlan, path);
+                documentUrls.push(url); // 1 is survey
+            }
+            if (documents.taxClearance) {
+                const path = `farm-nation/${session.user.id}/docs/${Date.now()}_tax_${documents.taxClearance.name}`;
+                const url = await uploadFile(documents.taxClearance, path);
+                documentUrls.push(url); // 2 is tax
+            }
 
-            const response = await fetch("/api/farm-nation/create-listing", {
-                method: "POST",
-                body: submitData,
-            });
+            // 3. Submit Data
+            const result = await submitLandListingAction({
+                ownerId: session.user.id,
+                ownerName: session.user.name || "Land Owner",
+                ownerEmail: session.user.email || "",
+                title: formData.title,
+                description: formData.description,
+                location: {
+                    state: formData.state,
+                    lga: formData.lga,
+                    address: formData.address,
+                },
+                size: formData.size,
+                price: formData.size * formData.pricePerUnit,
+                category: formData.category, // Added category
+                imageUrls,
+                documentUrls,
+                gpsCoordinates: formData.latitude && formData.longitude ? {
+                    latitude: parseFloat(formData.latitude),
+                    longitude: parseFloat(formData.longitude)
+                } : undefined,
+                availableForSale: formData.availableForSale,
+                availableForRent: formData.availableForRent,
+                escrowAvailable: formData.escrowAvailable,
+            } as any); // Type cast due to minor discrepancies in action signature vs local state
 
-            const data = await response.json();
-
-            if (data.success) {
-                alert("Land listing created successfully! It will be reviewed by our team.");
+            if (result.success) {
+                showToast("Land Listing Submitted! Your listing has been submitted for verification.", "success");
                 router.push("/farm-nation");
             } else {
-                alert(data.message || "Failed to create listing");
+                showToast(`Submission Failed: ${result.error || "Failed to create listing"}`, "error");
             }
-        } catch (error) {
-            alert("An error occurred while creating the listing");
+        } catch (error: any) {
+            console.error(error);
+            showToast("Error: " + error.message, "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -144,11 +180,19 @@ export default function ListLandPage() {
 
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
                     {/* Header */}
-                    <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white">
-                        <h1 className="text-3xl font-bold mb-2">List Your Land</h1>
-                        <p className="text-green-100">
-                            Create a listing for your agricultural land
-                        </p>
+                    <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white flex justify-between items-center">
+                        <div>
+                            <h1 className="text-3xl font-bold mb-2">List Your Land</h1>
+                            <p className="text-green-100">
+                                Create a listing for your agricultural land
+                            </p>
+                        </div>
+                        <Link
+                            href="/farm-nation/inquiries"
+                            className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-white font-semibold transition backdrop-blur-sm"
+                        >
+                            View Inquiries
+                        </Link>
                     </div>
 
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
@@ -185,8 +229,8 @@ export default function ListLandPage() {
                                                 type="button"
                                                 onClick={() => setFormData({ ...formData, category: cat.value as LandCategory })}
                                                 className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category === cat.value
-                                                        ? "border-green-600 bg-green-50 dark:bg-green-900/30"
-                                                        : "border-slate-200 dark:border-slate-700 hover:border-green-400"
+                                                    ? "border-green-600 bg-green-50 dark:bg-green-900/30"
+                                                    : "border-slate-200 dark:border-slate-700 hover:border-green-400"
                                                     }`}
                                             >
                                                 <div className="text-2xl mb-2">{cat.icon}</div>
@@ -389,6 +433,8 @@ export default function ListLandPage() {
                                     description="Certificate of Occupancy (C of O) or other proof of ownership"
                                     file={documents.landTitle}
                                     onChange={(file) => handleDocumentChange("landTitle", file)}
+                                    // Pass upload state if file exists
+                                    uploadState={documents.landTitle ? uploadState[documents.landTitle.name] : undefined}
                                     required
                                 />
 
@@ -397,6 +443,7 @@ export default function ListLandPage() {
                                     description="Licensed surveyor's plan showing land boundaries"
                                     file={documents.surveyPlan}
                                     onChange={(file) => handleDocumentChange("surveyPlan", file)}
+                                    uploadState={documents.surveyPlan ? uploadState[documents.surveyPlan.name] : undefined}
                                     required
                                 />
 
@@ -405,6 +452,7 @@ export default function ListLandPage() {
                                     description="Recent land tax payment receipt or clearance"
                                     file={documents.taxClearance}
                                     onChange={(file) => handleDocumentChange("taxClearance", file)}
+                                    uploadState={documents.taxClearance ? uploadState[documents.taxClearance.name] : undefined}
                                 />
                             </div>
                         </section>
@@ -426,7 +474,15 @@ export default function ListLandPage() {
                                         {media.images.length > 0 ? (
                                             <div className="grid grid-cols-4 gap-4 mb-4">
                                                 {media.images.map((img, index) => (
-                                                    <div key={index} className="relative">
+                                                    <div key={index} className="relative group">
+                                                        {/* Show Progress Overlay */}
+                                                        {uploadState[img.name]?.isUploading && (
+                                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg z-10">
+                                                                <div className="text-white text-xs font-bold">
+                                                                    {Math.round(uploadState[img.name].progress)}%
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         <img
                                                             src={URL.createObjectURL(img)}
                                                             alt={`Land ${index + 1}`}
@@ -435,7 +491,7 @@ export default function ListLandPage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => removeImage(index)}
-                                                            className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full"
+                                                            className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                                                         >
                                                             <X className="w-3 h-3" />
                                                         </button>
@@ -456,47 +512,6 @@ export default function ListLandPage() {
                                                     accept="image/*"
                                                     multiple
                                                     onChange={handleImageSelect}
-                                                    className="hidden"
-                                                />
-                                            </label>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Video */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                                        Land Walkthrough Video (Optional)
-                                    </label>
-                                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6">
-                                        {media.video ? (
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <Video className="w-8 h-8 text-green-600" />
-                                                    <div>
-                                                        <p className="font-semibold text-slate-900 dark:text-white">{media.video.name}</p>
-                                                        <p className="text-sm text-slate-500">{(media.video.size / 1024 / 1024).toFixed(2)} MB</p>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setMedia(prev => ({ ...prev, video: null }))}
-                                                    className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                                >
-                                                    <X className="w-5 h-5 text-red-600" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <label className="flex flex-col items-center cursor-pointer">
-                                                <Video className="w-12 h-12 text-slate-400 mb-3" />
-                                                <p className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
-                                                    Click to upload video
-                                                </p>
-                                                <p className="text-xs text-slate-500">MP4, MOV (max 50MB)</p>
-                                                <input
-                                                    type="file"
-                                                    accept="video/*"
-                                                    onChange={handleVideoSelect}
                                                     className="hidden"
                                                 />
                                             </label>
@@ -564,7 +579,7 @@ export default function ListLandPage() {
                                 {isSubmitting ? (
                                     <>
                                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                        Submitting for Review...
+                                        Submitting Listing...
                                     </>
                                 ) : (
                                     <>
@@ -593,13 +608,15 @@ function FileUploadField({
     description,
     file,
     onChange,
-    required
+    required,
+    uploadState
 }: {
     label: string;
     description: string;
     file: File | null;
     onChange: (file: File | null) => void;
     required?: boolean;
+    uploadState?: { progress: number; isUploading: boolean; error: string | null };
 }) {
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0] || null;
@@ -613,7 +630,15 @@ function FileUploadField({
             </label>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">{description}</p>
 
-            <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6">
+            <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 relative">
+                {/* Upload Overlay */}
+                {uploadState?.isUploading && (
+                    <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 flex items-center justify-center z-10 flex-col">
+                        <Loader2 className="w-6 h-6 animate-spin text-green-600 mb-2" />
+                        <span className="text-sm font-bold text-green-800 dark:text-green-400">Uploading {Math.round(uploadState.progress)}%</span>
+                    </div>
+                )}
+
                 {file ? (
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -626,7 +651,8 @@ function FileUploadField({
                         <button
                             type="button"
                             onClick={() => onChange(null)}
-                            className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                            disabled={uploadState?.isUploading}
+                            className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors disabled:opacity-50"
                         >
                             <X className="w-5 h-5 text-red-600" />
                         </button>

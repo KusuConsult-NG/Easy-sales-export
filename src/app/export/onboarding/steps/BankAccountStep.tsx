@@ -11,6 +11,7 @@ import {
     BankAccountVerification,
     BankAccountData,
 } from "@/components/onboarding/BankAccountVerification";
+import { useToast } from "@/contexts/ToastContext";
 
 interface BankAccountStepProps {
     onNext: (data: any) => void;
@@ -26,6 +27,7 @@ export function BankAccountStep({
     const [bankData, setBankData] = useState<BankAccountData | null>(
         initialData || null
     );
+    const { showToast } = useToast();
 
     const handleVerified = (data: BankAccountData) => {
         setBankData(data);
@@ -33,7 +35,7 @@ export function BankAccountStep({
 
     const handleSubmit = () => {
         if (!bankData || !bankData.verified) {
-            alert("Please verify your bank account to continue");
+            showToast("Please verify your bank account to continue", "error");
             return;
         }
 

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Check, X, Save, Eye } from "lucide-react";
+import { Save, Plus, Trash2, ArrowLeft, Loader2, GripVertical, CheckCircle, HelpCircle, Eye, X, Check } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 type QuestionType = "mcq-single" | "mcq-multiple" | "true-false" | "short-answer";
 
@@ -34,6 +35,7 @@ type QuizData = {
 };
 
 export default function QuizBuilderPage({ params }: { params: { courseId: string } }) {
+    const { showToast } = useToast();
     const router = useRouter();
     const [isSaving, setIsSaving] = useState(false);
 
@@ -174,7 +176,7 @@ export default function QuizBuilderPage({ params }: { params: { courseId: string
 
     const handleSaveQuiz = async () => {
         if (!quizData.title || quizData.questions.length === 0) {
-            alert("Please add a title and at least one question");
+            showToast("Please add a title and at least one question", "error");
             return;
         }
 
@@ -189,13 +191,13 @@ export default function QuizBuilderPage({ params }: { params: { courseId: string
             const data = await response.json();
 
             if (data.success) {
-                alert("Quiz saved successfully!");
-                router.push(`/admin/academy/courses/${params.courseId}`);
+                showToast("Quiz saved successfully", "success");
+                router.push(`/ admin / academy / courses / ${params.courseId} `);
             } else {
-                alert(data.message || "Failed to save quiz");
+                showToast(data.message || "Failed to save quiz", "error");
             }
         } catch (error) {
-            alert("An error occurred while saving the quiz");
+            showToast("An error occurred while saving the quiz", "error");
         } finally {
             setIsSaving(false);
         }
@@ -500,7 +502,7 @@ export default function QuizBuilderPage({ params }: { params: { courseId: string
                                                         onChange={(e) => updateAnswer(answer.id, "text", e.target.value)}
                                                         disabled={editingQuestion.type === "true-false"}
                                                         className="flex-1 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
-                                                        placeholder={`Option ${idx + 1}`}
+                                                        placeholder={`Option ${idx + 1} `}
                                                     />
                                                     {editingQuestion.type !== "true-false" && (editingQuestion.answers?.length ?? 0) > 2 && (
                                                         <button

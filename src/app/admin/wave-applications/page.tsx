@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter } from "lucide-react";
+import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Search, Eye, Calendar, MapPin, User } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import {
     getWaveApplicationsAction,
     approveWaveApplicationAction,
@@ -24,6 +25,7 @@ interface WaveApplication {
 }
 
 export default function AdminWaveApplicationsPage() {
+    const { showToast } = useToast();
     const [applications, setApplications] = useState<WaveApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -57,9 +59,13 @@ export default function AdminWaveApplicationsPage() {
         const result = await approveWaveApplicationAction(applicationId);
 
         if (result.success) {
-            fetchApplications(); // Refresh list
+            showToast("Application approved successfully", "success");
+            // Update local state
+            setApplications(applications.map(app =>
+                app.id === applicationId ? { ...app, status: "approved" } : app
+            ));
         } else {
-            alert(result.error);
+            showToast(result.error || "Failed to approve application", "error");
         }
 
         setProcessingId(null);
@@ -73,9 +79,13 @@ export default function AdminWaveApplicationsPage() {
         const result = await rejectWaveApplicationAction(applicationId, reason);
 
         if (result.success) {
-            fetchApplications(); // Refresh list
+            showToast("Application rejected successfully", "success");
+            // Update local state
+            setApplications(applications.map(app =>
+                app.id === applicationId ? { ...app, status: "rejected", rejectionReason: reason } : app
+            ));
         } else {
-            alert(result.error);
+            showToast(result.error || "Failed to reject application", "error");
         }
 
         setProcessingId(null);

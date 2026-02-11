@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, ArrowLeft, FileText, Send } from "lucide-react";
 import { createDisputeAction, getEscrowTransactionByIdAction, type EscrowTransaction } from "@/app/actions/escrow";
+import { useToast } from "@/contexts/ToastContext";
 
 interface DisputePageProps {
     params: { id: string };
@@ -13,6 +14,7 @@ interface DisputePageProps {
 export default function CreateDisputePage({ params }: DisputePageProps) {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
     const [reason, setReason] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [escrowData, setEscrowData] = useState<any>(null);
@@ -34,7 +36,7 @@ export default function CreateDisputePage({ params }: DisputePageProps) {
             if (result.success && result.data) {
                 setEscrowData(result.data);
             } else {
-                alert("Escrow transaction not found");
+                showToast("Escrow transaction not found", "error");
                 router.push("/escrow");
             }
             setLoadingEscrow(false);
@@ -58,7 +60,7 @@ export default function CreateDisputePage({ params }: DisputePageProps) {
         const isSeller = escrowData.sellerId === session.user.id;
 
         if (!isBuyer && !isSeller) {
-            alert("You are not authorized to create a dispute for this transaction");
+            showToast("You are not authorized to create a dispute for this transaction", "error");
             setSubmitting(false);
             return;
         }
@@ -72,10 +74,10 @@ export default function CreateDisputePage({ params }: DisputePageProps) {
         });
 
         if (result.success) {
-            alert("Dispute created successfully! Our team will review it shortly.");
+            showToast("Dispute created successfully! Our team will review it shortly.", "success");
             router.push("/escrow");
         } else {
-            alert(result.error || "Failed to create dispute");
+            showToast(result.error || "Failed to create dispute", "error");
         }
 
         setSubmitting(false);

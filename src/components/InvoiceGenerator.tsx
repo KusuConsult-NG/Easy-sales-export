@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { FileText, Download } from 'lucide-react';
 import { useState } from 'react';
+import { useToast } from "@/contexts/ToastContext";
 
 interface InvoiceItem {
     description: string;
@@ -41,6 +42,7 @@ export default function InvoiceGenerator({
     buttonVariant = 'primary'
 }: InvoiceGeneratorProps) {
     const [isGenerating, setIsGenerating] = useState(false);
+    const { showToast } = useToast();
 
     const generatePDF = () => {
         setIsGenerating(true);
@@ -197,7 +199,7 @@ export default function InvoiceGenerator({
             doc.save(`invoice-${invoice.id}.pdf`);
         } catch (error) {
             console.error('Failed to generate invoice:', error);
-            alert('Failed to generate invoice. Please try again.');
+            showToast('Failed to generate invoice. Please try again.', "error");
         } finally {
             setIsGenerating(false);
         }

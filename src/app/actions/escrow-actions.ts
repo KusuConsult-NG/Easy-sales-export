@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
 import {
     collection,
     addDoc,
@@ -13,7 +13,6 @@ import {
     getDocs,
     orderBy,
     Timestamp,
-} from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";

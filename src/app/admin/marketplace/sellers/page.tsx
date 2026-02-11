@@ -5,6 +5,7 @@ import {
     Store, CheckCircle, XCircle, Clock, Search,
     Filter, Eye, FileText, MapPin, CreditCard, Ban
 } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 type SellerVerification = {
     id: string;
@@ -37,6 +38,7 @@ type SellerVerification = {
 type FilterType = "all" | "pending" | "approved" | "rejected";
 
 export default function AdminSellersPage() {
+    const { showToast } = useToast();
     const [verifications, setVerifications] = useState<SellerVerification[]>([]);
     const [filteredVerifications, setFilteredVerifications] = useState<SellerVerification[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -65,6 +67,7 @@ export default function AdminSellersPage() {
             }
         } catch (error) {
             console.error("Failed to fetch verifications:", error);
+            showToast("Failed to fetch verifications", "error");
         } finally {
             setIsLoading(false);
         }
@@ -106,14 +109,14 @@ export default function AdminSellersPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Seller approved successfully!");
+                showToast("Seller approved successfully!", "success");
                 fetchVerifications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to approve seller");
+                showToast(data.message || "Failed to approve seller", "error");
             }
         } catch (error) {
-            alert("An error occurred while approving the seller");
+            showToast("An error occurred while approving the seller", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -134,14 +137,14 @@ export default function AdminSellersPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Seller verification rejected");
+                showToast("Seller verification rejected", "success");
                 fetchVerifications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to reject seller");
+                showToast(data.message || "Failed to reject seller", "error");
             }
         } catch (error) {
-            alert("An error occurred while rejecting the seller");
+            showToast("An error occurred while rejecting the seller", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -162,14 +165,14 @@ export default function AdminSellersPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Seller suspended successfully");
+                showToast("Seller suspended successfully", "success");
                 fetchVerifications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to suspend seller");
+                showToast(data.message || "Failed to suspend seller", "error");
             }
         } catch (error) {
-            alert("An error occurred while suspending the seller");
+            showToast("An error occurred while suspending the seller", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -256,10 +259,10 @@ export default function AdminSellersPage() {
                             <button
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
-                                className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === status
-                                        ? "bg-primary text-white"
-                                        : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
-                                    }`}
+                                className={`px - 4 py - 2 rounded - lg font - medium transition - colors ${filterStatus === status
+                                    ? "bg-primary text-white"
+                                    : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                    } `}
                             >
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                             </button>
@@ -347,11 +350,11 @@ export default function AdminSellersPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${verification.status === "pending"
-                                                    ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                                    : verification.status === "approved"
-                                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                                }`}>
+                                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                                : verification.status === "approved"
+                                                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                                } `}>
                                                 {verification.status.charAt(0).toUpperCase() + verification.status.slice(1)}
                                             </span>
                                         </td>

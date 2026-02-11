@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle, XCircle, Award, Loader2 } from "lucide-react";
 import { submitQuizScoreAction, type Quiz } from "@/app/actions/academy";
+import { useToast } from "@/contexts/ToastContext";
 
 interface QuizComponentProps {
     quiz: Quiz;
@@ -25,10 +26,11 @@ export default function QuizComponent({
     const [submitted, setSubmitted] = useState(false);
     const [score, setScore] = useState<number | null>(existingScore || null);
     const [submitting, setSubmitting] = useState(false);
+    const { showToast } = useToast();
 
     const handleSubmit = async () => {
         if (Object.keys(answers).length !== quiz.questions.length) {
-            alert("Please answer all questions before submitting");
+            showToast("Please answer all questions before submitting", "warning");
             return;
         }
 
@@ -81,14 +83,14 @@ export default function QuizComponent({
                                 <label
                                     key={optIndex}
                                     className={`block p-4 rounded-lg border-2 transition cursor-pointer ${showFeedback
-                                            ? isCorrect
-                                                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                                : isSelected
-                                                    ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                                    : 'border-slate-200 dark:border-slate-700'
+                                        ? isCorrect
+                                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                                             : isSelected
-                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                                : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
+                                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                                : 'border-slate-200 dark:border-slate-700'
+                                        : isSelected
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
                                         }`}
                                 >
                                     <div className="flex items-center justify-between">

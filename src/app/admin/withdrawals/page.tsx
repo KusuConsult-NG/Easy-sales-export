@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Wallet, CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 import {
     getPendingWithdrawalsAction,
@@ -21,6 +22,7 @@ interface WithdrawalRequest {
 }
 
 export default function AdminWithdrawalsPage() {
+    const { showToast } = useToast();
     const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export default function AdminWithdrawalsPage() {
         if (result.success) {
             fetchWithdrawals(); // Refresh list
         } else {
-            alert(result.error);
+            showToast(result.error, "error");
         }
 
         setProcessingId(null);
@@ -82,7 +84,7 @@ export default function AdminWithdrawalsPage() {
         if (result.success) {
             fetchWithdrawals(); // Refresh list
         } else {
-            alert(result.error);
+            showToast(result.error, "error");
         }
 
         setProcessingId(null);

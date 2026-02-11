@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Send, Loader2, MessageCircle, ArrowLeft, Shield } from "lucide-react";
 import { sendEscrowMessageAction, getEscrowMessagesAction, getEscrowTransactionByIdAction, type EscrowTransaction } from "@/app/actions/escrow";
 import type { Message } from "@/app/actions/escrow";
+import { useToast } from "@/contexts/ToastContext";
 
 interface EscrowChatPageProps {
     params: Promise<{ id: string }>;
@@ -18,6 +19,7 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
 
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState("");
     const [loading, setLoading] = useState(true);
@@ -46,11 +48,11 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
                     setEscrowData(result.data);
                     setAuthorized(true);
                 } else {
-                    alert("You are not authorized to view this chat");
+                    showToast("You are not authorized to view this chat", "error");
                     router.push("/escrow");
                 }
             } else {
-                alert(result.error || "Escrow transaction not found");
+                showToast(result.error || "Escrow transaction not found", "error");
                 router.push("/escrow");
             }
         }
@@ -108,7 +110,7 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
             setNewMessage("");
             await loadMessages(); // Refresh messages
         } else {
-            alert(result.error || "Failed to send message");
+            showToast(result.error || "Failed to send message", "error");
         }
 
         setSending(false);

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 type QuestionType = "mcq-single" | "mcq-multiple" | "true-false" | "short-answer";
 
@@ -34,6 +35,7 @@ type QuizData = {
 
 export default function StudentQuizPage({ params }: { params: { courseId: string } }) {
     const router = useRouter();
+    const { showToast } = useToast();
     const [quiz, setQuiz] = useState<QuizData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -159,10 +161,10 @@ export default function StudentQuizPage({ params }: { params: { courseId: string
             if (data.success) {
                 router.push(`/academy/courses/${params.courseId}/quiz/results?attemptId=${data.attemptId}`);
             } else {
-                alert(data.message || "Failed to submit quiz");
+                showToast(data.message || "Failed to submit quiz", "error");
             }
         } catch (error) {
-            alert("An error occurred while submitting the quiz");
+            showToast("An error occurred while submitting the quiz", "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -274,8 +276,8 @@ export default function StudentQuizPage({ params }: { params: { courseId: string
                         </div>
                         {timeRemaining !== null && (
                             <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${timeRemaining < 60
-                                    ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                                    : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300'
                                 }`}>
                                 <Clock className="w-5 h-5" />
                                 <span className="font-mono font-bold text-lg">
@@ -337,14 +339,14 @@ export default function StudentQuizPage({ params }: { params: { courseId: string
                                         key={answer.id}
                                         onClick={() => handleMultipleChoice(currentQuestion.id, answer.id, isMultiple)}
                                         className={`w-full p-4 text-left rounded-lg border-2 transition-all ${isSelected
-                                                ? 'border-primary bg-primary/10 dark:bg-primary/20'
-                                                : 'border-slate-200 dark:border-slate-700 hover:border-primary/50 bg-slate-50 dark:bg-slate-900'
+                                            ? 'border-primary bg-primary/10 dark:bg-primary/20'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-primary/50 bg-slate-50 dark:bg-slate-900'
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`w-5 h-5 rounded ${isMultiple ? 'rounded-md' : 'rounded-full'} border-2 flex items-center justify-center ${isSelected
-                                                    ? 'border-primary bg-primary'
-                                                    : 'border-slate-300 dark:border-slate-600'
+                                                ? 'border-primary bg-primary'
+                                                : 'border-slate-300 dark:border-slate-600'
                                                 }`}>
                                                 {isSelected && (
                                                     <CheckCircle className="w-4 h-4 text-white" fill="currentColor" />

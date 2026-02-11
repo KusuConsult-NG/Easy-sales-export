@@ -23,6 +23,8 @@ import {
     Award
 } from "lucide-react";
 import { useState } from "react";
+import Image from "next/image";
+import { COMPANY_INFO } from "@/lib/constants";
 
 const navItems = [
     { icon: Home, label: "Dashboard", href: "/cooperatives/dashboard" },
@@ -74,12 +76,26 @@ export default function CooperativeSidebar({ user }: CooperativeSidebarProps) {
             >
                 {/* Header */}
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-                    <Link href="/cooperatives" className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-linear-to-br from-purple-800 to-indigo-900 rounded-xl flex items-center justify-center">
+                    {/* Company Brand */}
+                    <div className="flex items-center gap-2 mb-6">
+                        <Image
+                            src="/images/logo.jpg"
+                            alt={COMPANY_INFO.name}
+                            width={24}
+                            height={24}
+                            className="rounded-full border border-slate-200 dark:border-slate-700"
+                        />
+                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-widest uppercase">
+                            {COMPANY_INFO.name}
+                        </span>
+                    </div>
+
+                    <Link href="/cooperatives" className="flex items-center gap-3 group">
+                        <div className="w-10 h-10 bg-linear-to-br from-purple-800 to-indigo-900 rounded-xl flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                             <Award className="w-6 h-6 text-white" />
                         </div>
                         <div>
-                            <h2 className="font-bold text-slate-900 dark:text-white">Cooperative</h2>
+                            <h2 className="font-bold text-slate-900 dark:text-white text-lg">Cooperative</h2>
                             <p className="text-xs text-slate-600 dark:text-slate-400">Member Portal</p>
                         </div>
                     </Link>

@@ -1,17 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle, XCircle, Loader2, AlertCircle } from "lucide-react";
+import { Briefcase, CheckCircle, XCircle, Loader2, AlertCircle, Search, Filter, DollarSign, Calendar, Eye, FileText } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import { getPendingLoanApplications, approveLoanApplication, rejectLoanApplication } from "@/app/actions/admin";
 import type { LoanApplication } from "@/app/actions/loans";
 
 export default function AdminLoansPage() {
+    const { showToast } = useToast();
     const [loans, setLoans] = useState<LoanApplication[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedLoan, setSelectedLoan] = useState<LoanApplication | null>(null);
-    const [actionLoading, setActionLoading] = useState(false);
+    const [actionLoading, setActionLoading] = useState(false); // Renamed to isProcessing in the diff, but keeping original for now
     const [rejectionReason, setRejectionReason] = useState("");
     const [showRejectModal, setShowRejectModal] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false); // New state from diff
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false); // New state from diff
 
     async function loadPendingLoans() {
         setLoading(true);
@@ -61,59 +65,58 @@ export default function AdminLoansPage() {
         return () => { mounted = false; };
     }, []);
 
-    async function handleApprove() {
+    const handleApproveLoan = async () => {
         if (!selectedLoan) return;
 
-        // Validate tier eligibility
+        // Validate tier eligibility (kept from original handleApprove)
         const tierMultiplier = selectedLoan.tier === "Premium" ? 5 : 2.5;
         const maxLoanAmount = selectedLoan.contributionAmount * tierMultiplier;
 
         if (selectedLoan.amount > maxLoanAmount) {
-            alert(
-                `Loan amount (₦${selectedLoan.amount.toLocaleString()}) exceeds maximum for ${selectedLoan.tier} tier (₦${maxLoanAmount.toLocaleString()})`
+            showToast(
+                `Loan amount (₦${selectedLoan.amount.toLocaleString()}) exceeds maximum for ${selectedLoan.tier} tier (₦${maxLoanAmount.toLocaleString()})`,
+                "error"
             );
             return;
         }
 
-        if (!confirm(`Approve loan of ₦${selectedLoan.amount.toLocaleString()} for ${selectedLoan.fullName}?`)) {
-            return;
-        }
-
-        setActionLoading(true);
-        const result = await approveLoanApplication(selectedLoan.id!);
+        setIsProcessing(true);
+        const result = await approveLoanApplication(selectedLoan.id!); // Using original action name
 
         if (result.success) {
-            alert("Loan approved successfully! Applicant has been notified.");
-            setSelectedLoan(null);
-            await loadPendingLoans();
+            showToast("Loan approved successfully! Applicant has been notified.", "success");
+            setLoans(loans.map(l => l.id === selectedLoan.id ? { ...l, status: "approved" } : l));
+            setIsDetailsModalOpen(false);
+            setSelectedLoan(null); // Clear selected loan after action
         } else {
-            alert(result.error || "Failed to approve loan");
+            showToast(result.error || "Failed to approve loan", "error");
         }
-        setActionLoading(false);
-    }
+        setIsProcessing(false);
+    };
 
-    async function handleRejectSubmit() {
+    const handleRejectLoan = async () => {
         if (!selectedLoan) return;
 
         if (!rejectionReason.trim()) {
-            alert("Please provide a reason for rejection");
+            showToast("Please provide a reason for rejection", "error");
             return;
         }
 
-        setActionLoading(true);
-        const result = await rejectLoanApplication(selectedLoan.id!, rejectionReason);
+        setIsProcessing(true);
+        const result = await rejectLoanApplication(selectedLoan.id!, rejectionReason); // Using original action name
 
         if (result.success) {
-            alert("Loan rejected. Applicant has been notified.");
-            setSelectedLoan(null);
+            showToast("Loan rejected. Applicant has been notified.", "success");
+            setLoans(loans.map(l => l.id === selectedLoan.id ? { ...l, status: "rejected" } : l));
+            setIsDetailsModalOpen(false);
             setRejectionReason("");
             setShowRejectModal(false);
-            await loadPendingLoans();
+            setSelectedLoan(null); // Clear selected loan after action
         } else {
-            alert(result.error || "Failed to reject loan");
+            showToast(result.error || "Failed to reject loan", "error");
         }
-        setActionLoading(false);
-    }
+        setIsProcessing(false);
+    };
 
     const getStatusColor = (status: string) => {
         const colors = {
@@ -380,7 +383,7 @@ export default function AdminLoansPage() {
                                 {selectedLoan.status === "pending" && (
                                     <div className="space-y-3">
                                         <button
-                                            onClick={handleApprove}
+                                            onClick={handleApproveLoan}
                                             disabled={actionLoading}
                                             className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
@@ -445,7 +448,7 @@ export default function AdminLoansPage() {
                                 Cancel
                             </button>
                             <button
-                                onClick={handleRejectSubmit}
+                                onClick={handleRejectLoan}
                                 disabled={actionLoading}
                                 className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                             >

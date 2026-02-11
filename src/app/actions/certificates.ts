@@ -1,7 +1,6 @@
 "use server";
 
-import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, deleteDoc, Timestamp, updateDoc } from "firebase/firestore";
-import { db, storage } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { createAuditLog } from "@/lib/audit-log";

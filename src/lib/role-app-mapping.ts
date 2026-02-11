@@ -151,15 +151,15 @@ export function canAccessEscrow(userRoles: UserRole[]): boolean {
 export function getPrimaryApp(userRoles: UserRole[]): string {
     // Role priority mapping (most important first)
     const rolePriorityMap: Record<UserRole, string> = {
-        export_participant: "/export",
-        buyer: "/marketplace",
-        seller: "/marketplace",
-        farmer: "/farm-nation",
-        land_owner: "/farm-nation",
-        investor: "/farm-nation",
-        cooperative_member: "/cooperatives/(member)/dashboard",
-        wave_participant: "/wave/(member)/dashboard",
-        academy_participant: "/academy",
+        export_participant: "/export/dashboard",
+        buyer: "/marketplace/buyer/dashboard",
+        seller: "/marketplace/seller/dashboard",
+        farmer: "/farm-nation/dashboard",
+        land_owner: "/farm-nation/dashboard",
+        investor: "/farm-nation/dashboard",
+        cooperative_member: "/cooperatives/dashboard",
+        wave_participant: "/wave/dashboard",
+        academy_participant: "/academy/dashboard",
         general_user: "/", // No default platform
         field_officer: "/admin",
         admin: "/admin",
@@ -170,7 +170,7 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
     const priorityOrder: UserRole[] = [
         "super_admin", "admin", "field_officer",
         "export_participant",
-        "buyer", "seller",
+        "seller", "buyer", // Seller priority over buyer
         "farmer", "land_owner", "investor",
         "cooperative_member",
         "wave_participant",
@@ -195,9 +195,13 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
 
     for (const app of fallbackPriority) {
         if (accessibleApps.includes(app)) {
-            // Handle special route formatting
-            if (app === "cooperatives") return "/cooperatives/(member)/dashboard";
-            if (app === "wave") return "/wave/(member)/dashboard";
+            // Handle specific dashboard paths
+            if (app === "cooperatives") return "/cooperatives/dashboard";
+            if (app === "wave") return "/wave/dashboard";
+            if (app === "export") return "/export/dashboard";
+            if (app === "farm-nation") return "/farm-nation/dashboard";
+            if (app === "academy") return "/academy/dashboard";
+            if (app === "marketplace") return "/marketplace/buyer/dashboard"; // Default to buyer
             return `/${app}`;
         }
     }

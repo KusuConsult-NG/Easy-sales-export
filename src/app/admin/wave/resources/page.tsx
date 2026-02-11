@@ -14,6 +14,7 @@ import {
     Loader2,
     X,
 } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import {
     uploadResourceAction,
     getResourcesAction,
@@ -31,6 +32,7 @@ const categoryOptions = [
 export default function AdminWaveResourcesPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
     const [resources, setResources] = useState<WaveResource[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -66,7 +68,7 @@ export default function AdminWaveResourcesPage() {
         e.preventDefault();
 
         if (!selectedFile) {
-            alert("Please select a file");
+            showToast("Please select a valid file to upload.", "error");
             return;
         }
 
@@ -81,7 +83,7 @@ export default function AdminWaveResourcesPage() {
         const result = await uploadResourceAction(data);
 
         if (result.success) {
-            alert("Resource uploaded successfully!");
+            showToast("Resource uploaded successfully!", "success");
             setShowUploadModal(false);
             setSelectedFile(null);
             setFormData({
@@ -95,7 +97,7 @@ export default function AdminWaveResourcesPage() {
             const updated = await getResourcesAction();
             setResources(updated);
         } else {
-            alert(result.error || "Failed to upload resource");
+            showToast(result.error || "Failed to upload resource", "error");
         }
 
         setUploading(false);
@@ -107,10 +109,10 @@ export default function AdminWaveResourcesPage() {
         const result = await deleteResourceAction(resourceId);
 
         if (result.success) {
-            alert("Resource deleted successfully!");
+            showToast("Resource deleted successfully", "success");
             setResources((prev) => prev.filter((r) => r.id !== resourceId));
         } else {
-            alert(result.error || "Failed to delete resource");
+            showToast(result.error || "Failed to delete resource", "error");
         }
     }
 

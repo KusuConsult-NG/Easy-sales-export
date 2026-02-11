@@ -6,7 +6,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
 import {
     collection,
     getDocs,
@@ -18,7 +18,6 @@ import {
     updateDoc,
     Timestamp,
     limit,
-} from "firebase/firestore";
 
 // ============================================================================
 // ADMIN DASHBOARD STATS

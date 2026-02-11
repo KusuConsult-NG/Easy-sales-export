@@ -25,24 +25,56 @@ function initializeFirebaseAdmin(): App {
     }
 
     // RUNTIME ONLY: Parse private key here, not at module scope
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY
-        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
-        : undefined;
+    // Handle both quoted and unquoted formats, with or without escaped newlines
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKey) {
+    if (!privateKey) {
+        throw new Error(
+            'Missing FIREBASE_PRIVATE_KEY environment variable. ' +
+            'Please check your .env.local file.'
+        );
+    }
+
+    // Remove surrounding quotes if present
+    if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = privateKey.slice(1, -1);
+    }
+
+    // Handle escaped newlines (common in quoted env vars)
+    if (privateKey.includes('\\n')) {
+        privateKey = privateKey.replace(/\\n/g, '\n');
+    }
+
+    // Validate PEM format
+    if (!privateKey.includes('BEGIN PRIVATE KEY') || !privateKey.includes('END PRIVATE KEY')) {
+        throw new Error(
+            'Invalid FIREBASE_PRIVATE_KEY format. ' +
+            'Must be a valid PEM formatted private key. ' +
+            'Check that your .env.local has the complete key including BEGIN/END markers.'
+        );
+    }
+
+    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL) {
         throw new Error(
             'Missing Firebase Admin SDK environment variables. ' +
             'Required: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY'
         );
     }
 
-    adminApp = initializeApp({
-        credential: cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: privateKey,
-        }),
-    });
+    try {
+        adminApp = initializeApp({
+            credential: cert({
+                projectId: process.env.FIREBASE_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                privateKey: privateKey,
+            }),
+        });
+    } catch (error: any) {
+        throw new Error(
+            `Failed to initialize Firebase Admin SDK: ${error.message}. ` +
+            'Please verify your Firebase credentials in .env.local'
+        );
+    }
 
     return adminApp;
 }

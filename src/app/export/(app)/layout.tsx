@@ -11,6 +11,8 @@ import { cookies } from "next/headers";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { initializeApp, getApps } from "firebase-admin/app";
 
+import ExportSidebar from "./ExportSidebar";
+
 export default async function ExportAppLayout({
     children,
 }: {
@@ -28,7 +30,7 @@ export default async function ExportAppLayout({
     const sessionCookie = cookieStore.get("session")?.value;
 
     if (!sessionCookie) {
-        redirect("/auth/login");
+        redirect("/export/login");
     }
 
     try {
@@ -48,9 +50,18 @@ export default async function ExportAppLayout({
         }
 
         // User has access, render the app
-        return <>{children}</>;
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+                <ExportSidebar />
+                <main className="lg:pl-64 min-h-screen transition-all">
+                    <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        );
     } catch (error) {
         console.error("Export access check error:", error);
-        redirect("/auth/login");
+        redirect("/export/login");
     }
 }

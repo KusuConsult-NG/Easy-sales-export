@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import Modal from "@/components/ui/Modal";
 
 type MembershipApplication = {
@@ -32,6 +33,7 @@ type MembershipApplication = {
 };
 
 export default function CooperativeMembersPage() {
+    const { showToast } = useToast();
     const [applications, setApplications] = useState<MembershipApplication[]>([]);
     const [filteredApplications, setFilteredApplications] = useState<MembershipApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -102,14 +104,14 @@ export default function CooperativeMembersPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Membership approved successfully!");
+                showToast("Membership approved successfully", "success");
                 fetchApplications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to approve membership");
+                showToast(data.message || "Failed to approve membership", "error");
             }
         } catch (error) {
-            alert("An error occurred while approving the membership");
+            showToast("An error occurred while approving the membership", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -121,23 +123,28 @@ export default function CooperativeMembersPage() {
 
         setIsProcessing(true);
         try {
-            const response = await fetch("/api/admin/cooperative/reject-member", {
+            if (!selectedApplication) {
+                showToast("No application selected", "error");
+                return;
+            }
+
+            const response = await fetch(`/api/admin/cooperatives/members/${selectedApplication.id}/reject`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ memberId: applicationId, reason }),
+                body: JSON.stringify({ reason }),
             });
 
             const data = await response.json();
 
             if (data.success) {
-                alert("Membership rejected");
+                showToast("Membership rejected successfully", "success");
                 fetchApplications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to reject membership");
+                showToast(data.message || "Failed to reject membership", "error");
             }
         } catch (error) {
-            alert("An error occurred while rejecting the membership");
+            showToast("An error occurred while rejecting the membership", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -307,15 +314,15 @@ export default function CooperativeMembersPage() {
                                                     ₦{app.registrationFee.toLocaleString()}
                                                 </p>
                                                 <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${app.paymentStatus === "completed"
-                                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                                        : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                                    }`}>
+                                                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                                    : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                                    } `}>
                                                     {app.paymentStatus}
                                                 </span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.membershipStatus)}`}>
+                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.membershipStatus)} `}>
                                                 {app.membershipStatus}
                                             </span>
                                         </td>

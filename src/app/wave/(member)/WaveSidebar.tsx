@@ -58,11 +58,8 @@ export default function WaveSidebar() {
                 {/* Header */}
                 <div className="p-6 border-b border-emerald-800">
                     <Link href="/wave" className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
-                            <Sparkles className="w-6 h-6 text-white" />
-                        </div>
                         <div>
-                            <h2 className="font-bold text-white">WAVE</h2>
+                            <h2 className="font-bold text-white text-xl">WAVE</h2>
                             <p className="text-xs text-emerald-200">Member Portal</p>
                         </div>
                     </Link>

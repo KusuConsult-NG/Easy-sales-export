@@ -3,6 +3,7 @@
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 import { Download } from 'lucide-react';
 import { useState } from 'react';
+import { useToast } from "@/contexts/ToastContext";
 
 // Styles for certificate
 const styles = StyleSheet.create({
@@ -155,6 +156,7 @@ export default function CertificateGenerator({
     courseId
 }: CertificateGeneratorProps) {
     const [isGenerating, setIsGenerating] = useState(false);
+    const { showToast } = useToast();
 
     const downloadCertificate = async () => {
         setIsGenerating(true);
@@ -185,7 +187,7 @@ export default function CertificateGenerator({
             URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Failed to generate certificate:', error);
-            alert('Failed to generate certificate. Please try again.');
+            showToast('Failed to generate certificate. Please try again.', "error");
         } finally {
             setIsGenerating(false);
         }

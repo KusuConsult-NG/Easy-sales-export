@@ -14,6 +14,7 @@ import {
     type CourseModule,
     type Quiz
 } from "@/app/actions/academy";
+import { useToast } from "@/contexts/ToastContext";
 
 interface QuizPageProps {
     params: { courseId: string; moduleId: string };
@@ -22,6 +23,7 @@ interface QuizPageProps {
 export default function QuizPage({ params }: QuizPageProps) {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
     const [course, setCourse] = useState<Course | null>(null);
     const [currentModule, setCurrentModule] = useState<CourseModule | null>(null);
     const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -100,7 +102,7 @@ export default function QuizPage({ params }: QuizPageProps) {
             setPassed(result.passed || false);
             setQuizCompleted(true);
         } else {
-            alert(result.error || "Failed to submit quiz");
+            showToast(result.error || "Failed to submit quiz", "error");
         }
 
         setSubmitting(false);
@@ -176,15 +178,15 @@ export default function QuizPage({ params }: QuizPageProps) {
 
                         {/* Score Display */}
                         <div className={`inline-block px-8 py-4 rounded-2xl mb-8 ${passed
-                                ? "bg-green-100 dark:bg-green-900/30"
-                                : "bg-red-100 dark:bg-red-900/30"
+                            ? "bg-green-100 dark:bg-green-900/30"
+                            : "bg-red-100 dark:bg-red-900/30"
                             }`}>
                             <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
                                 Your Score
                             </p>
                             <p className={`text-5xl font-bold ${passed
-                                    ? "text-green-600 dark:text-green-400"
-                                    : "text-red-600 dark:text-red-400"
+                                ? "text-green-600 dark:text-green-400"
+                                : "text-red-600 dark:text-red-400"
                                 }`}>
                                 {score}%
                             </p>
@@ -301,14 +303,14 @@ export default function QuizPage({ params }: QuizPageProps) {
                                             key={optionIndex}
                                             onClick={() => handleSelectAnswer(question.id, optionIndex)}
                                             className={`w-full text-left px-4 py-3 rounded-xl border-2 transition ${selectedAnswers[question.id] === optionIndex
-                                                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                                                    : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
+                                                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                                                : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                                                 }`}
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedAnswers[question.id] === optionIndex
-                                                        ? "border-blue-500 bg-blue-500"
-                                                        : "border-slate-300 dark:border-slate-600"
+                                                    ? "border-blue-500 bg-blue-500"
+                                                    : "border-slate-300 dark:border-slate-600"
                                                     }`}>
                                                     {selectedAnswers[question.id] === optionIndex && (
                                                         <div className="w-2 h-2 bg-white rounded-full" />

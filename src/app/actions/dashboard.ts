@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
 import {
     collection,
     query,
@@ -10,7 +10,6 @@ import {
     getDoc,
     orderBy,
     limit
-} from "firebase/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 

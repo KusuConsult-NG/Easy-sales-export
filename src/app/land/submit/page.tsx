@@ -118,8 +118,9 @@ export default function SubmitLandListingPage() {
                 price: parseFloat(formData.price),
                 soilType: formData.soilType,
                 waterSource: formData.waterSource,
-                imageFiles,
-                documentFiles,
+                // TODO: Implement file upload to Firebase Storage and pass URLs
+                imageUrls: [], // Placeholder - files selected but not uploaded yet
+                documentUrls: [], // Placeholder - files selected but not uploaded yet
             });
 
             if (result.success) {
@@ -177,8 +178,8 @@ export default function SubmitLandListingPage() {
                                 <div key={s} className="flex-1 flex items-center">
                                     <div
                                         className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition ${step >= s
-                                                ? "bg-green-600 text-white"
-                                                : "bg-slate-200 dark:bg-slate-700 text-slate-400"
+                                            ? "bg-green-600 text-white"
+                                            : "bg-slate-200 dark:bg-slate-700 text-slate-400"
                                             }`}
                                     >
                                         {s}

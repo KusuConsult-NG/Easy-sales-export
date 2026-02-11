@@ -1,11 +1,12 @@
 "use server";
 
-import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, updateDoc, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logFinancialAction, createAuditLog } from "@/lib/audit-log";
 
 /**
  * Payment Tracking & Verification System
+ * MIGRATED TO FIREBASE-ADMIN for server-side security
  */
 
 export interface PaymentRecord {
@@ -48,7 +49,7 @@ export async function createPaymentRecordAction(data: {
             initiatedAt: Timestamp.now(),
         };
 
-        const docRef = await addDoc(collection(db, "payments"), payment);
+        const docRef = await db.collection("payments").add(payment);
 
         await createAuditLog({
             action: "payment_initiated",
@@ -79,20 +80,18 @@ export async function verifyPaymentAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         // Find payment by reference
-        const q = query(
-            collection(db, "payments"),
-            where("paymentReference", "==", paymentReference)
-        );
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection("payments")
+            .where("paymentReference", "==", paymentReference)
+            .get();
 
         if (snapshot.empty) {
             return { success: false, error: "Payment not found" };
         }
 
         const paymentDoc = snapshot.docs[0];
-        const paymentRef = doc(db, "payments", paymentDoc.id);
+        const paymentRef = db.collection("payments").doc(paymentDoc.id);
 
-        await updateDoc(paymentRef, {
+        await paymentRef.update({
             status: "success",
             completedAt: Timestamp.now(),
             paystackResponse,
@@ -130,8 +129,8 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
             case "escrow_payment":
                 if (payment.relatedId) {
                     // Update escrow status to "held"
-                    const escrowRef = doc(db, "escrow_transactions", payment.relatedId);
-                    await updateDoc(escrowRef, {
+                    const escrowRef = db.collection("escrow_transactions").doc(payment.relatedId);
+                    await escrowRef.update({
                         status: "held",
                         paymentReference: payment.paymentReference,
                         paidAt: Timestamp.now(),
@@ -142,8 +141,8 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
             case "export_slot":
                 if (payment.relatedId) {
                     // Update slot status to "paid"
-                    const slotRef = doc(db, "export_slots", payment.relatedId);
-                    await updateDoc(slotRef, {
+                    const slotRef = db.collection("export_slots").doc(payment.relatedId);
+                    await slotRef.update({
                         status: "paid",
                         paidAt: Timestamp.now(),
                     });
@@ -172,12 +171,9 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
  */
 export async function getUserPaymentHistoryAction(userId: string): Promise<PaymentRecord[]> {
     try {
-        const q = query(
-            collection(db, "payments"),
-            where("userId", "==", userId)
-        );
-
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection("payments")
+            .where("userId", "==", userId)
+            .get();
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
@@ -196,12 +192,9 @@ export async function getPaymentByReferenceAction(
     paymentReference: string
 ): Promise<PaymentRecord | null> {
     try {
-        const q = query(
-            collection(db, "payments"),
-            where("paymentReference", "==", paymentReference)
-        );
-
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection("payments")
+            .where("paymentReference", "==", paymentReference)
+            .get();
 
         if (snapshot.empty) {
             return null;

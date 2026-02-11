@@ -38,67 +38,22 @@ export default function NotificationsPage() {
     }, [status]);
 
     const loadNotifications = async () => {
+        if (!session?.user?.id) return;
         setLoading(true);
         try {
-            // In production, fetch from getNotificationsAction
-            const mockNotifications: Notification[] = [
-                {
-                    id: "1",
-                    userId: session?.user?.id || "",
-                    type: "order",
-                    title: "New Order Received",
-                    message: "You have a new order #ORD-2026-145 worth ₦125,000",
-                    link: "/marketplace/sell/orders",
-                    read: false,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 15),
-                    priority: "high"
-                },
-                {
-                    id: "2",
-                    userId: session?.user?.id || "",
-                    type: "payment",
-                    title: "Payment Confirmed",
-                    message: "Payment of ₦300,000 has been confirmed for order #ORD-2026-144",
-                    link: "/wallet/transactions",
-                    read: false,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2),
-                    priority: "medium"
-                },
-                {
-                    id: "3",
-                    userId: session?.user?.id || "",
-                    type: "academy",
-                    title: "Course Completed",
-                    message: "Congratulations! You've completed 'Export Fundamentals'",
-                    link: "/academy/dashboard",
-                    read: true,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
-                    priority: "low"
-                },
-                {
-                    id: "4",
-                    userId: session?.user?.id || "",
-                    type: "wave",
-                    title: "WAVE Training Session",
-                    message: "Reminder: Business Planning workshop starts in 2 hours",
-                    link: "/wave/training",
-                    read: false,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 120),
-                    priority: "high"
-                },
-                {
-                    id: "5",
-                    userId: session?.user?.id || "",
-                    type: "cooperative",
-                    title: "Loan Approved",
-                    message: "Your loan application of ₦500,000 has been approved",
-                    link: "/cooperatives/my-loans",
-                    read: true,
-                    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48),
-                    priority: "high"
-                }
-            ];
-            setNotifications(mockNotifications);
+            const { getUserNotificationsAction } = await import("@/app/actions/notifications");
+            const data = await getUserNotificationsAction(session.user.id);
+            // Map firestore timestamp to Date if needed
+            const formattedData = data.map((n: any) => ({
+                ...n,
+                createdAt: n.createdAt?.toDate ? n.createdAt.toDate() : new Date(n.createdAt),
+                // Map API types to UI types if mismatched, or ensure they align.
+                // API: info, success, warning, error
+                // UI: order, payment, system, wave, cooperative, academy
+                // We might need to map or accept generic strings.
+                // For now, let's cast or fallback to system.
+            }));
+            setNotifications(formattedData);
         } catch (error) {
             console.error("Failed to load notifications:", error);
         } finally {
@@ -114,17 +69,37 @@ export default function NotificationsPage() {
 
     const unreadCount = notifications.filter(n => !n.read).length;
 
-    const handleMarkAsRead = (id: string) => {
+    const handleMarkAsRead = async (id: string) => {
+        // Optimistic update
         setNotifications(prev => prev.map(n =>
             n.id === id ? { ...n, read: true } : n
         ));
+
+        try {
+            const { markNotificationAsReadAction } = await import("@/app/actions/notifications");
+            await markNotificationAsReadAction(id);
+        } catch (error) {
+            console.error("Failed to mark as read:", error);
+            // Revert?
+        }
     };
 
-    const handleMarkAllAsRead = () => {
+    const handleMarkAllAsRead = async () => {
+        if (!session?.user?.id) return;
+
+        // Optimistic update
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
+        try {
+            const { markAllAsReadAction } = await import("@/app/actions/notifications");
+            await markAllAsReadAction(session.user.id);
+        } catch (error) {
+            console.error("Failed to mark all as read:", error);
+        }
     };
 
     const handleDelete = (id: string) => {
+        // We don't have delete action yet, so maybe just hide locally or implement delete
         setNotifications(prev => prev.filter(n => n.id !== id));
     };
 
@@ -201,8 +176,8 @@ export default function NotificationsPage() {
                                 key={f.key}
                                 onClick={() => setFilter(f.key as any)}
                                 className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${filter === f.key
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
                                     }`}
                             >
                                 {f.label}

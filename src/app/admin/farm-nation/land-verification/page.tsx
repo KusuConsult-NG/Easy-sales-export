@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MapPin, FileText, Calendar, Check, X, Eye } from "lucide-react";
+import { MapPin, FileText, Calendar, Check, X, Eye, CheckCircle, XCircle, Loader2, Search, Filter, Ruler, ExternalLink } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 type LandVerification = {
     id: string;
@@ -31,6 +32,7 @@ type LandVerification = {
 };
 
 export default function AdminLandVerificationPage() {
+    const { showToast } = useToast();
     const [verifications, setVerifications] = useState<LandVerification[]>([]);
     const [filteredVerifications, setFilteredVerifications] = useState<LandVerification[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -55,9 +57,12 @@ export default function AdminLandVerificationPage() {
 
             if (data.success) {
                 setVerifications(data.verifications);
+            } else {
+                showToast(data.message || "Failed to fetch verifications", "error");
             }
         } catch (error) {
             console.error("Failed to fetch verifications:", error);
+            showToast("An error occurred while fetching verifications", "error");
         } finally {
             setIsLoading(false);
         }
@@ -85,14 +90,14 @@ export default function AdminLandVerificationPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Land listing approved!");
+                showToast("Land listing approved!", "success");
                 fetchVerifications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to approve");
+                showToast(data.message || "Failed to approve", "error");
             }
         } catch (error) {
-            alert("An error occurred");
+            showToast("An error occurred", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -113,14 +118,14 @@ export default function AdminLandVerificationPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Land listing rejected");
+                showToast("Land listing rejected", "success");
                 fetchVerifications();
                 setIsDetailsModalOpen(false);
             } else {
-                alert(data.message || "Failed to reject");
+                showToast(data.message || "Failed to reject", "error");
             }
         } catch (error) {
-            alert("An error occurred");
+            showToast("An error occurred", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -170,37 +175,37 @@ export default function AdminLandVerificationPage() {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setFilterStatus("all")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${filterStatus === "all"
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "all"
                                     ? "bg-primary text-white"
                                     : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
-                                }`}
+                                } `}
                         >
                             All
                         </button>
                         <button
                             onClick={() => setFilterStatus("pending")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${filterStatus === "pending"
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "pending"
                                     ? "bg-yellow-600 text-white"
                                     : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
-                                }`}
+                                } `}
                         >
                             Pending ({stats.pending})
                         </button>
                         <button
                             onClick={() => setFilterStatus("verified")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${filterStatus === "verified"
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "verified"
                                     ? "bg-green-600 text-white"
                                     : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
-                                }`}
+                                } `}
                         >
                             Verified ({stats.verified})
                         </button>
                         <button
                             onClick={() => setFilterStatus("rejected")}
-                            className={`px-4 py-2 rounded-lg font-semibold transition-all ${filterStatus === "rejected"
+                            className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "rejected"
                                     ? "bg-red-600 text-white"
                                     : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
-                                }`}
+                                } `}
                         >
                             Rejected ({stats.rejected})
                         </button>
@@ -253,12 +258,12 @@ export default function AdminLandVerificationPage() {
                                                 </p>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${verification.verificationStatus === "pending"
+                                                <span className={`px - 3 py - 1 rounded - full text - xs font - semibold ${verification.verificationStatus === "pending"
                                                         ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
                                                         : verification.verificationStatus === "verified"
                                                             ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                                                             : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                                                    }`}>
+                                                    } `}>
                                                     {verification.verificationStatus}
                                                 </span>
                                             </td>

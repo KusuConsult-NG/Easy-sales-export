@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, Package, Hash, Loader2, CheckCircle } from "lucide-react";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
+import { useToast } from "@/contexts/ToastContext";
 
 interface BookingModalProps {
     isOpen: boolean;
@@ -14,6 +15,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
     const [quantity, setQuantity] = useState<number>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
+    const { showToast } = useToast();
 
     if (!isOpen || !exportWindow) return null;
 
@@ -22,7 +24,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
 
     const handleSubmit = async () => {
         if (quantity <= 0 || quantity > availableVolume) {
-            alert(`Please enter a quantity between 1 and ${availableVolume}kg`);
+            showToast(`Please enter a quantity between 1 and ${availableVolume}kg`, "warning");
             return;
         }
 
@@ -46,11 +48,11 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                     setIsSubmitting(false);
                 }, 2000);
             } else {
-                alert(result.error || "Booking failed. Please try again.");
+                showToast(result.error || "Booking failed. Please try again.", "error");
                 setIsSubmitting(false);
             }
         } catch (error) {
-            alert("Booking failed. Please try again.");
+            showToast("Booking failed. Please try again.", "error");
             setIsSubmitting(false);
         }
     };

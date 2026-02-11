@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
 import { auth } from "@/lib/auth";
 import {
     collection,
@@ -11,7 +11,6 @@ import {
     setDoc,
     orderBy,
     Timestamp
-} from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 export type ExportOpportunity = {

@@ -1,8 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import type { LandListing } from "@/types/strict";
 
 /**

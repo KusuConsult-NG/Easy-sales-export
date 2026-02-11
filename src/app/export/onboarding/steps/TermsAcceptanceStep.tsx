@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { Shield, FileText, AlertCircle } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 interface TermsAcceptanceStepProps {
     onNext: (data: any) => void;
@@ -32,13 +33,14 @@ export function TermsAcceptanceStep({
     const [acceptedPrivacy, setAcceptedPrivacy] = useState(
         initialData?.acceptedPrivacy || false
     );
+    const { showToast } = useToast();
 
     const allAccepted =
         acceptedInvestment && acceptedRisk && acceptedEscrow && acceptedPrivacy;
 
     const handleSubmit = () => {
         if (!allAccepted) {
-            alert("Please accept all terms and conditions to continue");
+            showToast("Please accept all terms and conditions to continue", "error");
             return;
         }
 
@@ -68,7 +70,7 @@ export function TermsAcceptanceStep({
                 {/* Risk Disclosure */}
                 <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                        <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
                         <div>
                             <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">
                                 Investment Risk Disclosure

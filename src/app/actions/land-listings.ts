@@ -1,7 +1,6 @@
 "use server";
 
-import { doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, updateDoc, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
 import { createAuditLog, logAdminAction } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 
@@ -23,6 +22,7 @@ export interface LandListing {
     };
     size: number; // in hectares
     price: number;
+    category?: string;
     soilType?: string;
     waterSource?: string;
     images: string[];
@@ -50,6 +50,7 @@ export async function createLandListingAction(data: {
     location: { state: string; lga: string; address: string };
     size: number;
     price: number;
+    category?: string;
     soilType?: string;
     waterSource?: string;
 }): Promise<{ success: boolean; error?: string; listingId?: string }> {
@@ -198,6 +199,7 @@ export async function rejectLandListingAction(
  */
 export async function searchLandListingsAction(filters: {
     state?: string;
+    category?: string;
     minSize?: number;
     maxSize?: number;
     minPrice?: number;
@@ -213,6 +215,12 @@ export async function searchLandListingsAction(filters: {
 
         if (filters.state) {
             q = query(q, where("location.state", "==", filters.state));
+        }
+        if (filters.category) {
+            q = query(q, where("category", "==", filters.category));
+        }
+        if (filters.category) {
+            q = query(q, where("category", "==", filters.category));
         }
 
         const snapshot = await getDocs(q);
@@ -284,17 +292,15 @@ export async function submitLandListingAction(data: {
     location: { state: string; lga: string; address: string };
     size: number;
     price: number;
+    category?: string;
     soilType?: string;
     waterSource?: string;
-    imageFiles: File[];
-    documentFiles: File[];
+    imageUrls: string[];
+    documentUrls: string[];
+    // Optional: GPS coordinates if available
+    gpsCoordinates?: { latitude: number; longitude: number };
 }): Promise<{ success: boolean; error?: string; listingId?: string }> {
     try {
-        // For now, just store file names as placeholders
-        // In production, upload to Firebase Storage and store URLs
-        const imageNames = data.imageFiles.map(f => f.name);
-        const documentNames = data.documentFiles.map(f => f.name);
-
         const listing: Omit<LandListing, "id"> = {
             ownerId: data.ownerId,
             ownerName: data.ownerName,
@@ -304,14 +310,20 @@ export async function submitLandListingAction(data: {
             location: data.location,
             size: data.size,
             price: data.price,
+            category: data.category,
             soilType: data.soilType,
             waterSource: data.waterSource,
-            images: imageNames, // Store filenames for MVP
-            documents: documentNames,
+            images: data.imageUrls,
+            documents: data.documentUrls,
             status: "pending_verification",
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now(),
         };
+
+        if (data.gpsCoordinates) {
+            // @ts-ignore - Adding dynamic property
+            (listing as any).gpsCoordinates = data.gpsCoordinates;
+        }
 
         const docRef = await addDoc(collection(db, "land_listings"), listing);
 
@@ -345,5 +357,110 @@ export async function submitLandListingAction(data: {
     } catch (error: any) {
         console.error("Land listing submission error:", error);
         return { success: false, error: error.message || "Failed to submit land listing" };
+    }
+}
+
+/**
+ * Get single land listing by ID
+ */
+export async function getPropertyByIdAction(id: string): Promise<LandListing | null> {
+    try {
+        const docRef = doc(db, "land_listings", id);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as LandListing;
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("Error fetching property:", error);
+        return null;
+    }
+}
+
+/**
+ * Submit inquiry for a land listing
+ */
+export async function submitLandInquiryAction(data: {
+    listingId: string;
+    listingTitle: string;
+    listingOwnerId: string;
+    buyerName: string;
+    buyerEmail: string;
+    buyerPhone: string;
+    message: string;
+}): Promise<{ success: boolean; error?: string }> {
+    try {
+        // 1. Save inquiry to database
+        const inquiryRef = await addDoc(collection(db, "land_inquiries"), {
+            ...data,
+            status: "pending",
+            createdAt: Timestamp.now(),
+            read: false
+        });
+
+        // 2. Create notification for the listing owner
+        await createNotificationAction({
+            userId: data.listingOwnerId,
+            type: "info",
+            title: "New Land Inquiry",
+            message: `You have a new inquiry for "${data.listingTitle}" from ${data.buyerName}.`,
+            link: `/farm-nation/inquiries/${inquiryRef.id}`,
+            linkText: "View Inquiry",
+        });
+
+        // 3. Log action
+        await createAuditLog({
+            action: "land_inquiry",
+            userId: "public_user",
+            userEmail: data.buyerEmail,
+            targetId: inquiryRef.id,
+            targetType: "land_inquiry",
+            details: `Inquiry for ${data.listingTitle}`,
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Submit inquiry error:", error);
+        return { success: false, error: error.message || "Failed to send message" };
+    }
+}
+
+/**
+ * Get inquiries for a user (as seller)
+ */
+export async function getLandInquiriesAction(userId: string): Promise<{ success: boolean; inquiries?: any[]; error?: string }> {
+    try {
+        const q = query(
+            collection(db, "land_inquiries"),
+            where("listingOwnerId", "==", userId),
+            orderBy("createdAt", "desc")
+        );
+        const snapshot = await getDocs(q);
+        const inquiries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        return { success: true, inquiries };
+    } catch (error: any) {
+        console.error("Get inquiries error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get single inquiry by ID
+ */
+export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ success: boolean; inquiry?: any; error?: string }> {
+    try {
+        const docRef = doc(db, "land_inquiries", inquiryId);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            return { success: true, inquiry: { id: docSnap.id, ...docSnap.data() } };
+        } else {
+            return { success: false, error: "Inquiry not found" };
+        }
+    } catch (error: any) {
+        console.error("Get inquiry error:", error);
+        return { success: false, error: error.message };
     }
 }

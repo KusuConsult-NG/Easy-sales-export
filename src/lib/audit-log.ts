@@ -32,6 +32,7 @@ export type AuditAction =
     // Admin Actions
     | 'land_verified'
     | 'land_rejected'
+    | 'land_inquiry'
     | 'dispute_created'
     | 'dispute_resolved'
     | 'announcement_published'

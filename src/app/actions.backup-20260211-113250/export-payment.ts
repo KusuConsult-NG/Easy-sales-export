@@ -1,0 +1,286 @@
+/**
+ * Export Investment Payment Integration
+ * Handles Paystack payments for export window investments
+ */
+"use server";
+
+import { auth } from "@/lib/auth";
+import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc, increment, collection, query, where, getDocs, limit, runTransaction } from "firebase/firestore";
+
+// Helper function to convert Naira to Kobo (Paystack uses kobo)
+function nairaToKobo(naira: number): number {
+    return Math.round(naira * 100);
+}
+
+export interface PaymentInitState {
+    success: boolean;
+    error?: string | null;
+    data?: {
+        authorizationUrl: string;
+        reference: string;
+    };
+}
+
+/**
+ * Initialize Paystack Payment for Export Investment
+ * Creates a payment session and returns authorization URL
+ */
+export async function initializeInvestmentPaymentAction(
+    windowId: string,
+    windowTitle: string,
+    investmentAmount: number,
+    commodity: string,
+    expectedROI: number
+): Promise<PaymentInitState> {
+    try {
+        const session = await auth();
+
+        if (!session?.user) {
+            return { error: "Authentication required", success: false };
+        }
+
+        // Validate amount
+        if (investmentAmount < 50000) {
+            return { error: "Minimum investment is ₦50,000", success: false };
+        }
+
+        if (investmentAmount > 10000000) {
+            return { error: "Maximum investment is ₦10,000,000", success: false };
+        }
+
+        // Check if export window exists and is open
+        const windowRef = doc(db, "exportWindows", windowId);
+        const windowDoc = await getDoc(windowRef);
+
+        if (!windowDoc.exists()) {
+            return { error: "Export window not found", success: false };
+        }
+
+        const windowData = windowDoc.data();
+
+        if (windowData.status !== "open" && windowData.status !== "active") {
+            return { error: "This export window is no longer accepting investments", success: false };
+        }
+
+        // Check if funding goal exceeded
+        const currentFunding = windowData.currentFunding || 0;
+        const fundingGoal = windowData.fundingGoal || 0;
+
+        if (currentFunding + investmentAmount > fundingGoal) {
+            return {
+                error: `Investment exceeds available slots. Maximum available: ₦${(fundingGoal - currentFunding).toLocaleString()}`,
+                success: false
+            };
+        }
+
+        // Initialize payment with Paystack
+        const { authorizationUrl, reference } = await initializePaystackPayment(
+            session.user.email!,
+            nairaToKobo(investmentAmount),
+            {
+                userId: session.user.id,
+                windowId,
+                windowTitle,
+                commodity,
+                investmentAmount,
+                expectedROI,
+                type: "export_investment",
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/export/payment/callback`,
+            }
+        );
+
+        // Create pending investment record
+        const investmentId = `${session.user.id}_${windowId}_${Date.now()}`;
+        await setDoc(doc(db, "exportInvestments", investmentId), {
+            investmentId,
+            windowId,
+            windowTitle,
+            commodity,
+            investorId: session.user.id,
+            investorEmail: session.user.email,
+            investorName: session.user.name || session.user.email,
+            amount: investmentAmount,
+            expectedROI,
+            expectedReturn: investmentAmount * (1 + expectedROI / 100),
+            paymentReference: reference,
+            status: "pending_payment",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+
+        return {
+            success: true,
+            data: {
+                authorizationUrl,
+                reference,
+            },
+        };
+    } catch (error: any) {
+        console.error("Investment payment initialization error:", error);
+        return {
+            success: false,
+            error: error.message || "Failed to initialize investment payment. Please try again.",
+        };
+    }
+}
+
+/**
+ * Verify Export Investment Payment
+ * Updates investment and portfolio after successful payment
+ */
+export async function verifyInvestmentPaymentAction(reference: string): Promise<{
+    success: boolean;
+    error?: string;
+    message?: string;
+    investmentId?: string;
+}> {
+    try {
+        const session = await auth();
+
+        if (!session?.user) {
+            return { error: "Authentication required", success: false };
+        }
+
+        // 🔒 SECURITY FIX #1: Double-payment protection
+        const processedRef = doc(db, "processedPayments", reference);
+        const existingPayment = await getDoc(processedRef);
+
+        if (existingPayment.exists()) {
+            return {
+                error: "Payment has already been processed",
+                success: false
+            };
+        }
+
+        // Verify payment with Paystack
+        const paymentData = await verifyPaystackPayment(reference);
+
+        if (!paymentData.status || paymentData.data.status !== "success") {
+            return {
+                error: `Payment ${paymentData.data.status}. Please contact support if amount was debited.`,
+                success: false,
+            };
+        }
+
+        // Get metadata
+        const metadata = paymentData.data.metadata as any;
+        const windowId = metadata.windowId;
+        const userId = metadata.userId;
+        const amountInNaira = paymentData.data.amount / 100;
+        const expectedAmount = metadata.investmentAmount;
+
+        // Verify user match
+        if (userId !== session.user.id) {
+            return { error: "Payment verification failed: User mismatch", success: false };
+        }
+
+        // 🔒 SECURITY FIX #3: Amount re-validation
+        if (amountInNaira < 50000 || amountInNaira > 10000000) {
+            return { error: "Invalid payment amount", success: false };
+        }
+
+        // Verify amount matches metadata (allow 1 naira variance for rounding)
+        if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
+            return { error: "Payment amount mismatch", success: false };
+        }
+
+        // Find investment record
+        const investmentQuery = await getDocs(
+            query(
+                collection(db, "exportInvestments"),
+                where("paymentReference", "==", reference),
+                limit(1)
+            )
+        );
+
+        if (investmentQuery.empty) {
+            return { error: "Investment record not found", success: false };
+        }
+
+        const investmentDoc = investmentQuery.docs[0];
+        const investmentData = investmentDoc.data();
+
+        // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
+        await runTransaction(db, async (transaction) => {
+            // Update investment status
+            const investmentRef = doc(db, "exportInvestments", investmentDoc.id);
+            transaction.update(investmentRef, {
+                status: "active",
+                paymentStatus: "paid",
+                paymentVerifiedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+
+            // Update export window funding
+            const windowRef = doc(db, "exportWindows", windowId);
+            const windowSnap = await transaction.get(windowRef);
+            const currentFunding = windowSnap.data()?.currentFunding || 0;
+            const investorCount = windowSnap.data()?.investorCount || 0;
+
+            transaction.update(windowRef, {
+                currentFunding: currentFunding + amountInNaira,
+                investorCount: investorCount + 1,
+                updatedAt: serverTimestamp(),
+            });
+
+            // Update or create investor portfolio
+            const portfolioId = session.user.id;
+            const portfolioRef = doc(db, "investorPortfolios", portfolioId);
+            const portfolioSnap = await transaction.get(portfolioRef);
+
+            if (portfolioSnap.exists()) {
+                const currentInvested = portfolioSnap.data().totalInvested || 0;
+                const currentReturns = portfolioSnap.data().totalExpectedReturns || 0;
+                const activeCount = portfolioSnap.data().activeInvestments || 0;
+
+                transaction.update(portfolioRef, {
+                    totalInvested: currentInvested + amountInNaira,
+                    totalExpectedReturns: currentReturns + investmentData.expectedReturn,
+                    activeInvestments: activeCount + 1,
+                    updatedAt: serverTimestamp(),
+                });
+            } else {
+                transaction.set(portfolioRef, {
+                    investorId: session.user.id,
+                    investorEmail: session.user.email,
+                    totalInvested: amountInNaira,
+                    totalExpectedReturns: investmentData.expectedReturn,
+                    totalReturned: 0,
+                    activeInvestments: 1,
+                    completedInvestments: 0,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                });
+            }
+
+            // Mark payment as processed
+            transaction.set(processedRef, {
+                processedAt: serverTimestamp(),
+                userId: session.user.id,
+                amount: amountInNaira,
+                type: "export_investment",
+                reference,
+            });
+        });
+
+        return {
+            success: true,
+            message: `Investment successful! Your ₦${amountInNaira.toLocaleString()} investment in ${metadata.windowTitle} is now active.`,
+            investmentId: investmentDoc.id,
+        };
+    } catch (error: any) {
+        // 🔒 SECURITY FIX #2: Sanitized error logging
+        console.error('[Payment Verification Error]', {
+            timestamp: new Date().toISOString(),
+            action: 'verifyInvestment',
+            reference,
+        });
+
+        return {
+            success: false,
+            error: "Failed to verify investment payment. Please contact support with your payment reference.",
+        };
+    }
+}

@@ -1,7 +1,6 @@
 "use server";
 
-import { doc, getDoc, collection, query, where, getDocs, Timestamp, orderBy, limit as firestoreLimit } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * Admin Analytics & Dashboard Data

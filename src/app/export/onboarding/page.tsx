@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { Package, TrendingUp, Shield, CheckCircle } from "lucide-react";
 import { OnboardingLayout } from "@/components/onboarding/OnboardingLayout";
 import { StepIndicator } from "@/components/onboarding/StepIndicator";
+import { useToast } from "@/contexts/ToastContext";
 import { OnboardingStep } from "@/types/service-registration";
 
 import { submitExportOnboardingAction } from "@/app/actions/export";
@@ -54,6 +55,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
 
 export default function ExportOnboardingPage() {
     const router = useRouter();
+    const { showToast } = useToast();
     const [currentStepId, setCurrentStepId] = useState("profile");
     const [steps, setSteps] = useState<OnboardingStep[]>(ONBOARDING_STEPS);
     const [formData, setFormData] = useState<any>({});
@@ -98,15 +100,16 @@ export default function ExportOnboardingPage() {
 
             if (result.success) {
                 // Successfully submitted - redirect to pending page
+                showToast("Onboarding submitted successfully!", "success");
                 router.push("/export/onboarding/pending");
             } else {
                 // Handle error
                 console.error("Onboarding submission failed:", result.error);
-                alert(`Failed to submit: ${result.error}`);
+                showToast(`Failed to submit: ${result.error}`, "error");
             }
         } catch (error) {
             console.error("Error submitting onboarding:", error);
-            alert("An error occurred. Please try again.");
+            showToast("An error occurred. Please try again.", "error");
         }
     };
 
@@ -170,7 +173,7 @@ export default function ExportOnboardingPage() {
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div className="flex items-start gap-2">
-                        <TrendingUp className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                        <TrendingUp className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
                         <div>
                             <p className="font-medium text-orange-900 dark:text-orange-100">
                                 Higher Returns
@@ -181,7 +184,7 @@ export default function ExportOnboardingPage() {
                         </div>
                     </div>
                     <div className="flex items-start gap-2">
-                        <Shield className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                        <Shield className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
                         <div>
                             <p className="font-medium text-orange-900 dark:text-orange-100">
                                 Secure Escrow
@@ -192,7 +195,7 @@ export default function ExportOnboardingPage() {
                         </div>
                     </div>
                     <div className="flex items-start gap-2">
-                        <Package className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                        <Package className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
                         <div>
                             <p className="font-medium text-orange-900 dark:text-orange-100">
                                 Verified Contracts

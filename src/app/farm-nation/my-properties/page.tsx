@@ -9,10 +9,12 @@ import {
     Loader2, AlertCircle, TrendingUp
 } from "lucide-react";
 import { getMyPropertiesAction, type Property } from "@/app/actions/farm-nation";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function MyPropertiesPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
 
     const [properties, setProperties] = useState<Property[]>([]);
     const [loading, setLoading] = useState(true);
@@ -257,7 +259,7 @@ export default function MyPropertiesPage() {
                                             View
                                         </button>
                                         <button
-                                            onClick={() => alert("Edit functionality coming soon!")}
+                                            onClick={() => showToast("Edit functionality coming soon!", "info")}
                                             className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition"
                                         >
                                             <Edit className="w-4 h-4" />
@@ -265,7 +267,7 @@ export default function MyPropertiesPage() {
                                         <button
                                             onClick={() => {
                                                 if (confirm(`Are you sure you want to delete "${property.name}"?`)) {
-                                                    alert("Delete functionality coming soon!");
+                                                    showToast("Delete functionality coming soon!", "info");
                                                 }
                                             }}
                                             className="px-4 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/40 text-red-600 rounded-lg transition"

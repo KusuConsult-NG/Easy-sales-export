@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { KYCForm, KYCData } from "@/components/onboarding/KYCForm";
 import { DocumentUpload } from "@/components/onboarding/DocumentUpload";
+import { useToast } from "@/contexts/ToastContext";
 
 interface KYCVerificationStepProps {
     onNext: (data: any) => void;
@@ -24,6 +25,7 @@ export function KYCVerificationStep({
     const [kycData, setKycData] = useState<Partial<KYCData>>(initialData?.kycData || {});
     const [idDocument, setIdDocument] = useState<File | null>(null);
     const [proofOfAddress, setProofOfAddress] = useState<File | null>(null);
+    const { showToast } = useToast();
 
     const handleSubmit = () => {
         // Validate KYC data
@@ -38,18 +40,18 @@ export function KYCVerificationStep({
             !kycData.idType ||
             !kycData.idNumber
         ) {
-            alert("Please fill in all required fields");
+            showToast("Please fill in all required fields", "error");
             return;
         }
 
         // Validate documents
         if (!idDocument) {
-            alert("Please upload your government-issued ID");
+            showToast("Please upload your government-issued ID", "error");
             return;
         }
 
         if (!proofOfAddress) {
-            alert("Please upload proof of address");
+            showToast("Please upload proof of address", "error");
             return;
         }
 

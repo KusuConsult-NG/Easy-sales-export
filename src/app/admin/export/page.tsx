@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Truck, CheckCircle, XCircle, Loader2, AlertCircle, Eye, Package } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 import { getAllExportRequestsAction } from "@/app/actions/admin";
 import { updateExportStatusAction } from "@/app/actions/export";
 
@@ -21,6 +22,7 @@ type ExportWindow = {
 };
 
 export default function AdminExportPage() {
+    const { showToast } = useToast();
     const [exports, setExports] = useState<ExportWindow[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedExport, setSelectedExport] = useState<ExportWindow | null>(null);
@@ -54,11 +56,11 @@ export default function AdminExportPage() {
         const result = await updateExportStatusAction(selectedExport.id, newStatus);
 
         if (result.success) {
-            alert("Status updated successfully!");
+            showToast("Status updated successfully!", "success");
             setSelectedExport(null);
             await loadExports();
         } else {
-            alert(result.error || "Failed to update status");
+            showToast(result.error || "Failed to update status", "error");
         }
         setActionLoading(false);
     }

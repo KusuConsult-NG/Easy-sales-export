@@ -1,8 +1,8 @@
 "use server";
 
 import { z } from "zod";
-import { collection, addDoc, updateDoc, doc, getDoc, getDocs, query, where, serverTimestamp, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     courseProgressSchema,
     courseEnrollmentSchema

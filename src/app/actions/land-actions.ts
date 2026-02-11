@@ -1,8 +1,8 @@
 "use server";
 
 import { z } from "zod";
-import { collection, addDoc, updateDoc, doc, getDocs, query, where, orderBy, serverTimestamp, Timestamp, GeoPoint } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     landListingSchema,
     landListingUpdateSchema,

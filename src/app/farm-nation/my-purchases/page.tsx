@@ -9,6 +9,7 @@ import {
     CheckCircle, Clock, XCircle, Download, Phone, Mail
 } from "lucide-react";
 import { getMyPurchaseRequestsAction } from "@/app/actions/farm-nation";
+import { useToast } from "@/contexts/ToastContext";
 
 interface PurchaseRequest {
     id: string;
@@ -29,6 +30,7 @@ interface PurchaseRequest {
 export default function MyPurchasesPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
+    const { showToast } = useToast();
 
     const [purchases, setPurchases] = useState<PurchaseRequest[]>([]);
     const [loading, setLoading] = useState(true);
@@ -302,7 +304,7 @@ export default function MyPurchasesPage() {
                                                     {getEscrowBadge(purchase.escrowStatus)}
                                                     {purchase.status === "completed" && (
                                                         <button
-                                                            onClick={() => alert("Download agreement functionality coming soon!")}
+                                                            onClick={() => showToast("Download agreement functionality coming soon!", "info")}
                                                             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition"
                                                         >
                                                             <Download className="w-4 h-4" />
@@ -322,7 +324,7 @@ export default function MyPurchasesPage() {
                                                         <button
                                                             onClick={() => {
                                                                 if (confirm("Are you sure you want to cancel this request?")) {
-                                                                    alert("Cancel functionality coming soon!");
+                                                                    showToast("Cancel functionality coming soon!", "info");
                                                                 }
                                                             }}
                                                             className="px-4 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 text-sm font-semibold rounded-lg transition"

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Upload, X, FileText } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 interface DocumentUploadProps {
     label: string;
@@ -22,6 +23,7 @@ export default function DocumentUpload({
 }: DocumentUploadProps) {
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
+    const { showToast } = useToast();
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
@@ -29,7 +31,7 @@ export default function DocumentUpload({
 
         // Check file size
         if (selectedFile.size > maxSize * 1024 * 1024) {
-            alert(`File size must be less than ${maxSize}MB`);
+            showToast(`File size must be less than ${maxSize}MB`, "error");
             return;
         }
 
@@ -61,8 +63,8 @@ export default function DocumentUpload({
 
             {!file ? (
                 <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${error
-                        ? "border-red-500 bg-red-50 dark:bg-red-950/30"
-                        : "border-slate-300 dark:border-slate-600 hover:border-green-500 dark:hover:border-green-500"
+                    ? "border-red-500 bg-red-50 dark:bg-red-950/30"
+                    : "border-slate-300 dark:border-slate-600 hover:border-green-500 dark:hover:border-green-500"
                     }`}>
                     <input
                         type="file"

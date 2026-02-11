@@ -1,8 +1,8 @@
 "use server";
 
 import { z } from "zod";
-import { collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, Timestamp, limit } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { AuditActionType } from "@/types/strict";
 import { createAuditLog } from "@/lib/audit-logger";
 import { auth } from "@/lib/auth";

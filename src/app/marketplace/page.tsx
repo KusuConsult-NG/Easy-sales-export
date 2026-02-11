@@ -1,36 +1,11 @@
-"use client";
-
 import { ArrowRight, ShoppingCart, Star, TrendingUp, Shield, Package, CheckCircle, Home } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { getRecommendedProductsAction } from "@/app/actions/marketplace";
 
-export default function MarketplaceLandingPage() {
-    const featuredProducts = [
-        {
-            name: "Premium Cashew Nuts",
-            price: "₦8,500/kg",
-            location: "Kogi State",
-            rating: 4.8,
-            image: "/images/logo.jpg",
-            badge: "Export Ready"
-        },
-        {
-            name: "Organic Shea Butter",
-            price: "₦12,000/kg",
-            location: "Kaduna State",
-            rating: 4.9,
-            image: "/images/logo.jpg",
-            badge: "Organic"
-        },
-        {
-            name: "Fresh Ginger Roots",
-            price: "₦4,200/kg",
-            location: "Plateau State",
-            rating: 4.6,
-            image: "/images/logo.jpg",
-            badge: "Fresh"
-        }
-    ];
+export default async function MarketplaceLandingPage() {
+    // Fetch real products
+    const { products } = await getRecommendedProductsAction(3);
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -117,49 +92,82 @@ export default function MarketplaceLandingPage() {
                     Premium agricultural commodities from verified sellers across Nigeria
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-                    {featuredProducts.map((product, index) => (
-                        <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift">
-                            <div className="relative h-56 bg-slate-200 dark:bg-slate-700">
-                                <Image
-                                    src={product.image}
-                                    alt={product.name}
-                                    fill
-                                    className="object-cover"
-                                />
-                                <div className="absolute top-4 right-4">
-                                    <span className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full">
-                                        {product.badge}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="p-6">
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                                    {product.name}
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                                    📍 {product.location}
-                                </p>
-                                <div className="flex items-center gap-2 mb-4">
-                                    <div className="flex items-center gap-1 text-yellow-500">
-                                        <Star className="w-4 h-4 fill-current" />
-                                        <span className="text-sm font-semibold">{product.rating}</span>
+                {products && products.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                        {products.map((product) => (
+                            <Link href={`/marketplace/products/${product.id}`} key={product.id} className="block group">
+                                <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift transition-all duration-300">
+                                    <div className="relative h-56 bg-slate-200 dark:bg-slate-700">
+                                        {product.images && product.images[0] ? (
+                                            <Image
+                                                src={product.images[0]}
+                                                alt={product.title}
+                                                fill
+                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                <Package className="w-12 h-12" />
+                                            </div>
+                                        )}
+                                        {product.exportReady && (
+                                            <div className="absolute top-4 right-4">
+                                                <span className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full shadow-sm">
+                                                    Export Ready
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="p-6">
+                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">
+                                            {product.title}
+                                        </h3>
+                                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 flex items-center gap-1">
+                                            📍 {product.location?.state || "Nigeria"}, {product.location?.lga || ""}
+                                        </p>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <div className="flex items-center gap-1 text-yellow-500">
+                                                <Star className="w-4 h-4 fill-current" />
+                                                <span className="text-sm font-semibold">{product.rating || "N/A"}</span>
+                                            </div>
+                                            <span className="text-slate-400 text-sm">•</span>
+                                            <span className="text-sm text-slate-500">{product.sellerName || "Verified Seller"}</span>
+                                        </div>
+                                        <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                                            <div>
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Price</p>
+                                                <span className="text-xl font-bold text-green-600">
+                                                    ₦{product.pricingTiers?.[0]?.price?.toLocaleString() ?? "N/A"}
+                                                </span>
+                                                <span className="text-sm text-slate-500 font-medium">/{product.unit}</span>
+                                            </div>
+                                            <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-colors duration-300">
+                                                <ArrowRight className="w-5 h-5 text-green-600 group-hover:text-white" />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                                    <span className="text-2xl font-bold text-green-600">
-                                        {product.price}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                            </Link>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                        <Package className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-1">No products yet</h3>
+                        <p className="text-slate-500 mb-6">Be the first to list your agricultural products</p>
+                        <Link
+                            href="/marketplace/onboarding"
+                            className="inline-flex items-center gap-2 px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition"
+                        >
+                            Start Selling
+                        </Link>
+                    </div>
+                )}
 
-                <div className="text-center">
+                <div className="text-center mt-8">
                     <Link
                         href="/marketplace/products"
-                        className="inline-flex items-center gap-2 px-8 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition"
+                        className="inline-flex items-center gap-2 px-8 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition shadow-lg hover:shadow-green-500/25"
                     >
                         View All Products
                         <ArrowRight className="w-5 h-5" />

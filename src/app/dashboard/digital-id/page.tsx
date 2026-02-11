@@ -14,19 +14,36 @@ export default function DigitalIDPage() {
     useEffect(() => {
         async function loadDigitalID() {
             try {
-                // In a real app, fetch user data from Firestore
-                // For now, we'll use mock data
-                const mockUserId = "demo-user-12345";
-                const mockCreatedAt = new Date("2024-01-15");
-                const memberNumber = formatMemberNumber(mockUserId, mockCreatedAt);
+                const session = await auth();
+                if (!session?.user?.id) {
+                    setError("User not authenticated");
+                    return;
+                }
+
+                // Fetch full user profile for creation date and verification status
+                const { db } = await import("@/lib/firebase");
+                const { doc, getDoc } = await import("firebase/firestore");
+
+                const userDoc = await getDoc(doc(db, "users", session.user.id));
+                if (!userDoc.exists()) {
+                    setError("User profile not found");
+                    return;
+                }
+
+                const userData = userDoc.data();
+                const createdAt = userData?.createdAt?.toDate ? userData.createdAt.toDate() : new Date();
+
+                // Use real data
+                const userId = session.user.id;
+                const memberNumber = formatMemberNumber(userId, createdAt);
 
                 const card = await generateDigitalIDCard(
-                    mockUserId,
+                    userId,
                     memberNumber,
-                    "John Doe",
-                    "john.doe@example.com",
-                    "exporter",
-                    mockCreatedAt
+                    userData?.fullName || session.user.name || "Member",
+                    userData?.email || session.user.email || "",
+                    (userData?.roles && userData.roles[0]) || "general_user",
+                    createdAt
                 );
 
                 setIdCard(card);

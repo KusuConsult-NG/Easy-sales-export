@@ -4,8 +4,10 @@ import { useState, useEffect } from "react";
 import { getAllFeatureToggles, updateFeatureToggle } from "@/app/actions/feature-toggles";
 import { FEATURE_METADATA, type FeatureToggle, FEATURE_CATEGORIES } from "@/lib/feature-toggles";
 import { Shield, ToggleLeft, ToggleRight, Loader2, CheckCircle, XCircle, AlertTriangle, Search, Filter } from "lucide-react";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function FeatureTogglesPage() {
+    const { showToast } = useToast();
     const [toggles, setToggles] = useState<FeatureToggle[]>([]);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export default function FeatureTogglesPage() {
                 )
             );
         } else {
-            alert(result.error || "Failed to update toggle");
+            showToast(result.error || "Failed to update toggle", "error");
         }
 
         setUpdating(null);
