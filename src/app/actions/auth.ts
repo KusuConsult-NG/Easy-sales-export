@@ -22,6 +22,7 @@ import { getPrimaryApp } from "@/lib/role-app-mapping";
 export async function loginAction(prevState: any, formData: FormData) {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
+    const redirectTo = formData.get("redirectTo") as string; // Module-specific redirect
 
     try {
         // Validate with Zod
@@ -37,8 +38,8 @@ export async function loginAction(prevState: any, formData: FormData) {
 
         // DO NOT MODIFY – AUTH STABILITY
         // Explicit redirect required for form actions
-        // Redirect to /dashboard which will then redirect to primary app
-        redirect("/dashboard");
+        // Use module-specific redirectTo if provided, otherwise default to /dashboard
+        redirect(redirectTo || "/dashboard");
         return { error: "", success: true }; // Defensive - redirect throws, but just in case
 
 
