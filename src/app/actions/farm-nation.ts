@@ -370,3 +370,106 @@ export async function getMyPurchaseRequestsAction() {
         return { success: false, error: error.message };
     }
 }
+
+/**
+ * Submit Farm Nation Onboarding
+ */
+export interface FarmNationOnboardingData {
+    role: "buyer" | "seller" | "both";
+    profile: {
+        fullName: string;
+        phone: string;
+        businessName?: string;
+        state: string;
+        lga: string;
+        address: string;
+    };
+    interests: {
+        // Buyer fields
+        propertyTypes?: string[];
+        budgetRange?: string;
+        preferredSize?: string;
+        // Seller fields
+        listingTypes?: string[];
+        totalAcreage?: string;
+        readyToList?: boolean;
+    };
+    terms: {
+        termsAccepted: boolean;
+        privacyAccepted: boolean;
+        feeDisclosureAccepted: boolean;
+    };
+}
+
+export async function submitFarmNationOnboardingAction(data: FarmNationOnboardingData) {
+    try {
+        // Get authenticated session
+        const session = await auth();
+
+        if (!session?.user?.id) {
+            return {
+                success: false,
+                error: "Not authenticated. Please login first.",
+            };
+        }
+
+        const userId = session.user.id;
+
+        // Validate required fields
+        if (!data.role || !data.profile || !data.terms) {
+            return {
+                success: false,
+                error: "Missing required onboarding data",
+            };
+        }
+
+        // Validate terms acceptance
+        if (!data.terms.termsAccepted || !data.terms.privacyAccepted || !data.terms.feeDisclosureAccepted) {
+            return {
+                success: false,
+                error: "You must accept all terms to continue",
+            };
+        }
+
+        // Prepare user roles
+        const roles: string[] = [];
+        if (data.role === "buyer" || data.role === "both") {
+            roles.push("farm-nation-buyer");
+        }
+        if (data.role === "seller" || data.role === "both") {
+            roles.push("farm-nation-seller");
+        }
+
+        // Update user document in Firestore
+        await db.collection(COLLECTIONS.USERS).doc(userId).set(
+            {
+                farmNation: {
+                    role: data.role,
+                    profile: data.profile,
+                    interests: data.interests,
+                    onboardingCompletedAt: new Date().toISOString(),
+                    termsAcceptedAt: new Date().toISOString(),
+                },
+                roles: FieldValue.arrayUnion(...roles),
+                updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+        );
+
+        console.log(`Farm Nation onboarding completed for user: ${userId}, role: ${data.role}`);
+
+        return {
+            success: true,
+            data: {
+                role: data.role,
+                userId,
+            },
+        };
+    } catch (error: any) {
+        console.error("Error submitting Farm Nation onboarding:", error);
+        return {
+            success: false,
+            error: "An error occurred while processing your onboarding. Please try again.",
+        };
+    }
+}
