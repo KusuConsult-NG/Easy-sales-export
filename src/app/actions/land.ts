@@ -9,10 +9,7 @@ import type { LandListing } from "@/types/strict";
  */
 export async function getVerifiedLandListings(): Promise<LandListing[]> {
     try {
-        const q = query(
-            collection(db, "land_listings"),
-            where("verificationStatus", "==", "verified")
-        );
+        const q = db.collection("land_listings").where("verificationStatus", "==", "verified");
 
         const snapshot = await getDocs(q);
         const listings: LandListing[] = [];

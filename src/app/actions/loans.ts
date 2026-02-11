@@ -127,7 +127,7 @@ export async function submitLoanApplicationAction(formData: {
             interestRate,
             totalRepayment,
             monthlyPayment,
-            appliedAt: Timestamp.now(),
+            appliedAt: FieldValue.serverTimestamp(),
         };
 
         const docRef = await db.collection("loan_applications").add(application);
@@ -224,7 +224,7 @@ export async function approveLoanAction(
 
         await appRef.update({
             status: "approved",
-            reviewedAt: Timestamp.now(),
+            reviewedAt: FieldValue.serverTimestamp(),
             reviewedBy: effectiveAdminId,
         });
 
@@ -273,7 +273,7 @@ export async function rejectLoanAction(
 
         await appRef.update({
             status: "rejected",
-            reviewedAt: Timestamp.now(),
+            reviewedAt: FieldValue.serverTimestamp(),
             reviewedBy: effectiveAdminId,
             rejectionReason: reason,
         });
@@ -330,8 +330,8 @@ export async function disburseLoanAction(
 
             transaction.update(appRef, {
                 status: "disbursed",
-                disbursedAt: Timestamp.now(),
-                updatedAt: Timestamp.now(),
+                disbursedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
         });
 
@@ -565,7 +565,7 @@ export async function submitRepaymentAction(data: {
             transaction.update(installmentRef, {
                 paidAmount: newPaidAmount,
                 status: calculatedStatus,
-                paidAt: calculatedStatus === "paid" ? Timestamp.now() : installmentData.paidAt || null,
+                paidAt: calculatedStatus === "paid" ? FieldValue.serverTimestamp() : installmentData.paidAt || null,
                 penaltyAmount: penalty,
                 daysOverdue: daysOverdue,
             });
@@ -579,7 +579,7 @@ export async function submitRepaymentAction(data: {
                 amount: data.amount,
                 paymentReference: data.paymentReference,
                 penaltyPaid: penalty > 0 ? Math.min(data.amount, penalty) : 0,
-                paidAt: Timestamp.now(),
+                paidAt: FieldValue.serverTimestamp(),
             });
 
             // Check if loan is fully repaid

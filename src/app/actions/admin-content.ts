@@ -47,11 +47,8 @@ export async function getPendingContentAction(): Promise<{
         const pendingItems: PendingContentItem[] = [];
 
         // 1. Marketplace Products
-        const productsQuery = query(
-            db.collection("marketplace_products"),
-            where("status", "==", "pending")
-        );
-        const productsSnap = await getDocs(productsQuery);
+        const productsQuery = db.collection("marketplace_products").where("status", "==", "pending");
+        const productsSnap = await productsQuery.get();
         productsSnap.forEach((doc) => {
             const data = doc.data();
             pendingItems.push({
@@ -67,11 +64,8 @@ export async function getPendingContentAction(): Promise<{
         });
 
         // 2. Land Listings
-        const landQuery = query(
-            db.collection("land_listings"),
-            where("verificationStatus", "==", "pending")
-        );
-        const landSnap = await getDocs(landQuery);
+        const landQuery = db.collection("land_listings").where("verificationStatus", "==", "pending");
+        const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
             const data = doc.data();
             pendingItems.push({
@@ -87,11 +81,8 @@ export async function getPendingContentAction(): Promise<{
         });
 
         // 3. Loans
-        const loansQuery = query(
-            db.collection("loans"),
-            where("status", "==", "pending")
-        );
-        const loansSnap = await getDocs(loansQuery);
+        const loansQuery = db.collection("loans").where("status", "==", "pending");
+        const loansSnap = await loansQuery.get();
         loansSnap.forEach((doc) => {
             const data = doc.data();
             pendingItems.push({
@@ -107,11 +98,8 @@ export async function getPendingContentAction(): Promise<{
         });
 
         // 4. WAVE Applications
-        const waveQuery = query(
-            db.collection("wave_applications"),
-            where("status", "==", "pending")
-        );
-        const waveSnap = await getDocs(waveQuery);
+        const waveQuery = db.collection("wave_applications").where("status", "==", "pending");
+        const waveSnap = await waveQuery.get();
         waveSnap.forEach((doc) => {
             const data = doc.data();
             pendingItems.push({

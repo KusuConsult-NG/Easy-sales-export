@@ -49,7 +49,7 @@ export async function initializePropertyPaymentAction(
         const propertyRef = doc(db, "farmNationProperties", propertyId);
         const propertyDoc = await getDoc(propertyRef);
 
-        if (!propertyDoc.exists()) {
+        if (!propertyDoc.exists) {
             return { error: "Property not found", success: false };
         }
 
@@ -80,7 +80,7 @@ export async function initializePropertyPaymentAction(
 
         // Create pending purchase record
         const purchaseId = `${session.user.id}_${propertyId}_${Date.now()}`;
-        await setDoc(doc(db, "propertyPurchases", purchaseId), {
+        await db.doc("propertyPurchases", purchaseId).set({
             purchaseId,
             propertyId,
             propertyTitle,
@@ -90,8 +90,8 @@ export async function initializePropertyPaymentAction(
             amount,
             paymentReference: reference,
             status: "pending_payment",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -131,7 +131,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         const processedRef = doc(db, "processedPayments", reference);
         const existingPayment = await getDoc(processedRef);
 
-        if (existingPayment.exists()) {
+        if (existingPayment.exists) {
             return {
                 error: "Payment has already been processed",
                 success: false
@@ -162,7 +162,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         const propertyRef = doc(db, "farmNationProperties", propertyId);
         const propertyDoc = await getDoc(propertyRef);
 
-        if (!propertyDoc.exists()) {
+        if (!propertyDoc.exists) {
             return { error: "Property not found", success: false };
         }
 
@@ -170,14 +170,14 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         const amountInNaira = paymentData.data.amount / 100;
 
         // Transfer ownership
-        await updateDoc(doc(db, "farmNationProperties", propertyId), {
+        await db.doc("farmNationProperties", propertyId).update({
             ownerId: session.user.id,
             ownerEmail: session.user.email,
             previousOwnerId: propertyData.ownerId,
             status: "sold",
-            soldAt: serverTimestamp(),
+            soldAt: FieldValue.serverTimestamp(),
             salePrice: amountInNaira,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Update purchase record
@@ -191,10 +191,10 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
 
         if (!purchaseQuery.empty) {
             const purchaseDoc = purchaseQuery.docs[0];
-            await updateDoc(doc(db, "propertyPurchases", purchaseDoc.id), {
+            await db.doc("propertyPurchases", purchaseDoc.id).update({
                 status: "completed",
-                paymentVerifiedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+                paymentVerifiedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
         }
 

@@ -46,7 +46,7 @@ export async function submitWithdrawalRequestAction(
         const membershipRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
         const membershipDoc = await getDoc(membershipRef);
 
-        if (!membershipDoc.exists()) {
+        if (!membershipDoc.exists) {
             return { error: 'You are not a member of any cooperative', success: false };
         }
 
@@ -73,9 +73,9 @@ export async function submitWithdrawalRequestAction(
             accountName: data.accountName,
             reason: data.reason || 'Personal withdrawal',
             status: 'pending',
-            requestedAt: serverTimestamp(),
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            requestedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Create audit log

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { createAuditLog, logAdminAction } from "@/lib/audit-log";
 
 /**
@@ -57,14 +58,14 @@ export async function createAnnouncementAction(data: {
             type: data.type,
             targetAudience: data.targetAudience,
             priority: data.priority,
-            publishedAt: Timestamp.now(),
+            publishedAt: FieldValue.serverTimestamp(),
             expiresAt: data.expiresAt ? Timestamp.fromDate(new Date(data.expiresAt)) : undefined,
             createdBy: data.adminId,
-            createdAt: Timestamp.now(),
+            createdAt: FieldValue.serverTimestamp(),
             active: true,
         };
 
-        const docRef = await addDoc(collection(db, "announcements"), announcement);
+        const docRef = await db.collection("announcements").add(announcement);
 
         await logAdminAction(
             "announcement_created",
@@ -87,12 +88,9 @@ export async function getActiveAnnouncementsAction(
     targetAudience: string = "all"
 ): Promise<Announcement[]> {
     try {
-        const now = Timestamp.now();
+        const now = FieldValue.serverTimestamp();
 
-        const q = query(
-            collection(db, "announcements"),
-            where("active", "==", true)
-        );
+        const q = db.collection("announcements").where("active", "==", true);
 
         const snapshot = await getDocs(q);
 
@@ -187,11 +185,11 @@ export async function createBannerAction(data: {
             endDate: new Date(data.endDate),
             position: data.position,
             createdBy: data.adminId,
-            createdAt: Timestamp.now(),
+            createdAt: FieldValue.serverTimestamp(),
             active: true,
         };
 
-        const docRef = await addDoc(collection(db, "banners"), banner);
+        const docRef = await db.collection("banners").add(banner);
 
         await logAdminAction(
             "banner_created",
@@ -214,10 +212,7 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
     try {
         const now = new Date();
 
-        const q = query(
-            collection(db, "banners"),
-            where("active", "==", true)
-        );
+        const q = db.collection("banners").where("active", "==", true);
 
         const snapshot = await getDocs(q);
 

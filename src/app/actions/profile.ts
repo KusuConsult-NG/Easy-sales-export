@@ -36,7 +36,7 @@ export async function getUserProfileAction() {
         const userId = session.user.id;
         const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
 
-        if (!userDoc.exists()) {
+        if (!userDoc.exists) {
             return { success: false, error: "User profile not found" };
         }
 
@@ -82,7 +82,7 @@ export async function updateUserProfileAction(data: {
         const userId = session.user.id;
 
         // Update Firestore
-        await updateDoc(doc(db, COLLECTIONS.USERS, userId), {
+        await db.doc(COLLECTIONS.USERS, userId).update({
             ...validated,
             updatedAt: new Date(),
         });
@@ -120,7 +120,7 @@ export async function updateNotificationPreferencesAction(preferences: {
         const userId = session.user.id;
 
         // Update Firestore
-        await updateDoc(doc(db, COLLECTIONS.USERS, userId), {
+        await db.doc(COLLECTIONS.USERS, userId).update({
             notifications: validated,
             updatedAt: new Date(),
         });

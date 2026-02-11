@@ -16,7 +16,7 @@ export async function getFeatureToggle(featureName: string): Promise<boolean> {
         const toggleRef = doc(db, COLLECTIONS.FEATURE_TOGGLES, featureName);
         const toggleDoc = await getDoc(toggleRef);
 
-        if (!toggleDoc.exists()) {
+        if (!toggleDoc.exists) {
             // Return default value
             return DEFAULT_TOGGLES[featureName] ?? false;
         }
@@ -47,13 +47,13 @@ export async function updateFeatureToggle(
         const toggleRef = doc(db, COLLECTIONS.FEATURE_TOGGLES, featureName);
         const toggleDoc = await getDoc(toggleRef);
 
-        const previousState = toggleDoc.exists() ? (toggleDoc.data() as FeatureToggle).enabled : DEFAULT_TOGGLES[featureName];
+        const previousState = toggleDoc.exists ? (toggleDoc.data() as FeatureToggle).enabled : DEFAULT_TOGGLES[featureName];
 
-        if (toggleDoc.exists()) {
+        if (toggleDoc.exists) {
             // Update existing toggle
             await updateDoc(toggleRef, {
                 enabled,
-                updatedAt: serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
         } else {
             // Create new toggle
@@ -62,8 +62,8 @@ export async function updateFeatureToggle(
                 name: featureName,
                 description: `Feature toggle for ${featureName}`,
                 enabled,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
                 createdBy: session.user.id,
             });
         }
@@ -129,7 +129,7 @@ export async function hasFeatureAccess(
         const toggleRef = doc(db, COLLECTIONS.FEATURE_TOGGLES, featureName);
         const toggleDoc = await getDoc(toggleRef);
 
-        if (!toggleDoc.exists()) {
+        if (!toggleDoc.exists) {
             // Feature not found, use default
             return DEFAULT_TOGGLES[featureName] ?? false;
         }

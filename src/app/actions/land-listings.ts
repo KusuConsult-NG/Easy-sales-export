@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { createAuditLog, logAdminAction } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 
@@ -60,11 +61,11 @@ export async function createLandListingAction(data: {
             images: [],
             documents: [],
             status: "draft",
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await addDoc(collection(db, "land_listings"), listing);
+        const docRef = await db.collection("land_listings").add(listing);
 
         await createAuditLog({
             action: "user_update",
@@ -91,7 +92,7 @@ async function submitForVerificationAction(
         const listingRef = doc(db, "land_listings", listingId);
         const listingDoc = await getDoc(listingRef);
 
-        if (!listingDoc.exists()) {
+        if (!listingDoc.exists) {
             return { success: false, error: "Listing not found" };
         }
 
@@ -103,7 +104,7 @@ async function submitForVerificationAction(
 
         await updateDoc(listingRef, {
             status: "pending_verification",
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return { success: true };
@@ -124,7 +125,7 @@ export async function verifyLandListingAction(
         const listingRef = doc(db, "land_listings", listingId);
         const listingDoc = await getDoc(listingRef);
 
-        if (!listingDoc.exists()) {
+        if (!listingDoc.exists) {
             return { success: false, error: "Listing not found" };
         }
 
@@ -133,9 +134,9 @@ export async function verifyLandListingAction(
             verificationStatus: {
                 verified: true,
                 verifiedBy: adminId,
-                verifiedAt: Timestamp.now(),
+                verifiedAt: FieldValue.serverTimestamp(),
             },
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await logAdminAction(
@@ -164,7 +165,7 @@ export async function rejectLandListingAction(
         const listingRef = doc(db, "land_listings", listingId);
         const listingDoc = await getDoc(listingRef);
 
-        if (!listingDoc.exists()) {
+        if (!listingDoc.exists) {
             return { success: false, error: "Listing not found" };
         }
 
@@ -173,10 +174,10 @@ export async function rejectLandListingAction(
             verificationStatus: {
                 verified: false,
                 verifiedBy: adminId,
-                verifiedAt: Timestamp.now(),
+                verifiedAt: FieldValue.serverTimestamp(),
                 rejectionReason: reason,
             },
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await logAdminAction(
@@ -208,10 +209,7 @@ export async function searchLandListingsAction(filters: {
     waterSource?: string;
 }): Promise<LandListing[]> {
     try {
-        let q = query(
-            collection(db, "land_listings"),
-            where("status", "==", "verified")
-        );
+        let q = db.collection("land_listings").where("status", "==", "verified");
 
         if (filters.state) {
             q = query(q, where("location.state", "==", filters.state));
@@ -262,10 +260,7 @@ export async function searchLandListingsAction(filters: {
  */
 export async function getPendingLandListingsAction(): Promise<LandListing[]> {
     try {
-        const q = query(
-            collection(db, "land_listings"),
-            where("status", "==", "pending_verification")
-        );
+        const q = db.collection("land_listings").where("status", "==", "pending_verification");
 
         const snapshot = await getDocs(q);
 
@@ -316,8 +311,8 @@ export async function submitLandListingAction(data: {
             images: data.imageUrls,
             documents: data.documentUrls,
             status: "pending_verification",
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
         if (data.gpsCoordinates) {
@@ -325,7 +320,7 @@ export async function submitLandListingAction(data: {
             (listing as any).gpsCoordinates = data.gpsCoordinates;
         }
 
-        const docRef = await addDoc(collection(db, "land_listings"), listing);
+        const docRef = await db.collection("land_listings").add(listing);
 
         // Create audit log
         await createAuditLog({
@@ -368,7 +363,7 @@ export async function getPropertyByIdAction(id: string): Promise<LandListing | n
         const docRef = doc(db, "land_listings", id);
         const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             return { id: docSnap.id, ...docSnap.data() } as LandListing;
         } else {
             return null;
@@ -393,10 +388,10 @@ export async function submitLandInquiryAction(data: {
 }): Promise<{ success: boolean; error?: string }> {
     try {
         // 1. Save inquiry to database
-        const inquiryRef = await addDoc(collection(db, "land_inquiries"), {
+        const inquiryRef = await db.collection("land_inquiries").add({
             ...data,
             status: "pending",
-            createdAt: Timestamp.now(),
+            createdAt: FieldValue.serverTimestamp(),
             read: false
         });
 
@@ -432,11 +427,7 @@ export async function submitLandInquiryAction(data: {
  */
 export async function getLandInquiriesAction(userId: string): Promise<{ success: boolean; inquiries?: any[]; error?: string }> {
     try {
-        const q = query(
-            collection(db, "land_inquiries"),
-            where("listingOwnerId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
+        const q = db.collection("land_inquiries").where("listingOwnerId", "==", userId).orderBy("createdAt", "desc");
         const snapshot = await getDocs(q);
         const inquiries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         return { success: true, inquiries };
@@ -454,7 +445,7 @@ export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ suc
         const docRef = doc(db, "land_inquiries", inquiryId);
         const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             return { success: true, inquiry: { id: docSnap.id, ...docSnap.data() } };
         } else {
             return { success: false, error: "Inquiry not found" };

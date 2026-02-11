@@ -77,7 +77,7 @@ export async function initializeOrderPaymentAction(
 
         // Create pending order record
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
-        await setDoc(doc(db, "marketplaceOrders", orderId), {
+        await db.doc("marketplaceOrders", orderId).set({
             orderId,
             buyerId: session.user.id,
             buyerEmail,
@@ -97,8 +97,8 @@ export async function initializeOrderPaymentAction(
             paymentReference: reference,
             paymentStatus: "pending",
             orderStatus: "pending_payment",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -138,7 +138,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         const processedRef = doc(db, "processedPayments", reference);
         const existingPayment = await getDoc(processedRef);
 
-        if (existingPayment.exists()) {
+        if (existingPayment.exists) {
             return {
                 error: "Payment has already been processed",
                 success: false
@@ -199,14 +199,14 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
             transaction.update(orderRef, {
                 paymentStatus: "paid",
                 orderStatus: "processing",
-                paymentVerifiedAt: serverTimestamp(),
+                paymentVerifiedAt: FieldValue.serverTimestamp(),
                 paidAmount: amountInNaira,
-                updatedAt: serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
 
             // Mark payment as processed
             transaction.set(processedRef, {
-                processedAt: serverTimestamp(),
+                processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
                 amount: amountInNaira,
                 type: "marketplace_order",

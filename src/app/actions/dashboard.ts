@@ -108,7 +108,7 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
             const memberDoc = await getDoc(
                 doc(db, COLLECTIONS.COOPERATIVES, cooperativeId, "members", userId)
             );
-            if (memberDoc.exists()) {
+            if (memberDoc.exists) {
                 cooperativeSavings = memberDoc.data().balance || 0;
             }
         }

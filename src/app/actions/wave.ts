@@ -623,7 +623,7 @@ export async function uploadWaveResourceAction(
         const resourceData: WaveResource = {
             ...resource,
             id: resourceId,
-            uploadedAt: Timestamp.now(),
+            uploadedAt: FieldValue.serverTimestamp(),
             downloads: 0,
         };
 

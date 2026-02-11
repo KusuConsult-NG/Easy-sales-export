@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
 
 /**
@@ -66,10 +67,7 @@ export async function getVendorOrdersAction(filters?: {
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = query(
-            collection(db, "vendor_orders"),
-            where("vendorId", "==", session.user.id)
-        );
+        let q = db.collection("vendor_orders").where("vendorId", "==", session.user.id);
 
         if (filters?.status) {
             q = query(q, where("status", "==", filters.status));
@@ -106,7 +104,7 @@ export async function updateVendorOrderStatusAction(
 
         const updateData: any = {
             status,
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
         if (trackingNumber) {
@@ -143,10 +141,7 @@ export async function getVendorProductsAction(filters?: {
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = query(
-            collection(db, "vendor_products"),
-            where("vendorId", "==", session.user.id)
-        );
+        let q = db.collection("vendor_products").where("vendorId", "==", session.user.id);
 
         if (filters?.status) {
             q = query(q, where("status", "==", filters.status));
@@ -184,7 +179,7 @@ export async function updateVendorProductInventoryAction(
         }
 
         const productRef = doc(db, "vendor_products", productId);
-        const productSnap = await getDocs(query(collection(db, "vendor_products"), where("__name__", "==", productId)));
+        const productSnap = await getDocs(db.collection("vendor_products").where("__name__", "==", productId));
 
         if (productSnap.empty) {
             return { success: false, error: "Product not found" };
@@ -211,7 +206,7 @@ export async function updateVendorProductInventoryAction(
         await updateDoc(productRef, {
             stock: newStock,
             status,
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await createAuditLog({
@@ -242,7 +237,7 @@ export async function toggleVendorProductStatusAction(
         }
 
         const productRef = doc(db, "vendor_products", productId);
-        const productSnap = await getDocs(query(collection(db, "vendor_products"), where("__name__", "==", productId)));
+        const productSnap = await getDocs(db.collection("vendor_products").where("__name__", "==", productId));
 
         if (productSnap.empty) {
             return { success: false, error: "Product not found" };
@@ -253,7 +248,7 @@ export async function toggleVendorProductStatusAction(
 
         await updateDoc(productRef, {
             status: newStatus,
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return { success: true, newStatus };

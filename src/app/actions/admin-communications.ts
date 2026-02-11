@@ -70,7 +70,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         });
 
         // Log email in database
-        await addDoc(collection(db, 'email_history'), {
+        await db.collection('email_history').add({
             recipients: recipients,
             subject,
             body,
@@ -113,7 +113,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
         }
 
         // Create announcement in database
-        const announcementRef = await addDoc(collection(db, 'announcements'), {
+        const announcementRef = await db.collection('announcements').add({
             title,
             message,
             priority,

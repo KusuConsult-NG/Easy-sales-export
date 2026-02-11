@@ -28,12 +28,12 @@ export async function submitLoanApplication(
         const validated = loanApplicationSchema.parse(data);
 
         // Create loan application in Firestore
-        const loanRef = await addDoc(collection(db, 'loan_applications'), {
+        const loanRef = await db.collection('loan_applications').add({
             ...validated,
             userId: session.user.id,
             status: LoanStatus.PENDING,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
             approvedBy: null,
             approvedAt: null,
             rejectionReason: null,
@@ -79,11 +79,7 @@ export async function getUserLoanApplications() {
     }
 
     try {
-        const loansQuery = query(
-            collection(db, 'loan_applications'),
-            where('userId', '==', session.user.id),
-            orderBy('createdAt', 'desc')
-        );
+        const loansQuery = db.collection('loan_applications').where('userId', '==', session.user.id).orderBy('createdAt', 'desc');
 
         const snapshot = await getDocs(loansQuery);
 
@@ -118,7 +114,7 @@ export async function getLoanApplication(loanId: string) {
 
     try {
         const loanRef = doc(db, 'loan_applications', loanId);
-        const loanDoc = await getDocs(query(collection(db, 'loan_applications'), where('__name__', '==', loanId)));
+        const loanDoc = await getDocs(db.collection('loan_applications').where('__name__', '==', loanId));
 
         if (loanDoc.empty) {
             return { success: false, error: "Loan application not found", loan: null };
@@ -158,11 +154,7 @@ export async function getPendingLoanApplications() {
     }
 
     try {
-        const loansQuery = query(
-            collection(db, 'loan_applications'),
-            where('status', '==', LoanStatus.PENDING),
-            orderBy('createdAt', 'desc')
-        );
+        const loansQuery = db.collection('loan_applications').where('status', '==', LoanStatus.PENDING).orderBy('createdAt', 'desc');
 
         const snapshot = await getDocs(loansQuery);
 
@@ -203,8 +195,8 @@ export async function approveLoanApplication(
         const updateData: Record<string, unknown> = {
             status: validated.approved ? LoanStatus.APPROVED : LoanStatus.REJECTED,
             approvedBy: session.user.id,
-            approvedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            approvedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
         if (validated.notes) {
@@ -215,7 +207,7 @@ export async function approveLoanApplication(
             updateData.rejectionReason = validated.rejectionReason;
         }
 
-        await updateDoc(doc(db, 'loan_applications', validated.loanId), updateData);
+        await db.doc('loan_applications', validated.loanId).update(updateData);
 
         // Audit log
         await createAuditLog({
@@ -253,12 +245,12 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
     }
 
     try {
-        await updateDoc(doc(db, 'loan_applications', loanId), {
+        await db.doc('loan_applications', loanId).update({
             status: LoanStatus.DISBURSED,
-            disbursedAt: serverTimestamp(),
+            disbursedAt: FieldValue.serverTimestamp(),
             disbursedBy: session.user.id,
             disbursementNotes,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Audit log
@@ -293,7 +285,7 @@ export async function getLoanStatistics() {
     }
 
     try {
-        const loansSnapshot = await getDocs(collection(db, 'loan_applications'));
+        const loansSnapshot = await db.collection('loan_applications').get();
 
         const stats = {
             total: loansSnapshot.size,

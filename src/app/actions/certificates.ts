@@ -66,11 +66,11 @@ export async function uploadCertificateAction(
             issueDate: metadata.issueDate ? new Date(metadata.issueDate) : undefined,
             expiryDate: metadata.expiryDate ? new Date(metadata.expiryDate) : undefined,
             issuer: metadata.issuer,
-            uploadedAt: Timestamp.now(),
+            uploadedAt: FieldValue.serverTimestamp(),
             size: file.size,
         };
 
-        const docRef = await addDoc(collection(db, "certificates"), certificate);
+        const docRef = await db.collection("certificates").add(certificate);
 
         await createAuditLog({
             action: "user_update",
@@ -95,7 +95,7 @@ export async function uploadCertificateAction(
  */
 export async function getUserCertificatesAction(userId: string): Promise<Certificate[]> {
     try {
-        const q = query(collection(db, "certificates"), where("userId", "==", userId));
+        const q = db.collection("certificates").where("userId", "==", userId);
         const snapshot = await getDocs(q);
 
         return snapshot.docs.map((doc) => ({
@@ -119,7 +119,7 @@ export async function deleteCertificateAction(
         const certRef = doc(db, "certificates", certificateId);
         const certDoc = await getDoc(certRef);
 
-        if (!certDoc.exists()) {
+        if (!certDoc.exists) {
             return { success: false, error: "Certificate not found" };
         }
 
@@ -162,7 +162,7 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
 
         await updateDoc(userRef, {
             onboardingCompleted: true,
-            onboardingCompletedAt: Timestamp.now(),
+            onboardingCompletedAt: FieldValue.serverTimestamp(),
         });
 
         await createAuditLog({
@@ -186,7 +186,7 @@ export async function checkOnboardingStatusAction(userId: string): Promise<boole
         const userRef = doc(db, COLLECTIONS.USERS, userId);
         const userDoc = await getDoc(userRef);
 
-        if (!userDoc.exists()) {
+        if (!userDoc.exists) {
             return false;
         }
 

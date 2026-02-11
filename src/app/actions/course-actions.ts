@@ -36,24 +36,24 @@ export async function updateCourseProgress(
 
         if (snapshot.empty) {
             // Create new progress record
-            await addDoc(collection(db, 'course_progress'), {
+            await db.collection('course_progress').add({
                 userId: session.user.id,
                 courseId: validated.courseId,
                 progressPercent: validated.progressPercent,
                 lastWatchedSecond: validated.lastWatchedSecond,
                 completed: validated.progressPercent >= 95,
-                completedAt: validated.progressPercent >= 95 ? serverTimestamp() : null,
-                updatedAt: serverTimestamp(),
+                completedAt: validated.progressPercent >= 95 ? FieldValue.serverTimestamp() : null,
+                updatedAt: FieldValue.serverTimestamp(),
             });
         } else {
             // Update existing progress
             const progressDoc = snapshot.docs[0];
-            await updateDoc(doc(db, 'course_progress', progressDoc.id), {
+            await db.doc('course_progress', progressDoc.id).update({
                 progressPercent: validated.progressPercent,
                 lastWatchedSecond: validated.lastWatchedSecond,
                 completed: validated.progressPercent >= 95,
-                completedAt: validated.progressPercent >= 95 ? serverTimestamp() : null,
-                updatedAt: serverTimestamp(),
+                completedAt: validated.progressPercent >= 95 ? FieldValue.serverTimestamp() : null,
+                updatedAt: FieldValue.serverTimestamp(),
             });
         }
 
@@ -115,22 +115,22 @@ export async function enrollInCourse(
         }
 
         // Create enrollment
-        const enrollmentRef = await addDoc(collection(db, 'course_enrollments'), {
+        const enrollmentRef = await db.collection('course_enrollments').add({
             userId: session.user.id,
             courseId: validated.courseId,
-            enrolledAt: serverTimestamp(),
+            enrolledAt: FieldValue.serverTimestamp(),
             status: 'active',
         });
 
         // Initialize progress record
-        await addDoc(collection(db, 'course_progress'), {
+        await db.collection('course_progress').add({
             userId: session.user.id,
             courseId: validated.courseId,
             progressPercent: 0,
             lastWatchedSecond: 0,
             completed: false,
             completedAt: null,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Audit log
@@ -262,11 +262,11 @@ export async function completeCourse(courseId: string) {
         }
 
         const progressDoc = snapshot.docs[0];
-        await updateDoc(doc(db, 'course_progress', progressDoc.id), {
+        await db.doc('course_progress', progressDoc.id).update({
             completed: true,
-            completedAt: serverTimestamp(),
+            completedAt: FieldValue.serverTimestamp(),
             progressPercent: 100,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Audit log
@@ -333,14 +333,14 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         }
 
         // Generate certificate
-        const certificateRef = await addDoc(collection(db, 'course_certificates'), {
+        const certificateRef = await db.collection('course_certificates').add({
             userId: session.user.id,
             userName: session.user.name || "Unknown",
             userEmail: session.user.email,
             courseId,
             courseTitle,
-            completedAt: progressData.completedAt || serverTimestamp(),
-            issuedAt: serverTimestamp(),
+            completedAt: progressData.completedAt || FieldValue.serverTimestamp(),
+            issuedAt: FieldValue.serverTimestamp(),
             certificateNumber: `CERT-${Date.now()}-${session.user.id!.substring(0, 8)}`,
         });
 

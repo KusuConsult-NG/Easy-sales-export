@@ -60,7 +60,7 @@ export async function sendResetEmailAction(
         const expiry = Date.now() + 3600000; // 1 hour from now
 
         // Store reset token in Firestore
-        await addDoc(collection(db, 'password_resets'), {
+        await db.collection('password_resets').add({
             email,
             token,
             expiry,
@@ -163,7 +163,7 @@ export async function resetPasswordAction(
         }
 
         // Mark token as used
-        await updateDoc(doc(db, 'password_resets', resetDoc.id), {
+        await db.doc('password_resets', resetDoc.id).update({
             used: true,
             usedAt: new Date()
         });

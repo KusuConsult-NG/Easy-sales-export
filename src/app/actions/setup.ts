@@ -22,7 +22,7 @@ export async function setupTestCooperativeAction() {
         const cooperativeRef = doc(db, COLLECTIONS.COOPERATIVES, cooperativeId);
         const cooperativeDoc = await getDoc(cooperativeRef);
 
-        if (!cooperativeDoc.exists()) {
+        if (!cooperativeDoc.exists) {
             // Create the cooperative
             await setDoc(cooperativeRef, {
                 id: cooperativeId,
@@ -33,8 +33,8 @@ export async function setupTestCooperativeAction() {
                 totalLoans: 0,
                 monthlyTarget: 50000,
                 interestRate: 5,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
                 status: "active",
             });
         }
@@ -43,7 +43,7 @@ export async function setupTestCooperativeAction() {
         const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, `${cooperativeId}_${userId}`);
         const memberDoc = await getDoc(memberRef);
 
-        if (memberDoc.exists()) {
+        if (memberDoc.exists) {
             return { error: "You are already a member of this cooperative", success: false };
         }
 
@@ -54,7 +54,7 @@ export async function setupTestCooperativeAction() {
             cooperativeId,
             savingsBalance: initialSavings,
             loanBalance: 0,
-            memberSince: serverTimestamp(),
+            memberSince: FieldValue.serverTimestamp(),
             monthlyTarget: 50000,
             status: "active",
         });
@@ -69,10 +69,10 @@ export async function setupTestCooperativeAction() {
         const userRef = doc(db, COLLECTIONS.USERS, userId);
         const userDoc = await getDoc(userRef);
 
-        if (userDoc.exists()) {
+        if (userDoc.exists) {
             await updateDoc(userRef, {
                 cooperativeId,
-                updatedAt: serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
         }
 

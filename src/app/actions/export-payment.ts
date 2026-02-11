@@ -54,7 +54,7 @@ export async function initializeInvestmentPaymentAction(
         const windowRef = doc(db, "exportWindows", windowId);
         const windowDoc = await getDoc(windowRef);
 
-        if (!windowDoc.exists()) {
+        if (!windowDoc.exists) {
             return { error: "Export window not found", success: false };
         }
 
@@ -93,7 +93,7 @@ export async function initializeInvestmentPaymentAction(
 
         // Create pending investment record
         const investmentId = `${session.user.id}_${windowId}_${Date.now()}`;
-        await setDoc(doc(db, "exportInvestments", investmentId), {
+        await db.doc("exportInvestments", investmentId).set({
             investmentId,
             windowId,
             windowTitle,
@@ -106,8 +106,8 @@ export async function initializeInvestmentPaymentAction(
             expectedReturn: investmentAmount * (1 + expectedROI / 100),
             paymentReference: reference,
             status: "pending_payment",
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -147,7 +147,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         const processedRef = doc(db, "processedPayments", reference);
         const existingPayment = await getDoc(processedRef);
 
-        if (existingPayment.exists()) {
+        if (existingPayment.exists) {
             return {
                 error: "Payment has already been processed",
                 success: false
@@ -209,8 +209,8 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             transaction.update(investmentRef, {
                 status: "active",
                 paymentStatus: "paid",
-                paymentVerifiedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+                paymentVerifiedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
 
             // Update export window funding
@@ -222,7 +222,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             transaction.update(windowRef, {
                 currentFunding: currentFunding + amountInNaira,
                 investorCount: investorCount + 1,
-                updatedAt: serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
 
             // Update or create investor portfolio
@@ -230,7 +230,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             const portfolioRef = doc(db, "investorPortfolios", portfolioId);
             const portfolioSnap = await transaction.get(portfolioRef);
 
-            if (portfolioSnap.exists()) {
+            if (portfolioSnap.exists) {
                 const currentInvested = portfolioSnap.data().totalInvested || 0;
                 const currentReturns = portfolioSnap.data().totalExpectedReturns || 0;
                 const activeCount = portfolioSnap.data().activeInvestments || 0;
@@ -239,7 +239,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
                     totalInvested: currentInvested + amountInNaira,
                     totalExpectedReturns: currentReturns + investmentData.expectedReturn,
                     activeInvestments: activeCount + 1,
-                    updatedAt: serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
                 });
             } else {
                 transaction.set(portfolioRef, {
@@ -250,14 +250,14 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
                     totalReturned: 0,
                     activeInvestments: 1,
                     completedInvestments: 0,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
                 });
             }
 
             // Mark payment as processed
             transaction.set(processedRef, {
-                processedAt: serverTimestamp(),
+                processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
                 amount: amountInNaira,
                 type: "export_investment",

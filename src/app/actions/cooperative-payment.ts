@@ -92,7 +92,7 @@ export async function verifyContributionPaymentAction(
         const processedRef = doc(db, 'processedPayments', reference);
         const existingPayment = await getDoc(processedRef);
 
-        if (existingPayment.exists()) {
+        if (existingPayment.exists) {
             return {
                 error: 'Payment has already been processed',
                 success: false
@@ -134,7 +134,7 @@ export async function verifyContributionPaymentAction(
             const membershipRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
             const membershipDoc = await transaction.get(membershipRef);
 
-            if (!membershipDoc.exists()) {
+            if (!membershipDoc.exists) {
                 throw new Error('Membership not found');
             }
 
@@ -146,13 +146,13 @@ export async function verifyContributionPaymentAction(
             transaction.update(membershipRef, {
                 totalContributions: newTotal,
                 tier: newTier,
-                lastContributionAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
+                lastContributionAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
 
             // Mark payment as processed atomically
             transaction.set(processedRef, {
-                processedAt: serverTimestamp(),
+                processedAt: FieldValue.serverTimestamp(),
                 amount: amountInNaira,
                 type: 'contribution',
                 reference,

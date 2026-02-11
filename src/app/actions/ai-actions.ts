@@ -81,12 +81,12 @@ export async function sendAIMessage(
         const aiResponse = aiData.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
 
         // Store chat history in Firestore
-        const chatRef = await addDoc(collection(db, 'ai_chat_history'), {
+        const chatRef = await db.collection('ai_chat_history').add({
             userId: session.user.id,
             message: validated.message,
             response: aiResponse,
             context: validated.context || {},
-            createdAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
         });
 
         // Audit log
@@ -134,14 +134,9 @@ export async function getAIChatHistory(maxMessages: number = 20) {
     }
 
     try {
-        const chatQuery = query(
-            collection(db, 'ai_chat_history'),
-            where('userId', '==', session.user.id),
-            orderBy('createdAt', 'desc'),
-            limit(maxMessages)
-        );
+        const chatQuery = db.collection('ai_chat_history').where('userId', '==', session.user.id).orderBy('createdAt', 'desc').limit(maxMessages);
 
-        const snapshot = await getDocs(chatQuery);
+        const snapshot = await chatQuery.get();
 
         const messages = snapshot.docs.map(doc => {
             const data = doc.data();

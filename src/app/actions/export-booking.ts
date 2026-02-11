@@ -33,7 +33,7 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
         const windowRef = doc(db, 'export_windows', data.exportWindowId);
         const windowDoc = await getDoc(windowRef);
 
-        if (!windowDoc.exists()) {
+        if (!windowDoc.exists) {
             return { success: false, error: 'Export window not found' };
         }
 
@@ -48,20 +48,20 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
         }
 
         // Create booking
-        const bookingRef = await addDoc(collection(db, 'export_bookings'), {
+        const bookingRef = await db.collection('export_bookings').add({
             userId: session.user.id,
             exportWindowId: data.exportWindowId,
             quantity: data.quantity,
             totalPrice: data.totalPrice,
             status: 'pending',
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Update export window current volume
         await updateDoc(windowRef, {
             currentVolume: increment(data.quantity),
-            updatedAt: Timestamp.now(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -93,11 +93,7 @@ export async function getUserBookingsAction(): Promise<{
 
         const { getDocs, query, where, orderBy } = await import('firebase/firestore');
 
-        const q = query(
-            collection(db, 'export_bookings'),
-            where('userId', '==', session.user.id),
-            orderBy('createdAt', 'desc')
-        );
+        const q = db.collection('export_bookings').where('userId', '==', session.user.id).orderBy('createdAt', 'desc');
 
         const snapshot = await getDocs(q);
         const bookings = snapshot.docs.map(doc => ({

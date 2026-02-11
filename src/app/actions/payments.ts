@@ -46,7 +46,7 @@ export async function createPaymentRecordAction(data: {
             status: "pending",
             paymentMethod: data.paymentMethod as any,
             purpose: data.purpose as any,
-            initiatedAt: Timestamp.now(),
+            initiatedAt: FieldValue.serverTimestamp(),
         };
 
         const docRef = await db.collection("payments").add(payment);
@@ -93,7 +93,7 @@ export async function verifyPaymentAction(
 
         await paymentRef.update({
             status: "success",
-            completedAt: Timestamp.now(),
+            completedAt: FieldValue.serverTimestamp(),
             paystackResponse,
         });
 
@@ -133,7 +133,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
                     await escrowRef.update({
                         status: "held",
                         paymentReference: payment.paymentReference,
-                        paidAt: Timestamp.now(),
+                        paidAt: FieldValue.serverTimestamp(),
                     });
                 }
                 break;
@@ -144,7 +144,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
                     const slotRef = db.collection("export_slots").doc(payment.relatedId);
                     await slotRef.update({
                         status: "paid",
-                        paidAt: Timestamp.now(),
+                        paidAt: FieldValue.serverTimestamp(),
                     });
                 }
                 break;

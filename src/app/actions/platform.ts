@@ -91,12 +91,12 @@ export async function submitWaveApplicationAction(
         const applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
         // Save to Firestore
-        await setDoc(doc(db, COLLECTIONS.WAVE_APPLICATIONS, applicationId), {
+        await db.doc(COLLECTIONS.WAVE_APPLICATIONS, applicationId).set({
             ...validatedData,
             userId: session.user.id,
             status: "pending", // pending | approved | rejected
-            applicationDate: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            applicationDate: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
@@ -152,7 +152,7 @@ export async function enrollInCourseAction(
             doc(db, COLLECTIONS.ENROLLMENTS, `${session.user.id}_${validatedData.courseId}`)
         );
 
-        if (existingEnrollmentQuery.exists()) {
+        if (existingEnrollmentQuery.exists) {
             return { error: "You are already enrolled in this course", success: false };
         }
 
@@ -160,22 +160,22 @@ export async function enrollInCourseAction(
         const enrollmentId = `${session.user.id}_${validatedData.courseId}`;
 
         // Save enrollment to Firestore
-        await setDoc(doc(db, COLLECTIONS.ENROLLMENTS, enrollmentId), {
+        await db.doc(COLLECTIONS.ENROLLMENTS, enrollmentId).set({
             userId: session.user.id,
             courseId: validatedData.courseId,
             fullName: validatedData.fullName,
             email: validatedData.email,
             phone: validatedData.phone,
-            enrollmentDate: serverTimestamp(),
+            enrollmentDate: FieldValue.serverTimestamp(),
             status: "active", // active | completed | dropped
             progress: 0,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Increment course student count (if course document exists)
         const courseRef = doc(db, COLLECTIONS.COURSES, validatedData.courseId);
         const courseDoc = await getDoc(courseRef);
-        if (courseDoc.exists()) {
+        if (courseDoc.exists) {
             await updateDoc(courseRef, {
                 students: increment(1),
             });
@@ -236,7 +236,7 @@ export async function submitWithdrawalAction(
         );
         const memberDoc = await getDoc(memberRef);
 
-        if (!memberDoc.exists()) {
+        if (!memberDoc.exists) {
             return { error: "You are not a member of this cooperative", success: false };
         }
 
@@ -263,7 +263,7 @@ export async function submitWithdrawalAction(
         const withdrawalId = `WD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
         // Save withdrawal request to Firestore
-        await setDoc(doc(db, COLLECTIONS.WITHDRAWALS, withdrawalId), {
+        await db.doc(COLLECTIONS.WITHDRAWALS, withdrawalId).set({
             userId: session.user.id,
             cooperativeId: validatedData.cooperativeId,
             amount: validatedData.amount,
@@ -272,8 +272,8 @@ export async function submitWithdrawalAction(
             bankName: validatedData.bankName,
             reason: validatedData.reason,
             status: "pending", // pending | approved | rejected | completed
-            requestDate: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            requestDate: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {

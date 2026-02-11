@@ -1,7 +1,8 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
+import { storage } from "@/lib/firebase";
 import {
     ref,
     uploadBytes,

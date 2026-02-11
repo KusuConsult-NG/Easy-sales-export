@@ -35,7 +35,7 @@ export async function createNotificationAction(data: {
         const notification: Omit<Notification, "id"> = {
             ...data,
             read: false,
-            createdAt: Timestamp.now(),
+            createdAt: FieldValue.serverTimestamp(),
         };
 
         const docRef = await db.collection("notifications").add(notification);
@@ -64,7 +64,7 @@ export async function createBulkNotificationsAction(
                 userId,
                 ...notification,
                 read: false,
-                createdAt: Timestamp.now(),
+                createdAt: FieldValue.serverTimestamp(),
             });
         });
 
@@ -117,7 +117,7 @@ export async function markNotificationAsReadAction(
     try {
         await db.collection("notifications").doc(notificationId).update({
             read: true,
-            readAt: Timestamp.now(),
+            readAt: FieldValue.serverTimestamp(),
         });
 
         return { success: true };
@@ -145,7 +145,7 @@ export async function markAllAsReadAction(userId: string): Promise<{ success: bo
         snapshot.docs.forEach((doc) => {
             batch.update(doc.ref, {
                 read: true,
-                readAt: Timestamp.now(),
+                readAt: FieldValue.serverTimestamp(),
             });
         });
 

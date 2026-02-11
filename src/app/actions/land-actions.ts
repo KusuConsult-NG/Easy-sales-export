@@ -33,7 +33,7 @@ export async function createLandListing(
         const geoPoint = new GeoPoint(validated.location.lat, validated.location.lng);
 
         // Create land listing in Firestore
-        const listingRef = await addDoc(collection(db, 'land_listings'), {
+        const listingRef = await db.collection('land_listings').add({
             ...validated,
             location: {
                 ...validated.location,
@@ -41,8 +41,8 @@ export async function createLandListing(
             },
             ownerId: session.user.id,
             status: 'pending_verification',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
             verifiedAt: null,
             verifiedBy: null,
             rejectionReason: null,
@@ -91,11 +91,7 @@ export async function getLandListings(filters?: z.infer<typeof landSearchSchema>
 
         // Apply status filter if provided
         if (filters?.status) {
-            listingsQuery = query(
-                collection(db, 'land_listings'),
-                where('status', '==', filters.status),
-                orderBy('createdAt', 'desc')
-            );
+            listingsQuery = db.collection('land_listings').where('status', '==', filters.status).orderBy('createdAt', 'desc');
         }
 
         const snapshot = await getDocs(listingsQuery);
@@ -154,10 +150,7 @@ export async function getVerifiedLandListings(filters?: z.infer<typeof landSearc
  */
 export async function getLandListing(listingId: string) {
     try {
-        const listingsQuery = query(
-            collection(db, 'land_listings'),
-            where('__name__', '==', listingId)
-        );
+        const listingsQuery = db.collection('land_listings').where('__name__', '==', listingId);
 
         const snapshot = await getDocs(listingsQuery);
 
@@ -199,11 +192,7 @@ export async function getMyLandListings() {
     }
 
     try {
-        const listingsQuery = query(
-            collection(db, 'land_listings'),
-            where('ownerId', '==', session.user.id),
-            orderBy('createdAt', 'desc')
-        );
+        const listingsQuery = db.collection('land_listings').where('ownerId', '==', session.user.id).orderBy('createdAt', 'desc');
 
         const snapshot = await getDocs(listingsQuery);
 
@@ -267,9 +256,9 @@ export async function updateLandListing(
             } as any;
         }
 
-        await updateDoc(doc(db, 'land_listings', listingId), {
+        await db.doc('land_listings', listingId).update({
             ...updateData,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
             // Reset to pending if content changed
             status: 'pending_verification',
         });
@@ -315,8 +304,8 @@ export async function verifyLandListing(
         const updateData: Record<string, unknown> = {
             status: validated.verified ? 'verified' : 'rejected',
             verifiedBy: session.user.id,
-            verifiedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+            verifiedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
         if (validated.notes) {
@@ -327,7 +316,7 @@ export async function verifyLandListing(
             updateData.rejectionReason = validated.rejectionReason;
         }
 
-        await updateDoc(doc(db, 'land_listings', validated.listingId), updateData);
+        await db.doc('land_listings', validated.listingId).update(updateData);
 
         // Audit log
         await createAuditLog({
@@ -376,11 +365,11 @@ export async function deleteLandListing(listingId: string) {
         }
 
         // Soft delete by updating status
-        await updateDoc(doc(db, 'land_listings', listingId), {
+        await db.doc('land_listings', listingId).update({
             status: 'deleted',
-            deletedAt: serverTimestamp(),
+            deletedAt: FieldValue.serverTimestamp(),
             deletedBy: session.user.id,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Audit log
@@ -414,7 +403,7 @@ export async function getLandStatistics() {
     }
 
     try {
-        const snapshot = await getDocs(collection(db, 'land_listings'));
+        const snapshot = await db.collection('land_listings').get();
 
         const stats = {
             total: 0,

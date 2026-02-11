@@ -34,7 +34,7 @@ export async function updateExportStatusAction(
         const exportRef = doc(db, COLLECTIONS.EXPORT_WINDOWS, exportId);
         const exportDoc = await getDoc(exportRef);
 
-        if (!exportDoc.exists()) {
+        if (!exportDoc.exists) {
             return { error: "Export window not found", success: false };
         }
 
@@ -47,7 +47,7 @@ export async function updateExportStatusAction(
         // Update status
         await updateDoc(exportRef, {
             status: newStatus,
-            updatedAt: serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return {
