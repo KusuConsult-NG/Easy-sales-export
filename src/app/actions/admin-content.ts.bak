@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase-admin";
 import {
     collection,
     getDocs,
@@ -12,7 +12,6 @@ import {
     orderBy,
     updateDoc,
     Timestamp,
-} from "firebase/firestore";
 
 export type ContentType = "products" | "land" | "loans" | "wave" | "certificates" | "resources" | "courses";
 export type ApprovalStatus = "pending" | "approved" | "rejected";

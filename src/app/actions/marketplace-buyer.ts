@@ -6,7 +6,7 @@
 
 "use server";
 
-import { db } from "@/lib/firebase-admin";
+import { db } from "@/lib/firebase";
 import {
     collection,
     getDocs,
@@ -16,6 +16,7 @@ import {
     limit,
     getDoc,
     doc
+} from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
 

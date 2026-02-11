@@ -5,8 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { db } from "@/lib/firebase";
 import {
     collection,
     addDoc,
@@ -14,6 +13,7 @@ import {
     doc,
     getDoc,
     serverTimestamp,
+} from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, Product } from "@/lib/types/marketplace";
 

@@ -5,7 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase-admin";
+import { db } from "@/lib/firebase";
 import {
     collection,
     query,
@@ -16,6 +16,7 @@ import {
     updateDoc,
     doc,
     orderBy,
+} from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";

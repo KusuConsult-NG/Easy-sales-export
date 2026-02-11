@@ -1,8 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db, storage } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { db, storage } from "@/lib/firebase";
 import {
     doc,
     collection,
@@ -15,6 +14,7 @@ import {
     orderBy,
     Timestamp,
     increment
+} from "firebase/firestore";
 import {
     ref,
     uploadBytes,
