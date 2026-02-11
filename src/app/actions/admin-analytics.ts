@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 
 /**
  * Admin Analytics & Dashboard Data
@@ -53,12 +54,10 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         // Active users (users with recent login audit logs in last 30d)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const activeUsersQuery = 
-            db.collection("audit_logs",
-            where("action", "==", "user_login"),
-            where("timestamp", ">=", Timestamp.fromDate(thirtyDaysAgo))
-        );
-        const activeUsersSnapshot = await getDocs(activeUsersQuery);
+        const activeUsersQuery = db.collection("audit_logs")
+            .where("action", "==", "user_login")
+            .where("timestamp", ">=", thirtyDaysAgo);
+        const activeUsersSnapshot = await activeUsersQuery.get();
         const activeUsers = new Set(activeUsersSnapshot.docs.map(d => d.data().userId)).size;
 
         // Revenue & Transactions
@@ -89,14 +88,14 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         });
 
         // Pending Approvals
-        const pendingWave = (await getDocs(db.collection("wave_applications", where("status", "==", "pending")))).size;
-        const pendingLoans = (await getDocs(db.collection("loan_applications", where("status", "==", "pending")))).size;
-        const pendingLand = (await getDocs(db.collection("land_listings", where("verificationStatus", "==", "pending")))).size;
+        const pendingWave = (await db.collection("wave_applications").where("status", "==", "pending").get()).size;
+        const pendingLoans = (await db.collection("loan_applications").where("status", "==", "pending").get()).size;
+        const pendingLand = (await db.collection("land_listings").where("verificationStatus", "==", "pending").get()).size;
 
         const pendingApprovals = pendingWave + pendingLoans + pendingLand;
 
-        const pendingEscrows = (await getDocs(db.collection("escrow_transactions", where("status", "==", "held")))).size;
-        const activeLandListings = (await getDocs(db.collection("land_listings", where("status", "==", "verified")))).size;
+        const pendingEscrows = (await db.collection("escrow_transactions").where("status", "==", "held").get()).size;
+        const activeLandListings = (await db.collection("land_listings").where("status", "==", "verified").get()).size;
 
         // 2. Revenue By Month (Last 6 Months)
         const revenueByMonthMap = new Map<string, number>();
@@ -165,13 +164,11 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         ];
 
         // 5. Recent Transactions
-        const recentAuditQuery = 
-            db.collection("audit_logs",
-            where("action", "in", ["payment_completed", "escrow_released", "loan_disbursed"]),
-            orderBy("timestamp", "desc"),
-            firestoreLimit(5)
-        );
-        const recentAudit = await getDocs(recentAuditQuery);
+        const recentAuditQuery = db.collection("audit_logs")
+            .where("action", "in", ["payment_completed", "escrow_released", "loan_disbursed"])
+            .orderBy("timestamp", "desc")
+            .limit(5);
+        const recentAudit = await recentAuditQuery.get();
 
         const recentTransactions = recentAudit.docs.map(doc => ({
             id: doc.id,
@@ -231,24 +228,20 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview | 
         }, 0);
 
         // Get all disbursed loans
-        const loansQuery = 
-            db.collection("loan_applications",
-            where("status", "in", ["approved", "disbursed"])
-        );
-        const loansSnapshot = await getDocs(loansQuery);
+        const loansQuery = db.collection("loan_applications")
+            .where("status", "in", ["approved", "disbursed"]);
+        const loansSnapshot = await loansQuery.get();
         const totalLoansDisbursed = loansSnapshot.docs.reduce((sum, doc) => {
             const data = doc.data();
             return sum + (data.amount || 0);
         }, 0);
 
         // Get recent transactions
-        const transactionsQuery = 
-            db.collection("audit_logs",
-            where("action", "in", ["payment_completed", "escrow_released", "loan_approved"]),
-            orderBy("timestamp", "desc"),
-            firestoreLimit(20)
-        );
-        const transactionsSnapshot = await getDocs(transactionsQuery);
+        const transactionsQuery = db.collection("audit_logs")
+            .where("action", "in", ["payment_completed", "escrow_released", "loan_approved"])
+            .orderBy("timestamp", "desc")
+            .limit(20);
+        const transactionsSnapshot = await transactionsQuery.get();
         const recentTransactions = transactionsSnapshot.docs.map((doc) => {
             const data = doc.data();
             return {
@@ -285,27 +278,21 @@ export async function getEngagementMetricsAction(): Promise<EngagementMetrics | 
         const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
         // Get daily active users
-        const dailyQuery = 
-            db.collection("audit_logs",
-            where("timestamp", ">=", Timestamp.fromDate(oneDayAgo))
-        );
-        const dailyDocs = await getDocs(dailyQuery);
+        const dailyQuery = db.collection("audit_logs")
+            .where("timestamp", ">=", oneDayAgo);
+        const dailyDocs = await dailyQuery.get();
         const dailyUsers = new Set(dailyDocs.docs.map((doc) => doc.data().userId));
 
         // Get weekly active users
-        const weeklyQuery = 
-            db.collection("audit_logs",
-            where("timestamp", ">=", Timestamp.fromDate(oneWeekAgo))
-        );
-        const weeklyDocs = await getDocs(weeklyQuery);
+        const weeklyQuery = db.collection("audit_logs")
+            .where("timestamp", ">=", oneWeekAgo);
+        const weeklyDocs = await weeklyQuery.get();
         const weeklyUsers = new Set(weeklyDocs.docs.map((doc) => doc.data().userId));
 
         // Get monthly active users
-        const monthlyQuery = 
-            db.collection("audit_logs",
-            where("timestamp", ">=", Timestamp.fromDate(oneMonthAgo))
-        );
-        const monthlyDocs = await getDocs(monthlyQuery);
+        const monthlyQuery = db.collection("audit_logs")
+            .where("timestamp", ">=", oneMonthAgo);
+        const monthlyDocs = await monthlyQuery.get();
         const monthlyUsers = new Set(monthlyDocs.docs.map((doc) => doc.data().userId));
 
         // Calculate top features by action count
