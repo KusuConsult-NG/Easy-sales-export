@@ -65,13 +65,21 @@ export default function ExportWindowsLandingPage() {
                         <p className="text-lg mb-8 text-orange-100 max-w-2xl">
                             Fund verified agricultural export contracts and earn attractive returns. Secure escrow protection, transparent tracking, and professional management.
                         </p>
-                        <button
-                            onClick={() => router.push('/export/onboarding')}
-                            className="group inline-flex items-center gap-3 bg-white text-orange-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-orange-500/50 transition-all hover:scale-105"
-                        >
-                            Get Started
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        </button>
+                        <div className="flex flex-wrap gap-4">
+                            <Link
+                                href="/export/register"
+                                className="group inline-flex items-center gap-3 bg-white text-orange-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-orange-500/50 transition-all hover:scale-105"
+                            >
+                                Get Started
+                                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                            <Link
+                                href="/export/login"
+                                className="inline-flex items-center gap-3 bg-orange-700/50 text-white border border-orange-400/30 px-8 py-4 rounded-xl font-bold text-lg backdrop-blur-sm hover:bg-orange-700/70 transition-all hover:scale-105"
+                            >
+                                Sign In
+                            </Link>
+                        </div>
                     </div>
                 </div>
                 {/* Wave SVG */}
