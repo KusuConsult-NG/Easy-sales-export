@@ -25,13 +25,13 @@ const REGISTRATION_PATHS = [
         benefits: ["Business grants", "Mentorship", "Exclusive training"],
     },
     {
-        id: "vendor",
-        title: "Vendor / Seller",
-        description: "Sell your agricultural products to a global market.",
+        id: "export-windows",
+        title: "Export Windows",
+        description: "Join bulk export opportunities and access international markets.",
         icon: ShoppingBag,
         color: "bg-blue-600",
-        href: "/auth/register?platforms[]=marketplace", // Standard register with pre-select
-        benefits: ["Global marketplace", "Secure payments", "Logistics support"],
+        href: "/auth/register?platforms[]=export&callbackUrl=/export/opportunities",
+        benefits: ["International buyers", "Volume aggregation", "Premium pricing"],
     },
     {
         id: "farm-nation",
