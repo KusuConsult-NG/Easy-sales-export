@@ -180,7 +180,7 @@ export default function HelpCenterPage() {
     })).filter(category => category.questions.length > 0);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 py-12">
+        <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 py-12">
             <div className="max-w-6xl mx-auto px-4">
                 {/* Header */}
                 <div className="text-center mb-12">
@@ -266,9 +266,9 @@ export default function HelpCenterPage() {
                                                         {faq.q}
                                                     </span>
                                                     {isExpanded ? (
-                                                        <ChevronUp className="w-5 h-5 text-primary flex-shrink-0" />
+                                                        <ChevronUp className="w-5 h-5 text-primary shrink-0" />
                                                     ) : (
-                                                        <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                                                        <ChevronDown className="w-5 h-5 text-slate-400 shrink-0" />
                                                     )}
                                                 </button>
                                                 {isExpanded && (
@@ -302,7 +302,7 @@ export default function HelpCenterPage() {
                 </div>
 
                 {/* Contact Support */}
-                <div className="bg-gradient-to-r from-primary to-blue-600 rounded-2xl p-8 text-center text-white shadow-xl">
+                <div className="bg-linear-to-r from-primary to-blue-600 rounded-2xl p-8 text-center text-white shadow-xl">
                     <MessageSquare className="w-12 h-12 mx-auto mb-4" />
                     <h3 className="text-2xl font-bold mb-2">Still need help?</h3>
                     <p className="mb-6 text-blue-100">
