@@ -44,22 +44,100 @@ export async function approveWaveApplicationAction(
             return { error: (valid.error as any).errors[0].message, success: false };
         }
 
-        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).update({
+        // Get application first to identify user
+        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
+        const appDoc = await appRef.get();
+
+        if (!appDoc.exists) {
+            return { error: "Application not found", success: false };
+        }
+
+        const appData = appDoc.data()!;
+        const userId = appData.userId;
+        const userEmail = appData.userEmail; // Ensure we have this from submission
+
+        if (!userId) {
+            return { error: "Application missing user ID", success: false };
+        }
+
+        // 1. Update Application Status
+        await appRef.update({
             status: "approved",
             reviewedBy: session.user.id,
             reviewedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // 2. Verify User & Assign Role (WAVE Participant)
+        // We auto-verify them because the WAVE application is the verification process
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            isVerified: true,
+            verifiedBy: session.user.id,
+            verifiedAt: FieldValue.serverTimestamp(),
+            roles: FieldValue.arrayUnion("wave_participant"),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // 3. Create/Update Wave Member Record (Enrolled)
+        await db.collection("wave_members").doc(userId).set({
+            active: true,
+            enrolledAt: FieldValue.serverTimestamp(),
+            applicationId: applicationId,
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // 4. Send Approval Email
+        if (userEmail && process.env.RESEND_API_KEY) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+
+                await resend.emails.send({
+                    from: "WAVE Program <noreply@easysalesexport.com>",
+                    to: userEmail,
+                    subject: "Welcome to WAVE - Application Approved!",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #059669;">Congratulations!</h2>
+                            <p>We are thrilled to inform you that your application for the <strong>Women Agro-Value Expansion (WAVE)</strong> program has been approved.</p>
+                            
+                            <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
+                                <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
+                                <p style="margin: 5px 0 0; color: #065f46;"><strong>Role:</strong> WAVE Participant</p>
+                            </div>
+
+                            <p>You now have full access to:</p>
+                            <ul>
+                                <li>Exclusive WAVE training resources and guides</li>
+                                <li>Cooperative funding opportunities</li>
+                                <li>Marketplace features</li>
+                            </ul>
+
+                            <p><strong>Next Steps:</strong></p>
+                            <p>Log in to your dashboard to start exploring the resources available to you.</p>
+
+                            <div style="text-align: center; margin-top: 30px;">
+                                <a href="https://easysalesexport.com/wave/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to WAVE Dashboard</a>
+                            </div>
+                        </div>
+                    `
+                });
+            } catch (emailError) {
+                console.error("Failed to send WAVE approval email:", emailError);
+                // Don't block success on email failure
+            }
+        }
+
         // Log audit
         await logAuditAction("wave_approve", applicationId, "application", {
             adminId: session.user.id,
+            userId: userId,
         });
 
         return {
             error: null,
             success: true,
-            message: "WAVE application approved successfully",
+            message: "WAVE application approved and user verified successfully",
         };
     } catch (error: any) {
         console.error("Approve WAVE application error:", error);

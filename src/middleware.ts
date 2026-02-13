@@ -136,8 +136,22 @@ export async function middleware(request: NextRequest) {
 
     // VERIFICATION CHECK
     // Redirect unverified users to /verify-status
+    // EXCEPTION: Onboarding applications are filled BEFORE verification (post-submission approval)
     if (session && isProtectedRoute && pathname !== "/verify-status") {
-        if (session.user.verified === false) {
+        const onboardingRoutes = [
+            "/wave/application",
+            "/academy/application",
+            "/marketplace/onboarding",
+            "/cooperatives/onboarding",
+            "/export/onboarding",
+            "/farm-nation/onboarding",
+        ];
+
+        const isOnboardingRoute = onboardingRoutes.some(route =>
+            pathname === route || pathname.startsWith(`${route}/`)
+        );
+
+        if (session.user.verified === false && !isOnboardingRoute) {
             return NextResponse.redirect(new URL("/verify-status", request.url));
         }
     }

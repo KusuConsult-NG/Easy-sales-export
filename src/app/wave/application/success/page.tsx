@@ -181,7 +181,7 @@ export default function ApplicationSuccessPage() {
                                 </li>
                             </ul>
                             <Link
-                                href="/cooperative/register"
+                                href="/cooperatives/register"
                                 className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl hover:scale-105"
                             >
                                 Continue to Cooperative Registration

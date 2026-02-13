@@ -66,7 +66,12 @@ export function Sidebar() {
     });
 
     return (
-        <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
+        <aside className={cn(
+            "w-64 border-r flex flex-col shrink-0 transition-colors duration-300",
+            pathname?.startsWith("/wave")
+                ? "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-100 dark:border-emerald-900/50"
+                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+        )}>
             {/* Logo Section with Notification */}
             <div className="p-6 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-4">
@@ -82,11 +87,17 @@ export function Sidebar() {
                             className="w-10 h-10 rounded-full border border-slate-200 shadow-sm"
                         />
                         <div>
-                            <h1 className="text-primary font-bold text-sm leading-tight uppercase tracking-wider">
-                                {COMPANY_INFO.name.split(" ")[0]} {COMPANY_INFO.name.split(" ")[1]}
+                            <h1 className={cn(
+                                "font-bold text-sm leading-tight uppercase tracking-wider",
+                                pathname?.startsWith("/wave") ? "text-emerald-700 dark:text-emerald-400" : "text-primary"
+                            )}>
+                                {pathname?.startsWith("/wave") ? "WAVE Program" : `${COMPANY_INFO.name.split(" ")[0]} ${COMPANY_INFO.name.split(" ")[1]}`}
                             </h1>
-                            <p className="text-[10px] text-slate-500 font-semibold tracking-widest uppercase">
-                                Export & Agri
+                            <p className={cn(
+                                "text-[10px] font-semibold tracking-widest uppercase",
+                                pathname?.startsWith("/wave") ? "text-emerald-600/70 dark:text-emerald-500/70" : "text-slate-500"
+                            )}>
+                                {pathname?.startsWith("/wave") ? "Women's Agribusiness" : "Export & Agri"}
                             </p>
                         </div>
                     </Link>
@@ -99,6 +110,7 @@ export function Sidebar() {
                 {visibleItems.map((item) => {
                     const isActive = pathname === item.href;
                     const Icon = item.icon;
+                    const isWave = pathname?.startsWith("/wave");
 
                     return (
                         <Link
@@ -107,11 +119,13 @@ export function Sidebar() {
                             className={cn(
                                 "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all",
                                 isActive
-                                    ? "text-primary bg-primary/5 dark:bg-primary/10"
+                                    ? isWave
+                                        ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-900/20"
+                                        : "text-primary bg-primary/5 dark:bg-primary/10"
                                     : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                             )}
                         >
-                            <Icon className="w-5 h-5" />
+                            <Icon className={cn("w-5 h-5", isActive && isWave && "text-emerald-600")} />
                             <span>{item.name}</span>
                         </Link>
                     );

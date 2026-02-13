@@ -32,7 +32,7 @@ function WaveRegisterContent() {
     const { data: session } = useSession();
 
     // Default valid callback or dashboard
-    const callbackUrl = searchParams.get("callbackUrl") || "/wave/dashboard";
+    const callbackUrl = searchParams.get("callbackUrl") || "/wave/application";
 
     const [formData, setFormData] = useState({
         fullName: "",
