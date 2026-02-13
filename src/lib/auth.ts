@@ -1,8 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth as firebaseAuth, db } from "./firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { auth as firebaseAuth } from "./firebase";
 import { loginSchema } from "./schemas";
 import { COLLECTIONS, type UserRole } from "./types/firestore";
 import type { User as FirestoreUser } from "./types/firestore";
@@ -43,18 +42,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         password
                     );
 
-                    // Fetch user profile from Firestore
-                    const userDocRef = doc(db, COLLECTIONS.USERS, userCredential.user.uid);
-                    const userDoc = await getDoc(userDocRef);
+                    // Success: Reset rate limit counter
+                    await resetLoginAttempts(email);
 
-                    if (!userDoc.exists()) {
+                    // Fetch user profile from Firestore using Admin SDK (Bypasses security rules & ensures consistency)
+                    const { getAdminDb } = await import("@/lib/firebase-admin");
+                    const adminDb = getAdminDb();
+
+                    const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(userCredential.user.uid).get();
+
+                    if (!userDoc.exists) {
                         throw new Error("User profile not found in database");
                     }
 
                     const userData = userDoc.data() as FirestoreUser;
-
-                    // Success: Reset rate limit counter
-                    await resetLoginAttempts(email);
 
                     // Return user object for NextAuth session
                     return {
