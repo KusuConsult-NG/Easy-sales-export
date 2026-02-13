@@ -22,6 +22,10 @@ export const GET = async () => {
         }
 
         return NextResponse.json({
+            env: {
+                projectId: process.env.FIREBASE_PROJECT_ID,
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL
+            },
             hasSession: !!session,
             user: session?.user ? {
                 id: session.user.id,
