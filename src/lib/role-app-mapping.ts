@@ -160,7 +160,7 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         cooperative_member: "/cooperatives/dashboard",
         wave_participant: "/wave/dashboard",
         academy_participant: "/academy/dashboard",
-        general_user: "/", // No default platform
+        general_user: "/profile", // Default to profile so they know they are logged in
         field_officer: "/admin",
         admin: "/admin",
         super_admin: "/admin",
@@ -206,6 +206,6 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         }
     }
 
-    // Absolute fallback to hub if no apps (shouldn't happen for valid users)
-    return "/";
+    // Absolute fallback to profile if no apps (ensure user lands on an auth page)
+    return "/profile";
 }
