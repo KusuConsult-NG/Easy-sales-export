@@ -1,0 +1,347 @@
+# API Documentation
+
+## Overview
+
+Easy Sales Export Platform provides Server Actions (Next.js 16) for all backend operations. This document covers key API endpoints and integration patterns.
+
+---
+
+## Authentication
+
+All authenticated requests require a valid NextAuth session.
+
+### Session Management
+
+```typescript
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+const session = await getServerSession(authOptions);
+if (!session?.user?.email) {
+  return { success: false, error: "Authentication required" };
+}
+```
+
+---
+
+## Marketplace API
+
+### Products
+
+#### Get All Products
+```typescript
+import { getProductsAction } from "@/app/actions/marketplace";
+
+const result = await getProductsAction({
+  category?: string;
+  searchQuery?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  limit?: number;
+});
+
+// Response
+{
+  success: boolean;
+  products: Product[];
+  error?: string;
+}
+```
+
+#### Get Product by ID
+```typescript
+import { getProductByIdAction } from "@/app/actions/marketplace";
+
+const result = await getProductByIdAction(productId: string);
+
+// Response
+{
+  success: boolean;
+  product: Product | null;
+  error?: string;
+}
+```
+
+#### Create Product (Vendor Only)
+```typescript
+import { createProductAction } from "@/app/actions/marketplace";
+
+const result = await createProductAction({
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  imageUrl: string;
+  stock: number;
+});
+```
+
+### Orders
+
+#### Create Order
+```typescript
+import { createOrderAction } from "@/app/actions/orders";
+
+const result = await createOrderAction({
+  items: CartItem[];
+  paymentMethod: "paystack" | "bank_transfer";
+  shippingAddress: Address;
+});
+
+// Response
+{
+ success: boolean;
+  order: Order;
+  paymentUrl?: string; // For Paystack
+}
+```
+
+#### Get User Orders
+```typescript
+import { getUserOrdersAction } from "@/app/actions/orders";
+
+const result = await getUserOrdersAction();
+```
+
+### Disputes
+
+#### Create Dispute
+```typescript
+import { createDisputeAction } from "@/app/actions/disputes";
+
+const result = await createDisputeAction({
+  orderId: string;
+  reason: "not_received" | "wrong_item" | "damaged" | "fake_product" | "other";
+  description: string;
+  evidenceUrls?: string[];
+});
+```
+
+---
+
+## Farm Nation API
+
+### Properties
+
+#### List Property
+```typescript
+import { createPropertyAction } from "@/app/actions/farm-nation";
+
+const result = await createPropertyAction({
+  title: string;
+  description: string;
+  location: string;
+  size: number;
+  sizeUnit: "acres" | "hectares";
+  price: number;
+  propertyType: "sale" | "lease";
+  amenities: string[];
+  images: string[];
+  coordinates?: { lat: number; lng: number };
+});
+```
+
+#### Get Properties
+```typescript
+import { getPropertiesAction } from "@/app/actions/farm-nation";
+
+const result = await getPropertiesAction({
+  status?: "pending" | "verified" | "rejected";
+  propertyType?: "sale" | "lease";
+  minPrice?: number;
+  maxPrice?: number;
+});
+```
+
+---
+
+## Academy API
+
+### Courses
+
+#### Get All Courses
+```typescript
+import { getCoursesAction } from "@/app/actions/academy";
+
+const result = await getCoursesAction({
+  category?: string;
+  level?: "beginner" | "intermediate" | "advanced";
+});
+```
+
+#### Enroll in Course
+```typescript
+import { enrollInCourseAction } from "@/app/actions/academy";
+
+const result = await enrollInCourseAction(courseId: string);
+```
+
+#### Submit Quiz
+```typescript
+import { submitQuizAction } from "@/app/actions/academy";
+
+const result = await submitQuizAction({
+  quizId: string;
+  answers: Record<string, string>;
+});
+
+// Response includes score and pass/fail status
+```
+
+---
+
+## Cooperatives API
+
+### Join Cooperative
+```typescript
+import { joinCooperativeAction } from "@/app/actions/cooperatives";
+
+const result = await joinCooperativeAction({
+  cooperativeId: string;
+  memberInfo: {
+    fullName: string;
+    phone: string;
+    address: string;
+  };
+});
+```
+
+### Apply for Loan
+```typescript
+import { applyForLoanAction } from "@/app/actions/cooperatives";
+
+const result = await applyForLoanAction({
+  cooperativeId: string;
+  amount: number;
+  purpose: string;
+  repaymentPeriod: number; // months
+});
+```
+
+---
+
+## File Upload
+
+### Firebase Storage Upload
+```typescript
+import { uploadFile } from "@/lib/storage-upload";
+
+const url = await uploadFile(
+  file: File,
+  path: string,
+  onProgress?: (progress: UploadProgress) => void
+);
+
+// Example
+const imageUrl = await uploadFile(
+  imageFile,
+  `products/${userId}/${Date.now()}.jpg`,
+  (progress) => console.log(`${progress.progress}%`)
+);
+```
+
+---
+
+## Admin API
+
+### Analytics
+```typescript
+import { getDashboardStatsAction } from "@/app/actions/admin-analytics";
+
+const stats = await getDashboardStatsAction();
+
+// Returns platform overview, revenue trends, user growth, module usage
+```
+
+### Audit Logs
+```typescript
+import { getAuditLogsAction } from "@/app/actions/audit-log-actions";
+
+const result = await getAuditLogsAction({
+  userEmail?: string;
+  severity?: "info" | "warning" | "critical";
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+});
+```
+
+### Export Audit Logs
+```typescript
+import { exportAuditLogsCSV } from "@/app/actions/audit-log-actions";
+
+const result = await exportAuditLogsCSV(filters);
+// Returns CSV string for download
+```
+
+---
+
+## Error Handling
+
+All Server Actions return a consistent response format:
+
+```typescript
+type ActionResponse<T> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+};
+```
+
+### Common Error Codes
+
+| Error | Description |
+|-------|------------|
+| `Authentication required` | User not logged in |
+| `Permission denied` | Insufficient privileges |
+| `Resource not found` | ID not found in database |
+| `Validation error` | Invalid input data |
+| `Payment failed` | Paystack transaction failed |
+
+---
+
+## Rate Limiting
+
+Currently implemented at Vercel edge level:
+- **Public endpoints**: 100 requests/minute
+- **Authenticated endpoints**: 300 requests/minute
+- **Admin endpoints**: 1000 requests/minute
+
+---
+
+## Webhooks
+
+### Paystack Webhook
+```
+POST /api/webhooks/paystack
+```
+
+Handles payment verification events:
+- `charge.success`
+- `charge.failed`
+- `refund.processed`
+
+---
+
+## TypeScript Types
+
+All types are available in `@/lib/types/`:
+
+```typescript
+import type {
+  Product,
+  Order,
+  Dispute,
+  Property,
+  Course,
+  User,
+} from "@/lib/types/marketplace";
+```
+
+---
+
+## Support
+
+For API questions or integration support:
+- Email: dev@kusuconsult.ng
+- GitHub: [Easy Sales Export](https://github.com/KusuConsult-NG/Easy-sales-export)
