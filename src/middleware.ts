@@ -86,15 +86,37 @@ export async function middleware(request: NextRequest) {
             const now = Date.now();
 
             if (now - lastActivityTime > SESSION_TIMEOUT_MS) {
-                // Session expired - redirect to module-specific login
-                const { getLoginUrl } = await import('@/lib/auth-redirect');
-                const loginPath = getLoginUrl(pathname, pathname);
-                const loginUrl = new URL(loginPath, request.url);
-                loginUrl.searchParams.set("error", "session_expired");
+                // Session expired
 
-                const response = NextResponse.redirect(loginUrl);
-                response.cookies.delete("lastActivity");
-                return response;
+                // Check if current route is protected
+                const isProtectedRoute = protectedRoutes.some((route) =>
+                    pathname.startsWith(route)
+                );
+
+                if (isProtectedRoute) {
+                    // Redirect to module-specific login
+                    const { getLoginUrl } = await import('@/lib/auth-redirect');
+                    const loginPath = getLoginUrl(pathname, pathname);
+                    const loginUrl = new URL(loginPath, request.url);
+                    loginUrl.searchParams.set("error", "session_expired");
+
+                    const response = NextResponse.redirect(loginUrl);
+                    response.cookies.delete("lastActivity");
+                    // Also clear session cookie if using next-auth default names
+                    response.cookies.delete("next-auth.session-token");
+                    response.cookies.delete("__Secure-next-auth.session-token");
+                    return response;
+                } else {
+                    // Public route: clear session and proceed
+                    // We can't easily "logout" the user from middleware without redirecting to a logout handler
+                    // But we can clear the activity cookie and let the client-side tracker handle specific logout if needed
+                    // OR better: Just delete the session cookies on the response so they are logged out effectively
+                    const response = NextResponse.next();
+                    response.cookies.delete("lastActivity");
+                    response.cookies.delete("next-auth.session-token");
+                    response.cookies.delete("__Secure-next-auth.session-token");
+                    return response;
+                }
             }
         }
     }

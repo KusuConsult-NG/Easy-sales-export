@@ -142,9 +142,9 @@ export default function GetStartedPage() {
 
                 <div className="mt-16 text-center">
                     <p className="text-slate-500 dark:text-slate-400">
-                        Not sure where to start?{" "}
+                        Want to explore first?{" "}
                         <Link href="/auth/register" className="text-primary font-semibold hover:underline">
-                            Create a General Account
+                            Join the Ecosystem
                         </Link>
                     </p>
                 </div>
