@@ -63,6 +63,17 @@ const SESSION_TIMEOUT_MS = parseInt(process.env.SESSION_TIMEOUT_MINUTES || "30",
 export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
 
+    // CRITICAL: Skip middleware for all auth pages to prevent redirect loops
+    // This includes: /auth/login, /auth/register, /marketplace/login, /export/login, etc.
+    const isAuthPage = pathname.includes('/login') ||
+        pathname.includes('/register') ||
+        pathname === '/auth/signin' ||
+        pathname === '/auth/signup';
+
+    if (isAuthPage) {
+        return NextResponse.next();
+    }
+
     // Get session using getToken (Edge Runtime compatible)
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
     const session = token ? { user: token } : null;
