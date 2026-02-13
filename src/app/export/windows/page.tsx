@@ -69,6 +69,9 @@ export default function ExportWindowsPage() {
                             <option>Nuts & Seeds</option>
                             <option>Spices & Herbs</option>
                             <option>Processed Products</option>
+                            <option>Animal Husbandry</option>
+                            <option>Fishery</option>
+                            <option>Poultry</option>
                         </select>
 
                         {/* Status Filter */}
@@ -86,6 +89,7 @@ export default function ExportWindowsPage() {
                             <option>Asia</option>
                             <option>Americas</option>
                             <option>Africa</option>
+                            <option>Middle East</option>
                         </select>
                     </div>
                 </div>
