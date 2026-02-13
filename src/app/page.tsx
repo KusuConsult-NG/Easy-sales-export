@@ -272,16 +272,6 @@ export default function HubPage() {
                                         Privacy Policy
                                     </Link>
                                 </li>
-                                <li>
-                                    <Link href="/auth/register" className="hover:text-white transition-colors">
-                                        Create Account
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href="/auth/login" className="hover:text-white transition-colors">
-                                        Login
-                                    </Link>
-                                </li>
                             </ul>
                         </div>
                     </div>
