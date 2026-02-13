@@ -1024,3 +1024,216 @@ export async function updateUserRolesAction(
         return { success: false, error: error.message };
     }
 }
+
+// ============================================
+// Seller Verification (Marketplace)
+// ============================================
+
+export async function approveSellerVerificationAction(
+    verificationId: string
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
+            // Fallback for super_admin if specific role missing, or strict check
+            if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
+                return { error: "Unauthorized: Permission required - users:verify_sellers", success: false };
+            }
+        }
+
+        // 1. Get Verification Doc
+        const verificationRef = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
+        const verificationDoc = await verificationRef.get();
+
+        if (!verificationDoc.exists) {
+            return { error: "Verification request not found", success: false };
+        }
+
+        const verificationData = verificationDoc.data()!;
+        const userId = verificationData.userId;
+
+        if (!userId) {
+            return { error: "Invalid verification request: Missing User ID", success: false };
+        }
+
+        // 2. Update Verification Status
+        await verificationRef.update({
+            status: "approved",
+            verifiedBy: session.user.id,
+            verifiedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // 3. Update User Profile (Verify & Add Role)
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            isVerified: true,
+            sellerVerificationStatus: "approved",
+            sellerVerificationId: verificationId,
+            verifiedBy: session.user.id, // Track who verified the user
+            verifiedAt: FieldValue.serverTimestamp(),
+            roles: FieldValue.arrayUnion("seller"),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // 4. Send Approval Email
+        if (process.env.RESEND_API_KEY) {
+            // Get user email - fetch user doc to be safe
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            const userData = userDoc.data();
+            const userEmail = userData?.email;
+
+            if (userEmail) {
+                try {
+                    const { Resend } = await import("resend");
+                    const resend = new Resend(process.env.RESEND_API_KEY);
+
+                    await resend.emails.send({
+                        from: "Easy Sales Export <noreply@easysalesexport.com>",
+                        to: userEmail,
+                        subject: "Seller Account Approved!",
+                        html: `
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                <h2 style="color: #059669;">You are now a Seller!</h2>
+                                <p>Congratulations! Your seller verification has been approved.</p>
+                                
+                                <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
+                                    <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
+                                    <p style="margin: 5px 0 0; color: #065f46;"><strong>Role:</strong> Seller</p>
+                                </div>
+
+                                <p>You can now:</p>
+                                <ul>
+                                    <li>List products on the marketplace</li>
+                                    <li>Manage your orders</li>
+                                    <li>Access seller analytics</li>
+                                </ul>
+
+                                <div style="text-align: center; margin-top: 30px;">
+                                    <a href="https://easysalesexport.com/marketplace/seller/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Seller Dashboard</a>
+                                </div>
+                            </div>
+                        `
+                    });
+                } catch (emailError) {
+                    console.error("Failed to send seller approval email:", emailError);
+                }
+            }
+        }
+
+        // Log audit
+        await logAuditAction("seller_approve", verificationId, "seller_verification", {
+            adminId: session.user.id,
+            userId: userId,
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: "Seller verified successfully",
+        };
+    } catch (error: any) {
+        console.error("Approve seller verification error:", error);
+        return { error: "Failed to verify seller", success: false };
+    }
+}
+
+// ============================================
+// Export Onboarding Approval
+// ============================================
+
+export async function approveExportOnboardingAction(
+    applicationId: string
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        // Use general user update permission or create a new one. Using users:update for now.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
+                return { error: "Unauthorized: Permission required - users:update", success: false };
+            }
+        }
+
+        // 1. Get Application Doc
+        const appRef = db.collection("export_onboarding").where("applicationId", "==", applicationId).limit(1);
+        const appSnapshot = await appRef.get();
+
+        if (appSnapshot.empty) {
+            return { error: "Application not found", success: false };
+        }
+
+        const appDoc = appSnapshot.docs[0];
+        const appData = appDoc.data();
+        const userId = appData.userId;
+
+        if (!userId) {
+            return { error: "Invalid application: Missing User ID", success: false };
+        }
+
+        // 2. Update Application Status
+        await appDoc.ref.update({
+            status: "approved",
+            reviewedBy: session.user.id,
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // 3. Update User Profile (Verify, Add Role, Activate Service)
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            isVerified: true,
+            "services.export.status": "active",
+            "services.export.approvedAt": FieldValue.serverTimestamp(),
+            verifiedBy: session.user.id,
+            verifiedAt: FieldValue.serverTimestamp(),
+            roles: FieldValue.arrayUnion("export_participant"),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // 4. Send Approval Email
+        if (process.env.RESEND_API_KEY && appData.userEmail) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+
+                await resend.emails.send({
+                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    to: appData.userEmail,
+                    subject: "Export Account Approved!",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #059669;">Welcome to Export Services!</h2>
+                            <p>Your export onboarding application has been approved.</p>
+                            
+                            <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
+                                <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
+                                <p style="margin: 5px 0 0; color: #065f46;"><strong>Service:</strong> Export Management</p>
+                            </div>
+
+                            <p>You can now start creating export windows and managing your commodities.</p>
+
+                            <div style="text-align: center; margin-top: 30px;">
+                                <a href="https://easysalesexport.com/export/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Export Dashboard</a>
+                            </div>
+                        </div>
+                    `
+                });
+            } catch (emailError) {
+                console.error("Failed to send export approval email:", emailError);
+            }
+        }
+
+        // Log audit
+        await logAuditAction("export_approve", applicationId, "export_onboarding", {
+            adminId: session.user.id,
+            userId: userId,
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: "Export application approved successfully",
+        };
+    } catch (error: any) {
+        console.error("Approve export application error:", error);
+        return { error: "Failed to approve export application", success: false };
+    }
+}

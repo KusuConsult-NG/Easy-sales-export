@@ -40,6 +40,9 @@ const protectedRoutes = [
     "/marketplace/cart",
     "/marketplace/orders",
     "/marketplace/checkout",
+    "/export/dashboard",
+    "/academy/dashboard",
+    "/farm-nation/dashboard",
 ];
 
 // Routes requiring MFA verification
@@ -134,27 +137,10 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
-    // VERIFICATION CHECK
-    // Redirect unverified users to /verify-status
-    // EXCEPTION: Onboarding applications are filled BEFORE verification (post-submission approval)
-    if (session && isProtectedRoute && pathname !== "/verify-status") {
-        const onboardingRoutes = [
-            "/wave/application",
-            "/academy/application",
-            "/marketplace/onboarding",
-            "/cooperatives/onboarding",
-            "/export/onboarding",
-            "/farm-nation/onboarding",
-        ];
-
-        const isOnboardingRoute = onboardingRoutes.some(route =>
-            pathname === route || pathname.startsWith(`${route}/`)
-        );
-
-        if (session.user.verified === false && !isOnboardingRoute) {
-            return NextResponse.redirect(new URL("/verify-status", request.url));
-        }
-    }
+    // VERIFICATION CHECK - REMOVED PER REQ: "Users can create account without approval"
+    // Verification is now strictly role-based via Admin Actions during Onboarding.
+    // The "isVerified" field on User will track if they have passed the specific onboarding checks.
+    // Dashboard access is allowed for all authenticated users (General User).
 
 
     // AUTH REDIRECT — DO NOT MODIFY WITHOUT FULL REVIEW
@@ -182,8 +168,16 @@ export async function middleware(request: NextRequest) {
 
         // Check if user has permission to access this route
         if (!hasErrorParam && !canAccessRoute(userRoles, pathname)) {
-            // Special case: allow dashboard access for all authenticated users
-            if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+            // EXCEPTION: Allow access to onboarding/application pages regardless of role
+            // This is critical so General Users can apply to become Sellers/Exporters/etc.
+            const isOnboardingPage = pathname.includes("/onboarding") ||
+                pathname.includes("/application") ||
+                pathname.includes("/register") ||
+                pathname.includes("/join");
+
+            if (isOnboardingPage) {
+                // Allow access
+            } else if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
                 // User is authenticated but lacks specific roles - allow dashboard access
                 // Dashboard will show appropriate UI based on roles
             } else {

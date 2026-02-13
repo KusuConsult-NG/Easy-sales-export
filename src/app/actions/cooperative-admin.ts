@@ -198,6 +198,16 @@ export async function updateMemberStatusAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // Verify user and assign role if activating
+        if (status === "active") {
+            // Assuming memberId is userId, which meets the pattern of other modules
+            await db.collection("users").doc(memberId).set({
+                isVerified: true,
+                roles: FieldValue.arrayUnion("cooperative_member"),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+
         return { success: true };
     } catch (error) {
         console.error("Update member status error:", error);

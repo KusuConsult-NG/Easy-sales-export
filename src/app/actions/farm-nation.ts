@@ -612,6 +612,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
                     onboardingCompletedAt: new Date().toISOString(),
                     termsAcceptedAt: new Date().toISOString(),
                 },
+                isVerified: true, // Instant verification for Farm Nation
                 roles: FieldValue.arrayUnion(...roles),
                 updatedAt: FieldValue.serverTimestamp(),
             },
