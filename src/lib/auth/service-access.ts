@@ -236,7 +236,7 @@ function checkWaveAccess(user: UserWithServices): ServiceAccessResult {
         };
     }
 
-    if (registration.status === "approved" && user.roles.includes("wave_member")) {
+    if (registration.status === "approved" && user.roles.includes("wave_participant")) {
         return { hasAccess: true };
     }
 

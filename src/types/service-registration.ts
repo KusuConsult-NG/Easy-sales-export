@@ -22,6 +22,7 @@ export type ServiceRole =
     | "cooperative_member"
     | "wave_applicant"
     | "wave_member"
+    | "wave_participant"
     | "academy_student"
     | "farm_nation_buyer"
     | "farm_nation_seller"
