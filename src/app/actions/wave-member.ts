@@ -24,6 +24,36 @@ export async function checkWaveMembershipAction(): Promise<{
         const memberDoc = await db.collection("wave_members").doc(session.user.id).get();
 
         if (!memberDoc.exists || !memberDoc.data()?.active) {
+            // Auto-Healing: If user has role but no doc, create/reactivate it
+            // This handles cases where registration succeeded (role assigned) but doc creation failed
+            // or environment mismatch caused data loss
+            const hasRole = session.user.roles?.includes("wave_participant");
+
+            if (hasRole) {
+                console.log(`[Auto-Heal] Creating missing wave_members doc for ${session.user.id}`);
+                const now = new Date();
+                const memberData = {
+                    userId: session.user.id,
+                    email: session.user.email,
+                    name: session.user.name || "WAVE Participant",
+                    roles: ["wave_participant"],
+                    active: true,
+                    status: "approved",
+                    enrolledAt: now,
+                    lastHealedAt: now
+                };
+
+                await db.collection("wave_members").doc(session.user.id).set(memberData, { merge: true });
+
+                return {
+                    enrolled: true,
+                    memberData: {
+                        id: session.user.id,
+                        ...memberData
+                    }
+                };
+            }
+
             return { enrolled: false };
         }
 
