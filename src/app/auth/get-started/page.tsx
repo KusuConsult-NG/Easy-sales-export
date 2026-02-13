@@ -34,6 +34,15 @@ const REGISTRATION_PATHS = [
         benefits: ["International buyers", "Volume aggregation", "Premium pricing"],
     },
     {
+        id: "marketplace",
+        title: "Marketplace",
+        description: "Buy and sell agricultural products in our verified marketplace.",
+        icon: ShoppingBag,
+        color: "bg-violet-600",
+        href: "/auth/register?platforms[]=marketplace&callbackUrl=/marketplace",
+        benefits: ["Verified buyers & sellers", "Secure payments", "Nationwide delivery"],
+    },
+    {
         id: "farm-nation",
         title: "Farm Nation Investor",
         description: "Invest in agricultural land and verified farm projects.",
