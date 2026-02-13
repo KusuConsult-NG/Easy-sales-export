@@ -22,6 +22,7 @@ export const GET = async () => {
         }
 
         return NextResponse.json({
+            version: "v3-auto-heal",
             env: {
                 projectId: process.env.FIREBASE_PROJECT_ID,
                 clientEmail: process.env.FIREBASE_CLIENT_EMAIL
