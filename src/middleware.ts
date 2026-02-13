@@ -193,11 +193,22 @@ export async function middleware(request: NextRequest) {
     response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
 
-    // Content Security Policy
-    response.headers.set(
-        "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://firebasestorage.googleapis.com https://firestore.googleapis.com;"
-    );
+    // Content Security Policy (comprehensive for development and production)
+    const cspDirectives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.paystack.co https://www.googletagmanager.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "img-src 'self' data: https: blob:",
+        "font-src 'self' data: https://fonts.gstatic.com",
+        "connect-src 'self' https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://firestore.googleapis.com https://api.paystack.co wss://*.firebaseio.com",
+        "frame-src 'self' https://js.paystack.co https://checkout.paystack.com https://www.youtube.com https://youtube.com",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ];
+
+    response.headers.set("Content-Security-Policy", cspDirectives.join("; "));
 
     // Cache-Control for protected routes (Prevent caching of sensitive data)
     if (session) {
