@@ -163,7 +163,7 @@ export default function ReviewStep({
                         onChange={(e) => onAcceptTermsChange(e.target.checked)}
                         className="mt-1 w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-2 focus:ring-blue-500"
                     />
-                    <label htmlFor="acceptTerms" className="text-sm text-slate-700 dark:text-slate-300">
+                    <label htmlFor="acceptTerms" className="text-sm text-slate-900 dark:text-white">
                         I confirm that all the information provided is accurate and complete. I accept the{" "}
                         <a href="#" className="text-blue-600 hover:underline font-semibold">
                             Terms and Conditions

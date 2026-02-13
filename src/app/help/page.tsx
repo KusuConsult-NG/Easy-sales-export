@@ -273,7 +273,7 @@ export default function HelpCenterPage() {
                                                 </button>
                                                 {isExpanded && (
                                                     <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-                                                        <p className="text-slate-700 dark:text-slate-300">
+                                                        <p className="text-slate-900 dark:text-white">
                                                             {faq.a}
                                                         </p>
                                                     </div>

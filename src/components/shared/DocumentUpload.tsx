@@ -57,7 +57,7 @@ export default function DocumentUpload({
 
     return (
         <div>
-            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                 {label} {required && <span className="text-red-500">*</span>}
             </label>
 

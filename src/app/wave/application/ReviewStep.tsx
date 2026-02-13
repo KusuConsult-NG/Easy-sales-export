@@ -311,7 +311,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                                 ) : (
                                     <div className="w-5 h-5" />
                                 )}
-                                <span className="text-slate-700 dark:text-slate-300">Willing to undergo training</span>
+                                <span className="text-slate-900 dark:text-white">Willing to undergo training</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 {data.willingToComplyWithStandards ? (
@@ -319,7 +319,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                                 ) : (
                                     <div className="w-5 h-5" />
                                 )}
-                                <span className="text-slate-700 dark:text-slate-300">Willing to comply with standards</span>
+                                <span className="text-slate-900 dark:text-white">Willing to comply with standards</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 {data.willingToParticipateInME ? (
@@ -327,7 +327,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                                 ) : (
                                     <div className="w-5 h-5" />
                                 )}
-                                <span className="text-slate-700 dark:text-slate-300">Willing to participate in M&E</span>
+                                <span className="text-slate-900 dark:text-white">Willing to participate in M&E</span>
                             </div>
                         </div>
                     </div>
@@ -350,7 +350,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                                 <p className="font-semibold text-slate-900 dark:text-white mb-1">
                                     Declaration of Truthfulness
                                 </p>
-                                <p className="text-slate-700 dark:text-slate-300">
+                                <p className="text-slate-900 dark:text-white">
                                     I hereby declare that all the information provided in this application form is
                                     true, accurate, and complete to the best of my knowledge. I understand that
                                     providing false or misleading information may result in disqualification from
@@ -370,7 +370,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                                 <p className="font-semibold text-slate-900 dark:text-white mb-1">
                                     Consent for Data Processing & Program Participation
                                 </p>
-                                <p className="text-slate-700 dark:text-slate-300">
+                                <p className="text-slate-900 dark:text-white">
                                     I consent to the processing of my personal data for the purposes of program
                                     management, monitoring, and evaluation. I agree to abide by the rules and
                                     regulations of the WAVE program and commit to actively participating in all
@@ -387,7 +387,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
                 <button
                     onClick={onBack}
                     disabled={submitting}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-700 dark:text-slate-300 disabled:opacity-50"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white disabled:opacity-50"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

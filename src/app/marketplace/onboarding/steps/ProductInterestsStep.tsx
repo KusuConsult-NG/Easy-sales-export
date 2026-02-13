@@ -107,7 +107,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
 
                         {/* Product Categories */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
                                 Product Categories of Interest *
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -131,7 +131,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
 
                         {/* Order Volume */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
                                 Typical Order Volume
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -161,7 +161,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
 
                         {/* Product Categories */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
                                 Product Categories to Sell *
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -185,7 +185,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
 
                         {/* Production Capacity */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
                                 Monthly Production Capacity
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -206,7 +206,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
 
                         {/* Certifications */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
                                 Certifications (if any)
                             </label>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -232,7 +232,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                     Back
                 </button>

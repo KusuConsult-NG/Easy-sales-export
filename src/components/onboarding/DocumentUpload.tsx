@@ -82,7 +82,7 @@ export function DocumentUpload({
     return (
         <div className="w-full">
             {/* Label */}
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                 {label}
                 {required && <span className="text-red-500 ml-1">*</span>}
             </label>
@@ -108,7 +108,7 @@ export function DocumentUpload({
                         className="hidden"
                     />
                     <Upload className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <p className="text-sm font-medium text-slate-900 dark:text-white mb-1">
                         Click to upload or drag and drop
                     </p>
                     <p className="text-xs text-slate-500">

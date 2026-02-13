@@ -79,7 +79,7 @@ export default async function FarmNationDashboard() {
                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link href="/farm-nation/properties" className="group p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700 transition">
-                    <span className="font-semibold text-slate-700 dark:text-white">Browse Listings</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">Browse Listings</span>
                     <ArrowRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform" />
                 </Link>
             </div>

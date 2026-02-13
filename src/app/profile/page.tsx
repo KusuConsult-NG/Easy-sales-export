@@ -229,7 +229,7 @@ export default function ProfilePage() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Full Name</label>
+                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Full Name</label>
                                             <input
                                                 type="text"
                                                 defaultValue={user.name || ''}
@@ -238,7 +238,7 @@ export default function ProfilePage() {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Email Address</label>
+                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Email Address</label>
                                             <input
                                                 type="email"
                                                 defaultValue={user.email || ''}
@@ -247,7 +247,7 @@ export default function ProfilePage() {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Phone Number</label>
+                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Phone Number</label>
                                             <input
                                                 type="tel"
                                                 value={userData.phone}
@@ -257,7 +257,7 @@ export default function ProfilePage() {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Location</label>
+                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Location</label>
                                             <input
                                                 type="text"
                                                 value={userData.location}
@@ -267,7 +267,7 @@ export default function ProfilePage() {
                                             />
                                         </div>
                                         <div className="md:col-span-2 space-y-2">
-                                            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Bio</label>
+                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Bio</label>
                                             <textarea
                                                 rows={4}
                                                 value={userData.bio}
@@ -347,7 +347,7 @@ export default function ProfilePage() {
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="font-medium text-slate-700 dark:text-slate-300">Email Notifications</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white">Email Notifications</p>
                                                     <p className="text-xs text-slate-500 dark:text-slate-400">Receive updates about your investments</p>
                                                 </div>
                                                 <input
@@ -359,7 +359,7 @@ export default function ProfilePage() {
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="font-medium text-slate-700 dark:text-slate-300">Push Notifications</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white">Push Notifications</p>
                                                     <p className="text-xs text-slate-500 dark:text-slate-400">Receive real-time alerts on your device</p>
                                                 </div>
                                                 <input
@@ -371,7 +371,7 @@ export default function ProfilePage() {
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="font-medium text-slate-700 dark:text-slate-300">SMS Notifications</p>
+                                                    <p className="font-medium text-slate-900 dark:text-white">SMS Notifications</p>
                                                     <p className="text-xs text-slate-500 dark:text-slate-400">Receive text message updates</p>
                                                 </div>
                                                 <input

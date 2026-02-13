@@ -119,7 +119,7 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
                             {/* Benefits */}
                             <ul className="space-y-2">
                                 {type.benefits.map((benefit, index) => (
-                                    <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                    <li key={index} className="flex items-start gap-2 text-sm text-slate-900 dark:text-white">
                                         <span className="text-green-500 mt-0.5">✓</span>
                                         <span>{benefit}</span>
                                     </li>

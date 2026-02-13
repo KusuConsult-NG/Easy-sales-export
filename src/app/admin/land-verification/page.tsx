@@ -207,7 +207,7 @@ export default function LandVerificationPage() {
                                     <div className="space-y-2">
                                         {listing.documents?.landTitle && (
                                             <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 p-2 rounded">
-                                                <span className="text-sm text-slate-700 dark:text-slate-300">Title Deed</span>
+                                                <span className="text-sm text-slate-900 dark:text-white">Title Deed</span>
                                                 <a href={listing.documents.landTitle} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
                                                     <Download className="w-4 h-4" />
                                                 </a>
@@ -215,7 +215,7 @@ export default function LandVerificationPage() {
                                         )}
                                         {listing.documents?.surveyPlan && (
                                             <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-700/50 p-2 rounded">
-                                                <span className="text-sm text-slate-700 dark:text-slate-300">Survey Plan</span>
+                                                <span className="text-sm text-slate-900 dark:text-white">Survey Plan</span>
                                                 <a href={listing.documents.surveyPlan} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
                                                     <Download className="w-4 h-4" />
                                                 </a>
@@ -228,7 +228,7 @@ export default function LandVerificationPage() {
                                 <div className="flex items-center space-x-3">
                                     <button
                                         onClick={() => setSelectedListing(listing)}
-                                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+                                        className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition"
                                     >
                                         <Eye className="w-4 h-4" />
                                         <span>Review</span>
@@ -264,25 +264,25 @@ export default function LandVerificationPage() {
                                 <div className="space-y-2">
                                     <label className="flex items-center space-x-3">
                                         <input type="checkbox" className="w-4 h-4 text-blue-600 rounded" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                                        <span className="text-sm text-slate-900 dark:text-white">
                                             Title deed is valid and matches listing details
                                         </span>
                                     </label>
                                     <label className="flex items-center space-x-3">
                                         <input type="checkbox" className="w-4 h-4 text-blue-600 rounded" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                                        <span className="text-sm text-slate-900 dark:text-white">
                                             Survey plan is recent and accurate
                                         </span>
                                     </label>
                                     <label className="flex items-center space-x-3">
                                         <input type="checkbox" className="w-4 h-4 text-blue-600 rounded" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                                        <span className="text-sm text-slate-900 dark:text-white">
                                             Location details are correct
                                         </span>
                                     </label>
                                     <label className="flex items-center space-x-3">
                                         <input type="checkbox" className="w-4 h-4 text-blue-600 rounded" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                                        <span className="text-sm text-slate-900 dark:text-white">
                                             Pricing is reasonable for the area
                                         </span>
                                     </label>
@@ -291,7 +291,7 @@ export default function LandVerificationPage() {
 
                             {/* Rejection Reason (conditional) */}
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                     Rejection Reason (if rejecting)
                                 </label>
                                 <textarea
@@ -312,7 +312,7 @@ export default function LandVerificationPage() {
                                     setRejectionReason("");
                                 }}
                                 disabled={actionLoading}
-                                className="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition disabled:opacity-50"
+                                className="px-4 py-2 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition disabled:opacity-50"
                             >
                                 Cancel
                             </button>

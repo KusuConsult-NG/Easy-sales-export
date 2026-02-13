@@ -122,7 +122,7 @@ export default function VerifyIDPage() {
                                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
                                     Ready to Scan
                                 </h2>
-                                <p className="text-slate-600 dark:text-slate-300 mb-6">
+                                <p className="text-slate-600 dark:text-white mb-6">
                                     Click the button below to activate your camera and scan a Digital ID QR code
                                 </p>
                                 <button
@@ -227,7 +227,7 @@ export default function VerifyIDPage() {
                                 <h2 className="text-2xl font-bold text-red-600 text-center mb-4">
                                     Invalid QR Code
                                 </h2>
-                                <p className="text-slate-600 dark:text-slate-300 text-center">
+                                <p className="text-slate-600 dark:text-white text-center">
                                     {result.error || "This QR code could not be verified. It may be expired, tampered with, or invalid."}
                                 </p>
                             </div>

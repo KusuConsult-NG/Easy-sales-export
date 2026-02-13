@@ -150,3 +150,20 @@ body {
   color: var(--foreground);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+@layer base {
+  /* Global accessibility fix for form controls */
+  input, textarea, select {
+    @apply text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400;
+  }
+
+  /* Ensure labels are always high contrast as requested */
+  label {
+    @apply text-slate-900 dark:text-white font-semibold;
+  }
+  
+  /* Heading visibility fix */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-slate-900 dark:text-white;
+  }
+}

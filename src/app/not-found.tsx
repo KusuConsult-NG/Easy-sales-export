@@ -46,16 +46,16 @@ export default function NotFound() {
                         Popular Pages:
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
-                        <Link href="/marketplace" className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:shadow-md transition text-sm">
+                        <Link href="/marketplace" className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg hover:shadow-md transition text-sm">
                             Marketplace
                         </Link>
-                        <Link href="/farm-nation" className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:shadow-md transition text-sm">
+                        <Link href="/farm-nation" className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg hover:shadow-md transition text-sm">
                             Farm Nation
                         </Link>
-                        <Link href="/academy" className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:shadow-md transition text-sm">
+                        <Link href="/academy" className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg hover:shadow-md transition text-sm">
                             Academy
                         </Link>
-                        <Link href="/export" className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:shadow-md transition text-sm">
+                        <Link href="/export" className="px-4 py-2 bg-white dark:bg-slate-800 text-slate-900 dark:text-white rounded-lg hover:shadow-md transition text-sm">
                             Export Windows
                         </Link>
                     </div>

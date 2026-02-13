@@ -123,7 +123,7 @@ function PaymentCallbackContent() {
 
                         <Link
                             href="/"
-                            className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg font-semibold transition-colors"
+                            className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white rounded-lg font-semibold transition-colors"
                         >
                             <Home className="w-5 h-5" />
                             Go Home

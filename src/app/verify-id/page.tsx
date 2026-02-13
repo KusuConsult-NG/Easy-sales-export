@@ -76,7 +76,7 @@ export default function VerifyIDPage() {
 
                     {/* Upload QR Image */}
                     <div className="mb-6">
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                             Upload QR Code Image
                         </label>
                         <div className="flex items-center justify-center w-full">
@@ -99,7 +99,7 @@ export default function VerifyIDPage() {
 
                     {/* Manual QR Data Input */}
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                             Or Enter QR Data Manually
                         </label>
                         <div className="flex space-x-2">

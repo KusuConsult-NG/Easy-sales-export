@@ -29,7 +29,7 @@ export default function AboutPage() {
                         About Us
                     </h1>
                     <div className="w-24 h-1 bg-linear-to-r from-green-600 via-green-500 to-green-600 mx-auto rounded-full mb-8" />
-                    <p className="text-xl text-slate-700 dark:text-slate-300 leading-relaxed">
+                    <p className="text-xl text-slate-900 dark:text-white leading-relaxed">
                         <strong className="text-slate-900 dark:text-white">Easy Sales Export Nigeria Limited</strong> is a strategic agro-export and trade infrastructure company connecting African producers to global markets.
                     </p>
                 </div>
@@ -43,7 +43,7 @@ export default function AboutPage() {
                             <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">
                                 What We Do
                             </h2>
-                            <div className="space-y-6 text-lg text-slate-700 dark:text-slate-300">
+                            <div className="space-y-6 text-lg text-slate-900 dark:text-white">
                                 <p>
                                     We build structured systems that organize farmers, coordinate production, ensure quality, and deliver commodities to international buyers with reliability and scale.
                                 </p>
@@ -86,7 +86,7 @@ export default function AboutPage() {
 
                     {/* Mission Statement */}
                     <div className="bg-emerald-50 dark:bg-emerald-900/20 border-l-4 border-emerald-600 p-8 rounded-r-xl mb-20">
-                        <p className="text-lg italic text-slate-700 dark:text-slate-300 mb-4">
+                        <p className="text-lg italic text-slate-900 dark:text-white mb-4">
                             We don't just export products.
                         </p>
                         <p className="text-xl font-bold text-emerald-800 dark:text-emerald-300">
@@ -124,7 +124,7 @@ export default function AboutPage() {
                                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
                                     Strategic Partner: WAVE Program
                                 </h3>
-                                <p className="text-lg text-slate-700 dark:text-slate-300 mb-4">
+                                <p className="text-lg text-slate-900 dark:text-white mb-4">
                                     As the lead implementing partner for the <strong>Women Agro Value Expansion (WAVE) Program</strong>, we are proud to support the Federal Ministry of Women Affairs in empowering 10 million Nigerian women through structured agricultural value chains.
                                 </p>
                                 <div className="space-y-2">
@@ -137,7 +137,7 @@ export default function AboutPage() {
                                     ].map((item, index) => (
                                         <div key={index} className="flex items-start gap-2">
                                             <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                                            <span className="text-slate-700 dark:text-slate-300">{item}</span>
+                                            <span className="text-slate-900 dark:text-white">{item}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -153,7 +153,7 @@ export default function AboutPage() {
                     <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-6">
                         Easy Sales Export Nigeria Limited
                     </h2>
-                    <p className="text-xl text-slate-700 dark:text-slate-300 mb-3">
+                    <p className="text-xl text-slate-900 dark:text-white mb-3">
                         Connecting African production to global markets.
                     </p>
                     <p className="text-2xl font-bold bg-linear-to-r from-green-700 via-green-600 to-green-500 bg-clip-text text-transparent">

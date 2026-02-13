@@ -218,7 +218,7 @@ export default function SubmitLandListingPage() {
                             </h2>
 
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Listing Title *
                                 </label>
                                 <input
@@ -232,7 +232,7 @@ export default function SubmitLandListingPage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Description *
                                 </label>
                                 <textarea
@@ -247,7 +247,7 @@ export default function SubmitLandListingPage() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         State *
                                     </label>
                                     <select
@@ -266,7 +266,7 @@ export default function SubmitLandListingPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Local Government Area *
                                     </label>
                                     <input
@@ -281,7 +281,7 @@ export default function SubmitLandListingPage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Street Address
                                 </label>
                                 <input
@@ -305,7 +305,7 @@ export default function SubmitLandListingPage() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Size (Hectares) *
                                     </label>
                                     <input
@@ -321,7 +321,7 @@ export default function SubmitLandListingPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Price (₦) *
                                     </label>
                                     <input
@@ -339,7 +339,7 @@ export default function SubmitLandListingPage() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Soil Type
                                     </label>
                                     <select
@@ -358,7 +358,7 @@ export default function SubmitLandListingPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Water Source
                                     </label>
                                     <select
@@ -409,7 +409,7 @@ export default function SubmitLandListingPage() {
 
                             {imageFiles.length > 0 && (
                                 <div>
-                                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
                                         Selected Images ({imageFiles.length}/5)
                                     </h3>
                                     <div className="space-y-2">
@@ -463,7 +463,7 @@ export default function SubmitLandListingPage() {
 
                             {documentFiles.length > 0 && (
                                 <div>
-                                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
                                         Selected Documents ({documentFiles.length}/3)
                                     </h3>
                                     <div className="space-y-2">
@@ -509,7 +509,7 @@ export default function SubmitLandListingPage() {
                             <button
                                 onClick={handleBack}
                                 disabled={step === 1}
-                                className="px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                className="px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
                                 <ArrowLeft className="w-5 h-5" />
                                 Back

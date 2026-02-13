@@ -162,7 +162,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                             {/* Suggestions */}
                             {messages.length === 0 && suggestions.length > 0 && (
                                 <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-                                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                                    <p className="text-sm font-medium text-slate-900 dark:text-white mb-3">
                                         Suggested questions:
                                     </p>
                                     <div className="space-y-2">
@@ -173,7 +173,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                                                 animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: i * 0.1 }}
                                                 onClick={() => handleSuggestionClick(suggestion)}
-                                                className="w-full text-left px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-[#1358ec]/10 dark:hover:bg-[#1358ec]/20 transition-colors text-sm text-slate-700 dark:text-slate-300 flex items-center justify-between group"
+                                                className="w-full text-left px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-[#1358ec]/10 dark:hover:bg-[#1358ec]/20 transition-colors text-sm text-slate-900 dark:text-white flex items-center justify-between group"
                                             >
                                                 <span>{suggestion}</span>
                                                 <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />

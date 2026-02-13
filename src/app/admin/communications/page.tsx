@@ -142,7 +142,7 @@ export default function AdminCommunicationsPage() {
 
                                 {/* Recipients */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Recipients
                                     </label>
                                     <select
@@ -162,7 +162,7 @@ export default function AdminCommunicationsPage() {
 
                                 {/* Subject */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Subject
                                     </label>
                                     <input
@@ -176,7 +176,7 @@ export default function AdminCommunicationsPage() {
 
                                 {/* Body */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Message
                                     </label>
                                     <textarea
@@ -232,7 +232,7 @@ export default function AdminCommunicationsPage() {
 
                                 {/* Title */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Title
                                     </label>
                                     <input
@@ -246,7 +246,7 @@ export default function AdminCommunicationsPage() {
 
                                 {/* Message */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Message
                                     </label>
                                     <textarea
@@ -260,7 +260,7 @@ export default function AdminCommunicationsPage() {
 
                                 {/* Priority */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Priority
                                     </label>
                                     <select
@@ -277,7 +277,7 @@ export default function AdminCommunicationsPage() {
 
                                 {/* Preview */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Preview
                                     </label>
                                     <div

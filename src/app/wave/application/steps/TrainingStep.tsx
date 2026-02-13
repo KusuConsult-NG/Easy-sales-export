@@ -65,7 +65,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
             <div className="space-y-6">
                 {/* Which support do you need */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Which support do you need from WAVE? *
                         <span className="text-xs font-normal text-slate-500 ml-1">(Select all that apply)</span>
                     </label>
@@ -111,7 +111,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
 
                     {/* Willing to undergo training */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Are you willing to undergo mandatory training? *
                         </label>
                         <div className="flex gap-4">
@@ -149,7 +149,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
 
                     {/* Comply with standards */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Are you willing to comply with WAVE production and quality standards? *
                         </label>
                         <div className="flex gap-4">
@@ -187,7 +187,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
 
                     {/* Participate in M&E */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Are you willing to participate in monitoring & evaluation (M&E)? *
                         </label>
                         <div className="flex gap-4">
@@ -229,7 +229,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-700 dark:text-slate-300"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

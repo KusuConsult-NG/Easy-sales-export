@@ -182,7 +182,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </h3>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Loan Amount (₦)
                                         </label>
                                         <input
@@ -197,7 +197,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Loan Purpose
                                         </label>
                                         <select
@@ -216,7 +216,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Repayment Period (Months)
                                         </label>
                                         <input
@@ -240,7 +240,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </h3>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Collateral Type
                                         </label>
                                         <input
@@ -254,7 +254,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Estimated Value (₦)
                                         </label>
                                         <input
@@ -269,7 +269,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Description
                                         </label>
                                         <textarea
@@ -294,7 +294,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                                 Business Name
                                             </label>
                                             <input
@@ -307,7 +307,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                                 Business Type
                                             </label>
                                             <input
@@ -320,7 +320,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                                 Years in Operation
                                             </label>
                                             <input
@@ -334,7 +334,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                                 Annual Revenue (₦)
                                             </label>
                                             <input
@@ -395,7 +395,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                         <button
                             type="button"
                             onClick={currentStep === 1 ? onCancel : prevStep}
-                            className="px-6 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors flex items-center gap-2"
+                            className="px-6 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors flex items-center gap-2"
                         >
                             <ChevronLeft className="w-5 h-5" />
                             {currentStep === 1 ? 'Cancel' : 'Previous'}

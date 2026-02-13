@@ -183,7 +183,7 @@ export default function QuizEditorPage() {
                                             type="text"
                                             value={opt.text}
                                             onChange={(e) => handleUpdateOption(q.id, opt.id, e.target.value)}
-                                            className="flex-1 text-slate-700 dark:text-slate-300 bg-transparent border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded px-2 py-1 focus:border-primary focus:outline-none transition-colors"
+                                            className="flex-1 text-slate-900 dark:text-white bg-transparent border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded px-2 py-1 focus:border-primary focus:outline-none transition-colors"
                                             placeholder="Option text..."
                                         />
                                         <button

@@ -65,7 +65,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
             <div className="space-y-6">
                 {/* Highest Level of Education */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Highest Level of Education *
                     </label>
                     <select
@@ -90,7 +90,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
 
                 {/* Current Occupation */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Current Occupation *
                     </label>
                     <input
@@ -110,7 +110,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
 
                 {/* Average Monthly Income */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Average Monthly Income *
                     </label>
                     <select
@@ -134,7 +134,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
 
                 {/* Currently Involved in Agriculture */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Are you currently involved in any agricultural activity? *
                     </label>
                     <div className="flex gap-4">
@@ -165,7 +165,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                 {/* If YES, specify the type */}
                 {data.involvedInAgriculture && (
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             If YES, specify the type (Select all that apply) *
                         </label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -208,7 +208,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-700 dark:text-slate-300"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

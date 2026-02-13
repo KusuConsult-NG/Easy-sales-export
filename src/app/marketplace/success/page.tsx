@@ -44,7 +44,7 @@ function SuccessContent() {
                         </Link>
                         <Link
                             href="/marketplace"
-                            className="block w-full px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2"
+                            className="block w-full px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center justify-center gap-2"
                         >
                             <Package className="w-5 h-5" />
                             Continue Shopping

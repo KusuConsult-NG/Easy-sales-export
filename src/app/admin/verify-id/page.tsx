@@ -79,7 +79,7 @@ export default function VerifyIDPage() {
                         <div>
                             <label
                                 htmlFor="qr-data"
-                                className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+                                className="block text-sm font-medium text-slate-900 dark:text-white mb-2"
                             >
                                 QR Code Data (Encrypted String)
                             </label>

@@ -177,7 +177,7 @@ export default function VendorOverviewPage() {
                                     {inventoryStats.lowStockProducts.slice(0, 3).map((product: any) => (
                                         <div key={product.id} className="flex items-center gap-2 text-xs">
                                             <AlertCircle className="w-4 h-4 text-amber-500" />
-                                            <span className="text-slate-700 dark:text-slate-300 flex-1 truncate">
+                                            <span className="text-slate-900 dark:text-white flex-1 truncate">
                                                 {product.name}
                                             </span>
                                             <span className="text-amber-600 font-semibold">

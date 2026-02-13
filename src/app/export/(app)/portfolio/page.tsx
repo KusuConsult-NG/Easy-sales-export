@@ -111,22 +111,22 @@ export default function ExportPortfolioPage() {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-slate-200 dark:border-slate-700">
-                                    <th className="text-left p-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    <th className="text-left p-4 text-sm font-semibold text-slate-900 dark:text-white">
                                         Commodity
                                     </th>
-                                    <th className="text-left p-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    <th className="text-left p-4 text-sm font-semibold text-slate-900 dark:text-white">
                                         Investment
                                     </th>
-                                    <th className="text-left p-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    <th className="text-left p-4 text-sm font-semibold text-slate-900 dark:text-white">
                                         Expected Returns
                                     </th>
-                                    <th className="text-left p-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    <th className="text-left p-4 text-sm font-semibold text-slate-900 dark:text-white">
                                         ROI
                                     </th>
-                                    <th className="text-left p-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    <th className="text-left p-4 text-sm font-semibold text-slate-900 dark:text-white">
                                         Period
                                     </th>
-                                    <th className="text-left p-4 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    <th className="text-left p-4 text-sm font-semibold text-slate-900 dark:text-white">
                                         Status
                                     </th>
                                 </tr>
@@ -142,7 +142,7 @@ export default function ExportPortfolioPage() {
                                                 {investment.commodity}
                                             </div>
                                         </td>
-                                        <td className="p-4 text-slate-700 dark:text-slate-300">
+                                        <td className="p-4 text-slate-900 dark:text-white">
                                             ₦{investment.amount.toLocaleString()}
                                         </td>
                                         <td className="p-4 text-green-600 font-medium">

@@ -108,7 +108,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Full Name */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Full Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -127,7 +127,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 {/* Phone and Email */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Phone Number <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -144,7 +144,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Email Address <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -164,7 +164,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 {/* Date of Birth and Gender */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Date of Birth <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -181,7 +181,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Gender <span className="text-red-500">*</span>
                         </label>
                         <select
@@ -203,7 +203,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
 
                 {/* Occupation */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Occupation <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -225,7 +225,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 State <span className="text-red-500">*</span>
                             </label>
                             <select
@@ -245,7 +245,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 LGA
                             </label>
                             <input
@@ -260,7 +260,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Street Address <span className="text-red-500">*</span>
                         </label>
                         <textarea
@@ -282,7 +282,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                 >
                     Back
                 </button>

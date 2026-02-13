@@ -134,7 +134,7 @@ export default function SellerOrdersPage() {
                                     onClick={() => setFilterStatus(status)}
                                     className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${filterStatus === status
                                         ? "bg-green-600 text-white"
-                                        : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                        : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600"
                                         }`}
                                 >
                                     {status === "all" ? "All" : status.replace("_", " ")}

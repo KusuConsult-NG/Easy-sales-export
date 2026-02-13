@@ -130,7 +130,7 @@ export default function MyCoursesPage() {
                                     {/* Progress Bar */}
                                     <div className="mb-4">
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                            <span className="text-sm font-semibold text-slate-900 dark:text-white">
                                                 {course.progress}% Complete
                                             </span>
                                             <span className="text-xs text-slate-500">

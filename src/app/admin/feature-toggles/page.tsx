@@ -184,7 +184,7 @@ export default function FeatureTogglesPage() {
                                                     disabled={isUpdating}
                                                     className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 ${toggle.enabled
                                                         ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
-                                                        : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                                                        : "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-600"
                                                         }`}
                                                 >
                                                     {isUpdating ? (

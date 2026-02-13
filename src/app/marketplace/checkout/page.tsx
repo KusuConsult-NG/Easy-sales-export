@@ -264,7 +264,7 @@ export default function CheckoutPage() {
                             </h2>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                         Email Address
                                     </label>
                                     <input

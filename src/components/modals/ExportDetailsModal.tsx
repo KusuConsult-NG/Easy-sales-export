@@ -50,7 +50,7 @@ export default function ExportDetailsModal({
             case "completed":
                 return "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400";
             default:
-                return "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400";
+                return "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-400";
         }
     };
 
@@ -199,7 +199,7 @@ export default function ExportDetailsModal({
                 {/* Close Button */}
                 <button
                     onClick={onClose}
-                    className="w-full px-6 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                    className="w-full px-6 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition"
                 >
                     Close
                 </button>

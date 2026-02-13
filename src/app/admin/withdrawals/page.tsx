@@ -166,7 +166,7 @@ export default function AdminWithdrawalsPage() {
                                             User ID: {withdrawal.userId}
                                         </p>
                                         {withdrawal.reason && (
-                                            <p className="text-sm text-slate-600 dark:text-slate-300 mt-2">
+                                            <p className="text-sm text-slate-600 dark:text-white mt-2">
                                                 <span className="font-semibold">Reason:</span> {withdrawal.reason}
                                             </p>
                                         )}

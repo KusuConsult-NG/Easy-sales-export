@@ -65,7 +65,7 @@ export default function CooperativeHistoryPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                    <button className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700 transition">
                         <Download className="w-4 h-4" />
                         <span>Export</span>
                     </button>
@@ -89,7 +89,7 @@ export default function CooperativeHistoryPage() {
                         <select
                             value={filterType}
                             onChange={(e) => setFilterType(e.target.value)}
-                            className="appearance-none pl-4 pr-10 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 dark:text-slate-300"
+                            className="appearance-none pl-4 pr-10 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-slate-900 dark:text-white"
                         >
                             <option value="all">All Types</option>
                             <option value="contribution">Contributions</option>
@@ -99,7 +99,7 @@ export default function CooperativeHistoryPage() {
                         </select>
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     </div>
-                    <button className="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:text-purple-600">
+                    <button className="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-white hover:text-purple-600">
                         <Calendar className="w-5 h-5" />
                     </button>
                 </div>
@@ -146,7 +146,7 @@ export default function CooperativeHistoryPage() {
                                             {t.description || "Transaction"}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <span className="capitalize px-2 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                            <span className="capitalize px-2 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-white">
                                                 {t.type.replace('_', ' ')}
                                             </span>
                                         </td>

@@ -147,7 +147,7 @@ This document serves as a record of the purchase agreement initiated through Eas
 
     const getEscrowBadge = (escrowStatus: string) => {
         const styles = {
-            pending: "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300",
+            pending: "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white",
             held: "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400",
             released: "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400",
             refunded: "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400",
@@ -216,7 +216,7 @@ This document serves as a record of the purchase agreement initiated through Eas
                 {/* Filters */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 mb-6 elevation-2">
                     <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Filter:</span>
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">Filter:</span>
                         {["all", "pending_payment", "payment_confirmed", "completed", "cancelled"].map((status) => (
                             <button
                                 key={status}
@@ -334,18 +334,18 @@ This document serves as a record of the purchase agreement initiated through Eas
                                             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
                                                 <p className="text-xs font-semibold text-blue-800 dark:text-blue-200 mb-2">Seller Information</p>
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                                                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                                    <div className="flex items-center gap-2 text-slate-900 dark:text-white">
                                                         <CheckCircle className="w-4 h-4 text-blue-600" />
                                                         <span>{purchase.sellerName}</span>
                                                     </div>
                                                     {purchase.sellerEmail && (
-                                                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                                        <div className="flex items-center gap-2 text-slate-900 dark:text-white">
                                                             <Mail className="w-4 h-4 text-blue-600" />
                                                             <span>{purchase.sellerEmail}</span>
                                                         </div>
                                                     )}
                                                     {purchase.sellerPhone && (
-                                                        <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                                        <div className="flex items-center gap-2 text-slate-900 dark:text-white">
                                                             <Phone className="w-4 h-4 text-blue-600" />
                                                             <span>{purchase.sellerPhone}</span>
                                                         </div>

@@ -79,7 +79,7 @@ export function BankAccountStep({
                 <div className="flex justify-between pt-4">
                     <button
                         onClick={onBack}
-                        className="px-6 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors font-semibold"
+                        className="px-6 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors font-semibold"
                     >
                         Back
                     </button>

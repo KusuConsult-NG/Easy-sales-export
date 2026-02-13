@@ -136,7 +136,7 @@ export default function SessionActivityTracker() {
                 {/* Content */}
                 <div className="p-6">
                     <div className="mb-6">
-                        <p className="text-slate-700 dark:text-slate-300 mb-4">
+                        <p className="text-slate-900 dark:text-white mb-4">
                             You've been inactive for a while. For your security, you'll be automatically
                             logged out soon.
                         </p>
@@ -162,7 +162,7 @@ export default function SessionActivityTracker() {
 
                         <button
                             onClick={handleLogout}
-                            className="w-full flex items-center justify-center space-x-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-medium py-3 px-4 rounded-lg transition"
+                            className="w-full flex items-center justify-center space-x-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-medium py-3 px-4 rounded-lg transition"
                         >
                             <span>Logout Now</span>
                         </button>

@@ -229,12 +229,12 @@ function PropertiesContent() {
                                     {/* Features / Details */}
                                     <div className="flex flex-wrap gap-2 mb-4">
                                         {property.soilType && (
-                                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-slate-300 rounded">
+                                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-white rounded">
                                                 {property.soilType}
                                             </span>
                                         )}
                                         {property.waterSource && (
-                                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-slate-300 rounded">
+                                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-white rounded">
                                                 {property.waterSource}
                                             </span>
                                         )}

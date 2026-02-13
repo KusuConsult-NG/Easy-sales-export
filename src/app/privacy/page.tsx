@@ -135,7 +135,7 @@ export default function PrivacyPolicyPage() {
                         <p className="text-slate-600 dark:text-slate-400 mb-4">
                             For questions about this Privacy Policy or to exercise your rights, contact us at:
                         </p>
-                        <div className="space-y-2 text-slate-700 dark:text-slate-300">
+                        <div className="space-y-2 text-slate-900 dark:text-white">
                             <p><strong>Email:</strong> <a href={`mailto:${COMPANY_INFO.contact.general.email}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.email}</a></p>
                             <p><strong>Phone:</strong> <a href={`tel:${COMPANY_INFO.contact.general.phone}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.phone}</a></p>
                         </div>

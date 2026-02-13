@@ -157,7 +157,7 @@ export default function ReviewPendingPage() {
 
                 {/* Contact Support */}
                 <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl p-6 text-center">
-                    <p className="text-slate-700 dark:text-slate-300 mb-4">
+                    <p className="text-slate-900 dark:text-white mb-4">
                         Have questions about your application?
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -170,7 +170,7 @@ export default function ReviewPendingPage() {
                         </a>
                         <a
                             href="tel:+2348012345678"
-                            className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-semibold transition-all"
+                            className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-xl font-semibold transition-all"
                         >
                             <Phone className="w-4 h-4" />
                             Call Us

@@ -271,7 +271,7 @@ export default function MySavingsPage() {
 
                                         {daysToMaturity > 0 && (
                                             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-                                                <p className="text-sm text-slate-700 dark:text-slate-300">
+                                                <p className="text-sm text-slate-900 dark:text-white">
                                                     💡 <strong>Tip:</strong> Your savings will mature in {daysToMaturity}{" "}
                                                     days. Continue contributing monthly to maximize your returns!
                                                 </p>

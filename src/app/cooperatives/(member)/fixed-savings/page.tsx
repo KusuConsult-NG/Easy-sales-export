@@ -531,7 +531,7 @@ export default function FixedSavingsPage() {
                                                     </p>
                                                 </div>
                                                 <div className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">
-                                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-400">
+                                                    <span className="text-xs font-bold text-slate-900 dark:text-slate-400">
                                                         Matured
                                                     </span>
                                                 </div>

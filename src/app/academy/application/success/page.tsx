@@ -27,7 +27,7 @@ export default function AcademyApplicationSuccessPage() {
                             <GraduationCap className="w-6 h-6 text-blue-600" />
                             What Happens Next?
                         </h2>
-                        <ol className="space-y-3 text-slate-700 dark:text-slate-300">
+                        <ol className="space-y-3 text-slate-900 dark:text-white">
                             <li className="flex items-start gap-3">
                                 <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
                                     1

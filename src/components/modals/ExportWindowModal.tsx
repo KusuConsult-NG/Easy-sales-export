@@ -62,7 +62,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
 
                 {/* Commodity Selection */}
                 <div>
-                    <label htmlFor="commodity" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="commodity" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         <Package className="w-4 h-4 inline mr-2" />
                         Commodity Type
                     </label>
@@ -82,7 +82,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
 
                 {/* Quantity */}
                 <div>
-                    <label htmlFor="quantity" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="quantity" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         Quantity (kg/tons)
                     </label>
                     <input
@@ -97,7 +97,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
 
                 {/* Amount */}
                 <div>
-                    <label htmlFor="amount" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="amount" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         <DollarSign className="w-4 h-4 inline mr-2" />
                         Amount (₦)
                     </label>
@@ -118,7 +118,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
 
                 {/* Delivery Date (Optional) */}
                 <div>
-                    <label htmlFor="deliveryDate" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="deliveryDate" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         <Calendar className="w-4 h-4 inline mr-2" />
                         Expected Delivery Date (Optional)
                     </label>
@@ -135,7 +135,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
 
                 {/* Destination */}
                 <div>
-                    <label htmlFor="destination" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="destination" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         🌍 Export Destination
                     </label>
                     <select
@@ -162,7 +162,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

@@ -128,7 +128,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
 
                         {/* Quantity Input */}
                         <div className="mb-6">
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 Quantity (kg)
                             </label>
                             <input
@@ -161,7 +161,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                             <button
                                 onClick={onClose}
                                 disabled={isSubmitting}
-                                className="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50"
+                                className="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50"
                             >
                                 Cancel
                             </button>

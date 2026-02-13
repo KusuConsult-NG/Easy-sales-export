@@ -126,7 +126,7 @@ export default function PaymentStep({ tierData, onComplete, onBack, isSubmitting
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                 >
                     Back
                 </button>

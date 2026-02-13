@@ -124,7 +124,7 @@ export default function RoleSelectionStep({ onNext, initialData }: RoleSelection
                                         key={index}
                                         className={`flex items-start gap-2 text-sm ${isSelected
                                                 ? "text-teal-800 dark:text-teal-200"
-                                                : "text-slate-700 dark:text-slate-300"
+                                                : "text-slate-900 dark:text-white"
                                             }`}
                                     >
                                         <CheckCircle

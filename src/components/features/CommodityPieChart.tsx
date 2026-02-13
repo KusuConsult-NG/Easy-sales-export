@@ -76,7 +76,7 @@ export default function CommodityPieChart() {
                                 className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: COLORS[index] }}
                             />
-                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                            <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-1">
                                 <span>{commodity.icon}</span>
                                 {commodity.name}
                             </span>

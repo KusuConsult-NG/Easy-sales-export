@@ -84,7 +84,7 @@ export default function StatusUpdateModal({
 
                 {/* Status Selection */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
                         <Package className="w-4 h-4 inline mr-2" />
                         New Status
                     </label>
@@ -124,7 +124,7 @@ export default function StatusUpdateModal({
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

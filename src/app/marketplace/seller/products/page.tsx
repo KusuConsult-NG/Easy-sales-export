@@ -118,7 +118,7 @@ export default function SellerProductsPage() {
                                     onClick={() => setFilterStatus(status)}
                                     className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors whitespace-nowrap ${filterStatus === status
                                         ? "bg-green-600 text-white"
-                                        : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                        : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600"
                                         }`}
                                 >
                                     {status === "all" ? "All" : status.replace("_", " ")}
@@ -133,25 +133,25 @@ export default function SellerProductsPage() {
                     <table className="w-full">
                         <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                             <tr>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">
                                     Product
                                 </th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">
                                     Category
                                 </th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">
                                     Price
                                 </th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">
                                     Stock
                                 </th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">
                                     Sold
                                 </th>
-                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900 dark:text-white">
                                     Status
                                 </th>
-                                <th className="px-6 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <th className="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">
                                     Actions
                                 </th>
                             </tr>
@@ -193,7 +193,7 @@ export default function SellerProductsPage() {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-slate-700 dark:text-slate-300 capitalize">
+                                            <td className="px-6 py-4 text-slate-900 dark:text-white capitalize">
                                                 {product.category}
                                             </td>
                                             <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">
@@ -207,7 +207,7 @@ export default function SellerProductsPage() {
                                                     {product.availableQuantity}{product.unit}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-slate-700 dark:text-slate-300">
+                                            <td className="px-6 py-4 text-slate-900 dark:text-white">
                                                 {product.orders || 0} units
                                             </td>
                                             <td className="px-6 py-4">

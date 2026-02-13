@@ -57,7 +57,7 @@ export default function CooperativeDirectoryPage() {
                         className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 hover:text-purple-600">
+                <button className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-white hover:text-purple-600">
                     <Filter className="w-4 h-4" />
                     <span>Filter</span>
                 </button>
@@ -118,11 +118,11 @@ export default function CooperativeDirectoryPage() {
                         </div>
 
                         <div className="flex gap-2 border-t border-slate-200 dark:border-slate-700 pt-4">
-                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-600 transition text-sm font-medium">
+                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-slate-600 dark:text-white hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-600 transition text-sm font-medium">
                                 <Mail className="w-4 h-4" />
                                 Message
                             </button>
-                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-green-50 dark:hover:bg-green-900/20 hover:text-green-600 transition text-sm font-medium">
+                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-slate-600 dark:text-white hover:bg-green-50 dark:hover:bg-green-900/20 hover:text-green-600 transition text-sm font-medium">
                                 <Phone className="w-4 h-4" />
                                 Call
                             </button>

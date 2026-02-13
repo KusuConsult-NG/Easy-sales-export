@@ -72,7 +72,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Full Name */}
                 <div className="col-span-full">
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Full Name <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -94,7 +94,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* Phone */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Phone Number <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -114,7 +114,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* Business Name (Optional) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Business Name <span className="text-slate-400">(Optional)</span>
                     </label>
                     <div className="relative">
@@ -132,7 +132,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* State */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         State <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -157,7 +157,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* LGA */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Local Government Area <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -174,7 +174,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* Address */}
                 <div className="col-span-full">
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Address <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -194,7 +194,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                 <button
                     type="button"
                     onClick={onBack}
-                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back

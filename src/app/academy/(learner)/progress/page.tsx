@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { TrendingUp, Award, Clock, Target, CheckCircle, BookOpen, Trophy, Loader2 } from "lucide-react";
-import { getUserAggregateProgressAction } from "@/app/actions/academy"; import { auth } from "@/lib/auth";
+import { getUserAggregateProgressAction } from "@/app/actions/academy";
 
 export default function ProgressPage() {
+    const { data: session } = useSession();
     const [loading, setLoading] = useState(true);
     const [userId, setUserId] = useState<string | null>(null);
     const [progressData, setProgressData] = useState({
@@ -20,14 +22,10 @@ export default function ProgressPage() {
     });
 
     useEffect(() => {
-        async function initAuth() {
-            const session = await auth();
-            if (session?.user?.id) {
-                setUserId(session.user.id);
-            }
+        if (session?.user?.id) {
+            setUserId(session.user.id);
         }
-        initAuth();
-    }, []);
+    }, [session]);
 
     useEffect(() => {
         async function loadProgress() {
@@ -205,7 +203,7 @@ export default function ProgressPage() {
                                 <h4 className="font-semibold text-slate-900 dark:text-white mb-2">
                                     Keep Learning!
                                 </h4>
-                                <p className="text-sm text-slate-700 dark:text-slate-300">
+                                <p className="text-sm text-slate-900 dark:text-white">
                                     You&apos;re making great progress! Complete lessons to unlock certificates and advance your career in agribusiness.
                                 </p>
                             </div>

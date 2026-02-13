@@ -114,7 +114,7 @@ export default function ContributePage() {
 
                         {/* Amount Input */}
                         <div className="mb-6">
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                 Amount (₦)
                             </label>
                             <div className="relative">
@@ -139,7 +139,7 @@ export default function ContributePage() {
 
                         {/* Quick Amounts */}
                         <div className="mb-6">
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                            <p className="text-sm font-medium text-slate-900 dark:text-white mb-3">
                                 Quick Select
                             </p>
                             <div className="grid grid-cols-3 gap-2">

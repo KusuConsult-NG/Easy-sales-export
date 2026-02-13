@@ -83,7 +83,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Business Name */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Business/Farm Name *
                     </label>
                     <input
@@ -101,7 +101,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* Business Type */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Business Type *
                     </label>
                     <div className="grid grid-cols-3 gap-3">
@@ -126,7 +126,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* Phone Number */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Phone Number *
                     </label>
                     <input
@@ -144,7 +144,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* State */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         State *
                     </label>
                     <select
@@ -167,7 +167,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* LGA */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Local Government Area
                     </label>
                     <input
@@ -181,7 +181,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* Address */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Business Address *
                     </label>
                     <textarea
@@ -202,7 +202,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                     Back
                 </button>

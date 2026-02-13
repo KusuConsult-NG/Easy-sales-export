@@ -180,7 +180,7 @@ export default function ExportWindowDetailPage() {
                             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
                                 About This Opportunity
                             </h2>
-                            <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
+                            <p className="text-lg text-slate-900 dark:text-white leading-relaxed">
                                 {window.description}
                             </p>
                         </div>
@@ -197,7 +197,7 @@ export default function ExportWindowDetailPage() {
                                             key={key}
                                             className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2"
                                         >
-                                            <dt className="font-semibold text-slate-700 dark:text-slate-300">{key}</dt>
+                                            <dt className="font-semibold text-slate-900 dark:text-white">{key}</dt>
                                             <dd className="text-slate-600 dark:text-slate-400">{value}</dd>
                                         </div>
                                     ))}
@@ -251,7 +251,7 @@ export default function ExportWindowDetailPage() {
                                     {window.documents.map((doc, index) => (
                                         <div
                                             key={index}
-                                            className="flex items-center gap-2 text-slate-700 dark:text-slate-300"
+                                            className="flex items-center gap-2 text-slate-900 dark:text-white"
                                         >
                                             <FileText className="w-4 h-4 text-purple-600" />
                                             {doc}
@@ -310,7 +310,7 @@ export default function ExportWindowDetailPage() {
 
                             {/* Investment Amount Input */}
                             <div className="mb-4">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Investment Amount (₦)
                                 </label>
                                 <input
@@ -359,7 +359,7 @@ export default function ExportWindowDetailPage() {
                                 </h3>
                                 <ul className="space-y-3">
                                     {window.benefits.map((benefit, index) => (
-                                        <li key={index} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                        <li key={index} className="flex items-start gap-2 text-sm text-slate-900 dark:text-white">
                                             <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
                                             {benefit}
                                         </li>

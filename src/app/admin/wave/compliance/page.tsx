@@ -235,7 +235,7 @@ export default function WAVECompliancePage() {
                                 {Object.entries(demographics.ageGroups).map(([age, count]) => (
                                     <div key={age}>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{age}</span>
+                                            <span className="text-sm font-semibold text-slate-900 dark:text-white">{age}</span>
                                             <span className="text-sm font-bold text-primary">{count}</span>
                                         </div>
                                         <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
@@ -262,7 +262,7 @@ export default function WAVECompliancePage() {
                                     .map(([state, count]) => (
                                         <div key={state}>
                                             <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{state}</span>
+                                                <span className="text-sm font-semibold text-slate-900 dark:text-white">{state}</span>
                                                 <span className="text-sm font-bold text-primary">{count}</span>
                                             </div>
                                             <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
@@ -286,7 +286,7 @@ export default function WAVECompliancePage() {
                                 {Object.entries(demographics.businessTypes).map(([type, count]) => (
                                     <div key={type}>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 capitalize">{type}</span>
+                                            <span className="text-sm font-semibold text-slate-900 dark:text-white capitalize">{type}</span>
                                             <span className="text-sm font-bold text-primary">{count}</span>
                                         </div>
                                         <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">

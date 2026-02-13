@@ -56,7 +56,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
                                 Farm Nation Terms of Service
                             </h3>
-                            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300 max-h-64 overflow-y-auto">
+                            <div className="space-y-2 text-sm text-slate-900 dark:text-white max-h-64 overflow-y-auto">
                                 <p className="font-semibold">Key Points:</p>
                                 <ul className="list-disc list-inside space-y-1 ml-2">
                                     <li>All property listings must be accurate and genuine</li>
@@ -77,7 +77,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                             onChange={() => handleCheckboxChange("termsAccepted")}
                             className="mt-1 w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-2 focus:ring-teal-500"
                         />
-                        <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-teal-600 transition-colors">
+                        <span className="text-sm text-slate-900 dark:text-white group-hover:text-teal-600 transition-colors">
                             I have read and agree to the{" "}
                             <a href="/terms" target="_blank" className="text-teal-600 hover:underline font-medium">
                                 Terms of Service
@@ -95,7 +95,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
                                 Privacy Policy
                             </h3>
-                            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                            <div className="space-y-2 text-sm text-slate-900 dark:text-white">
                                 <p>We collect and process your personal data to:</p>
                                 <ul className="list-disc list-inside space-y-1 ml-2">
                                     <li>Match you with relevant property listings</li>
@@ -117,7 +117,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                             onChange={() => handleCheckboxChange("privacyAccepted")}
                             className="mt-1 w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-2 focus:ring-teal-500"
                         />
-                        <span className="text-sm text-slate-700 dark:text-slate-300 group-hover:text-teal-600 transition-colors">
+                        <span className="text-sm text-slate-900 dark:text-white group-hover:text-teal-600 transition-colors">
                             I acknowledge the{" "}
                             <a href="/privacy" target="_blank" className="text-teal-600 hover:underline font-medium">
                                 Privacy Policy
@@ -171,7 +171,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                 <button
                     type="button"
                     onClick={onBack}
-                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back

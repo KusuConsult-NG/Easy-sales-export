@@ -88,7 +88,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Full Name */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Full Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -106,7 +106,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
 
                 {/* Relationship */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Relationship <span className="text-red-500">*</span>
                     </label>
                     <select
@@ -127,7 +127,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
 
                 {/* Phone Number */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Phone Number <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -145,7 +145,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
 
                 {/* Address */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Address <span className="text-red-500">*</span>
                     </label>
                     <textarea
@@ -166,7 +166,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                 >
                     Back
                 </button>

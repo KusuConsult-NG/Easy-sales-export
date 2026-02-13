@@ -119,10 +119,10 @@ export default function CertificatesPage() {
                             Your Certificates ({certificates.length})
                         </h2>
                         <div className="flex gap-2">
-                            <button className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                            <button className="px-4 py-2 text-sm font-medium text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
                                 Filter
                             </button>
-                            <button className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                            <button className="px-4 py-2 text-sm font-medium text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
                                 Sort
                             </button>
                         </div>
@@ -168,7 +168,7 @@ export default function CertificatesPage() {
                                         <Download className="w-4 h-4" />
                                         Download PDF
                                     </button>
-                                    <button className="px-4 py-2.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg transition-colors">
+                                    <button className="px-4 py-2.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white rounded-lg transition-colors">
                                         <Share2 className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -208,7 +208,7 @@ export default function CertificatesPage() {
                         <h4 className="font-semibold text-slate-900 dark:text-white mb-2">
                             How to Earn Certificates
                         </h4>
-                        <ul className="space-y-1.5 text-sm text-slate-700 dark:text-slate-300">
+                        <ul className="space-y-1.5 text-sm text-slate-900 dark:text-white">
                             <li className="flex items-start gap-2">
                                 <span className="text-emerald-700 dark:text-emerald-500">•</span>
                                 <span>Complete training courses and assessments</span>

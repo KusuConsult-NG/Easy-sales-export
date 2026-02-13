@@ -258,7 +258,7 @@ export default function AdminUsersPage() {
             vendor: "bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400",
             member: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400",
         };
-        return colors[role] || "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400";
+        return colors[role] || "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-400";
     };
 
     const toggleSelectUser = (userId: string) => {
@@ -410,7 +410,7 @@ export default function AdminUsersPage() {
                         </button>
                         <button
                             onClick={() => setSelectedUsers(new Set())}
-                            className="flex-1 sm:flex-none px-4 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-semibold transition touch-manipulation"
+                            className="flex-1 sm:flex-none px-4 py-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-lg font-semibold transition touch-manipulation"
                         >
                             Cancel
                         </button>
@@ -495,7 +495,7 @@ export default function AdminUsersPage() {
                             onChange={toggleSelectAll}
                             className="w-5 h-5 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-600"
                         />
-                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
                             Select All ({users.length})
                         </span>
                     </label>
@@ -628,7 +628,7 @@ export default function AdminUsersPage() {
                                                 defaultChecked={selectedUserForModal.roles?.includes(role)}
                                                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600"
                                             />
-                                            <span className="capitalize text-slate-700 dark:text-slate-300">{role.replace("_", " ")}</span>
+                                            <span className="capitalize text-slate-900 dark:text-white">{role.replace("_", " ")}</span>
                                         </label>
                                     ))}
                                 </div>

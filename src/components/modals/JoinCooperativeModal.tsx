@@ -155,22 +155,22 @@ export default function JoinCooperativeModal({
                     <div className="space-y-2 text-sm">
                         <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-slate-700 dark:text-slate-300">Earn interest on savings</span>
+                            <span className="text-slate-900 dark:text-white">Earn interest on savings</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-slate-700 dark:text-slate-300">Access to low-interest loans</span>
+                            <span className="text-slate-900 dark:text-white">Access to low-interest loans</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-slate-700 dark:text-slate-300">Share profits from collective sales</span>
+                            <span className="text-slate-900 dark:text-white">Share profits from collective sales</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Initial Contribution */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         <DollarSign className="w-4 h-4 inline mr-2" />
                         Initial Contribution (Optional)
                     </label>
@@ -189,7 +189,7 @@ export default function JoinCooperativeModal({
 
                 {/* Monthly Target */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         Monthly Savings Target (NGN) *
                     </label>
                     <input
@@ -214,7 +214,7 @@ export default function JoinCooperativeModal({
                         required
                         className="mt-1 text-primary focus:ring-primary"
                     />
-                    <label className="text-sm text-slate-700 dark:text-slate-300">
+                    <label className="text-sm text-slate-900 dark:text-white">
                         I agree to the cooperative terms and conditions, including the savings requirements and profit-sharing structure
                     </label>
                 </div>
@@ -225,7 +225,7 @@ export default function JoinCooperativeModal({
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

@@ -145,7 +145,7 @@ function MarketplaceRegisterContent() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             {/* Full Name */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Full Name <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
@@ -166,7 +166,7 @@ function MarketplaceRegisterContent() {
 
                             {/* Email */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Email Address <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
@@ -187,7 +187,7 @@ function MarketplaceRegisterContent() {
 
                             {/* Phone */}
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Phone Number
                                 </label>
                                 <div className="relative">
@@ -207,7 +207,7 @@ function MarketplaceRegisterContent() {
 
                             {/* Gender */}
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Gender <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
@@ -229,7 +229,7 @@ function MarketplaceRegisterContent() {
 
                             {/* Password */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Password <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
@@ -268,7 +268,7 @@ function MarketplaceRegisterContent() {
 
                             {/* Confirm Password */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Confirm Password <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">

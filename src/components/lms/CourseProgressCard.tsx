@@ -83,7 +83,7 @@ export default function CourseProgressCard({ courseId, courseTitle, totalLessons
             {/* Progress Bar */}
             <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <span className="text-sm font-medium text-slate-900 dark:text-white">
                         Progress
                     </span>
                     <span className="text-sm font-bold text-blue-600 dark:text-blue-400">

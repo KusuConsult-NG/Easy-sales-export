@@ -83,7 +83,7 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
             {/* Progress Bar */}
             <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <span className="text-sm font-medium text-slate-900 dark:text-white">
                         Payment Progress
                     </span>
                     <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
@@ -118,7 +118,7 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
                         paid: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800",
                         overdue: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
                         partial: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
-                        pending: "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600",
+                        pending: "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white border-slate-200 dark:border-slate-600",
                     };
 
                     return (

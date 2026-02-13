@@ -65,7 +65,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
             </div>
 
             <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
                     Select Learning Paths (Choose at least one) *
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -100,7 +100,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
             </div>
 
             <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                     Specific Topics of Interest
                 </label>
                 <div className="relative">
@@ -120,7 +120,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
             </div>
 
             <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                     Learning Goals *
                 </label>
                 <div className="relative">

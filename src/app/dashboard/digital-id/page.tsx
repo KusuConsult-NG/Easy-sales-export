@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth } from "@/lib/auth";
+import { useSession } from "next-auth/react";
 import { generateDigitalIDCard, formatMemberNumber, type DigitalIDCard as DigitalIDCardType } from "@/lib/digital-id";
 import DigitalIDCard from "@/components/DigitalIDCard";
 import { CreditCard, Loader2 } from "lucide-react";
 
 export default function DigitalIDPage() {
+    const { data: session, status } = useSession();
     const [loading, setLoading] = useState(true);
     const [idCard, setIdCard] = useState<DigitalIDCardType | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -14,9 +15,11 @@ export default function DigitalIDPage() {
     useEffect(() => {
         async function loadDigitalID() {
             try {
-                const session = await auth();
+                if (status === "loading") return;
+
                 if (!session?.user?.id) {
                     setError("User not authenticated");
+                    setLoading(false);
                     return;
                 }
 
@@ -56,7 +59,7 @@ export default function DigitalIDPage() {
         }
 
         loadDigitalID();
-    }, []);
+    }, [session, status]);
 
     if (loading) {
         return (

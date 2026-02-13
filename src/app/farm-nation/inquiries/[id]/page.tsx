@@ -157,7 +157,7 @@ export default function InquiryDetailsPage() {
                                 <MessageSquare className="w-5 h-5 text-slate-500" />
                                 Message
                             </div>
-                            <p className="text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed">
+                            <p className="text-slate-600 dark:text-white whitespace-pre-line leading-relaxed">
                                 {inquiry.message}
                             </p>
                         </div>

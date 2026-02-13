@@ -128,7 +128,7 @@ export default function HubPage() {
                                 As a strategic implementing partner in national and private agricultural initiatives, including the <strong className="text-slate-900 dark:text-white">Women Agro Value Expansion (WAVE) Program</strong>, Easy Sales Export plays a critical role in empowering producers and unlocking large-scale export opportunities.
                             </p>
                             <div className="bg-emerald-50 dark:bg-emerald-900/20 border-l-4 border-emerald-600 p-6 mb-8 rounded-r-xl">
-                                <p className="text-base italic text-slate-700 dark:text-slate-300 mb-3">
+                                <p className="text-base italic text-slate-900 dark:text-white mb-3">
                                     We don't just export products.
                                 </p>
                                 <p className="text-base font-semibold text-emerald-800 dark:text-emerald-300">

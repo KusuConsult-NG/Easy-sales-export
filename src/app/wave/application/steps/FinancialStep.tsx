@@ -56,7 +56,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             <div className="space-y-6">
                 {/* Do you have a bank account? */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Do you have a bank account? *
                     </label>
                     <div className="flex gap-4">
@@ -88,7 +88,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                 {data.hasBankAccount && (
                     <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-6">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 Bank Name *
                             </label>
                             <input
@@ -107,7 +107,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 Account Number *
                             </label>
                             <input
@@ -127,7 +127,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 BVN (Optional but recommended)
                             </label>
                             <input
@@ -144,7 +144,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
 
                 {/* Cooperative Membership */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Are you currently a member of any cooperative? *
                     </label>
                     <div className="flex gap-4">
@@ -175,7 +175,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                 {/* If YES, Cooperative Name */}
                 {data.isMemberOfCooperative && (
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             If YES, Cooperative Name *
                         </label>
                         <input
@@ -196,7 +196,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
 
                 {/* Willing to join EASY SALES cooperative */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Are you willing to join a EASY SALES-registered cooperative? *
                     </label>
                     <div className="flex gap-4">
@@ -229,7 +229,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-700 dark:text-slate-300"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

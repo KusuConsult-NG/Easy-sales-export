@@ -207,7 +207,7 @@ export default function InvoiceGenerator({
 
     const buttonClass = buttonVariant === 'primary'
         ? 'bg-primary hover:bg-primary/90 text-white'
-        : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200';
+        : 'bg-white hover:bg-slate-50 text-slate-900 border border-slate-200';
 
     return (
         <button

@@ -60,7 +60,7 @@ export default function OnboardingGuide({
                             </div>
 
                             {/* Description */}
-                            <p className="text-slate-600 dark:text-slate-300 mb-8 text-lg">
+                            <p className="text-slate-600 dark:text-white mb-8 text-lg">
                                 {description}
                             </p>
 

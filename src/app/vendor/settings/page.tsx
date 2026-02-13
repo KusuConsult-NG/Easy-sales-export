@@ -214,7 +214,7 @@ export default function VendorSettingsPage() {
                         {activeTab === "profile" && (
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Store Name *
                                     </label>
                                     <input
@@ -227,7 +227,7 @@ export default function VendorSettingsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Description
                                     </label>
                                     <textarea
@@ -241,7 +241,7 @@ export default function VendorSettingsPage() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Category *
                                         </label>
                                         <select
@@ -259,7 +259,7 @@ export default function VendorSettingsPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Contact Email *
                                         </label>
                                         <input
@@ -273,7 +273,7 @@ export default function VendorSettingsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Phone Number
                                     </label>
                                     <input
@@ -300,7 +300,7 @@ export default function VendorSettingsPage() {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Bank Name *
                                         </label>
                                         <input
@@ -313,7 +313,7 @@ export default function VendorSettingsPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Account Number *
                                         </label>
                                         <input
@@ -327,7 +327,7 @@ export default function VendorSettingsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Account Name *
                                     </label>
                                     <input
@@ -341,7 +341,7 @@ export default function VendorSettingsPage() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Payment Schedule
                                         </label>
                                         <select
@@ -355,7 +355,7 @@ export default function VendorSettingsPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                             Min Payout Threshold (₦)
                                         </label>
                                         <input
@@ -368,7 +368,7 @@ export default function VendorSettingsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Tax ID (Optional)
                                     </label>
                                     <input
@@ -438,7 +438,7 @@ export default function VendorSettingsPage() {
                         {activeTab === "shipping" && (
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Processing Time (days)
                                     </label>
                                     <input
@@ -452,7 +452,7 @@ export default function VendorSettingsPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Return Policy
                                     </label>
                                     <textarea

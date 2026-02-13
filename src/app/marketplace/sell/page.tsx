@@ -259,7 +259,7 @@ export default function SellerDashboardPage() {
                                             ? "bg-green-100 text-green-700"
                                             : product.availableQuantity === 0
                                                 ? "bg-red-100 text-red-700"
-                                                : "bg-slate-100 text-slate-700"
+                                                : "bg-slate-100 text-slate-900"
                                             }`}>
                                             {product.availableQuantity === 0 ? "Sold Out" : product.status}
                                         </span>
@@ -314,7 +314,7 @@ export default function SellerDashboardPage() {
                                         </button>
                                         <button
                                             onClick={() => router.push(`/marketplace/sell/edit/${product.id}`)}
-                                            className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition"
+                                            className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg transition"
                                         >
                                             <Edit className="w-4 h-4" />
                                         </button>

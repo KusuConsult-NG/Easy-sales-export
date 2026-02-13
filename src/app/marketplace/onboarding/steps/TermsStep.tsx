@@ -72,7 +72,7 @@ export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalS
                         </h3>
                         <ul className="space-y-2">
                             {section.points.map((point, pointIndex) => (
-                                <li key={pointIndex} className="flex items-start gap-3 text-slate-700 dark:text-slate-300">
+                                <li key={pointIndex} className="flex items-start gap-3 text-slate-900 dark:text-white">
                                     <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                                     <span>{point}</span>
                                 </li>
@@ -138,7 +138,7 @@ export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalS
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                     Back
                 </button>

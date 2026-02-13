@@ -59,7 +59,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Highest Education Level *
                     </label>
                     <div className="relative">
@@ -84,7 +84,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Field of Study
                     </label>
                     <div className="relative">
@@ -104,7 +104,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Years of Experience in Agriculture *
                     </label>
                     <div className="relative">
@@ -129,7 +129,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Current Role *
                     </label>
                     <div className="relative">

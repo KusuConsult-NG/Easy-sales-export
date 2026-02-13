@@ -262,7 +262,7 @@ export default function FarmNationMapPage() {
                         onClick={() => setViewMode("map")}
                         className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${viewMode === "map"
                                 ? "bg-primary text-white"
-                                : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                : "bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
                             }`}
                     >
                         <MapIcon className="w-4 h-4" />
@@ -272,7 +272,7 @@ export default function FarmNationMapPage() {
                         onClick={() => setViewMode("grid")}
                         className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${viewMode === "grid"
                                 ? "bg-primary text-white"
-                                : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                : "bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
                             }`}
                     >
                         <Grid className="w-4 h-4" />

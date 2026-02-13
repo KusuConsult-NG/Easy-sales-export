@@ -177,7 +177,7 @@ export default function AdminLandVerificationPage() {
                             onClick={() => setFilterStatus("all")}
                             className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "all"
                                     ? "bg-primary text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                                 } `}
                         >
                             All
@@ -186,7 +186,7 @@ export default function AdminLandVerificationPage() {
                             onClick={() => setFilterStatus("pending")}
                             className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "pending"
                                     ? "bg-yellow-600 text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                                 } `}
                         >
                             Pending ({stats.pending})
@@ -195,7 +195,7 @@ export default function AdminLandVerificationPage() {
                             onClick={() => setFilterStatus("verified")}
                             className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "verified"
                                     ? "bg-green-600 text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                                 } `}
                         >
                             Verified ({stats.verified})
@@ -204,7 +204,7 @@ export default function AdminLandVerificationPage() {
                             onClick={() => setFilterStatus("rejected")}
                             className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "rejected"
                                     ? "bg-red-600 text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                                 } `}
                         >
                             Rejected ({stats.rejected})

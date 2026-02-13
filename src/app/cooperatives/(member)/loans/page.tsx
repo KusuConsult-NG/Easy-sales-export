@@ -446,7 +446,7 @@ function LoanApplicationModal({
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                                className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
                             >
                                 <ArrowLeft className="w-6 h-6 rotate-180" />
                             </button>
@@ -463,7 +463,7 @@ function LoanApplicationModal({
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">
                                     Loan Amount (₦)
                                 </label>
                                 <input
@@ -481,7 +481,7 @@ function LoanApplicationModal({
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">
                                     Purpose of Loan
                                 </label>
                                 <textarea

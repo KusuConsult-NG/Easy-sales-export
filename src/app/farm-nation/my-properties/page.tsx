@@ -129,7 +129,7 @@ export default function MyPropertiesPage() {
                 {/* Filters */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 mb-6 elevation-2">
                     <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Filter:</span>
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">Filter:</span>
                         {["all", "available", "pending", "sold", "leased"].map((status) => (
                             <button
                                 key={status}
@@ -278,7 +278,7 @@ export default function MyPropertiesPage() {
                                         </button>
                                         <button
                                             onClick={() => router.push(`/farm-nation/edit-property/${property.id}`)}
-                                            className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition"
+                                            className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg transition"
                                             title="Edit Property"
                                         >
                                             <Edit className="w-4 h-4" />

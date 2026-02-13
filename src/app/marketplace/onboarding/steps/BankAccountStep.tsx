@@ -74,7 +74,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
                     <h4 className="font-bold text-slate-900 dark:text-white mb-3">
                         Payment Schedule
                     </h4>
-                    <div className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+                    <div className="space-y-3 text-sm text-slate-900 dark:text-white">
                         <div className="flex justify-between items-center">
                             <span>Payment frequency</span>
                             <span className="font-semibold">Per completed order</span>
@@ -119,7 +119,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                     Back
                 </button>

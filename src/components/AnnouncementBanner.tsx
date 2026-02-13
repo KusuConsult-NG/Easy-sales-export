@@ -81,7 +81,7 @@ export default function AnnouncementBanner() {
                                 <h3 className="font-semibold text-slate-900 dark:text-white">
                                     {announcement.title}
                                 </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                                <p className="text-sm text-slate-600 dark:text-white mt-1">
                                     {announcement.content}
                                 </p>
                             </div>

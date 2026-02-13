@@ -56,7 +56,7 @@ export function StatCard({
                         {value}
                     </h3>
                     {subtitle && (
-                        <p className="text-xs text-slate-600 dark:text-slate-300">
+                        <p className="text-xs text-slate-600 dark:text-white">
                             {subtitle}
                         </p>
                     )}

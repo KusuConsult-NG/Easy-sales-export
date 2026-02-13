@@ -128,7 +128,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
                     {/* Property Types */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
                             What type of properties are you interested in? <span className="text-red-500">*</span>
                         </label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -139,7 +139,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                     onClick={() => togglePropertyType(type)}
                                     className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${formData.propertyTypes.includes(type)
                                             ? "border-teal-600 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-100"
-                                            : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-teal-300"
+                                            : "border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white hover:border-teal-300"
                                         }`}
                                 >
                                     {type}
@@ -153,7 +153,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
                     {/* Budget Range */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Budget Range <span className="text-red-500">*</span>
                         </label>
                         <select
@@ -176,7 +176,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
                     {/* Preferred Size */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Preferred Property Size <span className="text-slate-400">(Optional)</span>
                         </label>
                         <select
@@ -204,7 +204,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
                     {/* Listing Types */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
                             What type of properties do you want to list? <span className="text-red-500">*</span>
                         </label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -215,7 +215,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                     onClick={() => toggleListingType(type)}
                                     className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${formData.listingTypes.includes(type)
                                             ? "border-teal-600 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-100"
-                                            : "border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-teal-300"
+                                            : "border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white hover:border-teal-300"
                                         }`}
                                 >
                                     {type}
@@ -229,7 +229,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
                     {/* Total Acreage */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Total Acreage Available <span className="text-slate-400">(Optional)</span>
                         </label>
                         <select
@@ -257,7 +257,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                 }
                                 className="w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-2 focus:ring-teal-500"
                             />
-                            <span className="text-sm text-slate-700 dark:text-slate-300">
+                            <span className="text-sm text-slate-900 dark:text-white">
                                 I have properties ready to list now
                             </span>
                         </label>
@@ -269,7 +269,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                 <button
                     type="button"
                     onClick={onBack}
-                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back

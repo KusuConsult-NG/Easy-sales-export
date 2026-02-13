@@ -83,7 +83,7 @@ export default function ContributionModal({
 
                 {/* Contribution Type Selection */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         Contribution Type
                     </label>
                     <div className="grid grid-cols-2 gap-3">
@@ -92,7 +92,7 @@ export default function ContributionModal({
                             onClick={() => setContributionType("savings")}
                             className={`px-4 py-3 rounded-xl border-2 font-semibold transition ${contributionType === "savings"
                                 ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400"
-                                : "border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+                                : "border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
                                 }`}
                         >
                             <TrendingUp className="w-5 h-5 mx-auto mb-1" />
@@ -104,7 +104,7 @@ export default function ContributionModal({
                             disabled={loanBalance === 0}
                             className={`px-4 py-3 rounded-xl border-2 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${contributionType === "loan_repayment"
                                 ? "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400"
-                                : "border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
+                                : "border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
                                 }`}
                         >
                             <TrendingDown className="w-5 h-5 mx-auto mb-1" />
@@ -116,7 +116,7 @@ export default function ContributionModal({
 
                 {/* Amount Input */}
                 <div>
-                    <label htmlFor="amount" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label htmlFor="amount" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         <DollarSign className="w-4 h-4 inline mr-2" />
                         Amount (₦)
                     </label>
@@ -144,7 +144,7 @@ export default function ContributionModal({
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

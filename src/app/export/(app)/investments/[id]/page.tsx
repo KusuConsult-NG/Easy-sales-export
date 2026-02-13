@@ -291,7 +291,7 @@ export default function InvestmentDetailPage() {
                             </h2>
                             <div className="mb-4">
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    <span className="text-sm font-medium text-slate-900 dark:text-white">
                                         Overall Progress
                                     </span>
                                     <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
@@ -383,7 +383,7 @@ export default function InvestmentDetailPage() {
                                             className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-300 dark:hover:border-purple-700 transition text-left"
                                         >
                                             <FileText className="w-5 h-5 text-purple-600 shrink-0" />
-                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                            <span className="text-sm font-medium text-slate-900 dark:text-white">
                                                 {doc}
                                             </span>
                                         </button>

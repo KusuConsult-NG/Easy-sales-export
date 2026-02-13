@@ -241,7 +241,7 @@ export default function LoanProductsPage() {
                                     <span className="text-slate-600 dark:text-slate-400">Status</span>
                                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${product.isActive
                                         ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                        : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-400"
+                                        : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-400"
                                         }`}>
                                         {product.isActive ? "Active" : "Inactive"}
                                     </span>

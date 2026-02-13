@@ -66,7 +66,7 @@ export default function MarketplaceRejectedPage() {
                             You may reapply after addressing the issues mentioned in your rejection email.
                             Please check your inbox for detailed feedback on your application.
                         </p>
-                        <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                        <div className="space-y-2 text-sm text-slate-900 dark:text-white">
                             <div className="flex items-center gap-2">
                                 <Mail className="w-4 h-4 text-slate-500" />
                                 <span>Check your email for specific feedback</span>

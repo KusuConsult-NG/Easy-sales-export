@@ -97,7 +97,7 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
                         </div>
                     </div>
 
-                    <p className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
+                    <p className="text-lg text-slate-600 dark:text-white leading-relaxed">
                         {step.description}
                     </p>
                 </div>

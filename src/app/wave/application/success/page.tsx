@@ -159,23 +159,23 @@ export default function ApplicationSuccessPage() {
                             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
                                 Ready for the Next Step?
                             </h2>
-                            <p className="text-slate-700 dark:text-slate-300 mb-4">
+                            <p className="text-slate-900 dark:text-white mb-4">
                                 As a WAVE participant, you're eligible to join our Cooperative program! Get access to:
                             </p>
                             <ul className="space-y-2 mb-6">
-                                <li className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                <li className="flex items-center gap-2 text-slate-900 dark:text-white">
                                     <CheckCircle className="w-5 h-5 text-blue-600" />
                                     Cooperative savings and loan products
                                 </li>
-                                <li className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                <li className="flex items-center gap-2 text-slate-900 dark:text-white">
                                     <CheckCircle className="w-5 h-5 text-blue-600" />
                                     Access to member dividends and shares
                                 </li>
-                                <li className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                <li className="flex items-center gap-2 text-slate-900 dark:text-white">
                                     <CheckCircle className="w-5 h-5 text-blue-600" />
                                     Financial literacy training and support
                                 </li>
-                                <li className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                <li className="flex items-center gap-2 text-slate-900 dark:text-white">
                                     <CheckCircle className="w-5 h-5 text-blue-600" />
                                     Community of women entrepreneurs
                                 </li>
@@ -195,13 +195,13 @@ export default function ApplicationSuccessPage() {
                 <div className="flex flex-col sm:flex-row gap-4">
                     <Link
                         href="/wave"
-                        className="flex-1 flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-xl font-semibold transition-all"
+                        className="flex-1 flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white px-6 py-3 rounded-xl font-semibold transition-all"
                     >
                         Back to WAVE Home
                     </Link>
                     <Link
                         href="/wave/application/review-pending"
-                        className="flex-1 flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 px-6 py-3 rounded-xl font-semibold transition-all"
+                        className="flex-1 flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white px-6 py-3 rounded-xl font-semibold transition-all"
                     >
                         <Calendar className="w-4 h-4" />
                         Check Application Status

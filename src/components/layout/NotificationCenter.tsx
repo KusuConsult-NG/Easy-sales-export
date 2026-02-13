@@ -156,13 +156,13 @@ export default function NotificationCenter() {
                     >
                         {unreadCount > 0 ? (
                             <>
-                                <BellDot className="w-6 h-6 text-slate-700 dark:text-slate-300" />
+                                <BellDot className="w-6 h-6 text-slate-900 dark:text-white" />
                                 <span className="absolute top-0 right-0 w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
                                     {unreadCount > 99 ? '99+' : unreadCount}
                                 </span>
                             </>
                         ) : (
-                            <Bell className="w-6 h-6 text-slate-700 dark:text-slate-300" />
+                            <Bell className="w-6 h-6 text-slate-900 dark:text-white" />
                         )}
                     </Menu.Button>
 

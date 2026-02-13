@@ -483,7 +483,7 @@ export default function PropertyDetailsPage() {
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowUpgradeModal(false)}
-                                className="flex-1 px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                className="flex-1 px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition"
                             >
                                 Cancel
                             </button>

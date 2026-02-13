@@ -68,7 +68,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             <div className="space-y-6">
                 {/* National Identification Number (NIN) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         National Identification Number (NIN) 🔒 *
                     </label>
                     <input
@@ -89,7 +89,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                 {/* Voter's Card Number (PVC) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Voter's Card Number (PVC) *
                     </label>
                     <input
@@ -110,7 +110,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 {/* Polling Unit & Ward */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Polling Unit *
                         </label>
                         <input
@@ -129,7 +129,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Ward *
                         </label>
                         <input
@@ -150,7 +150,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                 {/* Year of Voter Registration */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Year of Voter Registration *
                     </label>
                     <input
@@ -171,7 +171,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                 {/* Voted in Last Election */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Have you voted in the last general election? *
                     </label>
                     <div className="flex gap-4">
@@ -204,7 +204,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-700 dark:text-slate-300"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

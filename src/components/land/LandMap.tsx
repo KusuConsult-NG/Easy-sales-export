@@ -153,7 +153,7 @@ export function LandMap({
 
                                     {/* Acreage */}
                                     <div>
-                                        <p className="text-slate-700">
+                                        <p className="text-slate-900">
                                             <span className="font-semibold">{listing.acreage}</span> acres
                                         </p>
                                     </div>

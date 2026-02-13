@@ -145,7 +145,7 @@ export default function ContentApprovalPage() {
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                 Content Type
                             </label>
                             <select

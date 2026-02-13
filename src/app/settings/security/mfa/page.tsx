@@ -238,7 +238,7 @@ export default function MFASetupPage() {
                         </div>
 
                         <div className="mb-6">
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 Enter 6-digit code
                             </label>
                             <input
@@ -286,7 +286,7 @@ export default function MFASetupPage() {
                                     <div className="bg-white dark:bg-slate-800 rounded-lg p-3 mb-3">
                                         <div className="grid grid-cols-2 gap-2 font-mono text-sm">
                                             {recoveryCodes.map((code, i) => (
-                                                <div key={i} className="text-slate-700 dark:text-slate-300">
+                                                <div key={i} className="text-slate-900 dark:text-white">
                                                     {code}
                                                 </div>
                                             ))}

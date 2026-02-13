@@ -114,7 +114,7 @@ export default function CooperativeSidebar({ user }: CooperativeSidebarProps) {
                                 onClick={() => setMobileMenuOpen(false)}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
                                     ? "bg-purple-900 text-white shadow-lg shadow-purple-900/30"
-                                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                    : "text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
                                     }`}
                             >
                                 <Icon className="w-5 h-5" />

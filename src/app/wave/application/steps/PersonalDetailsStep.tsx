@@ -90,7 +90,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* Name Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Surname (as on NIN) *
                         </label>
                         <input
@@ -109,7 +109,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             First Name (as on NIN) *
                         </label>
                         <input
@@ -128,7 +128,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Other Names
                         </label>
                         <input
@@ -144,7 +144,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* Date of Birth & Age */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Date of Birth *
                         </label>
                         <input
@@ -162,7 +162,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Age
                         </label>
                         <input
@@ -178,7 +178,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* Contact Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Phone Number (Primary) *
                         </label>
                         <input
@@ -197,7 +197,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Alternative Phone Number
                         </label>
                         <input
@@ -212,7 +212,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
 
                 {/* Email Address */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Email Address (if available)
                     </label>
                     <input
@@ -226,7 +226,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
 
                 {/* Residential Address */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Residential Address *
                     </label>
                     <textarea
@@ -247,7 +247,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* State of Origin & LGA */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             State of Origin *
                         </label>
                         <select
@@ -271,7 +271,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Local Government Area (LGA) *
                         </label>
                         <input
@@ -293,7 +293,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* State of Residence & LGA */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             State of Residence *
                         </label>
                         <select
@@ -317,7 +317,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                             Local Government of Residence *
                         </label>
                         <input
@@ -338,7 +338,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
 
                 {/* Marital Status */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Marital Status *
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -382,7 +382,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </h3>
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 Next of Kin Name *
                             </label>
                             <input
@@ -402,7 +402,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Next of Kin Phone Number *
                                 </label>
                                 <input
@@ -421,7 +421,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                     Relationship with Next of Kin *
                                 </label>
                                 <input

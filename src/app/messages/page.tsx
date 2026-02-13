@@ -226,8 +226,8 @@ export default function MessagesPage() {
                 {!selectedConv ? (
                     <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
                         <div className="text-center">
-                            <MessageSquare className="w-20 h-20 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
-                            <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <MessageSquare className="w-20 h-20 mx-auto text-slate-300 dark:text-slate-900 mb-4" />
+                            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
                                 Select a conversation
                             </h3>
                             <p className="text-slate-500 dark:text-slate-400">

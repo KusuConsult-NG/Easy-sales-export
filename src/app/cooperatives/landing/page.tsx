@@ -279,7 +279,7 @@ export default function CooperativeLandingPage() {
                     <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
                         Easy Sales Cooperative
                     </h1>
-                    <h2 className="text-2xl md:text-4xl font-bold text-slate-700 mb-8">
+                    <h2 className="text-2xl md:text-4xl font-bold text-slate-900 mb-8">
                         Where Access Turns Into Income <br />
                         <span className="text-purple-600">and Structure Creates Wealth</span>
                     </h2>
@@ -301,7 +301,7 @@ export default function CooperativeLandingPage() {
                         <h3 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
                             Congratulations.
                         </h3>
-                        <div className="prose prose-lg max-w-none text-slate-700">
+                        <div className="prose prose-lg max-w-none text-slate-900">
                             <p className="text-xl mb-4">
                                 If you are here, it means you already understand one truth:
                             </p>
@@ -334,7 +334,7 @@ export default function CooperativeLandingPage() {
                                     className="bg-white border-2 border-purple-200 rounded-2xl p-6 text-center hover:shadow-xl transition"
                                 >
                                     <Icon className="w-10 h-10 text-purple-600 mx-auto mb-3" />
-                                    <p className="text-sm font-semibold text-slate-700">{stat.label}</p>
+                                    <p className="text-sm font-semibold text-slate-900">{stat.label}</p>
                                 </div>
                             );
                         })}
@@ -363,11 +363,11 @@ export default function CooperativeLandingPage() {
                     </div>
 
                     <div className="prose prose-lg max-w-none mb-12">
-                        <p className="text-xl text-slate-700 mb-6">
+                        <p className="text-xl text-slate-900 mb-6">
                             Across Nigeria today, millions are registering for empowerment programs. But only a fraction will be successful.
                         </p>
                         <p className="text-2xl font-bold text-purple-600 mb-6">Why?</p>
-                        <p className="text-lg text-slate-700">
+                        <p className="text-lg text-slate-900">
                             Because programs select people who are already <strong>structured</strong>, <strong>visible</strong>,{' '}
                             <strong>organized</strong>, and <strong>aligned with implementation partners</strong>.
                         </p>
@@ -380,7 +380,7 @@ export default function CooperativeLandingPage() {
                     <div className="grid md:grid-cols-2 gap-8 mb-12">
                         <div className="bg-white rounded-2xl p-8 shadow-lg">
                             <h4 className="text-2xl font-bold text-slate-900 mb-4">Our Mission</h4>
-                            <p className="text-slate-700 mb-4">We are the economic gateway that:</p>
+                            <p className="text-slate-900 mb-4">We are the economic gateway that:</p>
                             <ul className="space-y-2">
                                 {[
                                     'Organizes serious Nigerians',
@@ -390,7 +390,7 @@ export default function CooperativeLandingPage() {
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex items-start gap-2">
                                         <CheckCircle2 className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
-                                        <span className="text-slate-700">{item}</span>
+                                        <span className="text-slate-900">{item}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -398,10 +398,10 @@ export default function CooperativeLandingPage() {
 
                         <div className="bg-white rounded-2xl p-8 shadow-lg">
                             <h4 className="text-2xl font-bold text-slate-900 mb-4">What Makes Us Different</h4>
-                            <p className="text-slate-700 mb-4">
+                            <p className="text-slate-900 mb-4">
                                 This is <strong className="text-purple-600">not a traditional Nigerian cooperative</strong>.
                             </p>
-                            <p className="text-slate-700">
+                            <p className="text-slate-900">
                                 We offer the core benefits of strong cooperatives worldwide, but we go <strong className="text-purple-600">far beyond</strong> what most cooperatives in Nigeria are doing.
                             </p>
                         </div>
@@ -465,7 +465,7 @@ export default function CooperativeLandingPage() {
                                     {item.step}
                                 </div>
                                 <h4 className="text-2xl font-bold text-slate-900 mb-3 mt-2">{item.title}</h4>
-                                <p className="text-slate-700">{item.description}</p>
+                                <p className="text-slate-900">{item.description}</p>
                             </div>
                         ))}
                     </div>
@@ -518,7 +518,7 @@ export default function CooperativeLandingPage() {
                     {/* Warning Box */}
                     <div className="bg-yellow-50 border-l-4 border-yellow-500 rounded-xl p-8 mb-12">
                         <h4 className="text-2xl font-bold text-slate-900 mb-4">⚠️ A Word of Warning (Please Read Carefully)</h4>
-                        <p className="text-lg text-slate-700 mb-4">
+                        <p className="text-lg text-slate-900 mb-4">
                             Every major opportunity in Nigeria follows the same pattern:
                         </p>
                         <ul className="space-y-2 mb-6">
@@ -527,7 +527,7 @@ export default function CooperativeLandingPage() {
                                 'Latecomers complain',
                                 'Spectators argue online',
                             ].map((item, idx) => (
-                                <li key={idx} className="flex items-center gap-2 text-slate-700">
+                                <li key={idx} className="flex items-center gap-2 text-slate-900">
                                     <div className="w-2 h-2 bg-yellow-500 rounded-full" />
                                     <span>{item}</span>
                                 </li>
@@ -536,7 +536,7 @@ export default function CooperativeLandingPage() {
                         <p className="text-xl font-bold text-purple-600 mb-2">
                             Easy Sales Cooperative is an EARLY-MOVER ADVANTAGE.
                         </p>
-                        <p className="text-lg text-slate-700">
+                        <p className="text-lg text-slate-900">
                             When execution starts in full force, membership will not be open forever.
                         </p>
                     </div>
@@ -611,7 +611,7 @@ export default function CooperativeLandingPage() {
                                                 <h5 className="text-xl font-bold text-slate-900 mb-2">{idx + 1}. {benefit.title}</h5>
                                             </div>
                                         </div>
-                                        <p className="text-slate-700">{benefit.description}</p>
+                                        <p className="text-slate-900">{benefit.description}</p>
                                     </div>
                                 );
                             })}
@@ -632,7 +632,7 @@ export default function CooperativeLandingPage() {
                         </div>
                     </div>
 
-                    <p className="text-lg text-slate-700 text-center mb-12 max-w-3xl mx-auto">
+                    <p className="text-lg text-slate-900 text-center mb-12 max-w-3xl mx-auto">
                         Easy Sales Cooperative members have strategic positioning within the Women Agro-Value Expansion Program (RH-WAVE 774).
                     </p>
 
@@ -646,7 +646,7 @@ export default function CooperativeLandingPage() {
                                     <h4 className="text-xl font-bold text-slate-900 mb-4">{area.title}</h4>
                                     <ul className="space-y-2">
                                         {area.items.map((item, itemIdx) => (
-                                            <li key={itemIdx} className="flex items-start gap-2 text-sm text-slate-700">
+                                            <li key={itemIdx} className="flex items-start gap-2 text-sm text-slate-900">
                                                 <CheckCircle2 className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
                                                 <span>{item}</span>
                                             </li>
@@ -693,7 +693,7 @@ export default function CooperativeLandingPage() {
                                 </button>
                                 {expandedFaq === idx && (
                                     <div className="px-6 pb-5">
-                                        <p className="text-slate-700 leading-relaxed">{faq.a}</p>
+                                        <p className="text-slate-900 leading-relaxed">{faq.a}</p>
                                     </div>
                                 )}
                             </div>
@@ -764,7 +764,7 @@ export default function CooperativeLandingPage() {
                             </p>
                             <form className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">Name</label>
                                     <input
                                         type="text"
                                         className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"
@@ -772,7 +772,7 @@ export default function CooperativeLandingPage() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">Email</label>
                                     <input
                                         type="email"
                                         className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"
@@ -780,7 +780,7 @@ export default function CooperativeLandingPage() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-2">Message</label>
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">Message</label>
                                     <textarea
                                         rows={4}
                                         className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"

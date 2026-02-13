@@ -122,7 +122,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         <div className="space-y-4">
             {/* Bank Selection */}
             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                     Bank Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -145,7 +145,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
 
             {/* Account Number */}
             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                     Account Number <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -168,7 +168,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             {/* Account Name (Auto-filled after verification) */}
             {accountName && (
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         Account Name
                     </label>
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">

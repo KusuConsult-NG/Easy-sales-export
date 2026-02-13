@@ -77,7 +77,7 @@ export default function MarketplacePendingPage() {
                         <h3 className="font-semibold text-slate-900 dark:text-white mb-3">
                             What happens next?
                         </h3>
-                        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                        <ul className="space-y-2 text-sm text-slate-900 dark:text-white">
                             <li className="flex items-start gap-2">
                                 <span className="text-green-600 mt-1">✓</span>
                                 <span>We'll verify your business documents and tax ID</span>

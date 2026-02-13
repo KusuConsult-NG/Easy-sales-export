@@ -87,7 +87,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 <div>
                     <div className="flex items-center gap-2 mb-3">
                         <FileText className="w-5 h-5 text-slate-600" />
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white">
                             Business Registration Certificate (Optional)
                         </label>
                     </div>
@@ -105,7 +105,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
 
                 {/* Tax ID */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Tax Identification Number (TIN) *
                     </label>
                     <input
@@ -128,7 +128,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 <div>
                     <div className="flex items-center gap-2 mb-3">
                         <Image className="w-5 h-5 text-slate-600" />
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white">
                             Farm/Business Location Photos (Optional)
                         </label>
                     </div>
@@ -163,7 +163,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 <div>
                     <div className="flex items-center gap-2 mb-3">
                         <Package className="w-5 h-5 text-slate-600" />
-                        <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white">
                             Product Sample Photos (Optional)
                         </label>
                     </div>
@@ -199,7 +199,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                     <h4 className="font-bold text-slate-900 dark:text-white mb-3">
                         What happens next?
                     </h4>
-                    <ol className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                    <ol className="space-y-2 text-sm text-slate-900 dark:text-white">
                         <li className="flex items-start gap-3">
                             <span className="font-bold text-green-600">1.</span>
                             <span>Our team reviews your documents within 24 hours</span>
@@ -224,7 +224,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                     Back
                 </button>

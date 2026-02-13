@@ -55,7 +55,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         <div className="space-y-6">
             {/* Full Name */}
             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                     Full Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -72,7 +72,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
             {/* Date of Birth */}
             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                     Date of Birth <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -88,7 +88,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
             {/* Phone Number */}
             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                     Phone Number <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -105,7 +105,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
             {/* Address */}
             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                     Street Address <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -124,7 +124,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* City */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         City <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -138,7 +138,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
                 {/* State */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         State <span className="text-red-500">*</span>
                     </label>
                     <select
@@ -159,7 +159,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             {/* BVN (Optional) */}
             {includeBVN && (
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         Bank Verification Number (BVN) <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -183,7 +183,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* ID Type */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         ID Type <span className="text-red-500">*</span>
                     </label>
                     <select
@@ -202,7 +202,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
                 {/* ID Number */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                         ID Number <span className="text-red-500">*</span>
                     </label>
                     <input

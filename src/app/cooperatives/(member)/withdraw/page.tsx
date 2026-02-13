@@ -123,7 +123,7 @@ export default function WithdrawPage() {
                 <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
                     {/* Amount Input */}
                     <div className="mb-6">
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                             Withdrawal Amount (₦) *
                         </label>
                         <div className="relative">
@@ -154,7 +154,7 @@ export default function WithdrawPage() {
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                     Bank Name *
                                 </label>
                                 <input
@@ -168,7 +168,7 @@ export default function WithdrawPage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                     Account Number *
                                 </label>
                                 <input
@@ -186,7 +186,7 @@ export default function WithdrawPage() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                     Account Name *
                                 </label>
                                 <input
@@ -203,7 +203,7 @@ export default function WithdrawPage() {
 
                     {/* Reason (Optional) */}
                     <div className="mb-6">
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                             Reason for Withdrawal (Optional)
                         </label>
                         <textarea
@@ -218,7 +218,7 @@ export default function WithdrawPage() {
                     {/* Info Notice */}
                     <div className="mb-6 flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                         <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                        <div className="text-sm text-slate-700 dark:text-slate-300">
+                        <div className="text-sm text-slate-900 dark:text-white">
                             <p className="font-medium mb-1">Important Information:</p>
                             <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400">
                                 <li>Withdrawal requests require admin approval</li>

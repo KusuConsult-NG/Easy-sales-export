@@ -191,7 +191,7 @@ export default function FarmNationOnboardingPage() {
                                     )}
                                 </div>
                                 <div className="mt-2 text-center hidden md:block">
-                                    <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                                    <p className="text-xs font-medium text-slate-900 dark:text-white">
                                         {step.title}
                                     </p>
                                 </div>

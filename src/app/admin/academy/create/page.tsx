@@ -55,7 +55,7 @@ export default function CreateCoursePage() {
                 <div className="mb-6">
                     <Link
                         href="/admin/academy"
-                        className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 mb-4 transition-colors"
+                        className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-2 mb-4 transition-colors"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Academy
@@ -68,7 +68,7 @@ export default function CreateCoursePage() {
                     <form onSubmit={handleSubmit} className="p-6 space-y-6">
                         {/* Title */}
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                 Course Title
                             </label>
                             <input
@@ -83,7 +83,7 @@ export default function CreateCoursePage() {
 
                         {/* Description */}
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                 Description
                             </label>
                             <textarea
@@ -99,7 +99,7 @@ export default function CreateCoursePage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Instructor */}
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                     Instructor Name
                                 </label>
                                 <input
@@ -114,7 +114,7 @@ export default function CreateCoursePage() {
 
                             {/* Category */}
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                     Category
                                 </label>
                                 <select
@@ -133,7 +133,7 @@ export default function CreateCoursePage() {
 
                         {/* Thumbnail Upload Placeholder */}
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                 Course Thumbnail
                             </label>
                             <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center text-slate-500 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50 transition cursor-pointer">
@@ -147,7 +147,7 @@ export default function CreateCoursePage() {
                         <div className="pt-4 flex items-center justify-end gap-4 border-t border-slate-100 dark:border-slate-800">
                             <Link
                                 href="/admin/academy"
-                                className="px-6 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors"
+                                className="px-6 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-lg font-medium transition-colors"
                             >
                                 Cancel
                             </Link>

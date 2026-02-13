@@ -85,7 +85,7 @@ export default function LoanApplicationWizard({
                 {step === 1 && (
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                 How much would you like to borrow?
                             </label>
                             <div className="relative">
@@ -105,7 +105,7 @@ export default function LoanApplicationWizard({
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                 Repayment Duration
                             </label>
                             <select
@@ -126,7 +126,7 @@ export default function LoanApplicationWizard({
                 {step === 2 && (
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                 What will you use the loan for?
                             </label>
                             <textarea
@@ -195,7 +195,7 @@ export default function LoanApplicationWizard({
 
                         <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-6">
                             <h3 className="font-semibold text-slate-900 dark:text-white mb-3">Loan Purpose</h3>
-                            <p className="text-slate-600 dark:text-slate-300">{formData.purpose}</p>
+                            <p className="text-slate-600 dark:text-white">{formData.purpose}</p>
                         </div>
                     </div>
                 )}
@@ -242,7 +242,7 @@ export default function LoanApplicationWizard({
             <div className="bg-slate-50 dark:bg-slate-900/50 px-8 py-6 flex items-center justify-between border-t border-slate-200 dark:border-slate-700">
                 <button
                     onClick={step === 1 ? onCancel : handlePrevious}
-                    className="flex items-center space-x-2 px-6 py-3 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg font-semibold transition"
+                    className="flex items-center space-x-2 px-6 py-3 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg font-semibold transition"
                 >
                     <ArrowLeft className="w-5 h-5" />
                     <span>{step === 1 ? "Cancel" : "Previous"}</span>

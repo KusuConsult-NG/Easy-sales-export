@@ -40,7 +40,7 @@ export default function WebsiteNav() {
                             <Link
                                 key={link.name}
                                 href={link.href}
-                                className="text-slate-700 hover:text-orange-600 font-medium transition-colors relative group"
+                                className="text-slate-900 hover:text-orange-600 font-medium transition-colors relative group"
                             >
                                 {link.name}
                                 <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-orange-600 group-hover:w-full transition-all duration-300"></span>
@@ -52,7 +52,7 @@ export default function WebsiteNav() {
                     <div className="hidden lg:flex items-center gap-4">
                         <button
                             onClick={() => router.push("/auth/login")}
-                            className="px-6 py-2.5 text-slate-700 font-medium hover:text-orange-600 transition-colors"
+                            className="px-6 py-2.5 text-slate-900 font-medium hover:text-orange-600 transition-colors"
                         >
                             Sign In
                         </button>
@@ -67,7 +67,7 @@ export default function WebsiteNav() {
                     {/* Mobile Menu Button */}
                     <button
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        className="lg:hidden p-2 text-slate-700 hover:text-orange-600 transition-colors"
+                        className="lg:hidden p-2 text-slate-900 hover:text-orange-600 transition-colors"
                     >
                         {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                     </button>
@@ -82,7 +82,7 @@ export default function WebsiteNav() {
                             <Link
                                 key={link.name}
                                 href={link.href}
-                                className="block text-slate-700 hover:text-orange-600 font-medium py-2 transition-colors"
+                                className="block text-slate-900 hover:text-orange-600 font-medium py-2 transition-colors"
                                 onClick={() => setIsMobileMenuOpen(false)}
                             >
                                 {link.name}
@@ -94,7 +94,7 @@ export default function WebsiteNav() {
                                     router.push("/auth/login");
                                     setIsMobileMenuOpen(false);
                                 }}
-                                className="w-full px-6 py-2.5 text-slate-700 font-medium border border-slate-300 rounded-xl hover:border-orange-600 hover:text-orange-600 transition-colors"
+                                className="w-full px-6 py-2.5 text-slate-900 font-medium border border-slate-300 rounded-xl hover:border-orange-600 hover:text-orange-600 transition-colors"
                             >
                                 Sign In
                             </button>

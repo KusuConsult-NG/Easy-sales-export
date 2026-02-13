@@ -9,7 +9,6 @@
 import { useState } from "react";
 import { Upload, FileText, Image, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { uploadFile, validateFile, generateDocumentPath } from "@/lib/storage-upload";
-import { auth } from "@/lib/auth";
 
 interface DocumentUploadStepProps {
     data: {
@@ -162,7 +161,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Valid ID */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Valid ID <span className="text-red-500">*</span>
                     </label>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
@@ -173,7 +172,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         {uploadStates.validId.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-700 dark:text-slate-300 font-medium">
+                                <p className="text-slate-900 dark:text-white font-medium">
                                     Uploading... {Math.round(uploadStates.validId.progress)}%
                                 </p>
                                 <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
@@ -223,7 +222,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
 
                 {/* Passport Photo */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Passport Photo <span className="text-red-500">*</span>
                     </label>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
@@ -234,7 +233,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         {uploadStates.passportPhoto.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-700 dark:text-slate-300 font-medium">
+                                <p className="text-slate-900 dark:text-white font-medium">
                                     Uploading... {Math.round(uploadStates.passportPhoto.progress)}%
                                 </p>
                                 <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
@@ -284,7 +283,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
 
                 {/* Proof of Address (Optional) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Proof of Address <span className="text-slate-500">(Optional)</span>
                     </label>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
@@ -294,7 +293,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         {uploadStates.proofOfAddress.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-700 dark:text-slate-300 font-medium">
+                                <p className="text-slate-900 dark:text-white font-medium">
                                     Uploading... {Math.round(uploadStates.proofOfAddress.progress)}%
                                 </p>
                                 <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
@@ -341,7 +340,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
 
                 {/* BVN */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Bank Verification Number (BVN) <span className="text-red-500">*</span>
                     </label>
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
@@ -374,7 +373,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                             onChange={(e) => setBvnConsent(e.target.checked)}
                             className="mt-1 w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
                         />
-                        <label htmlFor="bvnConsent" className="flex-1 text-sm text-slate-700 dark:text-slate-300">
+                        <label htmlFor="bvnConsent" className="flex-1 text-sm text-slate-900 dark:text-white">
                             <span className="font-semibold text-slate-900 dark:text-white">
                                 I consent to the collection and processing of my BVN
                             </span>
@@ -405,7 +404,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                 >
                     Back
                 </button>

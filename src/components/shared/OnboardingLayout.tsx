@@ -25,7 +25,7 @@ export default function OnboardingLayout({
                         {title}
                     </h1>
                     {subtitle && (
-                        <p className="text-lg text-slate-700 dark:text-slate-300 mb-1">
+                        <p className="text-lg text-slate-900 dark:text-white mb-1">
                             {subtitle}
                         </p>
                     )}

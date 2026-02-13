@@ -75,7 +75,7 @@ function AcademyLoginContent() {
                         )}
 
                         <div className="space-y-2">
-                            <label htmlFor="login-email" className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                            <label htmlFor="login-email" className="block text-sm font-semibold text-slate-900 dark:text-white">
                                 Email Address
                             </label>
                             <div className="relative group">
@@ -97,7 +97,7 @@ function AcademyLoginContent() {
 
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <label htmlFor="login-password" className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <label htmlFor="login-password" className="block text-sm font-semibold text-slate-900 dark:text-white">
                                     Password
                                 </label>
                                 <Link

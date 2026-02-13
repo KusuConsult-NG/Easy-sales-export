@@ -13,7 +13,6 @@ import {
     Clock,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 
@@ -189,7 +188,7 @@ export default function WithdrawalsHistoryPage() {
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 Time Period
                             </label>
                             <select
@@ -205,7 +204,7 @@ export default function WithdrawalsHistoryPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                                 Status
                             </label>
                             <select
@@ -238,10 +237,10 @@ export default function WithdrawalsHistoryPage() {
                                     <div className="flex items-center gap-3">
                                         <div
                                             className={`w-12 h-12 rounded-xl flex items-center justify-center ${withdrawal.status === "completed"
-                                                    ? "bg-green-100 dark:bg-green-900/30"
-                                                    : withdrawal.status === "pending"
-                                                        ? "bg-yellow-100 dark:bg-yellow-900/30"
-                                                        : "bg-red-100 dark:bg-red-900/30"
+                                                ? "bg-green-100 dark:bg-green-900/30"
+                                                : withdrawal.status === "pending"
+                                                    ? "bg-yellow-100 dark:bg-yellow-900/30"
+                                                    : "bg-red-100 dark:bg-red-900/30"
                                                 }`}
                                         >
                                             {withdrawal.status === "completed" ? (
@@ -264,10 +263,10 @@ export default function WithdrawalsHistoryPage() {
 
                                     <span
                                         className={`px-3 py-1 rounded-full text-xs font-semibold ${withdrawal.status === "completed"
-                                                ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                                : withdrawal.status === "pending"
-                                                    ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                            : withdrawal.status === "pending"
+                                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                                : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
                                             }`}
                                     >
                                         {withdrawal.status.charAt(0).toUpperCase() +

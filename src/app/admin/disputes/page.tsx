@@ -147,7 +147,7 @@ export default function AdminDisputesPage() {
             },
             closed: {
                 bg: "bg-slate-100 dark:bg-slate-700",
-                text: "text-slate-700 dark:text-slate-300",
+                text: "text-slate-900 dark:text-white",
                 icon: CheckCircle,
             },
         };
@@ -164,7 +164,7 @@ export default function AdminDisputesPage() {
 
     const getPriorityBadge = (priority: string) => {
         const colors = {
-            low: "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300",
+            low: "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white",
             medium:
                 "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
             high: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400",
@@ -361,7 +361,7 @@ export default function AdminDisputesPage() {
                                                     <button className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors">
                                                         Resolve in Favor of Seller
                                                     </button>
-                                                    <button className="px-6 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                                    <button className="px-6 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                                                         Request More Info
                                                     </button>
                                                 </>

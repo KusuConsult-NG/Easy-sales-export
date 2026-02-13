@@ -283,7 +283,7 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
                         {timeRemaining !== null && (
                             <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${timeRemaining < 60
                                 ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                                : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300'
+                                : 'bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white'
                                 }`}>
                                 <Clock className="w-5 h-5" />
                                 <span className="font-mono font-bold text-lg">

@@ -44,7 +44,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Full Name *
                     </label>
                     <div className="relative">
@@ -64,7 +64,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Email Address *
                     </label>
                     <div className="relative">
@@ -84,7 +84,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Phone Number *
                     </label>
                     <div className="relative">
@@ -104,7 +104,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Date of Birth *
                     </label>
                     <div className="relative">
@@ -123,7 +123,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         State of Residence *
                     </label>
                     <div className="relative">
@@ -148,7 +148,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
                         Current Occupation *
                     </label>
                     <div className="relative">

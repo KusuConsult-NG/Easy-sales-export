@@ -75,7 +75,7 @@ export function InvestmentProfileStep({
             <div className="space-y-6">
                 {/* Investment Range */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
                         Investment Range <span className="text-red-500">*</span>
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -124,7 +124,7 @@ export function InvestmentProfileStep({
 
                 {/* Investment Goals */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
                         Investment Goals <span className="text-red-500">*</span>
                     </label>
                     <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
@@ -137,7 +137,7 @@ export function InvestmentProfileStep({
                                 onClick={() => toggleGoal(goal)}
                                 className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${goals.includes(goal)
                                     ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-100"
-                                    : "border-slate-200 dark:border-slate-700 hover:border-orange-300 text-slate-700 dark:text-slate-300"
+                                    : "border-slate-200 dark:border-slate-700 hover:border-orange-300 text-slate-900 dark:text-white"
                                     }`}
                             >
                                 <div className="flex items-center gap-2">
@@ -172,7 +172,7 @@ export function InvestmentProfileStep({
 
                 {/* Risk Tolerance */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
                         Risk Tolerance <span className="text-red-500">*</span>
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -195,7 +195,7 @@ export function InvestmentProfileStep({
                                     <p
                                         className={`font-semibold capitalize ${riskTolerance === risk
                                             ? "text-orange-900 dark:text-orange-100"
-                                            : "text-slate-700 dark:text-slate-300"
+                                            : "text-slate-900 dark:text-white"
                                             }`}
                                     >
                                         {risk}

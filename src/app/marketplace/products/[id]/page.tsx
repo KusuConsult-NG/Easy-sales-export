@@ -161,7 +161,7 @@ export default function ProductDetailPage() {
                                 <span className="text-xl font-normal text-slate-500 ml-2">/{product.unit}</span>
                             </div>
 
-                            <p className="text-lg text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
+                            <p className="text-lg text-slate-900 dark:text-white leading-relaxed mb-6">
                                 {product.description}
                             </p>
                         </div>
@@ -205,20 +205,20 @@ export default function ProductDetailPage() {
                             </h3>
                             <dl className="space-y-3">
                                 <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                    <dt className="font-semibold text-slate-700 dark:text-slate-300">Minimum Order</dt>
+                                    <dt className="font-semibold text-slate-900 dark:text-white">Minimum Order</dt>
                                     <dd className="text-slate-600 dark:text-slate-400">{product.minimumOrderQuantity} {product.unit}</dd>
                                 </div>
                                 <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                    <dt className="font-semibold text-slate-700 dark:text-slate-300">Available Quantity</dt>
+                                    <dt className="font-semibold text-slate-900 dark:text-white">Available Quantity</dt>
                                     <dd className="text-slate-600 dark:text-slate-400">{product.availableQuantity} {product.unit}</dd>
                                 </div>
                                 <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                    <dt className="font-semibold text-slate-700 dark:text-slate-300">Delivery Method</dt>
+                                    <dt className="font-semibold text-slate-900 dark:text-white">Delivery Method</dt>
                                     <dd className="text-slate-600 dark:text-slate-400 capitalize">{product.deliveryMethod}</dd>
                                 </div>
                                 {product.estimatedDeliveryDays && (
                                     <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                        <dt className="font-semibold text-slate-700 dark:text-slate-300">Est. Delivery</dt>
+                                        <dt className="font-semibold text-slate-900 dark:text-white">Est. Delivery</dt>
                                         <dd className="text-slate-600 dark:text-slate-400">{product.estimatedDeliveryDays} Days</dd>
                                     </div>
                                 )}
@@ -233,7 +233,7 @@ export default function ProductDetailPage() {
                                 </h3>
                                 <ul className="space-y-2">
                                     {product.certifications.map((cert, index) => (
-                                        <li key={index} className="flex items-start gap-3 text-slate-700 dark:text-slate-300">
+                                        <li key={index} className="flex items-start gap-3 text-slate-900 dark:text-white">
                                             <span className="text-green-600 mt-1">✓</span>
                                             {cert}
                                         </li>

@@ -132,7 +132,7 @@ export default function ContactPage() {
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 {/* Name */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Name
                                     </label>
                                     <input
@@ -146,7 +146,7 @@ export default function ContactPage() {
 
                                 {/* Email */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Email
                                     </label>
                                     <input
@@ -160,7 +160,7 @@ export default function ContactPage() {
 
                                 {/* Subject */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Subject
                                     </label>
                                     <input
@@ -174,7 +174,7 @@ export default function ContactPage() {
 
                                 {/* Message */}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                                         Message
                                     </label>
                                     <textarea
