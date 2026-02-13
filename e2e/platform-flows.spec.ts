@@ -72,7 +72,7 @@ test.describe('Academy Course Enrollment', () => {
 
         // Browse courses
         await page.goto('/academy');
-        await page.click('[data-testid="course-card"]').first();
+        await page.locator('[data-testid="course-card"]').first().click();
 
         // Enroll
         await page.click('text=Enroll Now');
@@ -129,7 +129,7 @@ test.describe('Admin Workflows', () => {
         await page.goto('/admin/marketplace/disputes');
 
         // Open dispute
-        await page.click('[data-testid="dispute-row"]').first();
+        await page.locator('[data-testid="dispute-row"]').first().click();
 
         // Review evidence
         await expect(page.locator('text=Evidence')).toBeVisible();
