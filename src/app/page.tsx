@@ -237,11 +237,6 @@ export default function HubPage() {
                                         Cooperatives
                                     </Link>
                                 </li>
-                                <li>
-                                    <Link href="/cooperatives/my-savings" className="hover:text-white transition-colors">
-                                        Savings
-                                    </Link>
-                                </li>
                             </ul>
                         </div>
                         <div>
