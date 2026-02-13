@@ -99,7 +99,7 @@ export default function SessionActivityTracker() {
 
     const handleLogout = async () => {
         localStorage.removeItem("lastActivity");
-        await signOut({ callbackUrl: "/auth/login?timeout=true" });
+        await signOut({ callbackUrl: "/auth/login" });
     };
 
     const handleExtendSession = () => {
