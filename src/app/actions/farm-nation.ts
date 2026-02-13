@@ -372,6 +372,168 @@ export async function getMyPurchaseRequestsAction() {
 }
 
 /**
+ * Cancel a purchase/lease request
+ */
+export async function cancelPurchaseRequestAction(requestId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const requestRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(requestId);
+        const requestDoc = await requestRef.get();
+
+        if (!requestDoc.exists) {
+            return { success: false, error: "Purchase request not found" };
+        }
+
+        const requestData = requestDoc.data();
+
+        // Verify user owns this request
+        if (requestData?.buyerId !== session.user.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Can only cancel pending requests
+        if (requestData?.status !== "pending_payment") {
+            return { success: false, error: "Can only cancel pending payment requests" };
+        }
+
+        // Update request status
+        await requestRef.update({
+            status: "cancelled",
+            escrowStatus: "refunded",
+            cancelledAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Mark property as available again
+        if (requestData?.propertyId) {
+            await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(requestData.propertyId).update({
+                status: "available",
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        return {
+            success: true,
+            message: "Purchase request cancelled successfully",
+        };
+    } catch (error: any) {
+        console.error("Cancel purchase request error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Delete a property listing
+ */
+export async function deletePropertyAction(propertyId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyDoc = await propertyRef.get();
+
+        if (!propertyDoc.exists) {
+            return { success: false, error: "Property not found" };
+        }
+
+        const property = propertyDoc.data();
+
+        // Verify user owns this property
+        if (property?.ownerId !== session.user.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Check for active purchase requests
+        const activeRequests = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+            .where("propertyId", "==", propertyId)
+            .where("status", "in", ["pending_payment", "payment_confirmed"])
+            .get();
+
+        if (!activeRequests.empty) {
+            return {
+                success: false,
+                error: "Cannot delete property with active purchase requests",
+            };
+        }
+
+        // Soft delete - mark as deleted
+        await propertyRef.update({
+            status: "deleted",
+            deletedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return {
+            success: true,
+            message: "Property deleted successfully",
+        };
+    } catch (error: any) {
+        console.error("Delete property error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Update a property listing
+ */
+export async function updatePropertyAction(propertyId: string, updates: Partial<PropertyListingInput>) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyDoc = await propertyRef.get();
+
+        if (!propertyDoc.exists) {
+            return { success: false, error: "Property not found" };
+        }
+
+        const property = propertyDoc.data();
+
+        // Verify user owns this property
+        if (property?.ownerId !== session.user.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Build update object
+        const updateData: any = {
+            updatedAt: FieldValue.serverTimestamp(),
+        };
+
+        if (updates.name) updateData.name = updates.name;
+        if (updates.description) updateData.description = updates.description;
+        if (updates.location) updateData.location = updates.location;
+        if (updates.state) updateData.state = updates.state.toLowerCase();
+        if (updates.lga) updateData.lga = updates.lga;
+        if (updates.price !== undefined) updateData.price = updates.price;
+        if (updates.size !== undefined) updateData.size = updates.size;
+        if (updates.type) updateData.type = updates.type;
+        if (updates.category) updateData.category = updates.category;
+        if (updates.features) updateData.features = updates.features;
+        if (updates.leaseDuration) updateData.leaseDuration = updates.leaseDuration;
+
+        await propertyRef.update(updateData);
+
+        return {
+            success: true,
+            message: "Property updated successfully",
+        };
+    } catch (error: any) {
+        console.error("Update property error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Submit Farm Nation Onboarding
  */
 export interface FarmNationOnboardingData {
@@ -455,8 +617,6 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
             },
             { merge: true }
         );
-
-        console.log(`Farm Nation onboarding completed for user: ${userId}, role: ${data.role}`);
 
         return {
             success: true,

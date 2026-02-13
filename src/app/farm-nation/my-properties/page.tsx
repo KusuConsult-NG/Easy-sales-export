@@ -8,7 +8,7 @@ import {
     Plus, MapPin, DollarSign, Maximize, Eye, Heart, Edit, Trash2,
     Loader2, AlertCircle, TrendingUp
 } from "lucide-react";
-import { getMyPropertiesAction, type Property } from "@/app/actions/farm-nation";
+import { getMyPropertiesAction, deletePropertyAction, type Property } from "@/app/actions/farm-nation";
 import { useToast } from "@/contexts/ToastContext";
 
 export default function MyPropertiesPage() {
@@ -33,6 +33,24 @@ export default function MyPropertiesPage() {
             console.error("Failed to load properties:", error);
         }
         setLoading(false);
+    }
+
+    async function handleDeleteProperty(propertyId: string, propertyName: string) {
+        if (!confirm(`Are you sure you want to delete "${propertyName}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const result = await deletePropertyAction(propertyId);
+            if (result.success) {
+                showToast(result.message || "Property deleted successfully", "success");
+                loadProperties();
+            } else {
+                showToast(result.error || "Failed to delete property", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred while deleting property", "error");
+        }
     }
 
     useEffect(() => {
@@ -256,21 +274,19 @@ export default function MyPropertiesPage() {
                                             className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
                                         >
                                             <Eye className="w-4 h-4" />
-                                            View
+                                            View Property
                                         </button>
                                         <button
-                                            onClick={() => showToast("Edit functionality coming soon!", "info")}
+                                            onClick={() => router.push(`/farm-nation/edit-property/${property.id}`)}
                                             className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg transition"
+                                            title="Edit Property"
                                         >
                                             <Edit className="w-4 h-4" />
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                if (confirm(`Are you sure you want to delete "${property.name}"?`)) {
-                                                    showToast("Delete functionality coming soon!", "info");
-                                                }
-                                            }}
+                                            onClick={() => handleDeleteProperty(property.id, property.name)}
                                             className="px-4 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/40 text-red-600 rounded-lg transition"
+                                            title="Delete Property"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>

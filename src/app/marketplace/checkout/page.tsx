@@ -115,10 +115,74 @@ export default function CheckoutPage() {
         }
     };
 
-    const handleBankTransfer = () => {
-        alert("Bank transfer instructions will be sent to your email");
-        // Bank transfer: Display account details modal, create pending order requiring manual verification
-        // For now, Paystack handles all payments - bank transfer is optional alternative
+    const handleBankTransfer = async () => {
+        if (!session) {
+            router.push("/auth/login?redirect=/marketplace/checkout");
+            return;
+        }
+
+        if (!email || !phone) {
+            setError("Please provide your email and phone number");
+            return;
+        }
+
+        // Validate phone number
+        if (!isValidNigerianPhone(phone)) {
+            setPhoneError("Please enter a valid Nigerian phone number");
+            return;
+        }
+
+        if (cart.length === 0) {
+            setError("Your cart is empty");
+            return;
+        }
+
+        setIsProcessing(true);
+        setError(null);
+        setPhoneError("");
+
+        try {
+            // Import the bank transfer action
+            const { createBankTransferOrderAction } = await import("@/app/actions/marketplace-payment");
+
+            // Prepare cart items
+            const cartItems = cart.map(item => ({
+                id: item.id,
+                title: item.title,
+                sellerId: item.sellerId,
+                price: item.pricingTiers[0]?.price || 0,
+                quantity: item.quantity,
+                unit: item.unit,
+            }));
+
+            // Create bank transfer order
+            const result = await createBankTransferOrderAction(
+                cartItems,
+                email,
+                phone,
+                deliveryFee
+            );
+
+            if (result.success && result.orderId) {
+                // Clear cart
+                localStorage.removeItem("marketplace_cart");
+
+                // Show success message
+                showToast(
+                    "Order Created! Please complete bank transfer to the account details shown.",
+                    "success"
+                );
+
+                // Redirect to success page with order details
+                router.push(`/marketplace/orders/${result.orderId}?payment=pending`);
+            } else {
+                setError(result.error || "Failed to create order");
+                setIsProcessing(false);
+            }
+        } catch (err) {
+            setError("An error occurred while creating your order");
+            setIsProcessing(false);
+        }
     };
 
     if (!isClient || cart.length === 0) {
@@ -248,25 +312,6 @@ export default function CheckoutPage() {
                                         <CheckCircle className="w-6 h-6 text-primary" />
                                     )}
                                 </button>
-
-                                <button
-                                    onClick={() => setPaymentMethod("bank_transfer")}
-                                    className={`w-full p-4 border-2 rounded-xl flex items-center gap-3 transition ${paymentMethod === "bank_transfer"
-                                        ? "border-primary bg-primary/5"
-                                        : "border-slate-200 dark:border-slate-700"
-                                        }`}
-                                    disabled
-                                >
-                                    <div className="w-6 h-6 bg-slate-300 dark:bg-slate-600 rounded" />
-                                    <div className="flex-1 text-left">
-                                        <p className="font-semibold text-slate-900 dark:text-white">
-                                            Bank Transfer
-                                        </p>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                                            Coming Soon
-                                        </p>
-                                    </div>
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -292,6 +337,76 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
+
+                            {/* Payment Method Selection */}
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                                    Payment Method *
+                                </label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentMethod("paystack")}
+                                        className={`p-4 border-2 rounded-xl transition-all text-left ${paymentMethod === "paystack"
+                                            ? "border-primary bg-primary/10"
+                                            : "border-slate-200 dark:border-slate-700 hover:border-primary/50"
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <CreditCard className="w-6 h-6 text-primary" />
+                                            <div>
+                                                <p className="font-semibold text-slate-900 dark:text-white">Card Payment</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400">Pay with debit/credit card</p>
+                                            </div>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentMethod("bank_transfer")}
+                                        className={`p-4 border-2 rounded-xl transition-all text-left ${paymentMethod === "bank_transfer"
+                                            ? "border-primary bg-primary/10"
+                                            : "border-slate-200 dark:border-slate-700 hover:border-primary/50"
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Store className="w-6 h-6 text-primary" />
+                                            <div>
+                                                <p className="font-semibold text-slate-900 dark:text-white">Bank Transfer</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400">Transfer directly to our account</p>
+                                            </div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Bank Transfer Details */}
+                            {paymentMethod === "bank_transfer" && (
+                                <div className="mb-6 p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                                    <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-4">Bank Transfer Details</h3>
+                                    <div className="space-y-3 text-sm">
+                                        <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                                            <span className="text-slate-600 dark:text-slate-400">Bank Name:</span>
+                                            <span className="font-semibold text-slate-900 dark:text-white">First Bank of Nigeria</span>
+                                        </div>
+                                        <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                                            <span className="text-slate-600 dark:text-slate-400">Account Number:</span>
+                                            <span className="font-semibold text-slate-900 dark:text-white font-mono">1234567890</span>
+                                        </div>
+                                        <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg">
+                                            <span className="text-slate-600 dark:text-slate-400">Account Name:</span>
+                                            <span className="font-semibold text-slate-900 dark:text-white">Easy Sales Export Ltd</span>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 p-3 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+                                        <p className="text-xs text-yellow-900 dark:text-yellow-200">
+                                            ⚠️ <strong>Important:</strong> After transfer, your order will be marked as "pending payment verification".
+                                            We'll confirm your payment within 24 hours and ship your order.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Error Display */}
                             {error && (
                                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-4">
@@ -301,7 +416,7 @@ export default function CheckoutPage() {
 
                             {process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ? (
                                 <button
-                                    onClick={handlePaystackCheckout}
+                                    onClick={paymentMethod === "paystack" ? handlePaystackCheckout : handleBankTransfer}
                                     disabled={isProcessing || !email || !phone}
                                     className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
@@ -310,10 +425,15 @@ export default function CheckoutPage() {
                                             <Loader2 className="w-5 h-5 animate-spin" />
                                             Processing...
                                         </>
-                                    ) : (
+                                    ) : paymentMethod === "paystack" ? (
                                         <>
                                             <CreditCard className="w-5 h-5" />
                                             Complete Payment
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Store className="w-5 h-5" />
+                                            Confirm Order
                                         </>
                                     )}
                                 </button>

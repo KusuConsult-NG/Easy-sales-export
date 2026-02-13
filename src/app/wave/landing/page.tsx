@@ -112,6 +112,50 @@ export default function WaveLandingPage() {
 
             </section>
 
+            {/* WAVE Program Video - Strategic Placement */}
+            <section className="py-20 bg-white">
+                <div className="max-w-6xl mx-auto px-6">
+                    <div className="text-center mb-8">
+                        <div className="inline-flex items-center gap-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-6 py-2 rounded-full text-sm font-semibold mb-6">
+                            <Sparkles className="w-4 h-4" />
+                            <span>See RH-WAVE 774 in Action</span>
+                        </div>
+                        <h3 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">
+                            Transforming Lives Through <span className="text-green-700">Agribusiness Excellence</span>
+                        </h3>
+                        <p className="text-lg text-slate-700 max-w-3xl mx-auto">
+                            Watch how the Women Agro-Value Expansion Programme is empowering Nigerian women to become leaders in agriculture and export
+                        </p>
+                    </div>
+
+                    {/* YouTube Video Embed */}
+                    <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-green-100 bg-slate-900">
+                        <iframe
+                            className="absolute inset-0 w-full h-full"
+                            src="https://www.youtube.com/embed/pijwn6DGhbQ?si=7BtMi-m3l9-zcJ8W"
+                            title="RH-WAVE 774 Program - Women Agro-Value Expansion"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                        />
+                    </div>
+
+                    {/* CTA Below Video */}
+                    <div className="text-center mt-8">
+                        <p className="text-lg text-slate-700 mb-4">
+                            Ready to be part of this transformation?
+                        </p>
+                        <Link
+                            href="/wave/application"
+                            className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-green-500/50 transition-all hover:scale-105"
+                        >
+                            <Users className="w-5 h-5" />
+                            <span>Join the Movement</span>
+                            <ArrowRight className="w-5 h-5" />
+                        </Link>
+                    </div>
+                </div>
+            </section>
+
             {/* Image Carousel Section */}
             <section className="py-16 bg-linear-to-br from-green-50 via-green-100 to-white">
                 <div className="max-w-6xl mx-auto px-6">

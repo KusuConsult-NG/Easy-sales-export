@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Package, Plus, Edit, Trash2, ToggleLeft, ToggleRight, Loader2, Search } from "lucide-react";
-import { getVendorProductsAction, toggleVendorProductStatusAction, updateVendorProductInventoryAction } from "@/app/actions/vendor";
+import { getVendorProductsAction, toggleVendorProductStatusAction, updateVendorProductInventoryAction, deleteVendorProductAction } from "@/app/actions/vendor";
 import type { VendorProduct } from "@/app/actions/vendor";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
@@ -50,6 +50,24 @@ export default function VendorProductsPage() {
             }
         } catch (error) {
             showToast("Failed to update status", "error");
+        }
+    };
+
+    const handleDeleteProduct = async (productId: string, productName: string) => {
+        if (!confirm(`Delete "${productName}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const result = await deleteVendorProductAction(productId);
+            if (result.success) {
+                showToast(result.message || "Product deleted successfully", "success");
+                loadProducts();
+            } else {
+                showToast(result.error || "Failed to delete product", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred while deleting product", "error");
         }
     };
 
@@ -140,8 +158,8 @@ export default function VendorProductsPage() {
                                     key={f.key}
                                     onClick={() => setFilterStatus(f.key as any)}
                                     className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${filterStatus === f.key
-                                            ? "bg-blue-600 text-white"
-                                            : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                                        ? "bg-blue-600 text-white"
+                                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
                                         }`}
                                 >
                                     {f.label}
@@ -201,8 +219,8 @@ export default function VendorProductsPage() {
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <span className={`font-bold ${product.stock === 0 ? "text-red-600" :
-                                                        product.stock <= product.reorderLevel ? "text-yellow-600" :
-                                                            "text-green-600"
+                                                    product.stock <= product.reorderLevel ? "text-yellow-600" :
+                                                        "text-green-600"
                                                     }`}>
                                                     {product.stock} {product.unit}
                                                 </span>
@@ -212,8 +230,8 @@ export default function VendorProductsPage() {
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold capitalize ${product.status === "active" ? "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400" :
-                                                        product.status === "out_of_stock" ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400" :
-                                                            "bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400"
+                                                    product.status === "out_of_stock" ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400" :
+                                                        "bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400"
                                                     }`}>
                                                     {product.status.replace("_", " ")}
                                                 </span>
@@ -239,16 +257,13 @@ export default function VendorProductsPage() {
                                                         <Edit className="w-5 h-5 text-blue-600" />
                                                     </button>
                                                     <button
-                                                        onClick={() => {
-                                                            if (confirm(`Delete ${product.name}?`)) {
-                                                                showToast("Delete functionality coming soon", "info");
-                                                            }
-                                                        }}
+                                                        onClick={() => handleDeleteProduct(product.id, product.name)}
                                                         className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
                                                         title="Delete"
                                                     >
                                                         <Trash2 className="w-5 h-5 text-red-600" />
                                                     </button>
+
                                                 </div>
                                             </td>
                                         </tr>

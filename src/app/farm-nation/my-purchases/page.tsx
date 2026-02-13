@@ -8,7 +8,7 @@ import {
     ArrowLeft, MapPin, DollarSign, Calendar, AlertCircle, Loader2,
     CheckCircle, Clock, XCircle, Download, Phone, Mail
 } from "lucide-react";
-import { getMyPurchaseRequestsAction } from "@/app/actions/farm-nation";
+import { getMyPurchaseRequestsAction, cancelPurchaseRequestAction } from "@/app/actions/farm-nation";
 import { useToast } from "@/contexts/ToastContext";
 
 interface PurchaseRequest {
@@ -50,6 +50,61 @@ export default function MyPurchasesPage() {
             console.error("Failed to load purchases:", error);
         }
         setLoading(false);
+    }
+
+    async function handleCancelPurchase(requestId: string) {
+        if (!confirm("Are you sure you want to cancel this purchase request? This action cannot be undone.")) {
+            return;
+        }
+
+        try {
+            const result = await cancelPurchaseRequestAction(requestId);
+            if (result.success) {
+                showToast(result.message || "Purchase cancelled successfully", "success");
+                loadPurchases();
+            } else {
+                showToast(result.error || "Failed to cancel purchase", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred while cancelling purchase", "error");
+        }
+    }
+
+    function handleDownloadAgreement(purchase: PurchaseRequest) {
+        const agreementText = `
+LAND PURCHASE AGREEMENT
+
+Property: ${purchase.propertyName}
+Purchase Type: ${purchase.propertyType === "sale" ? "Sale" : "Lease"}
+Price: ₦${purchase.propertyPrice.toLocaleString()}
+Location: ${purchase.propertyLocation || "N/A"}
+
+BUYER INFORMATION:
+${session?.user?.name || "Unknown"}
+
+SELLER INFORMATION:
+${purchase.sellerName}
+${purchase.sellerEmail ? `Email: ${purchase.sellerEmail}` : ""}
+${purchase.sellerPhone ? `Phone: ${purchase.sellerPhone}` : ""}
+
+Transaction Status: ${purchase.status.replace("_", " ").toUpperCase()}
+Escrow Status: ${purchase.escrowStatus.toUpperCase()}
+Date: ${purchase.createdAt.toLocaleDateString()}
+
+This document serves as a record of the purchase agreement initiated through Easy Sales Export platform.
+        `.trim();
+
+        const blob = new Blob([agreementText], { type: "text/plain" });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `agreement-${purchase.propertyName.replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        showToast("Agreement downloaded successfully", "success");
     }
 
     useEffect(() => {
@@ -302,31 +357,29 @@ export default function MyPurchasesPage() {
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
                                                     {getEscrowBadge(purchase.escrowStatus)}
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
                                                     {purchase.status === "completed" && (
                                                         <button
-                                                            onClick={() => showToast("Download agreement functionality coming soon!", "info")}
+                                                            onClick={() => handleDownloadAgreement(purchase)}
                                                             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition"
                                                         >
                                                             <Download className="w-4 h-4" />
                                                             Download Agreement
                                                         </button>
                                                     )}
-                                                </div>
 
-                                                <div className="flex items-center gap-2">
                                                     <button
                                                         onClick={() => router.push(`/farm-nation/property/${purchase.propertyId}`)}
                                                         className="px-4 py-2 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-400 text-sm font-semibold rounded-lg transition"
                                                     >
                                                         View Property
                                                     </button>
+
                                                     {purchase.status === "pending_payment" && (
                                                         <button
-                                                            onClick={() => {
-                                                                if (confirm("Are you sure you want to cancel this request?")) {
-                                                                    showToast("Cancel functionality coming soon!", "info");
-                                                                }
-                                                            }}
+                                                            onClick={() => handleCancelPurchase(purchase.id)}
                                                             className="px-4 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 text-sm font-semibold rounded-lg transition"
                                                         >
                                                             Cancel Request

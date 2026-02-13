@@ -7,8 +7,9 @@ import {
     Package, TrendingUp, ShoppingCart, DollarSign, Eye, Star,
     Plus, Edit, Trash2, BarChart3, Loader2, AlertCircle
 } from "lucide-react";
-import { getSellerProductsAction, getSellerVerificationAction } from "@/app/actions/marketplace";
+import { getSellerProductsAction, getSellerVerificationAction, deleteProductAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function SellerDashboardPage() {
     const { data: session, status } = useSession();
@@ -18,6 +19,25 @@ export default function SellerDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [verification, setVerification] = useState<any>(null);
     const [filterStatus, setFilterStatus] = useState<"all" | "active" | "suspended" | "sold_out">("all");
+    const { showToast } = useToast();
+
+    async function handleDeleteProduct(productId: string, productTitle: string) {
+        if (!confirm(`Delete "${productTitle}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const result = await deleteProductAction(productId);
+            if (result.success) {
+                showToast(result.message || "Product deleted successfully", "success");
+                loadSellerData();
+            } else {
+                showToast(result.error || "Failed to delete product", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred while deleting product", "error");
+        }
+    }
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -299,12 +319,8 @@ export default function SellerDashboardPage() {
                                             <Edit className="w-4 h-4" />
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                if (confirm("Delete this product?")) {
-                                                    alert("Delete functionality coming soon");
-                                                }
-                                            }}
-                                            className="px-4 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 rounded-lg transition"
+                                            onClick={() => handleDeleteProduct(product.id, product.title)}
+                                            className="px-4 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/40 text-red-600 rounded-lg transition"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>

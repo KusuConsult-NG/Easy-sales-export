@@ -267,3 +267,53 @@ export async function toggleVendorProductStatusAction(
         return { success: false, error: error.message };
     }
 }
+/**
+ * Delete a vendor product
+ */
+export async function deleteVendorProductAction(
+    productId: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const productRef = db.collection("vendor_products").doc(productId);
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return { success: false, error: "Product not found" };
+        }
+
+        const productData = productDoc.data();
+        
+        // Verify ownership
+        if (productData?.vendorId !== session.user.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Soft delete
+        await productRef.update({
+            status: "inactive",
+            deletedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await createAuditLog({
+            action: "user_delete",
+            userId: session.user.id,
+            targetId: productId,
+            targetType: "vendor_product",
+            metadata: { name: productData?.name },
+        });
+
+        return {
+            success: true,
+            message: "Product deleted successfully",
+        };
+    } catch (error: any) {
+        console.error("Delete vendor product error:", error);
+        return { success: false, error: error.message };
+    }
+}

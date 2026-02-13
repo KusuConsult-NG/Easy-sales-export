@@ -713,3 +713,103 @@ export async function getRecommendedProductsAction(limit: number = 3) {
     }
 }
 
+
+/**
+ * Delete a product listing
+ */
+export async function deleteProductAction(productId: string) {
+    try {
+        const session = await auth();
+
+        if (!session?.user?.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return { success: false, error: "Product not found" };
+        }
+
+        const product = productDoc.data() as Product;
+
+        // Verify user owns this product
+        if (product.sellerId !== session.user.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Check for active orders
+        const activeOrders = await db.collection(COLLECTIONS.ORDERS)
+            .where("productId", "==", productId)
+            .where("status", "in", ["pending_payment", "processing", "shipped"])
+            .get();
+
+        if (!activeOrders.empty) {
+            return {
+                success: false,
+                error: "Cannot delete product with active orders",
+            };
+        }
+
+        // Soft delete
+        await productRef.update({
+            status: "deleted",
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return {
+            success: true,
+            message: "Product deleted successfully",
+        };
+    } catch (error: any) {
+        console.error("Delete product error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get related products based on category and location
+ */
+export async function getRelatedProductsAction(productId: string, limit: number = 4) {
+    try {
+        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
+        const productSnap = await productRef.get();
+
+        if (!productSnap.exists) {
+            return { success: false, error: "Product not found", products: [] };
+        }
+
+        const product = productSnap.data() as Product;
+
+        // Query by same category
+        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
+            .where("category", "==", product.category)
+            .where("status", "==", "active")
+            .limit(limit + 1)
+            .get();
+
+        let products = snapshot.docs
+            .map(doc => doc.data() as Product)
+            .filter(p => p.id !== productId);
+
+        // If not enough, add random active products
+        if (products.length < limit) {
+            const additionalSnapshot = await db.collection(COLLECTIONS.PRODUCTS)
+                .where("status", "==", "active")
+                .limit(limit * 2)
+                .get();
+
+            const additional = additionalSnapshot.docs
+                .map(doc => doc.data() as Product)
+                .filter(p => p.id !== productId && !products.find(existing => existing.id === p.id));
+
+            products = [...products, ...additional].slice(0, limit);
+        }
+
+        return { success: true, products };
+    } catch (error: any) {
+        console.error("Get related products error:", error);
+        return { success: false, error: error.message, products: [] };
+    }
+}

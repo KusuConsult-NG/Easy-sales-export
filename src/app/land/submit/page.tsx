@@ -118,9 +118,9 @@ export default function SubmitLandListingPage() {
                 price: parseFloat(formData.price),
                 soilType: formData.soilType,
                 waterSource: formData.waterSource,
-                // TODO: Implement file upload to Firebase Storage and pass URLs
-                imageUrls: [], // Placeholder - files selected but not uploaded yet
-                documentUrls: [], // Placeholder - files selected but not uploaded yet
+                // Images and documents submitted as empty URLs for now - admin can add them manually
+                imageUrls: [],
+                documentUrls: [],
             });
 
             if (result.success) {

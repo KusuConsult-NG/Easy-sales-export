@@ -21,6 +21,9 @@ export const exportWindowSchema = z.object({
     quantity: z.string().min(1, "Quantity is required"),
     amount: z.number().positive("Amount must be greater than 0"),
     deliveryDate: z.string().optional(),
+    destination: z.enum(["europe", "north_america", "asia", "middle_east", "africa", "other"], {
+        message: "Please select a valid destination",
+    }).optional(),
 });
 
 export type ExportWindowFormData = z.infer<typeof exportWindowSchema>;
@@ -90,6 +93,7 @@ export async function createExportWindowAction(
             quantity: formData.get("quantity") as string,
             amount: parseFloat(formData.get("amount") as string),
             deliveryDate: formData.get("deliveryDate") as string | undefined,
+            destination: formData.get("destination") as string | undefined,
         };
 
         // Validate with Zod
@@ -113,6 +117,7 @@ export async function createExportWindowAction(
             commodity: validatedData.commodity,
             quantity: validatedData.quantity,
             amount: validatedData.amount,
+            destination: validatedData.destination || "other",
             status: "pending",
             userId: session.user.id,
             orderDate: FieldValue.serverTimestamp(),

@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getProductAction } from "@/app/actions/marketplace";
+import { getProductAction, getRelatedProductsAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ export default function ProductDetailPage() {
     const [loading, setLoading] = useState(true);
     const [product, setProduct] = useState<Product & { sellerName?: string } | null>(null);
     const [error, setError] = useState("");
+    const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
 
     useEffect(() => {
         async function loadProduct() {
@@ -25,6 +26,12 @@ export default function ProductDetailPage() {
                 const result = await getProductAction(productId);
                 if (result.success && result.product) {
                     setProduct(result.product);
+
+                    // Load related products
+                    const relatedResult = await getRelatedProductsAction(productId, 4);
+                    if (relatedResult.success) {
+                        setRelatedProducts(relatedResult.products || []);
+                    }
                 } else {
                     setError(result.error || "Product not found");
                 }
@@ -237,16 +244,54 @@ export default function ProductDetailPage() {
                     </div>
                 </div>
 
-                {/* Related Products Section */}
-                <div className="mt-16">
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
-                        Similar Products
-                    </h2>
+            {/* Related Products */}
+            <div className="max-w-7xl mx-auto px-6 py-12">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Related Products</h2>
+                {relatedProducts.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {relatedProducts.map((relatedProduct) => (
+                            <Link
+                                key={relatedProduct.id}
+                                href={`/marketplace/products/${relatedProduct.id}`}
+                                className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition group"
+                            >
+                                <div className="relative h-48">
+                                    {relatedProduct.images?.[0] ? (
+                                        <Image
+                                            src={relatedProduct.images[0]}
+                                            alt={relatedProduct.title}
+                                            fill
+                                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                            <Package className="w-12 h-12 text-slate-400" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-4">
+                                    <h3 className="font-semibold text-slate-900 dark:text-white text-sm line-clamp-2 mb-2">
+                                        {relatedProduct.title}
+                                    </h3>
+                                    <p className="text-lg font-bold text-green-600">
+                                        ₦{relatedProduct.pricingTiers[0]?.price.toLocaleString()}
+                                        <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">
+                                            /{relatedProduct.unit}
+                                        </span>
+                                    </p>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                ) : (
                     <div className="text-center text-slate-600 dark:text-slate-400 py-12 bg-white dark:bg-slate-800 rounded-2xl">
                         <Package className="w-16 h-16 mx-auto mb-4 text-slate-400" />
-                        <p>Related products coming soon</p>
+                        <p>No related products available</p>
                     </div>
-                </div>
+                )}
+            </div>
+
+
             </div>
         </div>
     );

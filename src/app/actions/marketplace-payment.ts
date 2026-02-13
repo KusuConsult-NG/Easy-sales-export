@@ -226,3 +226,74 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         };
     }
 }
+
+/**
+ * Create Marketplace Order with Bank Transfer Payment
+ * Creates a pending order that requires manual payment verification
+ */
+export async function createBankTransferOrderAction(
+    cartItems: CartItem[],
+    buyerEmail: string,
+    buyerPhone: string,
+    deliveryFee: number
+): Promise<{
+    success: boolean;
+    error?: string;
+    orderId?: string;
+    orderReference?: string;
+}> {
+    try {
+        const session = await auth();
+
+        if (!session?.user) {
+            return { error: "Authentication required", success: false };
+        }
+
+        const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const totalAmount = subtotal + deliveryFee;
+
+        if (totalAmount < 500) {
+            return { error: "Minimum order amount is ₦500", success: false };
+        }
+
+        const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
+        const orderReference = `BT-${Date.now()}`;
+
+        await db.collection("marketplaceOrders").doc(orderId).set({
+            orderId,
+            buyerId: session.user.id,
+            buyerEmail,
+            buyerPhone,
+            items: cartItems.map(item => ({
+                productId: item.id,
+                productTitle: item.title,
+                sellerId: item.sellerId,
+                quantity: item.quantity,
+                unit: item.unit,
+                pricePerUnit: item.price,
+                totalPrice: item.price * item.quantity,
+            })),
+            subtotal,
+            deliveryFee,
+            totalAmount,
+            paymentMethod: "bank_transfer",
+            paymentReference: orderReference,
+            paymentStatus: "pending_verification",
+            orderStatus: "pending_payment",
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return {
+            success: true,
+            orderId,
+            orderReference,
+        };
+    } catch (error: any) {
+        console.error("Bank transfer order creation error:", error);
+        return {
+            success: false,
+            error: error.message || "Failed to create order. Please try again.",
+        };
+    }
+}

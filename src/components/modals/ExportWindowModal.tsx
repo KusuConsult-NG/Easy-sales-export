@@ -133,6 +133,29 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                     </p>
                 </div>
 
+                {/* Destination */}
+                <div>
+                    <label htmlFor="destination" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        🌍 Export Destination
+                    </label>
+                    <select
+                        id="destination"
+                        name="destination"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                    >
+                        <option value="">Select destination...</option>
+                        <option value="europe">🇪🇺 Europe</option>
+                        <option value="north_america">🇺🇸 North America</option>
+                        <option value="asia">🌏 Asia</option>
+                        <option value="middle_east">🏜️ Middle East</option>
+                        <option value="africa">🌍 Africa</option>
+                        <option value="other">🌐 Other</option>
+                    </select>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Target market for this export
+                    </p>
+                </div>
+
                 {/* Action Buttons */}
                 <div className="flex gap-3 pt-4">
                     <button

@@ -57,6 +57,7 @@ function NewDisputePageContent() {
     const [selectedReason, setSelectedReason] = useState<DisputeReason>("not_received");
     const [description, setDescription] = useState("");
     const [evidenceUrls, setEvidenceUrls] = useState<string[]>([]);
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     useEffect(() => {
         if (orderId) {
@@ -84,6 +85,67 @@ function NewDisputePageContent() {
         } finally {
             setLoading(false);
         }
+    }
+
+    async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        // Validate total number of files
+        if (evidenceUrls.length + files.length > 5) {
+            showToast("Maximum 5 files allowed", "error");
+            return;
+        }
+
+        // Validate file sizes and types
+        for (const file of Array.from(files)) {
+            if (file.size > 10 * 1024 * 1024) {
+                showToast(`File ${file.name} exceeds 10MB limit`, "error");
+                return;
+            }
+
+            const validTypes = ["image/jpeg", "image/png", "application/pdf"];
+            if (!validTypes.includes(file.type)) {
+                showToast(`File ${file.name} must be JPG, PNG, or PDF`, "error");
+                return;
+            }
+        }
+
+        // Upload files
+        try {
+            const { uploadFile } = await import("@/lib/storage-upload");
+            const uploadedUrls: string[] = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const path = `disputes/evidence/${orderId}/${Date.now()}-${file.name}`;
+
+                const url = await uploadFile(
+                    file,
+                    path,
+                    (progressData) => {
+                        const totalProgress = ((i + progressData.progress / 100) / files.length) * 100;
+                        setUploadProgress(Math.round(totalProgress));
+                    }
+                );
+
+                uploadedUrls.push(url);
+            }
+
+            setEvidenceUrls([...evidenceUrls, ...uploadedUrls]);
+            setUploadProgress(0);
+            showToast("Files uploaded successfully", "success");
+        } catch (error: any) {
+            showToast(error.message || "Failed to upload files", "error");
+            setUploadProgress(0);
+        }
+
+        // Reset input
+        e.target.value = "";
+    }
+
+    function removeEvidence(index: number) {
+        setEvidenceUrls(evidenceUrls.filter((_, i) => i !== index));
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -199,8 +261,8 @@ function NewDisputePageContent() {
                                     type="button"
                                     onClick={() => setSelectedReason(reason.value)}
                                     className={`w-full p-4 rounded-xl border-2 transition text-left ${selectedReason === reason.value
-                                            ? "border-primary bg-primary/5"
-                                            : "border-gray-200 dark:border-gray-700 hover:border-primary/50"
+                                        ? "border-primary bg-primary/5"
+                                        : "border-gray-200 dark:border-gray-700 hover:border-primary/50"
                                         }`}
                                 >
                                     <div className="font-semibold text-gray-900 dark:text-white mb-1">
@@ -231,20 +293,79 @@ function NewDisputePageContent() {
                         </p>
                     </div>
 
-                    {/* Evidence Upload Placeholder */}
+                    {/* Evidence Upload */}
                     <div className="mb-6">
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                             Evidence (optional)
                         </label>
-                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-8 text-center">
+
+                        {/* File Upload Area */}
+                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 text-center">
                             <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                            <p className="text-gray-500 text-sm mb-2">
-                                Upload photos or documents to support your claim
+                            <p className="text-gray-700 dark:text-gray-300 text-sm mb-2 font-medium">
+                                Upload photos or documents
                             </p>
-                            <p className="text-xs text-gray-400">
-                                Feature coming soon - For now, please include evidence descriptions in your text
+                            <p className="text-xs text-gray-500 mb-4">
+                                Max 5 files, 10MB each (JPG, PNG, PDF)
                             </p>
+                            <input
+                                type="file"
+                                id="evidence-upload"
+                                multiple
+                                accept="image/jpeg,image/png,application/pdf"
+                                onChange={handleFileSelect}
+                                className="hidden"
+                            />
+                            <label
+                                htmlFor="evidence-upload"
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer transition"
+                            >
+                                <Upload className="w-4 h-4" />
+                                Choose Files
+                            </label>
                         </div>
+
+                        {/* Uploaded Files List */}
+                        {evidenceUrls.length > 0 && (
+                            <div className="mt-4 space-y-2">
+                                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                    Uploaded Files ({evidenceUrls.length})
+                                </p>
+                                {evidenceUrls.map((url, index) => (
+                                    <div
+                                        key={index}
+                                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                                    >
+                                        <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">
+                                            File {index + 1}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeEvidence(index)}
+                                            className="ml-2 p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Upload Progress */}
+                        {uploadProgress > 0 && uploadProgress < 100 && (
+                            <div className="mt-4">
+                                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                    <span>Uploading...</span>
+                                    <span>{uploadProgress}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                    <div
+                                        className="bg-primary h-2 rounded-full transition-all duration-300"
+                                        style={{ width: `${uploadProgress}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Warning */}
