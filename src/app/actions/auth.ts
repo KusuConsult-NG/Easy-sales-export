@@ -165,8 +165,11 @@ export async function registerAction(prevState: any, formData: FormData) {
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
-            redirectTo: primaryApp,
+            redirect: false,
         });
+
+        // Manual redirect to ensure cookie propagation
+        redirect(primaryApp);
 
         // This line never executes because signIn redirects
         return { error: "", success: true };
