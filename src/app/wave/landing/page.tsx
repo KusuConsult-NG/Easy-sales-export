@@ -111,12 +111,12 @@ export default function WaveLandingPage() {
             <section className="py-20 bg-white">
                 <div className="max-w-6xl mx-auto px-6">
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center gap-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-6 py-2 rounded-full text-sm font-semibold mb-6">
-                            <Sparkles className="w-4 h-4" />
+                        <div className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-full text-base font-bold mb-6 shadow-lg">
+                            <Sparkles className="w-5 h-5" />
                             <span>See RH-WAVE 774 in Action</span>
                         </div>
-                        <h3 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">
-                            Transforming Lives Through <span className="text-green-700">Agribusiness Excellence</span>
+                        <h3 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-3">
+                            Transforming Lives Through <span className="text-green-600 dark:text-green-400">Agribusiness Excellence</span>
                         </h3>
                         <p className="text-lg text-slate-700 max-w-3xl mx-auto">
                             Watch how the Women Agro-Value Expansion Programme is empowering Nigerian women to become leaders in agriculture and export
