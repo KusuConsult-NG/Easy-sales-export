@@ -21,7 +21,7 @@ const REGISTRATION_PATHS = [
         description: "Women's Agribusiness Venture Empowerment program application.",
         icon: Globe, // or Flower/Sprout if available
         color: "bg-green-600",
-        href: "/wave/register", // Custom WAVE registration page
+        href: "/wave/application", // WAVE Official Beneficiary Application Form
         benefits: ["Business grants", "Mentorship", "Exclusive training"],
     },
     {

@@ -176,10 +176,10 @@ function WaveLoginContent() {
                         <p className="text-emerald-200/60">
                             Don't have an account?{" "}
                             <Link
-                                href="/wave/register"
+                                href="/wave/application"
                                 className="text-white font-semibold hover:underline"
                             >
-                                Join WAVE
+                                Apply to WAVE
                             </Link>
                         </p>
                     </div>

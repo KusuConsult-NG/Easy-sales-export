@@ -43,28 +43,68 @@ export interface WaveTrainingEvent {
     createdAt: Timestamp;
 }
 
-// Validation Schema for WAVE Application
+// Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({
-    fullName: z.string().min(2, "Name is required"),
-    email: z.string().email("Invalid email"),
-    phone: z.string().min(10, "Invalid phone number"),
+    // SECTION A: Personal Identification
+    surname: z.string().min(2, "Surname is required"),
+    firstName: z.string().min(2, "First name is required"),
+    otherNames: z.string().optional(),
     dateOfBirth: z.string(),
-    gender: z.string().refine((val) => val === "female", { message: "WAVE is exclusively for female entrepreneurs" }),
-    citizenship: z.string().min(2),
-    stateOfResidence: z.string().min(2),
-    agriculturalActivity: z.string().min(2),
-    yearsOfExperience: z.number().min(0),
-    farmSize: z.string(),
-    monthlyRevenue: z.string(),
-    currentChallenges: z.string(),
-    businessName: z.string().min(2),
-    businessDescription: z.string().min(10),
-    targetMarket: z.string(),
-    fundingNeeded: z.number().positive("Funding amount must be positive"),
-    shortTermGoals: z.string(),
-    mediumTermGoals: z.string(),
-    longTermGoals: z.string(),
-    expectedImpact: z.string(),
+    age: z.number().min(18).max(100),
+    phone: z.string().min(10, "Invalid phone number"),
+    alternativePhone: z.string().optional(),
+    email: z.string().email("Invalid email").optional().or(z.literal("")),
+    residentialAddress: z.string().min(5, "Residential address is required"),
+    stateOfOrigin: z.string().min(2, "State of origin is required"),
+    lgaOfOrigin: z.string().min(2, "LGA of origin is required"),
+    stateOfResidence: z.string().min(2, "State of residence is required"),
+    lgaOfResidence: z.string().min(2, "LGA of residence is required"),
+    maritalStatus: z.enum(["single", "married", "widowed", "divorced", ""]),
+    nextOfKinName: z.string().min(2, "Next of kin name is required"),
+    nextOfKinPhone: z.string().min(10, "Next of kin phone is required"),
+    nextOfKinRelationship: z.string().min(2, "Relationship is required"),
+
+    // SECTION B: National Identity & Civic Status
+    nin: z.string().min(11, "Valid NIN is required"),
+    votersCardNumber: z.string().min(5, "Voter's card number is required"),
+    pollingUnit: z.string().min(2, "Polling unit is required"),
+    ward: z.string().min(2, "Ward is required"),
+    yearOfVoterRegistration: z.string().min(4, "Year of registration is required"),
+    votedInLastElection: z.boolean(),
+
+    // SECTION C: Socio-Economic Profile
+    highestEducation: z.enum(["none", "primary", "secondary", "tertiary", "vocational", ""]),
+    currentOccupation: z.string().min(2, "Current occupation is required"),
+    averageMonthlyIncome: z.enum(["below_50k", "50k_100k", "100k_250k", "above_250k", ""]),
+    involvedInAgriculture: z.boolean(),
+    agricultureTypes: z.array(z.enum(["farming", "processing", "trading", "export", "logistics"])).optional(),
+
+    // SECTION D: Agricultural Interest & Value Chain
+    valueChainAreas: z.array(z.enum(["crop_production", "livestock", "processing_packaging", "aggregation_trading", "export_market"])),
+    preferredCommodities: z.array(z.enum(["rice", "maize", "sesame", "soybeans", "ginger", "cassava", "vegetables", "other"])),
+    preferredCommodityOther: z.string().optional(),
+    hasAccessToFarmland: z.boolean(),
+    farmlandHectares: z.number().optional(),
+    needsFarmlandAccess: z.boolean().optional(),
+
+    // SECTION E: Financial & Cooperative Details
+    hasBankAccount: z.boolean(),
+    bankName: z.string().optional(),
+    accountNumber: z.string().optional(),
+    bvn: z.string().optional(),
+    isMemberOfCooperative: z.boolean(),
+    cooperativeName: z.string().optional(),
+    willingToJoinCooperative: z.boolean(),
+
+    // SECTION F: Training, Support & Commitment
+    supportNeeded: z.array(z.enum(["training", "inputs", "mechanization", "finance", "market_access"])),
+    willingToUndergoTraining: z.boolean(),
+    willingToComplyWithStandards: z.boolean(),
+    willingToParticipateInME: z.boolean(),
+
+    // SECTION G: Declaration & Consent
+    declarationAccepted: z.boolean(),
+    consentGiven: z.boolean(),
 });
 
 /**
@@ -111,28 +151,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
  * Submit multi-step WAVE application
  * Accepts object data from multi-step form (not FormData)
  */
-export async function submitMultiStepWaveApplicationAction(applicationData: {
-    fullName: string;
-    email: string;
-    phone: string;
-    dateOfBirth: string;
-    gender: "female" | "male" | "";
-    citizenship: string;
-    stateOfResidence: string;
-    agriculturalActivity: string;
-    yearsOfExperience: number;
-    farmSize: string;
-    monthlyRevenue: string;
-    currentChallenges: string;
-    businessName: string;
-    businessDescription: string;
-    targetMarket: string;
-    fundingNeeded: number;
-    shortTermGoals: string;
-    mediumTermGoals: string;
-    longTermGoals: string;
-    expectedImpact: string;
-}): Promise<{ success: boolean; error?: string; applicationId?: string }> {
+export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ success: boolean; error?: string; applicationId?: string }> {
     try {
         const session = await auth();
         if (!session?.user) {
@@ -173,8 +192,9 @@ export async function submitMultiStepWaveApplicationAction(applicationData: {
             targetId: applicationId,
             targetType: "wave_application",
             metadata: {
-                businessName: validatedData.businessName,
-                fundingNeeded: validatedData.fundingNeeded,
+                surname: validatedData.surname,
+                firstName: validatedData.firstName,
+                stateOfResidence: validatedData.stateOfResidence,
             },
         });
 

@@ -103,10 +103,10 @@ export default function WaveLandingPage() {
 
                     {/* CTA Button */}
                     <Link
-                        href="/wave/register"
+                        href="/wave/application"
                         className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-green-500/50 transition-all hover:scale-105"
                     >
-                        <span>Register Now</span>
+                        <span>Apply Now</span>
                         <ArrowRight className="w-6 h-6" />
                     </Link>                </div>
 
@@ -250,7 +250,7 @@ export default function WaveLandingPage() {
                     {/* CTA */}
                     <div className="text-center mt-12">
                         <Link
-                            href="/wave/register"
+                            href="/wave/application"
                             className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-8 py-4 rounded-xl text-lg font-bold shadow-xl hover:shadow-green-500/50 transition-all hover:scale-105"
                         >
                             <Users className="w-5 h-5" />
@@ -527,7 +527,7 @@ export default function WaveLandingPage() {
                     </p>
 
                     <Link
-                        href="/wave/register"
+                        href="/wave/application"
                         className="inline-flex items-center gap-3 bg-white text-green-700 px-12 py-6 rounded-xl text-xl font-bold shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                     >
                         <span>Begin Here - Apply Now!</span>

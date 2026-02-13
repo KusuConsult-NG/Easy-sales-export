@@ -113,18 +113,28 @@ export default function HubPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                         <div>
                             <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-6">
-                                Empowering Nigerian Agriculture
+                                About Us
                             </h2>
                             <p className="text-lg text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
-                                We are Nigeria's premier agricultural platform, dedicated to
-                                connecting farmers with global markets through innovative technology
-                                and secure financial systems.
+                                <strong className="text-slate-900 dark:text-white">Easy Sales Export Nigeria Limited</strong> is a strategic agro-export and trade infrastructure company connecting African producers to global markets.
+                            </p>
+                            <p className="text-lg text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+                                We build structured systems that organize farmers, coordinate production, ensure quality, and deliver commodities to international buyers with reliability and scale.
+                            </p>
+                            <p className="text-lg text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+                                Our work spans commodity export, cooperative development, farm production structuring, export training, and global market access facilitation.
                             </p>
                             <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
-                                Our mission is to empower Nigerian farmers to achieve financial
-                                independence through sustainable agricultural practices, quality
-                                education, and access to global trade opportunities.
+                                As a strategic implementing partner in national and private agricultural initiatives, including the <strong className="text-slate-900 dark:text-white">Women Agro Value Expansion (WAVE) Program</strong>, Easy Sales Export plays a critical role in empowering producers and unlocking large-scale export opportunities.
                             </p>
+                            <div className="bg-emerald-50 dark:bg-emerald-900/20 border-l-4 border-emerald-600 p-6 mb-8 rounded-r-xl">
+                                <p className="text-base italic text-slate-700 dark:text-slate-300 mb-3">
+                                    We don't just export products.
+                                </p>
+                                <p className="text-base font-semibold text-emerald-800 dark:text-emerald-300">
+                                    We build the systems that turn production into predictable wealth, empower communities, and position Africa as a global trade force.
+                                </p>
+                            </div>
                             <Link
                                 href="/auth/get-started"
                                 className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl hover:scale-105"
@@ -199,7 +209,13 @@ export default function HubPage() {
                             <h3 className="text-white font-bold mb-4 text-lg">
                                 Easy Sales Export
                             </h3>
-                            <p className="text-sm">
+                            <p className="text-sm mb-2">
+                                Connecting African production to global markets.
+                            </p>
+                            <p className="text-sm font-semibold text-emerald-400">
+                                Structuring trade. Empowering producers. Creating prosperity.
+                            </p>
+                            <p className="text-xs mt-3 text-slate-500">
                                 RC: 763845
                             </p>
                         </div>

@@ -23,78 +23,147 @@ import { submitMultiStepWaveApplicationAction } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 
 // Step imports
-import EligibilityStep from "./steps/EligibilityStep";
-import ExperienceStep from "./steps/ExperienceStep";
-import ProposalStep from "./steps/ProposalStep";
-import DocumentsStep from "./steps/DocumentsStep";
+import PersonalDetailsStep from "./steps/PersonalDetailsStep";
+import CivicStatusStep from "./steps/CivicStatusStep";
+import SocioEconomicStep from "./steps/SocioEconomicStep";
+import AgriInterestStep from "./steps/AgriInterestStep";
+import FinancialStep from "./steps/FinancialStep";
+import TrainingStep from "./steps/TrainingStep";
 import ReviewStep from "./ReviewStep";
 
 export interface WaveApplicationData {
-    // Step 1: Eligibility
-    fullName: string;
-    email: string;
-    phone: string;
+    // SECTION A: Personal Identification
+    surname: string;
+    firstName: string;
+    otherNames: string;
     dateOfBirth: string;
-    gender: "female" | "male" | "";
-    citizenship: string;
+    age: number;
+    phone: string;
+    alternativePhone: string;
+    email: string;
+    residentialAddress: string;
+    stateOfOrigin: string;
+    lgaOfOrigin: string;
     stateOfResidence: string;
+    lgaOfResidence: string;
+    maritalStatus: "single" | "married" | "widowed" | "divorced" | "";
+    nextOfKinName: string;
+    nextOfKinPhone: string;
+    nextOfKinRelationship: string;
 
-    // Step 2: Experience
-    agriculturalActivity: string;
-    yearsOfExperience: number;
-    farmSize: string;
-    monthlyRevenue: string;
-    currentChallenges: string;
+    // SECTION B: National Identity & Civic Status
+    nin: string;
+    votersCardNumber: string;
+    pollingUnit: string;
+    ward: string;
+    yearOfVoterRegistration: string;
+    votedInLastElection: boolean;
 
-    // Step 3: Proposal
-    businessName: string;
-    businessDescription: string;
-    targetMarket: string;
-    fundingNeeded: number;
-    shortTermGoals: string;
-    mediumTermGoals: string;
-    longTermGoals: string;
-    expectedImpact: string;
+    // SECTION C: Socio-Economic Profile
+    highestEducation: "none" | "primary" | "secondary" | "tertiary" | "vocational" | "";
+    currentOccupation: string;
+    averageMonthlyIncome: "below_50k" | "50k_100k" | "100k_250k" | "above_250k" | "";
+    involvedInAgriculture: boolean;
+    agricultureTypes: ("farming" | "processing" | "trading" | "export" | "logistics")[];
 
-    // Step 4: Documents
-    documents: {
-        governmentId?: File | null;
-        passportPhoto?: File | null;
-        businessEvidence?: File | null;
-        bankStatement?: File | null;
-        businessRegistration?: File | null;
-    };
+    // SECTION D: Agricultural Interest & Value Chain
+    valueChainAreas: ("crop_production" | "livestock" | "processing_packaging" | "aggregation_trading" | "export_market")[];
+    preferredCommodities: ("rice" | "maize" | "sesame" | "soybeans" | "ginger" | "cassava" | "vegetables" | "other")[];
+    preferredCommodityOther: string;
+    hasAccessToFarmland: boolean;
+    farmlandHectares: number;
+    needsFarmlandAccess: boolean;
+
+    // SECTION E: Financial & Cooperative Details
+    hasBankAccount: boolean;
+    bankName: string;
+    accountNumber: string;
+    bvn: string;
+    isMemberOfCooperative: boolean;
+    cooperativeName: string;
+    willingToJoinCooperative: boolean;
+
+    // SECTION F: Training, Support & Commitment
+    supportNeeded: ("training" | "inputs" | "mechanization" | "finance" | "market_access")[];
+    willingToUndergoTraining: boolean;
+    willingToComplyWithStandards: boolean;
+    willingToParticipateInME: boolean;
+
+    // SECTION G: Declaration & Consent
+    declarationAccepted: boolean;
+    consentGiven: boolean;
 }
 
 const INITIAL_DATA: WaveApplicationData = {
-    fullName: "",
-    email: "",
-    phone: "",
+    // SECTION A: Personal Identification
+    surname: "",
+    firstName: "",
+    otherNames: "",
     dateOfBirth: "",
-    gender: "",
-    citizenship: "nigerian",
+    age: 0,
+    phone: "",
+    alternativePhone: "",
+    email: "",
+    residentialAddress: "",
+    stateOfOrigin: "",
+    lgaOfOrigin: "",
     stateOfResidence: "",
-    agriculturalActivity: "",
-    yearsOfExperience: 0,
-    farmSize: "",
-    monthlyRevenue: "",
-    currentChallenges: "",
-    businessName: "",
-    businessDescription: "",
-    targetMarket: "",
-    fundingNeeded: 0,
-    shortTermGoals: "",
-    mediumTermGoals: "",
-    longTermGoals: "",
-    expectedImpact: "",
-    documents: {},
+    lgaOfResidence: "",
+    maritalStatus: "",
+    nextOfKinName: "",
+    nextOfKinPhone: "",
+    nextOfKinRelationship: "",
+
+    // SECTION B: National Identity & Civic Status
+    nin: "",
+    votersCardNumber: "",
+    pollingUnit: "",
+    ward: "",
+    yearOfVoterRegistration: "",
+    votedInLastElection: false,
+
+    // SECTION C: Socio-Economic Profile
+    highestEducation: "",
+    currentOccupation: "",
+    averageMonthlyIncome: "",
+    involvedInAgriculture: false,
+    agricultureTypes: [],
+
+    // SECTION D: Agricultural Interest & Value Chain
+    valueChainAreas: [],
+    preferredCommodities: [],
+    preferredCommodityOther: "",
+    hasAccessToFarmland: false,
+    farmlandHectares: 0,
+    needsFarmlandAccess: false,
+
+    // SECTION E: Financial & Cooperative Details
+    hasBankAccount: false,
+    bankName: "",
+    accountNumber: "",
+    bvn: "",
+    isMemberOfCooperative: false,
+    cooperativeName: "",
+    willingToJoinCooperative: false,
+
+    // SECTION F: Training, Support & Commitment
+    supportNeeded: [],
+    willingToUndergoTraining: false,
+    willingToComplyWithStandards: false,
+    willingToParticipateInME: false,
+
+    // SECTION G: Declaration & Consent
+    declarationAccepted: false,
+    consentGiven: false,
 };
 
 const STEPS = [
-    "Eligibility",
-    "Experience",
-    "Proposal",
-    "Documents",
+    "Personal Details",
+    "Civic Status",
+    "Socio-Economic",
+    "Agricultural Interest",
+    "Financial Details",
+    "Training & Support",
     "Review",
 ];
 
@@ -201,14 +270,14 @@ export default function WaveApplicationPage() {
                 {/* Step Content */}
                 <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl p-8 mb-8 text-white">
                     {currentStep === 0 && (
-                        <EligibilityStep
+                        <PersonalDetailsStep
                             data={formData}
                             updateData={updateFormData}
                             onNext={nextStep}
                         />
                     )}
                     {currentStep === 1 && (
-                        <ExperienceStep
+                        <CivicStatusStep
                             data={formData}
                             updateData={updateFormData}
                             onNext={nextStep}
@@ -216,7 +285,7 @@ export default function WaveApplicationPage() {
                         />
                     )}
                     {currentStep === 2 && (
-                        <ProposalStep
+                        <SocioEconomicStep
                             data={formData}
                             updateData={updateFormData}
                             onNext={nextStep}
@@ -224,7 +293,7 @@ export default function WaveApplicationPage() {
                         />
                     )}
                     {currentStep === 3 && (
-                        <DocumentsStep
+                        <AgriInterestStep
                             data={formData}
                             updateData={updateFormData}
                             onNext={nextStep}
@@ -232,6 +301,22 @@ export default function WaveApplicationPage() {
                         />
                     )}
                     {currentStep === 4 && (
+                        <FinancialStep
+                            data={formData}
+                            updateData={updateFormData}
+                            onNext={nextStep}
+                            onBack={prevStep}
+                        />
+                    )}
+                    {currentStep === 5 && (
+                        <TrainingStep
+                            data={formData}
+                            updateData={updateFormData}
+                            onNext={nextStep}
+                            onBack={prevStep}
+                        />
+                    )}
+                    {currentStep === 6 && (
                         <ReviewStep
                             data={formData}
                             onBack={prevStep}
@@ -242,8 +327,8 @@ export default function WaveApplicationPage() {
                     )}
                 </div>
 
-                {/* Navigation Buttons (shown for steps 1-4) */}
-                {currentStep < 4 && (
+                {/* Navigation Buttons (shown for steps 1-6) */}
+                {currentStep < 6 && (
                     <div className="flex items-center justify-between">
                         <button
                             onClick={prevStep}

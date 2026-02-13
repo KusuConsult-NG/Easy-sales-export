@@ -67,12 +67,6 @@ export async function middleware(request: NextRequest) {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
     const session = token ? { user: token } : null;
 
-    // 1. If user is logged in and tries to access auth pages, redirect to dashboard
-    // This prevents authenticated users from seeing login/register pages
-    if (token && pathname.startsWith('/auth')) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-
     // Check session timeout
     if (session) {
         const lastActivity = request.cookies.get("lastActivity")?.value;
