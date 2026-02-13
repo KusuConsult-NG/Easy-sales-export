@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
@@ -33,7 +33,13 @@ type QuizData = {
     questions: Question[];
 };
 
-export default function StudentQuizPage({ params }: { params: { courseId: string } }) {
+interface StudentQuizPageProps {
+    params: Promise<{ courseId: string }>;
+}
+
+export default function StudentQuizPage(props: StudentQuizPageProps) {
+    // Next.js 16: params is now a Promise, must unwrap with React.use()
+    const params = use(props.params);
     const router = useRouter();
     const { showToast } = useToast();
     const [quiz, setQuiz] = useState<QuizData | null>(null);

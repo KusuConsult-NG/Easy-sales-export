@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -17,10 +17,14 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 
 interface QuizPageProps {
-    params: { courseId: string; moduleId: string };
+    params: Promise<{ courseId: string; moduleId: string }>;
 }
 
-export default function QuizPage({ params }: QuizPageProps) {
+export default function QuizPage(props: QuizPageProps) {
+    // Next.js 16: params is now a Promise, must unwrap with React.use()
+    const params = use(props.params);
+    const { courseId, moduleId } = params;
+
     const router = useRouter();
     const { data: session, status } = useSession();
     const { showToast } = useToast();
@@ -34,8 +38,6 @@ export default function QuizPage({ params }: QuizPageProps) {
     const [selectedAnswers, setSelectedAnswers] = useState<Record<string, number>>({});
     const [score, setScore] = useState<number | null>(null);
     const [passed, setPassed] = useState<boolean>(false);
-
-    const { courseId, moduleId } = params;
 
     useEffect(() => {
         if (status === "unauthenticated") {

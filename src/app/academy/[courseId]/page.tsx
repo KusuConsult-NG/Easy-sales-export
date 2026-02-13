@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -17,10 +17,14 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 
 interface CourseDetailPageProps {
-    params: { courseId: string };
+    params: Promise<{ courseId: string }>;
 }
 
-export default function CourseDetailPage({ params }: CourseDetailPageProps) {
+export default function CourseDetailPage(props: CourseDetailPageProps) {
+    // Next.js 16: params is now a Promise, must unwrap with React.use()
+    const params = use(props.params);
+    const courseId = params.courseId;
+
     const router = useRouter();
     const { data: session, status } = useSession();
     const { showToast } = useToast();
@@ -28,9 +32,6 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     const [progress, setProgress] = useState<UserProgress | null>(null);
     const [loading, setLoading] = useState(true);
     const [enrolling, setEnrolling] = useState(false);
-
-    // params.courseId is used directly
-    const courseId = params.courseId;
 
     useEffect(() => {
         if (status === "unauthenticated") {

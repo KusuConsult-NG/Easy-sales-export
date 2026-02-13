@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { CheckCircle, XCircle, Award, Calendar, User, BookOpen } from "lucide-react";
 import Link from "next/link";
 
@@ -13,7 +13,13 @@ type CertificateVerification = {
     isValid: boolean;
 };
 
-export default function CertificateVerificationPage({ params }: { params: { certificateId: string } }) {
+interface CertificateVerificationPageProps {
+    params: Promise<{ certificateId: string }>;
+}
+
+export default function CertificateVerificationPage(props: CertificateVerificationPageProps) {
+    // Next.js 16: params is now a Promise, must unwrap with React.use()
+    const params = use(props.params);
     const [verification, setVerification] = useState<CertificateVerification | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

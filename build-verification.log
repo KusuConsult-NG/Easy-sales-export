@@ -1,0 +1,19 @@
+
+> easy-sales-export-nextjs@0.1.0 build
+> next build --webpack
+
+▲ Next.js 16.1.6 (webpack)
+- Environments: .env.local
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 53s
+  Running TypeScript ...
+Failed to compile.
+
+src/app/academy/[courseId]/lesson/[lessonId]/page.tsx
+Type error: Type 'LessonPageProps' does not satisfy the constraint 'PageProps'.
+  Types of property 'params' are incompatible.
+    Type '{ courseId: string; lessonId: string; }' is missing the following properties from type 'Promise<any>': then, catch, finally, [Symbol.toStringTag]
+
+Next.js build worker exited with code: 1 and signal: null

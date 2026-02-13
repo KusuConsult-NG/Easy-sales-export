@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, ArrowLeft, FileText, Send } from "lucide-react";
@@ -8,10 +8,12 @@ import { createDisputeAction, getEscrowTransactionByIdAction, type EscrowTransac
 import { useToast } from "@/contexts/ToastContext";
 
 interface DisputePageProps {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 }
 
-export default function CreateDisputePage({ params }: DisputePageProps) {
+export default function CreateDisputePage(props: DisputePageProps) {
+    // Next.js 16: params is now a Promise, must unwrap with React.use()
+    const params = use(props.params);
     const router = useRouter();
     const { data: session, status } = useSession();
     const { showToast } = useToast();

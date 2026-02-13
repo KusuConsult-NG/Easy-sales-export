@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import {
     ArrowLeft,
@@ -29,7 +29,13 @@ const DISPUTE_REASON_LABELS: Record<string, string> = {
     other: "Other Issue",
 };
 
-export default function DisputeDetailPage({ params }: { params: { id: string } }) {
+interface DisputeDetailPageProps {
+    params: Promise<{ id: string }>;
+}
+
+export default function DisputeDetailPage(props: DisputeDetailPageProps) {
+    // Next.js 16: params is now a Promise, must unwrap with React.use()
+    const params = use(props.params);
     const router = useRouter();
     const { showToast } = useToast();
 

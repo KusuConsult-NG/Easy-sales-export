@@ -61,7 +61,7 @@ interface EscrowStepperProps {
     onStatusChange?: () => void;
 }
 
-export function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowStepperProps) {
+function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowStepperProps) {
     const getStepIndex = (status: EscrowStatus) => {
         switch (status) {
             case "pending": return 0;
