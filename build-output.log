@@ -2,23 +2,4 @@
 > easy-sales-export-nextjs@0.1.0 build
 > next build
 
-▲ Next.js 16.1.6 (Turbopack)
-- Environments: .env.local
-
-⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
-  Creating an optimized production build ...
-✓ Compiled successfully in 26.1s
-  Running TypeScript ...
-Failed to compile.
-
-./src/app/actions/academy.ts:20:16
-Type error: Cannot find name 'Timestamp'.
-
-[0m [90m 18 |[39m     modules[33m:[39m [33mCourseModule[39m[][33m;[39m
- [90m 19 |[39m     thumbnail[33m?[39m[33m:[39m string[33m;[39m
-[31m[1m>[22m[39m[90m 20 |[39m     createdAt[33m:[39m [33mTimestamp[39m[33m;[39m
- [90m    |[39m                [31m[1m^[22m[39m
- [90m 21 |[39m     updatedAt[33m:[39m [33mTimestamp[39m[33m;[39m
- [90m 22 |[39m }
- [90m 23 |[39m[0m
-Next.js build worker exited with code: 1 and signal: null
+You are using Node.js 18.18.0. For Next.js, Node.js version ">=20.9.0" is required.
