@@ -14,14 +14,12 @@ import Image from "next/image";
 export default function WaveLandingPage() {
     // Image Slider State
     const images = [
+        "/wave/3L8A9873.jpg",
         "/wave/3L8A9713.jpg",
-        "/wave/3L8A9719.jpg",
         "/wave/3L8A9720.jpg",
         "/wave/3L8A9721.jpg",
         "/wave/3L8A9765.jpg",
         "/wave/3L8A9807.jpg",
-        "/wave/3L8A9873.jpg",
-        "/wave/83bc8706-9ccb-49a9-9ee5-86f8d801e8df.png",
         "/wave/8866221.jpg",
         "/wave/96a35f41-fce4-48e0-81f4-2206e03d5d32.png",
         "/wave/P1359762.jpg",
