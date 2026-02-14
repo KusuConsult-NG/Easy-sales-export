@@ -61,7 +61,10 @@ function ModuleRegisterContent({
 }: ModuleRegisterProps) {
     const { showToast } = useToast();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || `/${platforms[0]}`; // Default to module root if no callback
+    // CRITICAL FIX: Do NOT default to module root (/${platforms[0]})
+    // Leaving this empty allows determinePostRegistrationRedirect() in server action
+    // to route users to the correct onboarding page instead of the public landing page
+    const callbackUrl = searchParams.get("callbackUrl") || "";
 
     const [formData, setFormData] = useState({
         fullName: "",
