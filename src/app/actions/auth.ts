@@ -162,17 +162,18 @@ export async function registerAction(prevState: any, formData: FormData) {
         });
 
         // REGISTRATION MUST ESTABLISH SESSION — DO NOT MODIFY
-        // Determine primary app or use callback URL
+        // Always redirect to dashboard after registration
+        // Dashboard will handle routing to the appropriate app based on user roles
         const callbackUrl = formData.get("callbackUrl") as string;
-        const primaryApp = callbackUrl || getPrimaryApp(userProfile.roles);
+        const redirectUrl = callbackUrl || "/dashboard"; // Always go to dashboard
 
-        // Auto sign-in after registration and redirect to primary app or callback
+        // Auto sign-in after registration and redirect to dashboard
         // CRITICAL: Use redirectTo to ensure session cookies are set before redirect
         // redirect:false causes session establishment issues in production
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
-            redirectTo: primaryApp,
+            redirectTo: redirectUrl,
         });
 
 
