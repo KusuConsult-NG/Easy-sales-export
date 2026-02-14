@@ -20,6 +20,48 @@ import { ZodError } from "zod";
  * with Firebase and NextAuth v5 integration.
  */
 
+/**
+ * Determine where to redirect user after registration based on their roles
+ * Users must complete module-specific onboarding before accessing dashboards
+ */
+function determinePostRegistrationRedirect(roles: UserRole[]): string {
+    // Check roles in priority order and redirect to appropriate onboarding
+
+    // Marketplace: Buyer or Seller
+    if (roles.includes('seller') || roles.includes('buyer')) {
+        return '/marketplace/onboarding';
+    }
+
+    // Export Program
+    if (roles.includes('export_participant')) {
+        return '/export/onboarding';
+    }
+
+    // WAVE Program (females auto-enrolled)
+    if (roles.includes('wave_participant')) {
+        return '/wave/application'; // WAVE uses "application" instead of "onboarding"
+    }
+
+    // Cooperative
+    if (roles.includes('cooperative_member')) {
+        return '/cooperatives/onboarding';
+    }
+
+    // Farm Nation
+    if (roles.includes('farmer') || roles.includes('land_owner') || roles.includes('investor')) {
+        return '/farm-nation/onboarding';
+    }
+
+    // Academy
+    if (roles.includes('academy_participant')) {
+        return '/academy/onboarding';
+    }
+
+    // Fallback for general users or edge cases
+    return '/dashboard';
+}
+
+
 export async function loginAction(prevState: any, formData: FormData) {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
@@ -162,12 +204,12 @@ export async function registerAction(prevState: any, formData: FormData) {
         });
 
         // REGISTRATION MUST ESTABLISH SESSION — DO NOT MODIFY
-        // Always redirect to dashboard after registration
-        // Dashboard will handle routing to the appropriate app based on user roles
+        // Redirect to module-specific onboarding after registration
+        // Users must complete onboarding before accessing dashboards
         const callbackUrl = formData.get("callbackUrl") as string;
-        const redirectUrl = callbackUrl || "/dashboard"; // Always go to dashboard
+        const redirectUrl = callbackUrl || determinePostRegistrationRedirect(userRoles);
 
-        // Auto sign-in after registration and redirect to dashboard
+        // Auto sign-in after registration and redirect to onboarding
         // CRITICAL: Use redirectTo to ensure session cookies are set before redirect
         // redirect:false causes session establishment issues in production
         await signIn("credentials", {
