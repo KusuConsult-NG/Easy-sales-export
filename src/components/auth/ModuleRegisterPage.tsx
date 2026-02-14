@@ -209,7 +209,7 @@ function ModuleRegisterContent({
                                 <div className={`text-sm ${theme.textLight} opacity-80 uppercase tracking-widest font-semibold`}>{footerText}</div>
                             ) : (
                                 <p className={`text-sm ${theme.textLight} opacity-80`}>
-                                    &copy; {new Date().getFullYear()} Easy Sales Export. All rights reserved.
+                                    &copy; {new Date().getFullYear()} Easy Sales Export (v1.0.4-client-fix). All rights reserved.
                                 </p>
                             )}
                         </div>
