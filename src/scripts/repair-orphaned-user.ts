@@ -13,7 +13,7 @@
 
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { COLLECTIONS } from '@/lib/types/firestore';
+import { COLLECTIONS, type UserRole } from '@/lib/types/firestore';
 import type { User as FirestoreUser } from '@/lib/types/firestore';
 
 async function repairOrphanedUser() {
@@ -25,7 +25,7 @@ async function repairOrphanedUser() {
 
     // DEFAULT ROLES - adjust based on what the user was trying to register for
     // Check registration logs or ask user what platforms they selected
-    const roles = ['general_user']; // Add 'buyer', 'seller', 'wave_participant', etc. as needed
+    const roles: UserRole[] = ['general_user']; // Add 'buyer', 'seller', 'wave_participant', etc. as needed
 
     // Create the missing Firestore profile
     const userProfile: Omit<FirestoreUser, 'createdAt' | 'updatedAt'> = {
@@ -33,7 +33,7 @@ async function repairOrphanedUser() {
         fullName,
         email,
         roles,
-        verified: true, // Auto-verify
+        verified: true, // Auto-verify for all modules (not just WAVE)
         gender,
     };
 

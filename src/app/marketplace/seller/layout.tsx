@@ -57,6 +57,36 @@ export default async function SellerLayout({ children }: { children: React.React
             redirect("/marketplace/onboarding");
         }
 
+        // ADDITIONAL CHECK: Verify seller approval status from marketplace_sellers
+        const { getAdminDb } = await import("@/lib/firebase-admin");
+        const adminDb = getAdminDb();
+
+        try {
+            const sellerDoc = await adminDb.collection('marketplace_sellers').doc(userId).get();
+
+            if (sellerDoc.exists) {
+                const sellerData = sellerDoc.data();
+
+                // Block pending sellers
+                if (sellerData?.status === 'pending') {
+                    redirect('/marketplace/onboarding/pending');
+                }
+
+                // Block rejected sellers
+                if (sellerData?.status === 'rejected') {
+                    redirect('/marketplace/onboarding/rejected');
+                }
+
+                // Only approved sellers can access dashboard
+                if (sellerData?.status !== 'approved') {
+                    redirect('/marketplace/onboarding');
+                }
+            }
+        } catch (dbError) {
+            console.error("Failed to check seller status:", dbError);
+            // Continue - don't block if check fails
+        }
+
         // User has access, render the layout
         return <SellerLayoutContent>{children}</SellerLayoutContent>;
     } catch (error) {
