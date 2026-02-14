@@ -8,6 +8,7 @@ export default function AcademyLoginPage() {
         <ModuleLoginPage
             moduleName="Academy"
             logo={GraduationCap}
+            logoImage="/images/modules/academy.png"
             redirectDefault="/academy/application"
             registerLink="/academy/register"
             registerText="New to the Academy?"

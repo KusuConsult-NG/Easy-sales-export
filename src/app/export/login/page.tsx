@@ -8,6 +8,7 @@ export default function ExportLoginPage() {
         <ModuleLoginPage
             moduleName="Export Windows"
             logo={Ship}
+            logoImage="/images/modules/export.png"
             redirectDefault="/export/onboarding"
             registerLink="/export/register"
             registerText="New to Export Windows?"

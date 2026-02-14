@@ -1,11 +1,22 @@
 "use client";
 
 import ModuleRegisterPage from "@/components/auth/ModuleRegisterPage";
+import Image from "next/image";
 
 export default function CooperativeRegisterPage() {
     return (
         <ModuleRegisterPage
             moduleName="Cooperative"
+            logo={
+                <div className="w-16 h-16 relative mb-4">
+                    <Image
+                        src="/images/modules/cooperative.png"
+                        alt="Cooperative"
+                        fill
+                        className="object-contain"
+                    />
+                </div>
+            }
             description="Unlock access to shared resources, collective bargaining power, and direct investment opportunities."
             benefits={[
                 "Access to low-interest loans",

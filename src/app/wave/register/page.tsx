@@ -2,12 +2,22 @@
 
 import ModuleRegisterPage from "@/components/auth/ModuleRegisterPage";
 import { Sparkles } from "lucide-react";
+import Image from "next/image";
 
 export default function WaveRegisterPage() {
     return (
         <ModuleRegisterPage
             moduleName="WAVE"
-            logo={<Sparkles className="w-12 h-12 text-emerald-300 mb-4" />}
+            logo={
+                <div className="w-16 h-16 relative mb-4">
+                    <Image
+                        src="/images/modules/wave.png"
+                        alt="WAVE"
+                        fill
+                        className="object-contain"
+                    />
+                </div>
+            }
             description="Women's Agribusiness Venture Empowerment. A program exclusively designed to empower women in agriculture through funding, training, and mentorship."
             benefits={[
                 "Access to grants and funding",

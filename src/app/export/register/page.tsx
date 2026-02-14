@@ -2,12 +2,22 @@
 
 import ModuleRegisterPage from "@/components/auth/ModuleRegisterPage";
 import { Ship } from "lucide-react";
+import Image from "next/image";
 
 export default function ExportRegisterPage() {
     return (
         <ModuleRegisterPage
             moduleName="Export Windows"
-            logo={<Ship className="w-12 h-12 text-orange-300 mb-4" />}
+            logo={
+                <div className="w-16 h-16 relative mb-4">
+                    <Image
+                        src="/images/modules/export.png"
+                        alt="Export Windows"
+                        fill
+                        className="object-contain"
+                    />
+                </div>
+            }
             description="Access verified export containers and earn guaranteed returns on your trade investments."
             benefits={[
                 "Access verified export containers",

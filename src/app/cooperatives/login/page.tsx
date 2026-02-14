@@ -8,6 +8,7 @@ export default function CooperativeLoginPage() {
         <ModuleLoginPage
             moduleName="Cooperative"
             logo={Building2}
+            logoImage="/images/modules/cooperative.png"
             redirectDefault="/cooperatives/dashboard"
             registerLink="/cooperatives/register"
             registerText="New to the Cooperative?"

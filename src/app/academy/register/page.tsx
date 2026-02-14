@@ -2,12 +2,22 @@
 
 import ModuleRegisterPage from "@/components/auth/ModuleRegisterPage";
 import { GraduationCap } from "lucide-react";
+import Image from "next/image";
 
 export default function AcademyRegisterPage() {
     return (
         <ModuleRegisterPage
             moduleName="Academy"
-            logo={<GraduationCap className="w-12 h-12 text-blue-300 mb-4" />}
+            logo={
+                <div className="w-16 h-16 relative mb-4">
+                    <Image
+                        src="/images/modules/academy.png"
+                        alt="Academy"
+                        fill
+                        className="object-contain"
+                    />
+                </div>
+            }
             description="Master the art of export with comprehensive courses, expert-led training, and certification programs."
             benefits={[
                 "Export compliance training",

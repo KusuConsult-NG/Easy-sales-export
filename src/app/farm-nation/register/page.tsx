@@ -2,12 +2,22 @@
 
 import ModuleRegisterPage from "@/components/auth/ModuleRegisterPage";
 import { Sprout } from "lucide-react";
+import Image from "next/image";
 
 export default function FarmNationRegisterPage() {
     return (
         <ModuleRegisterPage
             moduleName="Farm Nation"
-            logo={<Sprout className="w-12 h-12 text-teal-300 mb-4" />}
+            logo={
+                <div className="w-16 h-16 relative mb-4">
+                    <Image
+                        src="/images/modules/farm-nation.png"
+                        alt="Farm Nation"
+                        fill
+                        className="object-contain"
+                    />
+                </div>
+            }
             description="Own farmland with minimal capital and earn from verified agricultural investments."
             benefits={[
                 "Own farmland with low capital",

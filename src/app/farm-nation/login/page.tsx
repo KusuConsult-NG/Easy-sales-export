@@ -8,6 +8,7 @@ export default function FarmNationLoginPage() {
         <ModuleLoginPage
             moduleName="Farm Nation"
             logo={Sprout}
+            logoImage="/images/modules/farm-nation.png"
             redirectDefault="/farm-nation/onboarding"
             registerLink="/farm-nation/register"
             registerText="New to Farm Nation?"

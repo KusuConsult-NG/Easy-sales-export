@@ -2,12 +2,22 @@
 
 import ModuleRegisterPage from "@/components/auth/ModuleRegisterPage";
 import { Store } from "lucide-react";
+import Image from "next/image";
 
 export default function MarketplaceRegisterPage() {
     return (
         <ModuleRegisterPage
             moduleName="Marketplace"
-            logo={<Store className="w-12 h-12 text-green-300 mb-4" />}
+            logo={
+                <div className="w-16 h-16 relative mb-4">
+                    <Image
+                        src="/images/modules/marketplace.png"
+                        alt="Marketplace"
+                        fill
+                        className="object-contain"
+                    />
+                </div>
+            }
             description="Connect buyers and sellers in a secure, transparent marketplace ecosystem."
             benefits={[
                 "List products for free",

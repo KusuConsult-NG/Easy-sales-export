@@ -10,6 +10,7 @@ export default function WaveLoginPage() {
         <ModuleLoginPage
             moduleName="WAVE"
             logo={Sparkles}
+            logoImage="/images/modules/wave.png"
             redirectDefault="/wave/dashboard"
             registerLink="/wave/register"
             theme={{

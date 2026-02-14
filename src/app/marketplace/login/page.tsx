@@ -8,6 +8,7 @@ export default function MarketplaceLoginPage() {
         <ModuleLoginPage
             moduleName="Marketplace"
             logo={Store}
+            logoImage="/images/modules/marketplace.png"
             redirectDefault="/marketplace/onboarding"
             registerLink="/marketplace/register"
             registerText="New to the Marketplace?"

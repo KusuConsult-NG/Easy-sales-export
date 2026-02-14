@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2, type LucideIcon } from "lucide-react";
 import { loginAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
@@ -12,6 +13,7 @@ import { useSearchParams } from "next/navigation";
 export interface ModuleLoginProps {
     moduleName: string;
     logo: LucideIcon;
+    logoImage?: string;
     redirectDefault: string;
     registerLink: string;
     registerText?: string;
@@ -50,6 +52,7 @@ const initialState = { error: "", success: false };
 function ModuleLoginContent({
     moduleName,
     logo: Logo,
+    logoImage,
     redirectDefault,
     registerLink,
     registerText,
@@ -123,8 +126,20 @@ function ModuleLoginContent({
                 {/* Logo & Header */}
                 <div className="text-center mb-6 md:mb-8 relative z-10">
                     <Link href={`/${redirectDefault.split('/')[1]}`} className="inline-flex items-center justify-center mb-4 md:mb-6 hover:opacity-90 transition-opacity">
-                        <div className={`w-12 h-12 md:w-16 md:h-16 bg-linear-to-br ${theme.logoGradient} rounded-2xl flex items-center justify-center shadow-xl ${theme.logoShadow} text-white transform rotate-3 hover:rotate-6 transition-transform`}>
-                            <Logo className="w-6 h-6 md:w-8 md:h-8" />
+                        <div className={`w-12 h-12 md:w-16 md:h-16 bg-linear-to-br ${theme.logoGradient} rounded-2xl flex items-center justify-center shadow-xl ${theme.logoShadow} text-white transform rotate-3 hover:rotate-6 transition-transform overflow-hidden`}>
+                            {logoImage ? (
+                                <div className="w-full h-full p-2">
+                                    <Image
+                                        src={logoImage}
+                                        alt={moduleName}
+                                        width={64}
+                                        height={64}
+                                        className="w-full h-full object-contain"
+                                    />
+                                </div>
+                            ) : (
+                                <Logo className="w-6 h-6 md:w-8 md:h-8" />
+                            )}
                         </div>
                     </Link>
                     <h1 className={`text-2xl md:text-3xl font-bold ${theme.textClass || "text-slate-900 dark:text-white"} mb-2`}>Welcome Back</h1>
