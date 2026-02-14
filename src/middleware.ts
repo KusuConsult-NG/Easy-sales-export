@@ -17,6 +17,7 @@ import type { UserRole } from "@/lib/types/roles";
 // Routes requiring any authenticated user
 // Note: Module landing pages (/export, /marketplace, etc.) are now public
 // Only the dashboard and actual authenticated features require login
+// ONBOARDING PAGES ARE NOT PROTECTED - users need access immediately after registration
 const protectedRoutes = [
     "/dashboard",
     "/settings",
@@ -29,12 +30,10 @@ const protectedRoutes = [
     "/land/submit",
     "/land/verify",
     "/wave/dashboard",
-    "/wave/application",
     "/wave/resources",
     "/cooperatives/dashboard",
     "/cooperatives/loans",
     "/cooperatives/savings",
-    "/marketplace/onboarding",
     "/marketplace/buyer",
     "/marketplace/seller",
     "/marketplace/cart",
