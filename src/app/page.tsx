@@ -21,7 +21,7 @@ export default function HubPage() {
         {
             title: "Export Windows",
             description: "Manage international agricultural exports with escrow protection and collective opportunities",
-            icon: Package,
+            iconImage: "/images/modules/export.png",
             href: "/export",
             gradient: "from-blue-500 to-cyan-500",
             stats: "1,247 Active Exports",
@@ -29,7 +29,7 @@ export default function HubPage() {
         {
             title: "Marketplace",
             description: "Buy and sell agricultural products directly from verified farmers and traders",
-            icon: ShoppingCart,
+            iconImage: "/images/modules/marketplace.png",
             href: "/marketplace",
             gradient: "from-orange-500 to-amber-500",
             stats: "3,856 Products Listed",
@@ -37,7 +37,7 @@ export default function HubPage() {
         {
             title: "Farm Nation",
             description: "Invest in premium farmland and earn guaranteed returns on agricultural real estate",
-            icon: Map,
+            iconImage: "/images/modules/farm-nation.png",
             href: "/farm-nation",
             gradient: "from-green-500 to-emerald-500",
             stats: "156 Land Parcels",
@@ -45,7 +45,7 @@ export default function HubPage() {
         {
             title: "Academy LMS",
             description: "Learn modern farming techniques and earn certifications from industry experts",
-            icon: GraduationCap,
+            iconImage: "/images/modules/academy.png",
             href: "/academy",
             gradient: "from-purple-500 to-pink-500",
             stats: "8,932 Courses Completed",
@@ -54,7 +54,7 @@ export default function HubPage() {
         {
             title: "WAVE Program",
             description: "RH-WAVE 774: Presidential mandate empowering Nigerian women in agriculture through training, funding, and market access",
-            icon: Users,
+            iconImage: "/images/modules/wave.png",
             href: "/wave/landing",
             gradient: "from-pink-500 to-rose-500",
             stats: "10M Women Target",
@@ -62,7 +62,7 @@ export default function HubPage() {
         {
             title: "Cooperatives",
             description: "Join farming communities for shared resources, knowledge, and collective bargaining",
-            icon: Building2,
+            iconImage: "/images/modules/cooperative.png",
             href: "/cooperatives",
             gradient: "from-indigo-500 to-blue-500",
             stats: "89 Active Groups",
@@ -185,10 +185,10 @@ export default function HubPage() {
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link
-                            href="/auth/register"
+                            href="/auth/get-started"
                             className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-primary font-bold rounded-xl hover:bg-slate-50 transition-all shadow-lg hover:shadow-xl hover:scale-105"
                         >
-                            Create Free Account
+                            Get Started
                             <ArrowRight className="w-5 h-5" />
                         </Link>
                         <Link

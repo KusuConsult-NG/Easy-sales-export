@@ -2,11 +2,13 @@
 
 import { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 interface ModuleCardProps {
     title: string;
     description: string;
-    icon: LucideIcon;
+    icon?: LucideIcon;
+    iconImage?: string;
     href: string;
     gradient: string;
     stats?: string;
@@ -17,6 +19,7 @@ export default function ModuleCard({
     title,
     description,
     icon: Icon,
+    iconImage,
     href,
     gradient,
     stats,
@@ -36,8 +39,18 @@ export default function ModuleCard({
                 )}
 
                 {/* Icon */}
-                <div className={`w-14 h-14 rounded-xl bg-linear-to-br ${gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                    <Icon className="w-7 h-7 text-white" />
+                <div className={`w-14 h-14 rounded-xl bg-linear-to-br ${gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 overflow-hidden`}>
+                    {iconImage ? (
+                        <Image
+                            src={iconImage}
+                            alt={title}
+                            width={56}
+                            height={56}
+                            className="w-full h-full object-cover"
+                        />
+                    ) : Icon ? (
+                        <Icon className="w-7 h-7 text-white" />
+                    ) : null}
                 </div>
 
                 {/* Content */}

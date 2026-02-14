@@ -6,207 +6,178 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle, ArrowRight, Calendar, Mail, Bell } from "lucide-react";
+import { CheckCircle, ArrowRight, AlertTriangle, Flame, ShieldCheck, DoorOpen } from "lucide-react";
 
 export default function ApplicationSuccessPage() {
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center px-4 py-12">
-            <div className="max-w-2xl w-full">
-                {/* Success Icon */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full mb-6">
-                        <CheckCircle className="w-12 h-12 text-green-600" />
+            <div className="max-w-3xl w-full space-y-8">
+
+                {/* 1. Header & Confirmation */}
+                <div className="text-center">
+                    <div className="inline-flex items-center justify-center w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-full mb-6 animate-pulse">
+                        <CheckCircle className="w-14 h-14 text-emerald-600" />
                     </div>
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
-                        Application Submitted!
+                    <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-6 leading-tight">
+                        Congratulations — <br className="hidden md:block" />
+                        Your WAVE Registration Is Submitted
                     </h1>
-                    <p className="text-lg text-slate-600 dark:text-slate-400">
-                        Your WAVE program application has been successfully received
-                    </p>
                 </div>
 
-                {/* Application Info */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 mb-8">
-                    <div className="border-l-4 border-emerald-700 pl-4 mb-6">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                            Application ID
+                {/* 2. The Hard Truth - Reality Check */}
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 border-l-8 border-slate-700 dark:border-slate-500">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                        Now listen carefully.
+                    </h2>
+                    <div className="space-y-4 text-lg text-slate-700 dark:text-slate-300 leading-relaxed">
+                        <p>
+                            Millions will register for WAVE. Only a fraction will be selected.
                         </p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                            WAVE-{new Date().getFullYear()}-{Math.random().toString(36).substr(2, 9).toUpperCase()}
+                        <p className="font-medium">
+                            And here is the truth most people won’t tell you:
                         </p>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="flex items-start gap-3">
-                            <Mail className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
-                            <div>
-                                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
-                                    Confirmation Email Sent
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    Check your inbox for application details and next steps
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-3">
-                            <Bell className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
-                            <div>
-                                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
-                                    Stay Updated
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    We'll notify you via email about your application status
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* What Happens Next */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 mb-8">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6">
-                        What Happens Next?                    </h2>
-                    <div className="space-y-6">
-                        <div className="flex gap-4">
-                            <div className="shrink-0">
-                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
-                                    1
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
-                                    Application Received
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    Your application is in our system and queued for review
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                            <div className="shrink-0">
-                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
-                                    2
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
-                                    Review by Team (3-5 business days)
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    Our team will carefully review your application and documents
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                            <div className="shrink-0">
-                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
-                                    3
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
-                                    Interview/Verification (if needed)
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    We may contact you for additional information or a brief interview
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                            <div className="shrink-0">
-                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
-                                    4
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
-                                    Approval Decision
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    You'll receive an email with the decision on your application
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                            <div className="shrink-0">
-                                <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-700 font-bold">
-                                    5
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
-                                    Onboarding & Training
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    If approved, you'll begin orientation and access program resources
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Next Step: Cooperative Registration */}
-                <div className="bg-linear-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl shadow-xl p-8 mb-8 border-2 border-blue-200 dark:border-blue-800">
-                    <div className="flex items-start gap-4 mb-4">
-                        <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
-                            <ArrowRight className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                                Ready for the Next Step?
-                            </h2>
-                            <p className="text-slate-900 dark:text-white mb-4">
-                                As a WAVE participant, you're eligible to join our Cooperative program! Get access to:
+                        <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <p className="text-xl font-semibold text-slate-900 dark:text-white text-center">
+                                WAVE does not reward hope.<br />
+                                It rewards <span className="text-emerald-600 dark:text-emerald-400">STRUCTURE</span>, <span className="text-emerald-600 dark:text-emerald-400">VISIBILITY</span>, and <span className="text-emerald-600 dark:text-emerald-400">POSITIONING</span>.
                             </p>
-                            <ul className="space-y-2 mb-6">
-                                <li className="flex items-center gap-2 text-slate-900 dark:text-white">
-                                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                                    Cooperative savings and loan products
+                        </div>
+                    </div>
+                </div>
+
+                {/* 3. Important Warning */}
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl shadow-lg p-8 border-2 border-amber-200 dark:border-amber-700/50">
+                    <div className="flex items-start gap-4">
+                        <AlertTriangle className="w-8 h-8 text-amber-600 shrink-0 mt-1" />
+                        <div className="space-y-4">
+                            <h3 className="text-2xl font-bold text-amber-800 dark:text-amber-400">
+                                IMPORTANT: Don’t Close This Page Yet
+                            </h3>
+                            <p className="text-lg text-amber-900/80 dark:text-amber-200/80">
+                                Right now, you are registered. But registration alone does not guarantee success.
+                            </p>
+                            <div className="bg-white/50 dark:bg-black/20 p-4 rounded-lg">
+                                <p className="font-semibold text-amber-900 dark:text-amber-100 mb-2">Those who move forward are those who:</p>
+                                <ul className="list-disc list-inside space-y-1 text-amber-900/80 dark:text-amber-200/80 ml-2">
+                                    <li>Are organized</li>
+                                    <li>Are documented</li>
+                                    <li>Are already inside aligned systems</li>
+                                    <li>Are known to implementation partners</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 4. EasySells Value Prop */}
+                <div className="bg-blue-50 dark:bg-blue-900/10 rounded-2xl shadow-xl p-8 border-2 border-blue-100 dark:border-blue-800/30">
+                    <div className="flex items-center gap-3 mb-6">
+                        <DoorOpen className="w-8 h-8 text-blue-600" />
+                        <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                            This Is Where EasySales Cooperative Comes In
+                        </h2>
+                    </div>
+
+                    <div className="space-y-6 text-lg text-slate-700 dark:text-slate-300">
+                        <p>
+                            <strong>EasySales Export is an implementing partner of WAVE.</strong>
+                        </p>
+                        <p>That means we:</p>
+                        <ul className="grid sm:grid-cols-3 gap-4">
+                            {[
+                                "Understand the execution process",
+                                "Know what successful candidates look like",
+                                "Are also investing in the ecosystem"
+                            ].map((item, i) => (
+                                <li key={i} className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow-sm border border-blue-100 dark:border-slate-700 flex items-start gap-2 text-sm font-medium">
+                                    <CheckCircle className="w-5 h-5 text-blue-600 shrink-0" />
+                                    {item}
                                 </li>
-                                <li className="flex items-center gap-2 text-slate-900 dark:text-white">
-                                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                                    Access to member dividends and shares
-                                </li>
-                                <li className="flex items-center gap-2 text-slate-900 dark:text-white">
-                                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                                    Financial literacy training and support
-                                </li>
-                                <li className="flex items-center gap-2 text-slate-900 dark:text-white">
-                                    <CheckCircle className="w-5 h-5 text-blue-600" />
-                                    Community of women entrepreneurs
-                                </li>
-                            </ul>
+                            ))}
+                        </ul>
+
+                        <div className="text-center p-6 border-t-2 border-dashed border-blue-200 dark:border-blue-800/50 mt-4">
+                            <p className="text-xl font-serif italic text-blue-900 dark:text-blue-200">
+                                "We invest first in people already inside our structure.<br />
+                                Our cooperative members."
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 5. Urgency Window */}
+                <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30 rounded-2xl shadow-xl p-8 border border-orange-200 dark:border-orange-800/50">
+                    <div className="flex items-center gap-3 mb-6">
+                        <Flame className="w-8 h-8 text-orange-600 animate-pulse" />
+                        <h2 className="text-2xl font-bold text-orange-900 dark:text-orange-100">
+                            This Is an Early-Mover Window
+                        </h2>
+                    </div>
+
+                    <div className="space-y-6 text-lg">
+                        <p className="text-slate-700 dark:text-slate-300">
+                            EasySales Cooperative is not open to everyone. <br />
+                            And it will not stay open forever.
+                        </p>
+
+                        <div className="grid md:grid-cols-2 gap-6">
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border-l-4 border-green-500 shadow-sm">
+                                <h4 className="font-bold text-green-700 dark:text-green-400 mb-3 uppercase text-sm tracking-wide">Those who join now</h4>
+                                <ul className="space-y-2 text-slate-600 dark:text-slate-400 text-sm">
+                                    <li className="flex gap-2"><ArrowRight className="w-4 h-4 mt-1 text-green-500" /> Position themselves closer to WAVE execution</li>
+                                    <li className="flex gap-2"><ArrowRight className="w-4 h-4 mt-1 text-green-500" /> Gain visibility within the ecosystem</li>
+                                    <li className="flex gap-2"><ArrowRight className="w-4 h-4 mt-1 text-green-500" /> Align with market access, training, and investment flows</li>
+                                </ul>
+                            </div>
+
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border-l-4 border-red-500 shadow-sm flex flex-col justify-center">
+                                <h4 className="font-bold text-red-700 dark:text-red-400 mb-2 uppercase text-sm tracking-wide">Those who wait...</h4>
+                                <p className="text-xl font-bold text-red-600 dark:text-red-400 italic">
+                                    will watch others move ahead.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 6. Final Warning & CTA */}
+                <div className="bg-slate-900 text-white rounded-3xl shadow-2xl overflow-hidden relative">
+                    {/* Background Pattern */}
+                    <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500 via-blue-500 to-slate-900"></div>
+
+                    <div className="relative p-8 md:p-12 text-center space-y-8">
+                        <div className="inline-block bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest mb-2">
+                            Final Warning
+                        </div>
+
+                        <div className="space-y-2">
+                            <h2 className="text-3xl font-bold">
+                                Don’t be part of the crowd.
+                            </h2>
+                            <h2 className="text-3xl font-bold text-emerald-400">
+                                Be part of the structure.
+                            </h2>
+                        </div>
+
+                        <p className="text-slate-300 text-lg max-w-xl mx-auto">
+                            Most people will close this page and do nothing. A few will act — and those few will benefit.
+                        </p>
+
+                        <div className="pt-4">
                             <Link
                                 href="/cooperatives/register"
-                                className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all shadow-lg hover:shadow-xl hover:scale-105"
+                                className="inline-flex items-center justify-center w-full md:w-auto gap-3 bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white px-8 py-5 rounded-xl font-black text-xl md:text-2xl transition-all shadow-[0_0_40px_-5px_rgba(16,185,129,0.5)] transform hover:scale-105"
                             >
-                                Continue to Cooperative Registration
-                                <ArrowRight className="w-5 h-5" />
+                                <ShieldCheck className="w-8 h-8" />
+                                ACTIVATE MY MEMBERSHIP NOW
                             </Link>
+                            <p className="mt-4 text-sm text-slate-400">
+                                Secure your position. Move from registration to real participation.
+                            </p>
                         </div>
                     </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <Link
-                        href="/wave"
-                        className="flex-1 flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white px-6 py-3 rounded-xl font-semibold transition-all"
-                    >
-                        Back to WAVE Home
-                    </Link>
-                    <Link
-                        href="/wave/application/review-pending"
-                        className="flex-1 flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white px-6 py-3 rounded-xl font-semibold transition-all"
-                    >
-                        <Calendar className="w-4 h-4" />
-                        Check Application Status
-                    </Link>
-                </div>
             </div>
         </div>
     );

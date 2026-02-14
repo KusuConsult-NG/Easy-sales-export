@@ -10,7 +10,7 @@ const REGISTRATION_PATHS = [
         id: "cooperative",
         title: "Cooperative Member",
         description: "Join a cooperative to access loans, savings, and community support.",
-        icon: Users,
+        iconImage: "/images/modules/cooperative.png",
         color: "bg-purple-600",
         href: "/cooperatives/register", // Direct specific register
         benefits: ["Access low-interest loans", "High-yield savings", "Community network"],
@@ -19,7 +19,7 @@ const REGISTRATION_PATHS = [
         id: "wave",
         title: "WAVE Application",
         description: "Women's Agribusiness Venture Empowerment program application.",
-        icon: Globe, // or Flower/Sprout if available
+        iconImage: "/images/modules/wave.png",
         color: "bg-green-600",
         href: "/wave/application", // WAVE Official Beneficiary Application Form
         benefits: ["Business grants", "Mentorship", "Exclusive training"],
@@ -28,36 +28,36 @@ const REGISTRATION_PATHS = [
         id: "export-windows",
         title: "Export Windows",
         description: "Join bulk export opportunities and access international markets.",
-        icon: ShoppingBag,
+        iconImage: "/images/modules/export.png",
         color: "bg-blue-600",
-        href: "/auth/register?platforms[]=export&callbackUrl=/export/opportunities",
+        href: "/export/register",
         benefits: ["International buyers", "Volume aggregation", "Premium pricing"],
     },
     {
         id: "marketplace",
         title: "Marketplace",
         description: "Buy and sell agricultural products in our verified marketplace.",
-        icon: ShoppingBag,
+        iconImage: "/images/modules/marketplace.png",
         color: "bg-violet-600",
-        href: "/auth/register?platforms[]=marketplace&callbackUrl=/marketplace",
+        href: "/marketplace/register",
         benefits: ["Verified buyers & sellers", "Secure payments", "Nationwide delivery"],
     },
     {
         id: "farm-nation",
         title: "Farm Nation Investor",
         description: "Invest in agricultural land and verified farm projects.",
-        icon: Tractor,
+        iconImage: "/images/modules/farm-nation.png",
         color: "bg-emerald-600",
-        href: "/auth/register?platforms[]=farm-nation&callbackUrl=/farm-nation", // Redirect to landing/dashboard
+        href: "/farm-nation/register",
         benefits: ["Land ownership", "Passive income", "Managed farming"],
     },
     {
         id: "academy",
         title: "Academy Student",
         description: "Learn modern farming techniques and business skills.",
-        icon: GraduationCap,
+        iconImage: "/images/modules/academy.png",
         color: "bg-orange-600",
-        href: "/auth/register?platforms[]=academy&callbackUrl=/academy/application", // Redirect to application
+        href: "/academy/register",
         benefits: ["Certified courses", "Expert instructors", "Practical training"],
     },
 ];
@@ -81,14 +81,11 @@ export default function GetStartedPage() {
                         </span>
                     </Link>
                     <div className="flex items-center gap-4">
-                        <span className="text-sm text-slate-600 dark:text-slate-400">
-                            Already have an account?
-                        </span>
                         <Link
-                            href="/auth/login"
-                            className="text-sm font-semibold text-primary hover:underline"
+                            href="/"
+                            className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
                         >
-                            Sign In
+                            Back to Home
                         </Link>
                     </div>
                 </div>
@@ -111,8 +108,16 @@ export default function GetStartedPage() {
                             href={path.href}
                             className="group bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm hover:shadow-xl border border-slate-200 dark:border-slate-700 hover:border-primary/50 transition-all duration-300 flex flex-col h-full"
                         >
-                            <div className={`w-12 h-12 rounded-xl ${path.color} text-white flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform`}>
-                                <path.icon className="w-6 h-6" />
+                            <div className={`w-12 h-12 rounded-xl ${path.color} text-white flex items-center justify-center mb-6 shadow-lg group-hover:scale-110 transition-transform overflow-hidden`}>
+                                {path.iconImage && (
+                                    <Image
+                                        src={path.iconImage}
+                                        alt={path.title}
+                                        width={48}
+                                        height={48}
+                                        className="w-full h-full object-cover"
+                                    />
+                                )}
                             </div>
 
                             <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3 group-hover:text-primary transition-colors">
@@ -143,8 +148,8 @@ export default function GetStartedPage() {
                 <div className="mt-16 text-center">
                     <p className="text-slate-500 dark:text-slate-400">
                         Want to explore first?{" "}
-                        <Link href="/auth/register" className="text-primary font-semibold hover:underline">
-                            Join the Ecosystem
+                        <Link href="/marketplace" className="text-primary font-semibold hover:underline">
+                            Browse Marketplace
                         </Link>
                     </p>
                 </div>
