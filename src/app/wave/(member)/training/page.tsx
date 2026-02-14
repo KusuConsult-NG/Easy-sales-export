@@ -17,6 +17,7 @@ import {
 import { checkWaveMembershipAction, getUserTrainingRegistrationsAction } from "@/app/actions/wave-member";
 import { getWaveTrainingEventsAction, registerForTrainingAction, type WaveTrainingEvent } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
+import BackButton from "@/components/ui/BackButton";
 
 export default function WaveTrainingPage() {
     const router = useRouter();
@@ -118,12 +119,7 @@ export default function WaveTrainingPage() {
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
-                    <button
-                        onClick={() => router.push("/wave/dashboard")}
-                        className="text-emerald-700 hover:text-emerald-700 font-semibold mb-4 flex items-center gap-2"
-                    >
-                        ← Back to Dashboard
-                    </button>
+                    <BackButton fallbackPath="/wave/dashboard" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                         Training Events
                     </h1>

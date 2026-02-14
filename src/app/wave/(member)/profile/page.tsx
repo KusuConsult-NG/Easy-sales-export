@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useToast } from "@/contexts/ToastContext";
+import BackButton from "@/components/ui/BackButton";
 import {
     User,
     Briefcase,
@@ -75,12 +78,7 @@ export default function WaveProfilePage() {
             <div className="max-w-5xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
-                    <button
-                        onClick={() => router.push("/wave/dashboard")}
-                        className="text-emerald-700 hover:text-emerald-700 font-semibold mb-4 flex items-center gap-2"
-                    >
-                        ← Back to Dashboard
-                    </button>
+                    <BackButton fallbackPath="/wave/dashboard" />
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
                         My WAVE Profile
                     </h1>
@@ -205,14 +203,14 @@ export default function WaveProfilePage() {
                         <div className="flex items-center gap-3">
                             <div
                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${memberData?.active
-                                        ? "bg-emerald-100 dark:bg-emerald-900/30"
-                                        : "bg-gray-100 dark:bg-gray-700"
+                                    ? "bg-emerald-100 dark:bg-emerald-900/30"
+                                    : "bg-gray-100 dark:bg-gray-700"
                                     }`}
                             >
                                 <CheckCircle
                                     className={`w-5 h-5 ${memberData?.active
-                                            ? "text-emerald-700 dark:text-emerald-500"
-                                            : "text-gray-400"
+                                        ? "text-emerald-700 dark:text-emerald-500"
+                                        : "text-gray-400"
                                         }`}
                                 />
                             </div>
@@ -225,14 +223,14 @@ export default function WaveProfilePage() {
                         <div className="flex items-center gap-3">
                             <div
                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.resourcesAccessed > 0
-                                        ? "bg-emerald-100 dark:bg-emerald-900/30"
-                                        : "bg-gray-100 dark:bg-gray-700"
+                                    ? "bg-emerald-100 dark:bg-emerald-900/30"
+                                    : "bg-gray-100 dark:bg-gray-700"
                                     }`}
                             >
                                 <CheckCircle
                                     className={`w-5 h-5 ${stats.resourcesAccessed > 0
-                                            ? "text-emerald-700 dark:text-emerald-500"
-                                            : "text-gray-400"
+                                        ? "text-emerald-700 dark:text-emerald-500"
+                                        : "text-gray-400"
                                         }`}
                                 />
                             </div>
@@ -245,14 +243,14 @@ export default function WaveProfilePage() {
                         <div className="flex items-center gap-3">
                             <div
                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.trainingsRegistered > 0
-                                        ? "bg-emerald-100 dark:bg-emerald-900/30"
-                                        : "bg-gray-100 dark:bg-gray-700"
+                                    ? "bg-emerald-100 dark:bg-emerald-900/30"
+                                    : "bg-gray-100 dark:bg-gray-700"
                                     }`}
                             >
                                 <CheckCircle
                                     className={`w-5 h-5 ${stats.trainingsRegistered > 0
-                                            ? "text-emerald-700 dark:text-emerald-500"
-                                            : "text-gray-400"
+                                        ? "text-emerald-700 dark:text-emerald-500"
+                                        : "text-gray-400"
                                         }`}
                                 />
                             </div>
@@ -265,14 +263,14 @@ export default function WaveProfilePage() {
                         <div className="flex items-center gap-3">
                             <div
                                 className={`w-10 h-10 rounded-full flex items-center justify-center ${stats.trainingsCompleted > 0
-                                        ? "bg-emerald-100 dark:bg-emerald-900/30"
-                                        : "bg-gray-100 dark:bg-gray-700"
+                                    ? "bg-emerald-100 dark:bg-emerald-900/30"
+                                    : "bg-gray-100 dark:bg-gray-700"
                                     }`}
                             >
                                 <CheckCircle
                                     className={`w-5 h-5 ${stats.trainingsCompleted > 0
-                                            ? "text-emerald-700 dark:text-emerald-500"
-                                            : "text-gray-400"
+                                        ? "text-emerald-700 dark:text-emerald-500"
+                                        : "text-gray-400"
                                         }`}
                                 />
                             </div>
