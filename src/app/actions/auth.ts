@@ -210,13 +210,16 @@ export async function registerAction(prevState: any, formData: FormData) {
         const redirectUrl = callbackUrl || determinePostRegistrationRedirect(userRoles);
 
         // Auto sign-in after registration and redirect to onboarding
-        // CRITICAL: Use redirectTo to ensure session cookies are set before redirect
-        // redirect:false causes session establishment issues in production
+        // CRITICAL: Use explicit redirect pattern to ensure session cookies are set
+        // Implicit redirect (default) can race with cookie setting in Server Actions
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
-            redirectTo: redirectUrl,
+            redirect: false, // Don't let NextAuth redirect automatically
         });
+
+        // Manual redirect ensures execution context completes and cookies are flushed
+        redirect(redirectUrl);
 
 
 

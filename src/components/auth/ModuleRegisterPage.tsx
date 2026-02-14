@@ -141,8 +141,8 @@ function ModuleRegisterContent({
 
                     <div className="relative z-10 h-full flex flex-col justify-between">
                         <div>
-                            <Link href="/" className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full mb-8 hover:bg-white/20 transition-all border border-white/10 !text-white">
-                                <span className="font-bold !text-white">{brandingText || "Easy Sales Export"}</span>
+                            <Link href="/" className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full mb-8 hover:bg-white/20 transition-all border border-white/10 text-white!">
+                                <span className="font-bold text-white!">{brandingText || "Easy Sales Export"}</span>
                             </Link>
 
                             {logo && <div className="mb-6">{logo}</div>}
