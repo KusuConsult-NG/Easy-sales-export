@@ -7,6 +7,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { checkServiceAccess } from "@/lib/auth/service-access";
+import { getAuth } from "firebase-admin/auth";
+import { initializeApp, getApps } from "firebase-admin/app";
 import WaveSidebar from "./WaveSidebar";
 
 export default async function WaveMemberLayout({
@@ -14,53 +16,35 @@ export default async function WaveMemberLayout({
 }: {
     children: React.ReactNode;
 }) {
-    // Get session from NextAuth
-    const { auth } = await import("@/lib/auth");
-    const session = await auth();
+    // Initialize Firebase Admin if needed
+    if (getApps().length === 0) {
+        initializeApp();
+    }
+
+    const auth = getAuth();
+
+    // Get session cookie
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("session")?.value;
 
     // Check if user is authenticated
-    if (!session?.user) {
-        redirect("/wave/login?redirect=/wave");
+    if (!sessionCookie) {
+        redirect("/wave/login");
     }
 
-    const { db } = await import("@/lib/firebase-admin");
+    // Verify session and check access
+    try {
+        const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
+        const userId = decodedClaims.uid;
 
-    const userId = session.user.id;
+        const accessResult = await checkServiceAccess(userId, "wave");
 
-    // Fetch user data using Admin SDK (bypasses Firestore rules)
-    const userDoc = await db.collection("users").doc(userId).get();
-    const userData = userDoc.data();
-
-    if (!userData) {
-        redirect("/wave/login?redirect=/wave");
-    }
-
-    // Check WAVE registration
-    // We replicate checkWaveAccess logic here but with server-side data
-    const registration = userData.serviceRegistrations?.wave;
-
-    if (!registration) {
-        redirect("/wave/application");
-    }
-
-    // Handle pending/review status
-    if (registration.status === "pending" || registration.status === "under_review") {
-        redirect("/wave/application/review-pending");
-    }
-
-    if (registration.status === "rejected") {
-        redirect("/wave/application");
-    }
-
-    // Check for approved status AND role
-    // Note: We use wave_participant as defined in role-app-mapping
-    const hasRole = userData.roles?.includes("wave_participant");
-
-    if (registration.status === "approved" && hasRole) {
-        // Access granted
-    } else {
-        // Fallback for inconsistent state
-        redirect("/wave/application");
+        if (!accessResult.hasAccess) {
+            redirect(accessResult.redirectTo || "/wave/application");
+        }
+    } catch (error) {
+        console.error("Session verification failed:", error);
+        redirect("/wave/login");
     }
 
     return (
