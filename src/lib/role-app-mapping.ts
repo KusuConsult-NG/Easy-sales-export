@@ -70,7 +70,7 @@ export const ROLE_APP_ACCESS: Record<UserRole, AppIdentifier[]> = {
  * Apps that are accessible to everyone (regardless of role)
  * Dashboard is a smart redirect to user's primary app and must be universally accessible
  */
-export const UNIVERSAL_APPS: AppIdentifier[] = ["dashboard", "messages", "profile"];
+export const UNIVERSAL_APPS: AppIdentifier[] = ["dashboard", "profile"];
 
 /**
  * Check if user has access to a specific app

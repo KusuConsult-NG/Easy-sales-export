@@ -180,6 +180,36 @@ export async function middleware(request: NextRequest) {
             } else if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
                 // User is authenticated but lacks specific roles - allow dashboard access
                 // Dashboard will show appropriate UI based on roles
+            } else if (pathname.startsWith('/messages')) {
+                // MESSAGES ROUTE: Require at least one approved service registration
+                // Users must complete onboarding and get admin approval before accessing messages
+                try {
+                    const { getAdminDb } = await import('@/lib/firebase-admin');
+                    const adminDb = getAdminDb();
+                    const userDoc = await adminDb.collection('users').doc(session.user.id as string).get();
+
+                    if (userDoc.exists) {
+                        const userData = userDoc.data();
+                        const serviceRegistrations = userData?.serviceRegistrations || {};
+
+                        // Check if user has at least one approved registration
+                        const hasApprovedModule = Object.values(serviceRegistrations).some(
+                            (reg: any) => reg?.status === 'approved'
+                        );
+
+                        if (!hasApprovedModule) {
+                            // User has no approved modules - redirect to dashboard with message
+                            return NextResponse.redirect(new URL("/dashboard?error=messages_approval_required", request.url));
+                        }
+                    } else {
+                        // User document doesn't exist - redirect to dashboard
+                        return NextResponse.redirect(new URL("/dashboard?error=user_not_found", request.url));
+                    }
+                } catch (error) {
+                    console.error("Error checking messages access:", error);
+                    // On error, redirect to dashboard
+                    return NextResponse.redirect(new URL("/dashboard?error=server_error", request.url));
+                }
             } else {
                 // For other protected routes, redirect to dashboard with error
                 return NextResponse.redirect(new URL("/dashboard?error=unauthorized", request.url));
