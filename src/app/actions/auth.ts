@@ -151,7 +151,7 @@ export async function registerAction(prevState: any, formData: FormData) {
             fullName: validatedData.fullName,
             email: validatedData.email,
             roles: userRoles,
-            verified: false,
+            verified: true, // Auto-verify on registration (account-level verification)
             gender: gender,
         };
 
