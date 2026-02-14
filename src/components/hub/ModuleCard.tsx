@@ -46,7 +46,7 @@ export default function ModuleCard({
                             alt={title}
                             width={56}
                             height={56}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                         />
                     ) : Icon ? (
                         <Icon className="w-7 h-7 text-white" />

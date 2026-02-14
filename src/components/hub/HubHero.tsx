@@ -64,7 +64,7 @@ export default function HubHero() {
                     alt="Easy Sales Export Logo"
                     width={120}
                     height={120}
-                    className="rounded-full border-4 border-white/30 shadow-2xl"
+                    className="rounded-full border-4 border-white/30 shadow-2xl object-cover"
                     priority
                 />
                 </div>
