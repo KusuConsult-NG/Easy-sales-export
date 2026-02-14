@@ -11,6 +11,7 @@ import type { User as FirestoreUser } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { LEGACY_ROLE_MAP, type LegacyRole, type UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
+import { ZodError } from "zod";
 
 /**
  * Server Actions for Authentication
@@ -53,6 +54,12 @@ export async function loginAction(prevState: any, formData: FormData) {
         }
 
         logger.error("Login error", error);
+
+        if (error instanceof ZodError) {
+            const zodError = error as any;
+            const errorMessage = zodError.errors?.map((e: any) => e.message).join(", ") || "Validation error";
+            return { error: errorMessage, success: false };
+        }
 
         if (error instanceof AuthError) {
             switch (error.type) {
@@ -160,16 +167,15 @@ export async function registerAction(prevState: any, formData: FormData) {
         const primaryApp = callbackUrl || getPrimaryApp(userProfile.roles);
 
         // Auto sign-in after registration and redirect to primary app or callback
-        // redirect:false prevents session from being established on client
-        // We MUST redirect to allow session cookie to be set
+        // CRITICAL: Use redirectTo to ensure session cookies are set before redirect
+        // redirect:false causes session establishment issues in production
         await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
-            redirect: false,
+            redirectTo: primaryApp,
         });
 
-        // Manual redirect to ensure cookie propagation
-        redirect(primaryApp);
+
 
         // This line never executes because signIn redirects
         return { error: "", success: true };
@@ -182,6 +188,12 @@ export async function registerAction(prevState: any, formData: FormData) {
         }
 
         logger.error("Registration error", error);
+
+        if (error instanceof ZodError) {
+            const zodError = error as any;
+            const errorMessage = zodError.errors?.map((e: any) => e.message).join(", ") || "Validation error";
+            return { error: errorMessage, success: false };
+        }
 
         // Handle Firebase auth errors
         if (error.code === "auth/email-already-in-use") {
