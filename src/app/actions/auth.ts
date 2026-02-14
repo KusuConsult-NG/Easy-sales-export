@@ -209,17 +209,12 @@ export async function registerAction(prevState: any, formData: FormData) {
         const callbackUrl = formData.get("callbackUrl") as string;
         const redirectUrl = callbackUrl || determinePostRegistrationRedirect(userRoles);
 
-        // Auto sign-in after registration and redirect to onboarding
-        // CRITICAL: Use explicit redirect pattern to ensure session cookies are set
-        // Implicit redirect (default) can race with cookie setting in Server Actions
-        await signIn("credentials", {
-            email: validatedData.email,
-            password: validatedData.password,
-            redirect: false, // Don't let NextAuth redirect automatically
-        });
+        // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
+        // Server-side signIn in Server Actions causes race conditions with cookies.
+        // We return success, and the client component calls signIn() via NextAuth client SDK.
 
-        // Manual redirect ensures execution context completes and cookies are flushed
-        // UPDATE: Return URL to client to handle redirect (fixes race condition loop)
+        // This validates the user is created and roles are assigned.
+        // Client will use these credentials to establish the session.
         return { success: true, redirectUrl, error: "" };
     } catch (error: any) {
         // Re-throw redirect errors to allow Next.js to handle navigation

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { registerAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
+import { signIn } from "next-auth/react";
 
 export interface ModuleRegisterProps {
     moduleName: string;
@@ -85,14 +86,41 @@ function ModuleRegisterContent({
     // Enhanced initial state for client-side redirect
     const [state, formAction, isPending] = useActionState(registerAction, { error: "", success: false, redirectUrl: "" });
 
-    // Handle client-side redirect after successful registration
-    // This prevents race conditions where middleware checks for cookies before they are set
+    // Handle client-side Login & Redirect after successful registration
+    // This removes the server-side "Race Condition" by using standard client auth flow
     useEffect(() => {
-        if (state.success && state.redirectUrl) {
-            showToast("Account created successfully! Redirecting...", "success");
-            router.push(state.redirectUrl);
-        }
-    }, [state, router, showToast]);
+        const performAutoLogin = async () => {
+            if (state.success && state.redirectUrl) {
+                showToast("Account created! Securely signing in...", "success");
+
+                try {
+                    // Use NextAuth Client SDK to establish session
+                    // This is robust and handles cookies correctly
+                    const result = await signIn("credentials", {
+                        email: formData.email,
+                        password: formData.password,
+                        redirect: false,
+                    });
+
+                    if (result?.error) {
+                        console.error("Auto-login failed:", result.error);
+                        showToast("Account created, but auto-login failed. Please sign in.", "error");
+                        router.push("/auth/login");
+                    } else {
+                        // Session established successfully
+                        showToast("Login successful! Redirecting to setup...", "success");
+                        router.push(state.redirectUrl);
+                    }
+                } catch (error) {
+                    console.error("Auto-login error:", error);
+                    showToast("Login error. Please sign in manually.", "error");
+                    router.push("/auth/login");
+                }
+            }
+        };
+
+        performAutoLogin();
+    }, [state, formData.email, formData.password, router, showToast]);
 
     // Password Strength Logic
     const passwordStrength = useMemo(() => {
