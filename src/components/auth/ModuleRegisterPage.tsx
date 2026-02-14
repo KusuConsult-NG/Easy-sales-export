@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
+import { useState, useMemo, Suspense, useEffect } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
     Mail,
     Lock,
@@ -59,6 +59,7 @@ function ModuleRegisterContent({
     footerText,
     brandingText,
 }: ModuleRegisterProps) {
+    const router = useRouter();
     const { showToast } = useToast();
     const searchParams = useSearchParams();
     // CRITICAL FIX: Do NOT default to module root (/${platforms[0]})
@@ -80,7 +81,18 @@ function ModuleRegisterContent({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [state, formAction, isPending] = useActionState(registerAction, initialState);
+
+    // Enhanced initial state for client-side redirect
+    const [state, formAction, isPending] = useActionState(registerAction, { error: "", success: false, redirectUrl: "" });
+
+    // Handle client-side redirect after successful registration
+    // This prevents race conditions where middleware checks for cookies before they are set
+    useEffect(() => {
+        if (state.success && state.redirectUrl) {
+            showToast("Account created successfully! Redirecting...", "success");
+            router.push(state.redirectUrl);
+        }
+    }, [state, router, showToast]);
 
     // Password Strength Logic
     const passwordStrength = useMemo(() => {

@@ -142,13 +142,13 @@ export async function registerAction(prevState: any, formData: FormData) {
         // Validate platforms (at least one required)
         const allowedPlatforms = ["marketplace", "export", "cooperatives", "farm-nation", "academy", "wave"];
         if (!platforms || platforms.length === 0) {
-            return { error: "Please select at least one platform", success: false };
+            return { error: "Please select at least one platform", success: false, redirectUrl: "" };
         }
 
         // Validate all platforms are allowed
         const invalidPlatforms = platforms.filter(p => !allowedPlatforms.includes(p));
         if (invalidPlatforms.length > 0) {
-            return { error: "Invalid platform selection", success: false };
+            return { error: "Invalid platform selection", success: false, redirectUrl: "" };
         }
 
         // Create Firebase Auth user via Admin SDK
@@ -219,12 +219,8 @@ export async function registerAction(prevState: any, formData: FormData) {
         });
 
         // Manual redirect ensures execution context completes and cookies are flushed
-        redirect(redirectUrl);
-
-
-
-        // This line never executes because signIn redirects
-        return { error: "", success: true };
+        // UPDATE: Return URL to client to handle redirect (fixes race condition loop)
+        return { success: true, redirectUrl, error: "" };
     } catch (error: any) {
         // Re-throw redirect errors to allow Next.js to handle navigation
         if (error && typeof error === 'object' && 'digest' in error &&
@@ -238,25 +234,25 @@ export async function registerAction(prevState: any, formData: FormData) {
         if (error instanceof ZodError) {
             const zodError = error as any;
             const errorMessage = zodError.errors?.map((e: any) => e.message).join(", ") || "Validation error";
-            return { error: errorMessage, success: false };
+            return { error: errorMessage, success: false, redirectUrl: "" };
         }
 
         // Handle Firebase auth errors
         if (error.code === "auth/email-already-in-use") {
-            return { error: "An account with this email already exists", success: false };
+            return { error: "An account with this email already exists", success: false, redirectUrl: "" };
         }
         if (error.code === "auth/weak-password") {
-            return { error: "Password is too weak", success: false };
+            return { error: "Password is too weak", success: false, redirectUrl: "" };
         }
         if (error.code === "auth/invalid-email") {
-            return { error: "Invalid email address", success: false };
+            return { error: "Invalid email address", success: false, redirectUrl: "" };
         }
 
         if (error instanceof Error) {
-            return { error: error.message, success: false };
+            return { error: error.message, success: false, redirectUrl: "" };
         }
 
-        return { error: "Registration failed. Please try again", success: false };
+        return { error: "Registration failed. Please try again", success: false, redirectUrl: "" };
     }
 }
 
