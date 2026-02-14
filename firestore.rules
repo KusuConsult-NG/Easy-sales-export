@@ -29,7 +29,7 @@ service cloud.firestore {
     function isVerified() {
       return isSignedIn() &&
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isVerified == true;
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verified == true;
     }
     
     // ============================================
@@ -336,6 +336,192 @@ service cloud.firestore {
         allow update: if false;
         allow delete: if false;
       }
+    }
+    
+    // ============================================
+    // MARKETPLACE MODULE
+    // ============================================
+    
+    // Marketplace Sellers (vendor profiles)
+    match /marketplace_sellers/{sellerId} {
+      // Read: All authenticated users can view sellers
+      allow read: if isSignedIn();
+      
+      // Create: Own profile only
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending';
+      
+      // Update: Own profile (limited) or admin (all fields)
+      allow update: if (isOwner(resource.data.userId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['businessName', 'description', 'phone', 'address', 'updatedAt']))
+                    || isAdmin();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // Marketplace Products
+    match /marketplace_products/{productId} {
+      // Read: All authenticated users
+      allow read: if isSignedIn();
+      
+      // Create: Authenticated sellers only
+      allow create: if isSignedIn() &&
+                       request.resource.data.sellerId == request.auth.uid &&
+                       request.resource.data.price > 0 &&
+                       request.resource.data.stock >= 0;
+      
+      // Update: Own products or admin
+      allow update: if isOwner(resource.data.sellerId) || isAdmin();
+      
+      // Delete: Own products or admin
+      allow delete: if isOwner(resource.data.sellerId) || isAdmin();
+    }
+    
+    // Marketplace Orders
+    match /marketplace_orders/{orderId} {
+      // Read: Buyer, seller, or admin
+      allow read: if isSignedIn() &&
+                     (resource.data.buyerId == request.auth.uid ||
+                      resource.data.sellerId == request.auth.uid ||
+                      isAdmin());
+      
+      // Create: Authenticated buyers only
+      allow create: if isSignedIn() &&
+                       request.resource.data.buyerId == request.auth.uid &&
+                       request.resource.data.status == 'pending';
+      
+      // Update: Seller (status), buyer (limited), or admin
+      allow update: if isAdmin() ||
+                       (isOwner(resource.data.sellerId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                       (isOwner(resource.data.buyerId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryAddress', 'updatedAt']));
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // EXPORT MODULE
+    // ============================================
+    
+    // Export Participants
+    match /export_participants/{participantId} {
+      // Read: Own profile or admin
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Create: Authenticated users only
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending';
+      
+      // Update: Admin only (approval/rejection)
+      allow update: if isAdmin();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // Export Windows (active export periods)
+    match /export_windows/{windowId} {
+      // Read: All authenticated users
+      allow read: if isSignedIn();
+      
+      // Create/Update/Delete: Admin only
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // WAVE MODULE
+    // ============================================
+    
+    // WAVE Members (approved participants)
+    match /wave_members/{memberId} {
+      // Read: Own profile or admin
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Create: Admin only (after application approval)
+      allow create: if isAdmin();
+      
+      // Update: Admin or own profile (limited fields)
+      allow update: if isAdmin() ||
+                       (isOwner(resource.data.userId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progressTracking', 'updatedAt']));
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // FARM NATION MODULE
+    // ============================================
+    
+    // Property Inquiries
+    match /property_inquiries/{inquiryId} {
+      // Read: Inquiry sender, property owner, or admin
+      allow read: if isSignedIn() &&
+                     (resource.data.userId == request.auth.uid ||
+                      resource.data.propertyOwnerId == request.auth.uid ||
+                      isAdmin());
+      
+      // Create: Authenticated users only
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending';
+      
+      // Update: Property owner (response) or admin
+      allow update: if isAdmin() ||
+                       (isOwner(resource.data.propertyOwnerId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'response', 'updatedAt']));
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // NOTIFICATIONS
+    // ============================================
+    
+    // User Notifications
+    match /notifications/{notificationId} {
+      // Read: Own notifications only
+      allow read: if isOwner(resource.data.userId);
+      
+      // Create: System/Admin only
+      allow create: if isAdmin();
+      
+      // Update: Own notifications (mark as read) or admin
+      allow update: if (isOwner(resource.data.userId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'updatedAt']))
+                    || isAdmin();
+      
+      // Delete: Own notifications or admin
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+    
+    // ============================================
+    // TESTIMONIALS
+    // ============================================
+    
+    // Platform Testimonials
+    match /testimonials/{testimonialId} {
+      // Read: All authenticated users (public)
+      allow read: if isSignedIn();
+      
+      // Create: Authenticated users only
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending';
+      
+      // Update: Admin only (approval/moderation)
+      allow update: if isAdmin();
+      
+      // Delete: Own testimonial or admin
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
     }
     
     // ============================================
