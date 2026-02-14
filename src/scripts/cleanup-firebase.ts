@@ -90,12 +90,13 @@ async function deleteCollection(collectionName: string, batchSize = 100): Promis
     const query = collectionRef.limit(batchSize);
 
     return new Promise((resolve, reject) => {
-        deleteQueryBatch(query, resolve, reject, 0);
+        deleteQueryBatch(query, collectionName, resolve, reject, 0);
     });
 }
 
 async function deleteQueryBatch(
     query: FirebaseFirestore.Query,
+    collectionName: string,
     resolve: (value: number) => void,
     reject: (error: any) => void,
     deletedCount: number
@@ -104,7 +105,7 @@ async function deleteQueryBatch(
         const snapshot = await query.get();
 
         if (snapshot.size === 0) {
-            console.log(`   ✓ ${query.firestore.formattedName.split('/').pop()}: ${deletedCount} documents deleted`);
+            console.log(`   ✓ ${collectionName}: ${deletedCount} documents deleted`);
             resolve(deletedCount);
             return;
         }
@@ -120,10 +121,10 @@ async function deleteQueryBatch(
 
         // Recurse to delete more
         setImmediate(() => {
-            deleteQueryBatch(query, resolve, reject, newDeletedCount);
+            deleteQueryBatch(query, collectionName, resolve, reject, newDeletedCount);
         });
     } catch (error) {
-        console.error(`   ❌ Error deleting from ${query.firestore.formattedName}:`, error);
+        console.error(`   ❌ Error deleting from ${collectionName}:`, error);
         reject(error);
     }
 }
