@@ -147,6 +147,18 @@ export async function registerCooperativeMemberAction(
         // Save to Firestore
         await existingMemberRef.set(membershipData);
 
+        // CRITICAL: Update user.serviceRegistrations to link membership with auth
+        await db.collection(COLLECTIONS.USERS).doc(userId).set({
+            serviceRegistrations: {
+                cooperatives: {
+                    status: "pending",
+                    registrationDate: FieldValue.serverTimestamp(),
+                    membershipTier: validatedData.membershipTier,
+                }
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
         // Initialize Paystack payment
         const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
         if (!paystackSecretKey) {

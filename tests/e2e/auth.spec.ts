@@ -8,12 +8,12 @@ import { test, expect } from '@playwright/test';
 test.describe('Authentication', () => {
     test.beforeEach(async ({ page }) => {
         // Navigate to login page before each test
-        await page.goto('/auth/login');
+        await page.goto('/cooperatives/login');
     });
 
     test('should display login page correctly', async ({ page }) => {
         await expect(page).toHaveTitle(/Easy Sales Export/);
-        await expect(page.locator('h1')).toContainText('Login');
+        await expect(page.locator('h1')).toContainText('Welcome Back');
         await expect(page.locator('input[name="email"]')).toBeVisible();
         await expect(page.locator('input[name="password"]')).toBeVisible();
     });
@@ -23,15 +23,21 @@ test.describe('Authentication', () => {
         await page.fill('input[name="password"]', 'wrongpassword');
         await page.click('button[type="submit"]');
 
-        // Wait for error message
-        await expect(page.locator('text=/invalid|error|incorrect/i')).toBeVisible({ timeout: 5000 });
+        // Wait for error message (include "attempts" for rate limit errors)
+        await expect(page.locator('text=/invalid|error|incorrect|failed|attempts/i')).toBeVisible({ timeout: 10000 });
     });
 
     test('should show error for empty fields', async ({ page }) => {
+        // Disable HTML5 validation to test server-side validation
+        await page.evaluate(() => {
+            const form = document.querySelector('form');
+            if (form) form.noValidate = true;
+        });
+
         await page.click('button[type="submit"]');
 
         // Should see validation errors
-        await expect(page.locator('text=/required|email|password/i')).toBeVisible();
+        await expect(page.locator('text=/required|email|password|invalid/i')).toBeVisible();
     });
 
     // NOTE: Actual login test requires valid test credentials

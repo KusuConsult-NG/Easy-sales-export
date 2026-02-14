@@ -185,6 +185,18 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // CRITICAL: Update user.serviceRegistrations to link application with auth
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
+            serviceRegistrations: {
+                wave: {
+                    status: "pending",
+                    applicationId,
+                    submittedAt: FieldValue.serverTimestamp(),
+                }
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
         // Audit log
         await createAuditLog({
             action: "user_update",

@@ -436,6 +436,18 @@ export async function submitAcademyApplicationAction(
             notes: "",
         });
 
+        // CRITICAL: Update user.serviceRegistrations to link application with auth
+        await db.collection("users").doc(session.user.id).set({
+            serviceRegistrations: {
+                academy: {
+                    status: "pending",
+                    applicationId,
+                    submittedAt: FieldValue.serverTimestamp(),
+                }
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
         // Create audit log
         await createAuditLog({
             action: "user_update",

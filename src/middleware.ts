@@ -68,10 +68,11 @@ export async function middleware(request: NextRequest) {
 
     // CRITICAL: Skip middleware for all auth pages to prevent redirect loops
     // This includes: /auth/login, /auth/register, /marketplace/login, /export/login, etc.
-    const isAuthPage = pathname.includes('/login') ||
+    const isAuthPage = pathname.includes('/login') || // Allows /wave/login, /export/login, etc.
         pathname.includes('/register') ||
         pathname === '/auth/signin' ||
-        pathname === '/auth/signup';
+        pathname === '/auth/signup' ||
+        pathname === '/auth/get-started';
 
     if (isAuthPage) {
         return NextResponse.next();

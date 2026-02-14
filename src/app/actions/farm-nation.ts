@@ -612,6 +612,13 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
                     onboardingCompletedAt: new Date().toISOString(),
                     termsAcceptedAt: new Date().toISOString(),
                 },
+                serviceRegistrations: {
+                    farmNation: {
+                        status: "approved", // Farm Nation has instant approval
+                        role: data.role,
+                        completedAt: FieldValue.serverTimestamp(),
+                    }
+                },
                 isVerified: true, // Instant verification for Farm Nation
                 roles: FieldValue.arrayUnion(...roles),
                 updatedAt: FieldValue.serverTimestamp(),

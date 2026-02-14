@@ -8,9 +8,17 @@ import { ArrowRight, Sparkles } from "lucide-react";
 export default function HubHero() {
     // Hero background image slider
     const heroImages = [
-        "/images/hero-1.jpg",
-        "/images/hero-2.jpg",
-        "/images/hero-3.jpg",
+        "/images/hub/photo_2026-02-14 15.20.02.jpeg",
+        "/images/hub/photo_2026-02-14 15.20.11.jpeg",
+        "/images/hub/photo_2026-02-14 15.20.17.jpeg",
+        "/images/hub/photo_2026-02-14 15.20.27.jpeg",
+        "/images/hub/photo_2026-02-14 15.20.37.jpeg",
+        "/images/hub/photo_2026-02-14 15.20.45.jpeg",
+        "/images/hub/photo_2026-02-14 15.21.06.jpeg",
+        "/images/hub/photo_2026-02-14 15.21.14.jpeg",
+        "/images/hub/photo_2026-02-14 15.21.28.jpeg",
+        "/images/hub/photo_2026-02-14 15.21.33.jpeg",
+        "/images/hub/photo_2026-02-14 15.21.49.jpeg",
     ];
     const [currentHeroImage, setCurrentHeroImage] = useState(0);
 

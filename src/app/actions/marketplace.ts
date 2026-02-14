@@ -274,6 +274,14 @@ export async function submitMarketplaceOnboardingAction(
             isSeller: true, // Flag to indicate seller intent
             sellerVerificationStatus: "pending",
             sellerVerificationId: verificationId,
+            serviceRegistrations: {
+                marketplace: {
+                    status: "pending",
+                    verificationId,
+                    accountType: formData.get("accountType") as string,
+                    submittedAt: FieldValue.serverTimestamp(),
+                }
+            },
             updatedAt: FieldValue.serverTimestamp(),
         });
 

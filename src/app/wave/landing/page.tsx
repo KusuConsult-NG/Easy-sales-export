@@ -14,17 +14,27 @@ import Image from "next/image";
 export default function WaveLandingPage() {
     // Image Slider State
     const images = [
-        "/wave/3L8A9873.jpg",
-        "/wave/3L8A9713.jpg",
-        "/wave/3L8A9720.jpg",
-        "/wave/3L8A9721.jpg",
-        "/wave/3L8A9765.jpg",
-        "/wave/3L8A9807.jpg",
-        "/wave/8866221.jpg",
-        "/wave/96a35f41-fce4-48e0-81f4-2206e03d5d32.png",
-        "/wave/P1359762.jpg",
-        "/wave/P1359776.jpg",
-        "/wave/photo_2026-02-04_04-02-12.jpg",
+        "/images/wave/photo_2026-02-14 12.46.49.jpeg",
+        "/images/wave/photo_2026-02-14 12.47.22.jpeg",
+        "/images/wave/photo_2026-02-14 12.47.24.jpeg",
+        "/images/wave/photo_2026-02-14 12.47.29.jpeg",
+        "/images/wave/photo_2026-02-14 12.47.34.jpeg",
+        "/images/wave/photo_2026-02-14 12.47.44.jpeg",
+        "/images/wave/photo_2026-02-14 12.47.50.jpeg",
+        "/images/wave/photo_2026-02-14 12.47.57.jpeg",
+        "/images/wave/photo_2026-02-14 12.48.35.jpeg",
+        "/images/wave/photo_2026-02-14 12.49.39.jpeg",
+        "/images/wave/photo_2026-02-14 12.50.06.jpeg",
+        "/images/wave/photo_2026-02-14 12.50.29.jpeg",
+        "/images/wave/photo_2026-02-14 12.50.33.jpeg",
+        "/images/wave/photo_2026-02-14 12.51.13.jpeg",
+        "/images/wave/photo_2026-02-14 12.51.27.jpeg",
+        "/images/wave/photo_2026-02-14 12.51.40.jpeg",
+        "/images/wave/photo_2026-02-14 12.52.05.jpeg",
+        "/images/wave/photo_2026-02-14 12.52.09.jpeg",
+        "/images/wave/photo_2026-02-14 12.52.18.jpeg",
+        "/images/wave/photo_2026-02-14 12.52.26.jpeg",
+        "/images/wave/photo_2026-02-14 12.52.48.jpeg",
     ];
 
     const [currentImage, setCurrentImage] = useState(0);

@@ -366,9 +366,8 @@ export async function submitExportOnboardingAction(
         // Update user document to mark export service registration
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         await userRef.update({
-            services: {
+            serviceRegistrations: {
                 export: {
-                    registered: true,
                     status: "pending_approval",
                     applicationId,
                     appliedAt: FieldValue.serverTimestamp(),

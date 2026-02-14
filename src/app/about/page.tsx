@@ -176,10 +176,10 @@ export default function AboutPage() {
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link
-                            href="/auth/register"
+                            href="/auth/get-started"
                             className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-green-700 font-bold rounded-xl hover:bg-slate-50 transition-all shadow-lg hover:shadow-xl hover:scale-105"
                         >
-                            Create Free Account
+                            Get Started
                             <ArrowRight className="w-5 h-5" />
                         </Link>
                         <Link

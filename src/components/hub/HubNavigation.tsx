@@ -66,8 +66,8 @@ export default function HubNavigation() {
                                                         key={subIndex}
                                                         href={subItem.href}
                                                         className={`block px-4 py-2.5 text-sm font-medium transition-colors ${isActive(subItem.href)
-                                                                ? "text-primary bg-primary/10"
-                                                                : "text-slate-900 dark:text-white hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700"
+                                                            ? "text-primary bg-primary/10"
+                                                            : "text-slate-900 dark:text-white hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700"
                                                             }`}
                                                     >
                                                         {subItem.label}
@@ -80,8 +80,8 @@ export default function HubNavigation() {
                                     <Link
                                         href={item.href}
                                         className={`px-4 py-2 font-medium rounded-lg transition-colors ${isActive(item.href)
-                                                ? "text-primary bg-primary/10"
-                                                : "text-slate-900 dark:text-white hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800"
+                                            ? "text-primary bg-primary/10"
+                                            : "text-slate-900 dark:text-white hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800"
                                             }`}
                                     >
                                         {item.label}
@@ -89,6 +89,12 @@ export default function HubNavigation() {
                                 )}
                             </div>
                         ))}
+                        <Link
+                            href="/auth/get-started"
+                            className="ml-4 px-4 py-2 font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors"
+                        >
+                            Access Portal
+                        </Link>
                     </div>
 
                     {/* Mobile Menu Button */}
@@ -129,8 +135,8 @@ export default function HubNavigation() {
                                                         href={subItem.href}
                                                         onClick={() => setIsMobileMenuOpen(false)}
                                                         className={`block px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive(subItem.href)
-                                                                ? "text-primary bg-primary/10"
-                                                                : "text-slate-600 dark:text-slate-400 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800"
+                                                            ? "text-primary bg-primary/10"
+                                                            : "text-slate-600 dark:text-slate-400 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800"
                                                             }`}
                                                     >
                                                         {subItem.label}
@@ -144,8 +150,8 @@ export default function HubNavigation() {
                                         href={item.href}
                                         onClick={() => setIsMobileMenuOpen(false)}
                                         className={`block px-4 py-3 font-medium rounded-lg transition-colors ${isActive(item.href)
-                                                ? "text-primary bg-primary/10"
-                                                : "text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
+                                            ? "text-primary bg-primary/10"
+                                            : "text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
                                             }`}
                                     >
                                         {item.label}
@@ -153,6 +159,12 @@ export default function HubNavigation() {
                                 )}
                             </div>
                         ))}
+                        <Link
+                            href="/auth/get-started"
+                            className="block mt-4 px-4 py-3 font-semibold text-center text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors"
+                        >
+                            Access Portal
+                        </Link>
                     </div>
                 )}
             </div>

@@ -51,10 +51,10 @@ export default function WebsiteNav() {
                     {/* Auth Buttons */}
                     <div className="hidden lg:flex items-center gap-4">
                         <button
-                            onClick={() => router.push("/auth/login")}
+                            onClick={() => router.push("/auth/get-started")}
                             className="px-6 py-2.5 text-slate-900 font-medium hover:text-orange-600 transition-colors"
                         >
-                            Sign In
+                            Access Portal
                         </button>
                         <button
                             onClick={() => router.push("/auth/get-started")}
@@ -91,12 +91,12 @@ export default function WebsiteNav() {
                         <div className="pt-4 border-t border-slate-200 space-y-3">
                             <button
                                 onClick={() => {
-                                    router.push("/auth/login");
+                                    router.push("/auth/get-started");
                                     setIsMobileMenuOpen(false);
                                 }}
                                 className="w-full px-6 py-2.5 text-slate-900 font-medium border border-slate-300 rounded-xl hover:border-orange-600 hover:text-orange-600 transition-colors"
                             >
-                                Sign In
+                                Access Portal
                             </button>
                             <button
                                 onClick={() => {

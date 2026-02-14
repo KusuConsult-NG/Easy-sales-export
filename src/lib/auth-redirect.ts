@@ -48,9 +48,9 @@ export function getModuleAuthUrl(pathname: string, type: 'login' | 'register'): 
         return `/academy/${type}`;
     }
 
-    // Default to generic auth pages for all other routes
+    // Default to Auth Portal for all other routes
     // (e.g., /dashboard, /settings, /admin, etc.)
-    return `/auth/${type}`;
+    return '/auth/get-started';
 }
 
 /**
