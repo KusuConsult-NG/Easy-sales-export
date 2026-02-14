@@ -7,8 +7,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 
 interface OrphanedUser {
     uid: string;
@@ -89,19 +87,27 @@ export default function OrphanedUsersPage() {
             </div>
 
             <div className="flex gap-4 mb-6">
-                <Button onClick={detectOrphaned} disabled={loading}>
+                <button
+                    onClick={detectOrphaned}
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                     {loading ? 'Scanning...' : 'Scan for Orphaned Users'}
-                </Button>
+                </button>
 
                 {orphanedUsers.length > 0 && (
-                    <Button onClick={repairAll} disabled={repairing} variant="primary">
+                    <button
+                        onClick={repairAll}
+                        disabled={repairing}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                         {repairing ? 'Repairing...' : `Repair All (${orphanedUsers.length})`}
-                    </Button>
+                    </button>
                 )}
             </div>
 
             {results && (
-                <Card className="mb-6 p-4 bg-green-50 border-green-200">
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
                     <h3 className="font-semibold mb-2">Repair Results</h3>
                     <div className="grid grid-cols-3 gap-4 text-sm">
                         <div>Total: {results.total}</div>
@@ -114,19 +120,19 @@ export default function OrphanedUsersPage() {
                             <pre className="mt-2 text-xs">{JSON.stringify(results.errors, null, 2)}</pre>
                         </details>
                     )}
-                </Card>
+                </div>
             )}
 
             {orphanedUsers.length === 0 && !loading && (
-                <Card className="p-6 text-center text-gray-500">
+                <div className="p-6 text-center text-gray-500 bg-white border border-gray-200 rounded-md">
                     No orphaned users detected
-                </Card>
+                </div>
             )}
 
             {orphanedUsers.length > 0 && (
                 <div className="space-y-3">
                     {orphanedUsers.map((user) => (
-                        <Card key={user.uid} className="p-4">
+                        <div key={user.uid} className="p-4 bg-white border border-gray-200 rounded-md">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <div className="font-mono text-sm text-gray-500">{user.uid}</div>
@@ -134,15 +140,15 @@ export default function OrphanedUsersPage() {
                                     <div className="text-sm text-gray-600">{user.email || 'No email'}</div>
                                     <div className="text-xs text-gray-400">Created: {user.createdAt}</div>
                                 </div>
-                                <Button
+                                <button
                                     onClick={() => repairSingle(user.uid)}
                                     disabled={repairing}
-                                    size="sm"
+                                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Repair
-                                </Button>
+                                </button>
                             </div>
-                        </Card>
+                        </div>
                     ))}
                 </div>
             )}
