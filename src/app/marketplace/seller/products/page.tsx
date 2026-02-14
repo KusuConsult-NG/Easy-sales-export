@@ -12,6 +12,7 @@ import Link from "next/link";
 import { getSellerProductsAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import BackButton from "@/components/ui/BackButton";
 
 export default function SellerProductsPage() {
     const [loading, setLoading] = useState(true);
@@ -76,6 +77,7 @@ export default function SellerProductsPage() {
                 <div className="max-w-7xl mx-auto px-8 py-6">
                     <div className="flex items-center justify-between">
                         <div>
+                            <BackButton fallbackPath="/marketplace/seller/dashboard" />
                             <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
                                 My Products
                             </h1>

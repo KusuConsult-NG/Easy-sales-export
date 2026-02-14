@@ -1,5 +1,6 @@
 import { BookOpen, Clock, CheckCircle, Play, Award } from "lucide-react";
 import Link from "next/link";
+import BackButton from "@/components/ui/BackButton";
 
 // This will be replaced with real data from Firestore
 const ENROLLED_COURSES = [
@@ -46,6 +47,7 @@ export default function MyCoursesPage() {
         <div className="space-y-8">
             {/* Header */}
             <div>
+                <BackButton fallbackPath="/academy/dashboard" />
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
                     My Courses
                 </h1>

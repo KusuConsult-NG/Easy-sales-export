@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { PieChart, TrendingUp, Calendar, DollarSign } from "lucide-react";
+import BackButton from "@/components/ui/BackButton";
 
 export default function ExportPortfolioPage() {
     const portfolioData = {
@@ -53,6 +54,7 @@ export default function ExportPortfolioPage() {
             <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* Header */}
                 <div className="mb-8">
+                    <BackButton fallbackPath="/export/dashboard" />
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
                         Investment Portfolio
                     </h1>
