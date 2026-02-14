@@ -20,7 +20,8 @@ import {
     GraduationCap
 } from "lucide-react";
 import { useState } from "react";
-import { logoutAction } from "@/app/actions/auth";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { COMPANY_INFO } from "@/lib/constants";
 
@@ -34,7 +35,13 @@ const navItems = [
 
 export default function AcademySidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    const handleLogout = async () => {
+        await signOut({ redirect: false });
+        router.push('/academy/login');
+    };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -105,15 +112,13 @@ export default function AcademySidebar() {
 
                 {/* Footer */}
                 <div className="p-4 border-t border-indigo-800 bg-indigo-950/30">
-                    <form action={logoutAction}>
-                        <button
-                            type="submit"
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-indigo-200 hover:bg-indigo-800 hover:text-white transition-colors"
-                        >
-                            <LogOut className="w-5 h-5" />
-                            <span className="font-medium">Sign Out</span>
-                        </button>
-                    </form>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-indigo-200 hover:bg-indigo-800 hover:text-white transition-colors"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span className="font-medium">Sign Out</span>
+                    </button>
                 </div>
             </aside>
 

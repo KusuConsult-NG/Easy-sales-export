@@ -19,9 +19,12 @@ import {
     User,
     Menu,
     X,
-    Sparkles
+    Sparkles,
+    LogOut
 } from "lucide-react";
 import { useState } from "react";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 const navItems = [
     { icon: Home, label: "Dashboard", href: "/wave/dashboard" },
@@ -36,7 +39,13 @@ const navItems = [
 
 export default function WaveSidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    const handleLogout = async () => {
+        await signOut({ redirect: false });
+        router.push('/wave/login');
+    };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -88,8 +97,8 @@ export default function WaveSidebar() {
                     })}
                 </nav>
 
-                {/* User Info (Mock) */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-emerald-800 bg-emerald-950/30">
+                {/* User Info & Logout */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-emerald-800 bg-emerald-950/30 space-y-2">
                     <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-900/50 border border-emerald-800">
                         <div className="w-10 h-10 bg-emerald-700 rounded-full flex items-center justify-center text-white font-bold border border-emerald-600">
                             JD
@@ -105,6 +114,13 @@ export default function WaveSidebar() {
                             </div>
                         </div>
                     </div>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-emerald-200 hover:bg-red-900/30 hover:text-red-300 transition-all border border-transparent hover:border-red-700/30"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span className="font-medium">Logout</span>
+                    </button>
                 </div>
             </aside>
 

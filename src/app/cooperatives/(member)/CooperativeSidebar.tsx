@@ -20,11 +20,14 @@ import {
     Settings,
     Menu,
     X,
-    Award
+    Award,
+    LogOut
 } from "lucide-react";
 import { useState } from "react";
 import Image from "next/image";
 import { COMPANY_INFO } from "@/lib/constants";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 const navItems = [
     { icon: Home, label: "Dashboard", href: "/cooperatives/dashboard" },
@@ -47,7 +50,13 @@ interface CooperativeSidebarProps {
 
 export default function CooperativeSidebar({ user }: CooperativeSidebarProps) {
     const pathname = usePathname();
+    const router = useRouter();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    const handleLogout = async () => {
+        await signOut({ redirect: false });
+        router.push('/cooperatives/login');
+    };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -124,8 +133,8 @@ export default function CooperativeSidebar({ user }: CooperativeSidebarProps) {
                     })}
                 </nav>
 
-                {/* User Info */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 dark:border-slate-800">
+                {/* User Info & Logout */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
                     <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800">
                         <div className="w-10 h-10 bg-linear-to-br from-purple-800 to-indigo-900 rounded-full flex items-center justify-center text-white font-bold">
                             {initials}
@@ -141,6 +150,13 @@ export default function CooperativeSidebar({ user }: CooperativeSidebarProps) {
                             </div>
                         </div>
                     </div>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span className="font-medium">Logout</span>
+                    </button>
                 </div>
             </aside>
 

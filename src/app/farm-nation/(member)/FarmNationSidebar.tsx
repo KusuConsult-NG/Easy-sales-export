@@ -21,7 +21,8 @@ import {
     LogOut
 } from "lucide-react";
 import { useState } from "react";
-import { logoutAction } from "@/app/actions/auth";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { COMPANY_INFO } from "@/lib/constants";
 
@@ -36,7 +37,13 @@ const navItems = [
 
 export default function FarmNationSidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    const handleLogout = async () => {
+        await signOut({ redirect: false });
+        router.push('/farm-nation/login');
+    };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -107,15 +114,13 @@ export default function FarmNationSidebar() {
 
                 {/* Footer */}
                 <div className="p-4 border-t border-emerald-800 bg-emerald-950/30">
-                    <form action={logoutAction}>
-                        <button
-                            type="submit"
-                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-emerald-200 hover:bg-emerald-800 hover:text-white transition-colors"
-                        >
-                            <LogOut className="w-5 h-5" />
-                            <span className="font-medium">Sign Out</span>
-                        </button>
-                    </form>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-emerald-200 hover:bg-emerald-800 hover:text-white transition-colors"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span className="font-medium">Sign Out</span>
+                    </button>
                 </div>
             </aside>
 
