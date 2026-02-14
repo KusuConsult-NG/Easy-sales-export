@@ -21,11 +21,28 @@ import { ZodError } from "zod";
  */
 
 /**
- * Determine where to redirect user after registration based on their roles
+ * Determine where to redirect user after registration based on their selected platforms
  * Users must complete module-specific onboarding before accessing dashboards
+ * 
+ * CRITICAL: Prioritize the user's SELECTED platform over auto-assigned roles
+ * Example: Female user selects Cooperative → Should go to /cooperatives/onboarding
+ *          NOT /wave/application (even though wave_participant was auto-assigned)
  */
-function determinePostRegistrationRedirect(roles: UserRole[]): string {
-    // Check roles in priority order and redirect to appropriate onboarding
+function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[]): string {
+    // PRIORITY 1: Check user's SELECTED platforms first (single platform registration)
+    if (platforms.length === 1) {
+        const platform = platforms[0];
+
+        if (platform === 'marketplace') return '/marketplace/onboarding';
+        if (platform === 'export') return '/export/onboarding';
+        if (platform === 'cooperatives') return '/cooperatives/onboarding';
+        if (platform === 'farm-nation') return '/farm-nation/onboarding';
+        if (platform === 'academy') return '/academy/onboarding';
+        if (platform === 'wave') return '/wave/application';
+    }
+
+    // PRIORITY 2: For multi-platform registration, use role-based priority
+    // (User selected multiple platforms, so we need to pick one)
 
     // Marketplace: Buyer or Seller
     if (roles.includes('seller') || roles.includes('buyer')) {
@@ -37,14 +54,14 @@ function determinePostRegistrationRedirect(roles: UserRole[]): string {
         return '/export/onboarding';
     }
 
-    // WAVE Program (females auto-enrolled)
-    if (roles.includes('wave_participant')) {
-        return '/wave/application'; // WAVE uses "application" instead of "onboarding"
-    }
-
-    // Cooperative
+    // Cooperative (Check BEFORE WAVE to prevent female cooperative users going to WAVE)
     if (roles.includes('cooperative_member')) {
         return '/cooperatives/onboarding';
+    }
+
+    // WAVE Program (females auto-enrolled) - Now checked AFTER Cooperative
+    if (roles.includes('wave_participant')) {
+        return '/wave/application'; // WAVE uses "application" instead of "onboarding"
     }
 
     // Farm Nation
@@ -207,7 +224,7 @@ export async function registerAction(prevState: any, formData: FormData) {
         // Redirect to module-specific onboarding after registration
         // Users must complete onboarding before accessing dashboards
         const callbackUrl = formData.get("callbackUrl") as string;
-        const redirectUrl = callbackUrl || determinePostRegistrationRedirect(userRoles);
+        const redirectUrl = callbackUrl || determinePostRegistrationRedirect(platforms, userRoles);
 
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
         // Server-side signIn in Server Actions causes race conditions with cookies.
