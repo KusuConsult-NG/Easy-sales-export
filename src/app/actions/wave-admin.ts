@@ -318,6 +318,16 @@ export async function approveWaveApplicationAction(
                 active: true,
             });
 
+            // CLEAR CACHE - User now has Wave access
+            try {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(appData.userId, 'wave');
+                console.log(`[Wave Approval] Cleared cache for user: ${appData.userId}`);
+            } catch (cacheError) {
+                // Non-critical - continue even if cache clear fails
+                console.error('[Wave Approval] Cache invalidation error:', cacheError);
+            }
+
             // Send approval email
             const userDocData = await db.collection("users").doc(appData.userId).get();
             if (userDocData.exists) {

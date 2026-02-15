@@ -86,6 +86,15 @@ export async function approveWaveApplicationAction(
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
+        // 4. CLEAR CACHE - User now has Wave access
+        try {
+            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+            await invalidateServiceCache(userId, 'wave');
+            console.log(`[Wave Approval] Cache cleared for user: ${userId}`);
+        } catch (cacheError) {
+            console.error('[Wave Approval] Cache clear error:', cacheError);
+        }
+
         // 4. Send Approval Email
         if (userEmail && process.env.RESEND_API_KEY) {
             try {
@@ -289,6 +298,15 @@ export async function toggleUserVerificationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // CLEAR CACHE - User verification status changed
+        try {
+            const { invalidateUserCache } = await import('@/lib/cache-invalidation');
+            await invalidateUserCache(userId);
+            console.log(`[User Verification] Cache cleared for user: ${userId}`);
+        } catch (cacheError) {
+            console.error('[User Verification] Cache clear error:', cacheError);
+        }
+
         // Log audit
         await logAuditAction(
             newVerificationStatus ? "user_verify" : "user_unverify",
@@ -445,6 +463,9 @@ export async function verifyLandListing(
 
         // Update listing status
         const listingRef = db.collection("land_listings").doc(listingId);
+        const listingDoc = await listingRef.get();
+        const ownerId = listingDoc.exists ? listingDoc.data()?.ownerId : null;
+
         await listingRef.update({
             verificationStatus: decision,
             verified: decision === "approved",
@@ -454,9 +475,18 @@ export async function verifyLandListing(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // Get listing data for email
-        const listingDoc = await listingRef.get();
+        // CLEAR CACHE - Owner's Farm Nation status changed
+        if (ownerId && decision === "approved") {
+            try {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(ownerId, 'farmNation');
+                console.log(`[Land Verification] Cache cleared for user: ${ownerId}`);
+            } catch (cacheError) {
+                console.error('[Land Verification] Cache clear error:', cacheError);
+            }
+        }
 
+        // Use listing data for email (listingDoc already fetched above)
         if (listingDoc.exists) {
             const listingData = listingDoc.data()!;
 
@@ -653,6 +683,15 @@ export async function approveLoanApplication(
             reviewedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // CLEAR CACHE - User's cooperative status changed
+        try {
+            const { invalidateCooperativeCache } = await import('@/lib/cache-invalidation');
+            await invalidateCooperativeCache(loanData.userId);
+            console.log(`[Loan Approval] Cache cleared for user: ${loanData.userId}`);
+        } catch (cacheError) {
+            console.error('[Loan Approval] Cache clear error:', cacheError);
+        }
 
         // Send approval email
         if (process.env.RESEND_API_KEY) {
