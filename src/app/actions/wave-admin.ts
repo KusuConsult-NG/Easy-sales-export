@@ -8,7 +8,7 @@ import { auth } from "@/lib/auth";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
 // ============================================================================
 // RESOURCES MANAGEMENT
@@ -41,7 +41,7 @@ export async function createResourceAction(data: {
             uploadedBy: session.user.id,
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "resource_uploaded",
             userId: session.user.id,
             targetType: "wave_resource",
@@ -83,7 +83,7 @@ export async function updateResourceAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "resource_update",
             userId: session.user.id,
             targetType: "wave_resource",
@@ -114,7 +114,7 @@ export async function deleteResourceAction(
 
         await db.collection("wave_resources").doc(resourceId).delete();
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "resource_delete",
             userId: session.user.id,
             targetType: "wave_resource",
@@ -161,7 +161,7 @@ export async function createTrainingEventAction(data: {
             createdBy: session.user.id,
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "wave_training_created",
             userId: session.user.id,
             targetType: "wave_training_event",
@@ -205,7 +205,7 @@ export async function updateTrainingEventAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "wave_training_updated",
             userId: session.user.id,
             targetType: "wave_training_event",
@@ -342,7 +342,7 @@ export async function approveWaveApplicationAction(
             }
         }
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "wave_application_approved",
             userId: session.user.id,
             targetType: "wave_application",
@@ -399,7 +399,7 @@ export async function rejectWaveApplicationAction(
             rejectionReason: reason,
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "wave_application_rejected",
             userId: session.user.id,
             targetType: "wave_application",

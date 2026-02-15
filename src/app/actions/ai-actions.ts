@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { AuditActionType } from "@/types/strict";
-import { createAuditLog } from "@/lib/audit-logger";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 
 /**
@@ -91,11 +91,11 @@ export async function sendAIMessage(
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: AuditActionType.USER_LOGIN, // Can add AI_CHAT to enum
-            resourceId: chatRef.id,
-            resourceType: 'ai_chat',
+            action: 'user_login', // Can add AI_CHAT to enum
+            targetId: chatRef.id,
+            targetType: 'ai_chat',
             metadata: {
                 messageLength: validated.message.length,
                 currentPage: validated.context?.currentPage,

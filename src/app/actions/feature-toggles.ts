@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { DEFAULT_TOGGLES, type FeatureToggle } from "@/lib/feature-toggles";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
 /**
  * Get feature toggle state
@@ -70,7 +70,7 @@ export async function updateFeatureToggle(
         }
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "feature_toggled",
             userId: session.user.id,
             userEmail: session.user.email!,

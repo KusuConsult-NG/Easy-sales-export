@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog, logAdminAction } from "@/lib/audit-log";
+import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 import { createNotificationAction } from "@/app/actions/notifications";
 
 /**
@@ -68,7 +68,7 @@ export async function createLandListingAction(data: {
 
         const docRef = await db.collection("land_listings").add(listing);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: data.ownerId,
             targetId: docRef.id,
@@ -321,7 +321,7 @@ export async function submitLandListingAction(data: {
         const docRef = await db.collection("land_listings").add(listing);
 
         // Create audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: data.ownerId,
             userEmail: data.ownerEmail,
@@ -404,7 +404,7 @@ export async function submitLandInquiryAction(data: {
         });
 
         // 3. Log action
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "land_inquiry",
             userId: "public_user",
             userEmail: data.buyerEmail,

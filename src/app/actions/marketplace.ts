@@ -9,13 +9,8 @@
 import { auth } from "@/lib/auth";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import {
-    ref,
-    uploadBytes,
-    getDownloadURL
-} from "firebase/storage";
 import { db } from "@/lib/firebase-admin"; // Use Admin DB
-import { storage } from "@/lib/firebase"; // Keep Client Storage for now (or refactor if needed)
+import { uploadFileToStorage } from "@/lib/storage-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SellerVerification, Product, CartItem, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
@@ -176,15 +171,14 @@ export async function submitMarketplaceOnboardingAction(
         const userId = session.user.id;
         const timestamp = Date.now();
 
-        // 1. Handle File Uploads (Client SDK Storage)
+        // 1. Handle File Uploads (Admin SDK Storage)
         const uploadFile = async (file: File, path: string) => {
             const extension = file.name.split('.').pop();
             const fileName = `${timestamp}_${Math.random().toString(36).substring(7)}.${extension}`;
-            const storageRef = ref(storage, `${path}/${userId}/${fileName}`);
-            const buffer = await file.arrayBuffer();
+            const destination = `${path}/${userId}/${fileName}`;
 
-            await uploadBytes(storageRef, buffer, { contentType: file.type });
-            return await getDownloadURL(storageRef);
+            // Use signed URLs (private/secure) for verification docs
+            return await uploadFileToStorage(file, destination, false);
         };
 
         let businessRegistrationUrl = "";
@@ -365,15 +359,15 @@ export async function createProductAction(
 
         const productId = `product_${userId}_${Date.now()}`;
 
-        // 1. Handle Image Uploads (Client SDK Storage)
+        // 1. Handle Image Uploads (Admin SDK Storage)
         const uploadFile = async (file: File) => {
             const extension = file.name.split('.').pop();
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
-            const storageRef = ref(storage, `products/${userId}/${productId}/${fileName}`);
-            const buffer = await file.arrayBuffer();
+            const destination = `products/${userId}/${productId}/${fileName}`;
 
-            await uploadBytes(storageRef, buffer, { contentType: file.type });
-            return await getDownloadURL(storageRef);
+            // Use signed URLs for product images too for now to match behavior
+            // In future, making them public via isPublic: true is better for caching
+            return await uploadFileToStorage(file, destination, false);
         };
 
         const imageUrls: string[] = [];

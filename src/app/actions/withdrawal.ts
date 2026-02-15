@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
 import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
-import { createAuditLog } from '@/lib/audit-log';
+import { createAdminAuditLog } from '@/lib/audit-log-admin';
 
 interface WithdrawalRequestData {
     amount: number;
@@ -80,7 +80,7 @@ export async function submitWithdrawalRequestAction(
         });
 
         // Create audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: 'payment_initiated', // Using existing audit action type
             userId,
             userEmail,

@@ -12,7 +12,7 @@ import {
     type LandSearchFilters
 } from "@/lib/validations/land";
 import { AuditActionType, type LandListing } from "@/types/strict";
-import { createAuditLog } from "@/lib/audit-logger";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 
 /**
@@ -49,11 +49,11 @@ export async function createLandListing(
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: AuditActionType.CONTENT_APPROVE, // Can add LAND_CREATE to enum
-            resourceId: listingRef.id,
-            resourceType: 'land_listing',
+            action: 'land_verified', // Can add LAND_CREATE to enum
+            targetId: listingRef.id,
+            targetType: 'land_listing',
             metadata: {
                 title: validated.title,
                 acreage: validated.acreage,
@@ -271,11 +271,11 @@ export async function updateLandListing(
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: AuditActionType.CONTENT_APPROVE,
-            resourceId: listingId,
-            resourceType: 'land_listing',
+            action: 'land_verified',
+            targetId: listingId,
+            targetType: 'land_listing',
             metadata: {
                 action: 'update',
             },
@@ -326,11 +326,11 @@ export async function verifyLandListing(
         await db.collection('land_listings').doc(validated.listingId).update(updateData);
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: validated.verified ? AuditActionType.CONTENT_APPROVE : AuditActionType.CONTENT_APPROVE, // Using CONTENT_APPROVE for both since CONTENT_REJECT doesn't exist
-            resourceId: validated.listingId,
-            resourceType: 'land_listing',
+            action: validated.verified ? 'land_verified' : 'land_verified', // Using CONTENT_APPROVE for both since CONTENT_REJECT doesn't exist
+            targetId: validated.listingId,
+            targetType: 'land_listing',
             metadata: {
                 verified: validated.verified,
                 notes: validated.notes,
@@ -380,11 +380,11 @@ export async function deleteLandListing(listingId: string) {
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: AuditActionType.CONTENT_APPROVE, // Using CONTENT_APPROVE since CONTENT_REJECT doesn't exist
-            resourceId: listingId,
-            resourceType: 'land_listing',
+            action: 'land_verified', // Using CONTENT_APPROVE since CONTENT_REJECT doesn't exist
+            targetId: listingId,
+            targetType: 'land_listing',
             metadata: {
                 action: 'delete',
             },

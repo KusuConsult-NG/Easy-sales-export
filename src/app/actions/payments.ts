@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { logFinancialAction, createAuditLog } from "@/lib/audit-log";
+import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log-admin";
 
 /**
  * Payment Tracking & Verification System
@@ -52,7 +52,7 @@ export async function createPaymentRecordAction(data: {
 
         const docRef = await db.collection("payments").add(payment);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "payment_initiated",
             userId: data.userId,
             userEmail: data.userEmail,
@@ -100,7 +100,7 @@ export async function verifyPaymentAction(
 
         const paymentData = paymentDoc.data() as PaymentRecord;
 
-        await logFinancialAction(
+        await logAdminFinancialAction(
             "payment_completed",
             paymentData.userId,
             paymentData.amount,

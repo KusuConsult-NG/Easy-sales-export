@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
 /**
  * Export Aggregation System
@@ -68,7 +68,7 @@ export async function createExportWindowAction(data: {
 
         const docRef = await db.collection("export_windows").add(window);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: data.adminId,
             targetId: docRef.id,
@@ -161,7 +161,7 @@ export async function bookExportSlotAction(data: {
             currentVolume: windowData.currentVolume + data.volume,
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: data.userId,
             targetId: slotRef.id,

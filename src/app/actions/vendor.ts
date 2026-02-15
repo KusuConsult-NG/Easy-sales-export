@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
 /**
  * VENDOR ACTIONS
@@ -119,7 +119,7 @@ export async function updateVendorOrderStatusAction(
 
         await orderRef.update(updateData);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: session.user.id,
             targetId: orderId,
@@ -220,7 +220,7 @@ export async function updateVendorProductInventoryAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: session.user.id,
             targetId: productId,
@@ -301,7 +301,7 @@ export async function deleteVendorProductAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_delete",
             userId: session.user.id,
             targetId: productId,

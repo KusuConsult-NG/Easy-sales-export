@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 
 /**
@@ -153,7 +153,7 @@ export async function enrollInCourseAction(
 
         await progressRef.set(progress);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId,
             targetId: courseId,
@@ -450,7 +450,7 @@ export async function submitAcademyApplicationAction(
         }, { merge: true });
 
         // Create audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: session.user.id,
             targetId: applicationId,
@@ -485,7 +485,7 @@ export async function createCourseAction(data: Partial<Course>): Promise<{ succe
             status: "draft",
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "course_created",
             userId: session.user.id,
             targetId: docRef.id,
@@ -511,7 +511,7 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "course_updated",
             userId: session.user.id,
             targetId: courseId,
@@ -538,7 +538,7 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "course_updated",
             userId: session.user.id,
             targetId: courseId,

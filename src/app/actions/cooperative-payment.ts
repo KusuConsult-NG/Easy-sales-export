@@ -87,7 +87,7 @@ export async function verifyContributionPaymentAction(
         const { COLLECTIONS } = await import('@/lib/types/firestore');
         const { doc, getDoc, setDoc, runTransaction, serverTimestamp, FieldValue } = await import('firebase/firestore');
         const { calculateUserTier } = await import('@/lib/cooperative-tiers');
-        const { createAuditLog } = await import('@/lib/audit-log');
+        const { createAdminAuditLog } = await import('@/lib/audit-log-admin');
 
         // 🔒 SECURITY FIX #1: Double-payment protection
         const processedRef = doc(db, 'processedPayments', reference);
@@ -173,7 +173,7 @@ export async function verifyContributionPaymentAction(
         });
 
         // Create audit log (outside transaction - not critical)
-        await createAuditLog({
+        await createAdminAuditLog({
             action: 'contribution_made',
             userId,
             userEmail: session.user.email!,

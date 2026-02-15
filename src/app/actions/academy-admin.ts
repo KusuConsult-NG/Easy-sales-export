@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 
 /**
@@ -118,7 +118,7 @@ export async function approveAcademyApplicationAction(
         }
 
         // 6. Log Audit
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "academy_approve",
             userId: session.user.id,
             targetId: applicationId,
@@ -205,7 +205,7 @@ export async function rejectAcademyApplicationAction(
         }
 
         // 4. Log Audit
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "academy_reject",
             userId: session.user.id,
             targetId: applicationId,

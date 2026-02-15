@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
@@ -199,7 +199,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         }, { merge: true });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: session.user.id,
             targetId: applicationId,
@@ -252,7 +252,7 @@ export async function enrollInWaveAction(userId: string): Promise<{
             active: true,
         }, { merge: true });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId,
             targetType: "wave_enrollment",
@@ -584,7 +584,7 @@ export async function generateCertificateAction(
 
         await db.collection("wave_certificates").doc(certId).set(certificate);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId,
             targetId: certId,
@@ -744,7 +744,7 @@ export async function registerForTrainingAction(
             });
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId,
             targetId: eventId,

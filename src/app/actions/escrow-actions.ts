@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { AuditActionType } from "@/types/strict";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
@@ -297,26 +298,17 @@ export async function releaseEscrowFunds(
         });
 
         // Create audit log
-        // Use try-catch for dynamic import to handle potential missing module gracefully or use a fixed path if known
-        try {
-            // Assuming the correct path is '@/lib/audit-logger' as seen in other files, 
-            // but checking file existence first would be safer. 
-            // Updated to assume @/lib/audit-logger based on course-actions.ts
-            const { createAuditLog } = await import("@/lib/audit-logger");
-            await createAuditLog({
-                userId,
-                actionType: AuditActionType.ESCROW_RELEASE, // Adapted to match strict types if needed, or use string
-                resourceId: transactionId,
-                resourceType: "escrow",
-                metadata: {
-                    sellerId: txData.sellerId,
-                    amount: txData.amount,
-                    productName: txData.productName,
-                }
-            });
-        } catch (e) {
-            console.warn("Audit log failed", e);
-        }
+        await createAdminAuditLog({
+            userId,
+            action: 'escrow_released',
+            targetId: transactionId,
+            targetType: "escrow",
+            metadata: {
+                sellerId: txData.sellerId,
+                amount: txData.amount,
+                productName: txData.productName,
+            }
+        });
 
         return { success: true };
     } catch (error: any) {
@@ -398,23 +390,17 @@ export async function refundEscrowToBuyer(
         });
 
         // Create audit log
-        try {
-            // Assuming the correct path is '@/lib/audit-logger' as seen in other files
-            const { createAuditLog } = await import("@/lib/audit-logger");
-            await createAuditLog({
-                userId,
-                actionType: AuditActionType.ESCROW_REFUND,
-                resourceId: transactionId,
-                resourceType: "escrow",
-                metadata: {
-                    buyerId: txData.buyerId,
-                    amount: txData.amount,
-                    productName: txData.productName,
-                }
-            });
-        } catch (e) {
-            console.warn("Audit log failed", e);
-        }
+        await createAdminAuditLog({
+            userId,
+            action: 'escrow_refunded',
+            targetId: transactionId,
+            targetType: "escrow",
+            metadata: {
+                buyerId: txData.buyerId,
+                amount: txData.amount,
+                productName: txData.productName,
+            }
+        });
 
         return { success: true };
     } catch (error: any) {

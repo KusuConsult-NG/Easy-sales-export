@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
+import { getStorage } from 'firebase-admin/storage';
 
 /**
  * CRITICAL: Lazy initialization pattern
@@ -116,3 +117,20 @@ export const adminAuth = new Proxy({} as Auth, {
     }
 });
 
+
+/**
+ * Get Storage instance (lazy initialization)
+ */
+export function getAdminStorage() {
+    const app = initializeFirebaseAdmin();
+    // Storage is part of firebase-admin/storage but accessed via app in v10 or imported
+    // Actually in firebase-admin, it's getStorage(app)
+    return getStorage(app);
+}
+
+export const adminStorage = new Proxy({} as ReturnType<typeof getStorage>, {
+    get(_target, prop) {
+        const instance = getAdminStorage();
+        return instance[prop as keyof ReturnType<typeof getStorage>];
+    }
+});

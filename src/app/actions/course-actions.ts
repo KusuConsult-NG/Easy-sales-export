@@ -9,7 +9,7 @@ import {
     courseEnrollmentSchema
 } from "@/lib/validations/course";
 import { AuditActionType, type CourseProgress } from "@/types/strict";
-import { createAuditLog } from "@/lib/audit-logger";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 
 /**
@@ -57,11 +57,11 @@ export async function updateCourseProgress(
 
         // Audit log for completion
         if (validated.progressPercent >= 95) {
-            await createAuditLog({
+            await createAdminAuditLog({
                 userId: session.user.id,
-                actionType: AuditActionType.COURSE_COMPLETE,
-                resourceId: validated.courseId,
-                resourceType: 'course',
+                action: 'course_completed',
+                targetId: validated.courseId,
+                targetType: 'course',
                 metadata: {
                     progressPercent: validated.progressPercent,
                 },
@@ -129,11 +129,11 @@ export async function enrollInCourse(
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: AuditActionType.COURSE_ENROLL,
-            resourceId: validated.courseId,
-            resourceType: 'course',
+            action: 'course_enrolled',
+            targetId: validated.courseId,
+            targetType: 'course',
             metadata: {
                 enrollmentId: enrollmentRef.id,
             },
@@ -256,11 +256,11 @@ export async function completeCourse(courseId: string) {
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: AuditActionType.COURSE_COMPLETE,
-            resourceId: courseId,
-            resourceType: 'course',
+            action: 'course_completed',
+            targetId: courseId,
+            targetType: 'course',
             metadata: {
                 manualCompletion: true,
             },
@@ -336,11 +336,11 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id!,
-            actionType: AuditActionType.COURSE_COMPLETE,
-            resourceId: certificateRef.id,
-            resourceType: 'certificate',
+            action: 'course_completed',
+            targetId: certificateRef.id,
+            targetType: 'certificate',
             metadata: {
                 courseId,
                 courseTitle,

@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { calculateRepaymentSchedule, isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
 import { auth } from "@/lib/auth";
 
@@ -133,7 +133,7 @@ export async function submitLoanApplicationAction(formData: {
 
         const docRef = await db.collection("loan_applications").add(application);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "loan_applied",
             userId: formData.userId,
             userEmail: formData.userEmail,
@@ -231,7 +231,7 @@ export async function approveLoanAction(
 
         const appData = appDoc.data() as LoanApplication;
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "loan_approved",
             userId: effectiveAdminId,
             targetId: applicationId,
@@ -281,7 +281,7 @@ export async function rejectLoanAction(
 
         const appData = appDoc.data() as LoanApplication;
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "loan_rejected",
             userId: effectiveAdminId,
             targetId: applicationId,
@@ -344,7 +344,7 @@ export async function disburseLoanAction(
         const appDoc = await appRef.get();
         const appData = appDoc.data() as LoanApplication;
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "loan_disbursed",
             userId: effectiveAdminId,
             targetId: applicationId,
@@ -614,7 +614,7 @@ export async function submitRepaymentAction(data: {
         }
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId: data.userId,
             targetId: data.loanId,

@@ -2,11 +2,10 @@
 
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
-import { storage } from "@/lib/firebase";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { uploadFileToStorage } from "@/lib/storage-admin";
 
 /**
  * Certificate Management Actions
@@ -52,18 +51,17 @@ export async function uploadCertificateAction(
             return { success: false, error: "Invalid file type. Only PDF and images are allowed" };
         }
 
-        // Upload to Firebase Storage
+        // Upload to Firebase Storage (Admin SDK)
         const fileName = `${Date.now()}-${file.name}`;
-        const storageRef = ref(storage, `certificates/${userId}/${fileName}`);
+        const destination = `certificates/${userId}/${fileName}`;
 
-        // Note: In actual implementation, we'd convert File to Buffer
-        // For server action, we need to handle this differently
-        // This is a placeholder for the actual upload logic
+        // Upload and get URL (Signed URL, effectively private/secure)
+        const fileUrl = await uploadFileToStorage(file, destination, false);
 
         const certificate: Omit<Certificate, "id"> = {
             userId,
             fileName: file.name,
-            fileUrl: `https://storage.googleapis.com/placeholder/${fileName}`, // Placeholder
+            fileUrl,
             fileType: file.type,
             certificateType: metadata.certificateType as any,
             issueDate: metadata.issueDate ? new Date(metadata.issueDate) : undefined,
@@ -75,7 +73,7 @@ export async function uploadCertificateAction(
 
         const docRef = await db.collection("certificates").add(certificate);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId,
             targetId: docRef.id,
@@ -139,7 +137,7 @@ export async function deleteCertificateAction(
         // Delete from Firestore
         await certRef.delete();
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId,
             targetId: certificateId,
@@ -163,12 +161,12 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
     try {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-        await userRef.update( {
+        await userRef.update({
             onboardingCompleted: true,
             onboardingCompletedAt: FieldValue.serverTimestamp(),
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "user_update",
             userId,
             targetType: "onboarding_completion",

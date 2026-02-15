@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog } from "@/lib/audit-log";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
 export interface WaveResource {
     id?: string;
@@ -120,7 +120,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
         const docRef = await db.collection("wave_resources").add(resourceData);
 
         // Create audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "resource_uploaded",
             userId: session.user.id,
             targetId: docRef.id,
@@ -189,7 +189,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{
         });
 
         // Create audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "resource_download",
             userId: session.user.id,
             targetId: resourceId,
@@ -233,7 +233,7 @@ export async function deleteResourceAction(resourceId: string): Promise<{
         });
 
         // Create audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "resource_delete",
             userId: session.user.id,
             targetId: resourceId,
@@ -283,7 +283,7 @@ export async function updateResourceAction(
         });
 
         // Create audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "resource_update",
             userId: session.user.id,
             targetId: resourceId,

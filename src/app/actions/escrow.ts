@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAuditLog, logFinancialAction } from "@/lib/audit-log";
+import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log-admin";
 
 /**
  * Marketplace Escrow System
@@ -76,7 +76,7 @@ export async function createEscrowAction(data: {
 
         const docRef = await db.collection("escrow_transactions").add(escrow);
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "escrow_created",
             userId: data.buyerId,
             targetId: docRef.id,
@@ -118,7 +118,7 @@ export async function confirmEscrowPaymentAction(
 
         const escrowData = escrowDoc.data() as EscrowTransaction;
 
-        await logFinancialAction(
+        await logAdminFinancialAction(
             "payment_completed",
             escrowData.buyerId,
             escrowData.amount,
@@ -193,7 +193,7 @@ export async function releaseEscrowAction(
             releasedBy: adminId,
         });
 
-        await logFinancialAction(
+        await logAdminFinancialAction(
             "escrow_released",
             adminId,
             escrowData.amount,
@@ -247,7 +247,7 @@ export async function createDisputeAction(data: {
             status: "disputed",
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "dispute_created",
             userId: data.initiatorId,
             targetId: docRef.id,
@@ -299,7 +299,7 @@ export async function resolveDisputeAction(
             [outcome === "release_to_seller" ? "releasedAt" : "refundedAt"]: FieldValue.serverTimestamp(),
         });
 
-        await createAuditLog({
+        await createAdminAuditLog({
             action: "dispute_resolved",
             userId: adminId,
             targetId: disputeId,

@@ -10,7 +10,7 @@ import {
     type LoanApprovalData
 } from "@/lib/validations/loan";
 import { AuditActionType, LoanStatus, type LoanApplication } from "@/types/strict";
-import { createAuditLog } from "@/lib/audit-logger";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 
 /**
@@ -40,11 +40,11 @@ export async function submitLoanApplication(
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: AuditActionType.LOAN_APPROVE, // Will add LOAN_CREATE to enum if needed
-            resourceId: loanRef.id,
-            resourceType: 'loan_application',
+            action: 'loan_approved', // Will add LOAN_CREATE to enum if needed
+            targetId: loanRef.id,
+            targetType: 'loan_application',
             metadata: {
                 amount: validated.amount,
                 purpose: validated.purpose,
@@ -210,11 +210,11 @@ export async function approveLoanApplication(
         await db.collection('loan_applications').doc(validated.loanId).update(updateData);
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: validated.approved ? AuditActionType.LOAN_APPROVE : AuditActionType.LOAN_REJECT,
-            resourceId: validated.loanId,
-            resourceType: 'loan_application',
+            action: validated.approved ? 'loan_approved' : 'loan_rejected',
+            targetId: validated.loanId,
+            targetType: 'loan_application',
             metadata: {
                 approved: validated.approved,
                 notes: validated.notes,
@@ -254,11 +254,11 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
         });
 
         // Audit log
-        await createAuditLog({
+        await createAdminAuditLog({
             userId: session.user.id,
-            actionType: AuditActionType.LOAN_APPROVE, // Can add LOAN_DISBURSE to enum
-            resourceId: loanId,
-            resourceType: 'loan_application',
+            action: 'loan_approved', // Can add LOAN_DISBURSE to enum
+            targetId: loanId,
+            targetType: 'loan_application',
             metadata: {
                 status: 'disbursed',
                 notes: disbursementNotes,

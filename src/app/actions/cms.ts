@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
-import { createAuditLog, logAdminAction } from "@/lib/audit-log";
+import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 
 /**
  * Content Management System (CMS)
