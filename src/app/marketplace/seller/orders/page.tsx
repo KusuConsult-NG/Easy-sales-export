@@ -12,6 +12,7 @@ import Link from "next/link";
 import { getSellerOrdersAction } from "@/app/actions/marketplace";
 import type { Order } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import BackButton from "@/components/ui/BackButton";
 
 export default function SellerOrdersPage() {
     const [loading, setLoading] = useState(true);
@@ -74,6 +75,7 @@ export default function SellerOrdersPage() {
             {/* Header */}
             <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
                 <div className="max-w-7xl mx-auto px-8 py-6">
+                    <BackButton fallbackPath="/marketplace/seller/dashboard" />
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
                         Orders Management
                     </h1>

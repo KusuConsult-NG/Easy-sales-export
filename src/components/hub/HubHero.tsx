@@ -10,7 +10,7 @@ export default function HubHero() {
     const heroImages = [
         "/images/hub/photo_2026-02-14 15.20.02.jpeg",
         "/images/hub/photo_2026-02-14 15.20.11.jpeg",
-        "/images/hub/photo_2026-02-14 15.20.17.jpeg",
+        // Picture 3 removed per user request
         "/images/hub/photo_2026-02-14 15.20.27.jpeg",
         "/images/hub/photo_2026-02-14 15.20.37.jpeg",
         "/images/hub/photo_2026-02-14 15.20.45.jpeg",

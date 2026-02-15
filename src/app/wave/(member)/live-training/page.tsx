@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import VideoClassroom from "@/components/VideoClassroom";
-import { Video, Users, Clock, ArrowLeft } from "lucide-react";
+import { Video, Users, Clock } from "lucide-react";
+import BackButton from "@/components/ui/BackButton";
 
 export default function WAVELiveTrainingPage() {
     const router = useRouter();
@@ -59,13 +60,7 @@ export default function WAVELiveTrainingPage() {
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-6">
-                    <button
-                        onClick={() => router.push("/wave/dashboard")}
-                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-primary mb-4"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Dashboard
-                    </button>
+                    <BackButton fallbackPath="/wave/dashboard" />
 
                     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
                         <div className="flex items-start justify-between">

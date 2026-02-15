@@ -89,12 +89,6 @@ export default function HubNavigation() {
                                 )}
                             </div>
                         ))}
-                        <Link
-                            href="/auth/get-started"
-                            className="ml-4 px-4 py-2 font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors"
-                        >
-                            Access Portal
-                        </Link>
                     </div>
 
                     {/* Mobile Menu Button */}
@@ -159,12 +153,6 @@ export default function HubNavigation() {
                                 )}
                             </div>
                         ))}
-                        <Link
-                            href="/auth/get-started"
-                            className="block mt-4 px-4 py-3 font-semibold text-center text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors"
-                        >
-                            Access Portal
-                        </Link>
                     </div>
                 )}
             </div>

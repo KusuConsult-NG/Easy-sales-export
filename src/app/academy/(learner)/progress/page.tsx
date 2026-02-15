@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { TrendingUp, Award, Clock, Target, CheckCircle, BookOpen, Trophy, Loader2 } from "lucide-react";
 import { getUserAggregateProgressAction } from "@/app/actions/academy";
+import BackButton from "@/components/ui/BackButton";
 
 export default function ProgressPage() {
     const { data: session } = useSession();
@@ -60,6 +61,7 @@ export default function ProgressPage() {
         <div className="space-y-8">
             {/* Header */}
             <div>
+                <BackButton fallbackPath="/academy/dashboard" />
                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
                     Learning Progress
                 </h1>
