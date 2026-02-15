@@ -1114,6 +1114,15 @@ export async function approveSellerVerificationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // CLEAR CACHE - User now has seller role and verification
+        try {
+            const { invalidateSellerCache } = await import('@/lib/cache-invalidation');
+            await invalidateSellerCache(userId);
+            console.log(`[Seller Approval] Cache cleared for user: ${userId}`);
+        } catch (cacheError) {
+            console.error('[Seller Approval] Cache clear error:', cacheError);
+        }
+
         // 4. Send Approval Email
         if (process.env.RESEND_API_KEY) {
             // Get user email - fetch user doc to be safe
