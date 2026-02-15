@@ -1227,6 +1227,15 @@ export async function approveExportOnboardingAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // CLEAR CACHE - User now has Export access
+        try {
+            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+            await invalidateServiceCache(userId, 'export');
+            console.log(`[Export Approval] Cache cleared for user: ${userId}`);
+        } catch (cacheError) {
+            console.error('[Export Approval] Cache clear error:', cacheError);
+        }
+
         // 4. Send Approval Email
         if (process.env.RESEND_API_KEY && appData.userEmail) {
             try {
