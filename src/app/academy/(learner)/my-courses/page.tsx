@@ -114,7 +114,7 @@ export default function MyCoursesPage() {
                                 className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow"
                             >
                                 {/* Thumbnail */}
-                                <div className="h-40 bg-gradient-to-br from-blue-500 to-indigo-600 relative">
+                                <div className="h-40 bg-linear-to-br from-primary/20 to-transparent relative">
                                     <div className="absolute inset-0 flex items-center justify-center">
                                         <BookOpen className="w-16 h-16 text-white/30" />
                                     </div>
