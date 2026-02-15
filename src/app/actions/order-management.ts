@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
@@ -52,7 +53,7 @@ export async function getSellerOrdersAction(filters?: {
 
         return { success: true, orders };
     } catch (error: any) {
-        console.error("Get seller orders error:", error);
+        logger.error("Get seller orders error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -114,7 +115,7 @@ export async function updateOrderStatusAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update order status error:", error);
+        logger.error("Update order status error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -156,7 +157,7 @@ export async function getBuyerOrdersAction(filters?: {
 
         return { success: true, orders };
     } catch (error: any) {
-        console.error("Get buyer orders error:", error);
+        logger.error("Get buyer orders error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -206,7 +207,7 @@ export async function confirmDeliveryAction(orderId: string) {
 
         return { success: true };
     } catch (error: any) {
-        console.error("Confirm delivery error:", error);
+        logger.error("Confirm delivery error:", error);
         return { success: false, error: error.message };
     }
 }

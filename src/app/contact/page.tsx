@@ -1,6 +1,7 @@
 "use client";
 
 import { Mail, MapPin, Phone, Send } from "lucide-react";
+import { logger } from '@/lib/logger';
 import { useState } from "react";
 import { COMPANY_INFO } from "@/lib/constants";
 import { toast } from "sonner";
@@ -37,7 +38,7 @@ export default function ContactPage() {
                 toast.error(data.error || "Failed to send message. Please try again.");
             }
         } catch (error) {
-            console.error("Contact form error:", error);
+            logger.error("Contact form error:", error);
             toast.error("Failed to send message. Please email us directly at info@easysalesexport.com");
         } finally {
             setIsSubmitting(false);

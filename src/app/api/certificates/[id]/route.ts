@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db, storage } from "@/lib/firebase";
 import { doc, getDoc, deleteDoc } from "firebase/firestore";
@@ -55,7 +56,7 @@ export async function DELETE(
             message: "Certificate deleted",
         });
     } catch (error: any) {
-        console.error("Delete error:", error);
+        logger.error("Delete error:", error);
         return NextResponse.json(
             { success: false, error: "Delete failed" },
             { status: 500 }

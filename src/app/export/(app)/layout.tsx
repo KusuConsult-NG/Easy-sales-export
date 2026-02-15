@@ -6,10 +6,12 @@
  */
 
 import { redirect } from "next/navigation";
+import { logger } from '@/lib/logger';
 import { getAuth } from "firebase-admin/auth";
 import { cookies } from "next/headers";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { initializeApp, getApps } from "firebase-admin/app";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import ExportSidebar from "./ExportSidebar";
 
@@ -51,17 +53,19 @@ export default async function ExportAppLayout({
 
         // User has access, render the app
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-                <ExportSidebar />
-                <main className="lg:pl-64 min-h-screen transition-all">
-                    <div className="p-4 lg:p-8 mt-16 lg:mt-0">
-                        {children}
-                    </div>
-                </main>
-            </div>
+            <ErrorBoundary>
+                <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+                    <ExportSidebar />
+                    <main className="lg:pl-64 min-h-screen transition-all">
+                        <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+                            {children}
+                        </div>
+                    </main>
+                </div>
+            </ErrorBoundary>
         );
     } catch (error) {
-        console.error("Export access check error:", error);
+        logger.error("Export access check error:", error);
         redirect("/export/login");
     }
 }

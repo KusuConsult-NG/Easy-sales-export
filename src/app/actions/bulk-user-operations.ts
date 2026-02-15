@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -120,7 +121,7 @@ export async function bulkSuspendUsersAction(
             failed: failedIds,
         };
     } catch (error: any) {
-        console.error("Failed to bulk suspend users:", error);
+        logger.error("Failed to bulk suspend users:", error);
         return {
             success: false,
             suspended: 0,
@@ -215,7 +216,7 @@ export async function bulkActivateUsersAction(
             failed: failedIds,
         };
     } catch (error: any) {
-        console.error("Failed to bulk activate users:", error);
+        logger.error("Failed to bulk activate users:", error);
         return {
             success: false,
             activated: 0,
@@ -329,7 +330,7 @@ export async function bulkAssignRolesAction(
             failed: failedIds,
         };
     } catch (error: any) {
-        console.error("Failed to bulk assign roles:", error);
+        logger.error("Failed to bulk assign roles:", error);
         return {
             success: false,
             updated: 0,
@@ -449,7 +450,7 @@ export async function bulkDeleteUsersAction(
             failed: failedIds,
         };
     } catch (error: any) {
-        console.error("Failed to bulk delete users:", error);
+        logger.error("Failed to bulk delete users:", error);
         return {
             success: false,
             deleted: 0,
@@ -548,7 +549,7 @@ export async function createImpersonationTokenAction(
             expiresAt: expiresAt.toISOString(),
         };
     } catch (error: any) {
-        console.error("Failed to create impersonation token:", error);
+        logger.error("Failed to create impersonation token:", error);
         return {
             success: false,
             error: error.message || "Failed to create impersonation token",
@@ -662,7 +663,7 @@ export async function exportUserDataAction(
             data: userDataExport,
         };
     } catch (error: any) {
-        console.error("Failed to export user data:", error);
+        logger.error("Failed to export user data:", error);
         return {
             success: false,
             error: error.message || "Failed to export user data",

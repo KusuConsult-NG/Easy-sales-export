@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+// Rate limiter for payment verification (prevent fraud/double-verification)
+const paymentVerifyLimiter = rateLimit(rateLimitConfig.payment);
 
 /**
  * API Route: Verify Paystack Payment for Cooperative Membership
@@ -9,6 +15,14 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
  * This endpoint verifies the payment with Paystack and updates the membership record
  */
 export async function POST(request: NextRequest) {
+    // RATE LIMITING - Prevent payment verification abuse
+    const clientIp = getClientIp(request);
+    const rateLimitResult = await paymentVerifyLimiter.check(clientIp);
+
+    if (!rateLimitResult.success) {
+        return createRateLimitResponse(rateLimitResult);
+    }
+
     try {
         const session = await auth();
         if (!session?.user) {
@@ -105,7 +119,7 @@ export async function POST(request: NextRequest) {
             message: "Payment verified successfully. Your application is pending approval.",
         });
     } catch (error) {
-        console.error("Payment verification error:", error);
+        logger.error("Payment verification error:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

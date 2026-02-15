@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -76,7 +77,7 @@ async function uploadHandler(request: NextRequest) {
         });
 
     } catch (error: any) {
-        console.error("Generic upload error:", error);
+        logger.error("Generic upload error:", error);
         return NextResponse.json(
             { success: false, error: "Upload failed: " + (error.message || "Unknown error") },
             { status: 500 }

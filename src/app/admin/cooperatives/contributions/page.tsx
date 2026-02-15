@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import {
     TrendingUp,
     Users,
@@ -29,7 +30,7 @@ export default function AdminContributionsPage() {
                 setReports(result.data);
             }
         } catch (error) {
-            console.error("Failed to load reports:", error);
+            logger.error("Failed to load reports:", error);
         } finally {
             setLoading(false);
         }

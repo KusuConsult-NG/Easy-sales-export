@@ -5,6 +5,7 @@
 'use server';
 
 import { auth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { initializePaystackPayment } from '@/lib/paystack-server';
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
@@ -58,7 +59,7 @@ export async function initializeContributionPaymentAction(
             },
         };
     } catch (error: any) {
-        console.error('Payment initialization error:', error);
+        logger.error('Payment initialization error:', error);
         return {
             error: error.message || 'Failed to initialize payment',
             success: false
@@ -196,7 +197,7 @@ export async function verifyContributionPaymentAction(
         };
     } catch (error: any) {
         // 🔒 SECURITY FIX #2: Sanitized error logging
-        console.error('[Payment Verification Error]', {
+        logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyContribution',
             reference,

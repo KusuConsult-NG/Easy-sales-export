@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, collection } from "firebase/firestore";
+import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+// Rate limiter for seller verification submissions (prevent spam)
+const verificationLimiter = rateLimit(rateLimitConfig.serverAction);
 
 /**
  * API Route: Submit Seller Verification
  * Note: File uploads are simplified for now. In production, integrate with cloud storage (Firebase Storage/Cloudinary)
  */
 export async function POST(request: NextRequest) {
+    // RATE LIMITING - Prevent verification submission spam
+    const clientIp = getClientIp(request);
+    const rateLimitResult = await verificationLimiter.check(clientIp);
+
+    if (!rateLimitResult.success) {
+        return createRateLimitResponse(rateLimitResult);
+    }
+
     try {
         const session = await auth();
         if (!session?.user) {
@@ -82,9 +96,9 @@ export async function POST(request: NextRequest) {
             state,
             lga,
             documents: {
-                businessDoc: `placeholder_${businessDoc.name}`, // In production: actual storage URL
-                idDoc: `placeholder_${idDoc.name}`,
-                addressProof: `placeholder_${addressProof.name}`,
+                businessDoc: `placeholder_${businessDoc.name} `, // In production: actual storage URL
+                idDoc: `placeholder_${idDoc.name} `,
+                addressProof: `placeholder_${addressProof.name} `,
             },
             bankDetails: {
                 bankName,
@@ -112,7 +126,7 @@ export async function POST(request: NextRequest) {
             message: "Verification submitted successfully"
         });
     } catch (error) {
-        console.error("Failed to submit verification:", error);
+        logger.error("Failed to submit verification:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

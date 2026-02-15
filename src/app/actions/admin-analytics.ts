@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { Timestamp } from "firebase-admin/firestore";
 
 /**
@@ -198,7 +199,7 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         };
 
     } catch (error) {
-        console.error("Failed to fetch dashboard stats:", error);
+        logger.error("Failed to fetch dashboard stats:", error);
         return null;
     }
 }
@@ -259,7 +260,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview | 
             recentTransactions,
         };
     } catch (error) {
-        console.error("Failed to fetch financial overview:", error);
+        logger.error("Failed to fetch financial overview:", error);
         return null;
     }
 }
@@ -315,7 +316,7 @@ export async function getEngagementMetricsAction(): Promise<EngagementMetrics | 
             topFeatures,
         };
     } catch (error) {
-        console.error("Failed to fetch engagement metrics:", error);
+        logger.error("Failed to fetch engagement metrics:", error);
         return null;
     }
 }

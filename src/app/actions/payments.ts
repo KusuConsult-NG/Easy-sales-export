@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logFinancialAction, createAuditLog } from "@/lib/audit-log";
 
@@ -66,7 +67,7 @@ export async function createPaymentRecordAction(data: {
 
         return { success: true, paymentId: docRef.id };
     } catch (error) {
-        console.error("Payment record creation error:", error);
+        logger.error("Payment record creation error:", error);
         return { success: false, error: "Failed to create payment record" };
     }
 }
@@ -115,7 +116,7 @@ export async function verifyPaymentAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Payment verification error:", error);
+        logger.error("Payment verification error:", error);
         return { success: false, error: "Failed to verify payment" };
     }
 }
@@ -162,7 +163,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
                 break;
         }
     } catch (error) {
-        console.error("Post-payment action error:", error);
+        logger.error("Post-payment action error:", error);
     }
 }
 
@@ -180,7 +181,7 @@ export async function getUserPaymentHistoryAction(userId: string): Promise<Payme
             ...doc.data(),
         })) as PaymentRecord[];
     } catch (error) {
-        console.error("Failed to fetch payment history:", error);
+        logger.error("Failed to fetch payment history:", error);
         return [];
     }
 }
@@ -205,7 +206,7 @@ export async function getPaymentByReferenceAction(
             ...snapshot.docs[0].data(),
         } as PaymentRecord;
     } catch (error) {
-        console.error("Failed to fetch payment:", error);
+        logger.error("Failed to fetch payment:", error);
         return null;
     }
 }

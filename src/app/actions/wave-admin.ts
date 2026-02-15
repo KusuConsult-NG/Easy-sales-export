@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
@@ -49,7 +50,7 @@ export async function createResourceAction(data: {
 
         return { success: true, resourceId: resourceRef.id };
     } catch (error) {
-        console.error("Create resource error:", error);
+        logger.error("Create resource error:", error);
         return { success: false, error: "Failed to create resource" };
     }
 }
@@ -91,7 +92,7 @@ export async function updateResourceAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Update resource error:", error);
+        logger.error("Update resource error:", error);
         return { success: false, error: "Failed to update resource" };
     }
 }
@@ -122,7 +123,7 @@ export async function deleteResourceAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Delete resource error:", error);
+        logger.error("Delete resource error:", error);
         return { success: false, error: "Failed to delete resource" };
     }
 }
@@ -169,7 +170,7 @@ export async function createTrainingEventAction(data: {
 
         return { success: true, eventId: eventRef.id };
     } catch (error) {
-        console.error("Create event error:", error);
+        logger.error("Create event error:", error);
         return { success: false, error: "Failed to create event" };
     }
 }
@@ -213,7 +214,7 @@ export async function updateTrainingEventAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Update event error:", error);
+        logger.error("Update event error:", error);
         return { success: false, error: "Failed to update event" };
     }
 }
@@ -240,7 +241,7 @@ export async function getEventParticipantsAction(eventId: string): Promise<{
 
         return { success: true, participants };
     } catch (error) {
-        console.error("Get participants error:", error);
+        logger.error("Get participants error:", error);
         return { success: false, error: "Failed to fetch participants" };
     }
 }
@@ -274,7 +275,7 @@ export async function getWaveApplicationsAction(): Promise<{
 
         return { success: true, applications };
     } catch (error) {
-        console.error("Get applications error:", error);
+        logger.error("Get applications error:", error);
         return { success: false, error: "Failed to fetch applications" };
     }
 }
@@ -325,7 +326,7 @@ export async function approveWaveApplicationAction(
                 console.log(`[Wave Approval] Cleared cache for user: ${appData.userId}`);
             } catch (cacheError) {
                 // Non-critical - continue even if cache clear fails
-                console.error('[Wave Approval] Cache invalidation error:', cacheError);
+                logger.error('[Wave Approval] Cache invalidation error:', cacheError);
             }
 
             // Send approval email
@@ -350,7 +351,7 @@ export async function approveWaveApplicationAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Approve application error:", error);
+        logger.error("Approve application error:", error);
         return { success: false, error: "Failed to approve application" };
     }
 }
@@ -407,7 +408,7 @@ export async function rejectWaveApplicationAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Reject application error:", error);
+        logger.error("Reject application error:", error);
         return { success: false, error: "Failed to reject application" };
     }
 }

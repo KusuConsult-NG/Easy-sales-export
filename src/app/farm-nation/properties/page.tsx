@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import { logger } from '@/lib/logger';
 import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -54,7 +55,7 @@ function PropertiesContent() {
 
             setProperties(filtered);
         } catch (error) {
-            console.error(error);
+            logger.error("Error:", error);
         } finally {
             setLoading(false);
         }

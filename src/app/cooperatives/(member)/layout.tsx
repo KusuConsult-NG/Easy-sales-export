@@ -5,12 +5,14 @@
  */
 
 import { cookies } from "next/headers";
+import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getAdminDb } from "@/lib/firebase-admin";
 import CooperativeSidebar from "./CooperativeSidebar";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export default async function CooperativeMemberLayout({
     children,
@@ -75,21 +77,23 @@ export default async function CooperativeMemberLayout({
             };
         }
     } catch (error) {
-        console.error("Session verification failed:", error);
+        logger.error("Session verification failed:", error);
         redirect("/cooperatives/login?redirect=/cooperatives");
     }
 
     return (
-        <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-            {/* Sidebar */}
-            <CooperativeSidebar user={userProfile} />
+        <ErrorBoundary>
+            <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
+                {/* Sidebar */}
+                <CooperativeSidebar user={userProfile} />
 
-            {/* Main Content */}
-            <main className="flex-1 lg:ml-64">
-                <div className="p-4 lg:p-8">
-                    {children}
-                </div>
-            </main>
-        </div>
+                {/* Main Content */}
+                <main className="flex-1 lg:ml-64">
+                    <div className="p-4 lg:p-8">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </ErrorBoundary>
     );
 }

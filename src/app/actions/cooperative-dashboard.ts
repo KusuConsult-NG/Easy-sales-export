@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
@@ -68,7 +69,7 @@ export async function getDashboardDataAction() {
         };
 
     } catch (error) {
-        console.error("Dashboard data fetch error:", error);
+        logger.error("Dashboard data fetch error:", error);
         return {
             success: false,
             error: error instanceof Error ? error.message : "Failed to load dashboard data",

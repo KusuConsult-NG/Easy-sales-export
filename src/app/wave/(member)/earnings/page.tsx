@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -38,7 +39,7 @@ export default function WaveEarningsPage() {
             const result = await calculateEarningsAction(session.user.id);
             setEarnings(result);
         } catch (error) {
-            console.error("Failed to load earnings:", error);
+            logger.error("Failed to load earnings:", error);
             showToast("Failed to load earnings data", "error");
         } finally {
             setLoading(false);

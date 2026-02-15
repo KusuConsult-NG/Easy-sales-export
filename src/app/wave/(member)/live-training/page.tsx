@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import VideoClassroom from "@/components/VideoClassroom";
 import { Video, Users, Clock } from "lucide-react";
@@ -23,7 +24,7 @@ export default function WAVELiveTrainingPage() {
                     router.push("/auth/login");
                 }
             } catch (error) {
-                console.error("Failed to fetch user:", error);
+                logger.error("Failed to fetch user:", error);
                 router.push("/auth/login");
             } finally {
                 setIsLoading(false);

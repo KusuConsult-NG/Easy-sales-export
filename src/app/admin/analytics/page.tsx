@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import Link from "next/link";
 import {
     TrendingUp,
@@ -54,7 +55,7 @@ export default function AdminAnalyticsPage() {
                     setAnalytics(result);
                 }
             } catch (error) {
-                console.error(error);
+                logger.error("Error:", error);
             } finally {
                 if (mounted) setLoading(false);
             }

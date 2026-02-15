@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase-admin';
 
@@ -56,7 +57,7 @@ export async function GET(
             location: userData?.location || '',
         });
     } catch (error) {
-        console.error('Error fetching user:', error);
+        logger.error('Error fetching user:', error);
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 }

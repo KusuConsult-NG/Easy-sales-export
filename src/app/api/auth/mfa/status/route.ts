@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
             authenticated: true,
         });
     } catch (error: any) {
-        console.error("MFA status check error:", error);
+        logger.error("MFA status check error:", error);
         // Return graceful error response instead of 500
         return NextResponse.json({
             success: true,

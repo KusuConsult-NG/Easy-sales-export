@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, Package, ShoppingCart, Star, MapPin, Award, Phone, Mail, Shield, Loader2 } from "lucide-react";
+import { logger } from '@/lib/logger';
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -36,7 +37,7 @@ export default function ProductDetailPage() {
                     setError(result.error || "Product not found");
                 }
             } catch (err) {
-                console.error("Failed to load product:", err);
+                logger.error("Failed to load product:", err);
                 setError("Failed to load product details");
             } finally {
                 setLoading(false);

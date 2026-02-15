@@ -1,5 +1,6 @@
 'use server';
 
+import { logger } from '@/lib/logger';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { auth } from '@/lib/auth';
@@ -59,7 +60,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
         // Remove duplicates
         return [...new Set(emails)];
     } catch (error) {
-        console.error('Error fetching recipient emails:', error);
+        logger.error('Error fetching recipient emails:', error);
         return [];
     }
 }
@@ -129,7 +130,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
             recipientCount: emails.length
         };
     } catch (error: any) {
-        console.error('Failed to send bulk email:', error);
+        logger.error('Failed to send bulk email:', error);
         return {
             success: false,
             error: error.message || 'Failed to send email. Please try again.'
@@ -171,7 +172,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
             id: announcementRef.id
         };
     } catch (error) {
-        console.error('Failed to create announcement:', error);
+        logger.error('Failed to create announcement:', error);
         return {
             success: false,
             error: 'Failed to create announcement. Please try again.'

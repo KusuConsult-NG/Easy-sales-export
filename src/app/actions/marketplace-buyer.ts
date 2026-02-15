@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Product } from "@/lib/types/marketplace";
 
@@ -72,7 +73,7 @@ export async function getProductsAction(filters?: ProductFilters) {
 
         return { success: true, products };
     } catch (error: any) {
-        console.error("Get products error:", error);
+        logger.error("Get products error:", error);
         return { success: false, error: error.message, products: [] };
     }
 }
@@ -93,7 +94,7 @@ export async function getProductByIdAction(productId: string) {
 
         return { success: true, product };
     } catch (error: any) {
-        console.error("Get product error:", error);
+        logger.error("Get product error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -113,7 +114,7 @@ export async function getFeaturedProductsAction() {
 
         return { success: true, products };
     } catch (error: any) {
-        console.error("Get featured products error:", error);
+        logger.error("Get featured products error:", error);
         return { success: false, error: error.message, products: [] };
     }
 }
@@ -132,7 +133,7 @@ export async function getProductsByCategoryAction(category: string) {
 
         return { success: true, products };
     } catch (error: any) {
-        console.error("Get products by category error:", error);
+        logger.error("Get products by category error:", error);
         return { success: false, error: error.message, products: [] };
     }
 }

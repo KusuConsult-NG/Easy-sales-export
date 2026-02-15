@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
@@ -51,7 +52,7 @@ export default function WaveProfilePage() {
                 setStats(statsResult.stats);
             }
         } catch (error) {
-            console.error("Profile load error:", error);
+            logger.error("Profile load error:", error);
         } finally {
             setLoading(false);
         }

@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from '@/lib/logger';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
@@ -13,7 +14,7 @@ export default function GlobalError({
 }) {
     useEffect(() => {
         // Log error for debugging
-        console.error('Global error caught:', error);
+        logger.error('Global error caught:', error);
     }, [error]);
 
     return (

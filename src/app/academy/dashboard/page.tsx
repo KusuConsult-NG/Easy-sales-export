@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { Award, BookOpen, Clock, TrendingUp, Calendar, Download } from "lucide-react";
 import Link from "next/link";
 
@@ -53,7 +54,7 @@ export default function AcademyDashboardPage() {
                 setStats(data.stats || stats);
             }
         } catch (error) {
-            console.error("Failed to fetch dashboard data:", error);
+            logger.error("Failed to fetch dashboard data:", error);
         } finally {
             setIsLoading(false);
         }
@@ -63,7 +64,7 @@ export default function AcademyDashboardPage() {
         try {
             window.open(`/academy/certificate/${certificateId}`, '_blank');
         } catch (error) {
-            console.error("Failed to download certificate:", error);
+            logger.error("Failed to download certificate:", error);
         }
     };
 

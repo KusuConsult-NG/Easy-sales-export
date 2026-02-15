@@ -1,5 +1,6 @@
 'use server';
 
+import { logger } from '@/lib/logger';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -69,7 +70,7 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
             bookingId: bookingRef.id
         };
     } catch (error) {
-        console.error('Create booking error:', error);
+        logger.error('Create booking error:', error);
         return {
             success: false,
             error: 'Failed to create booking'
@@ -103,7 +104,7 @@ export async function getUserBookingsAction(): Promise<{
 
         return { success: true, bookings };
     } catch (error) {
-        console.error('Get bookings error:', error);
+        logger.error('Get bookings error:', error);
         return { success: false, error: 'Failed to fetch bookings' };
     }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from '@/lib/logger';
 import { ScanLine, CheckCircle, XCircle, Loader2, ShieldCheck } from "lucide-react";
 
 interface VerificationResult {
@@ -40,7 +41,7 @@ export default function VerifyIDPage() {
             const data = await response.json();
             setResult(data);
         } catch (error) {
-            console.error("Verification failed:", error);
+            logger.error("Verification failed:", error);
             setResult({
                 valid: false,
                 error: "Verification failed. Please try again.",

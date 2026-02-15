@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -160,7 +161,7 @@ export default function ListLandPage() {
                 showToast(`Submission Failed: ${result.error || "Failed to create listing"}`, "error");
             }
         } catch (error: any) {
-            console.error(error);
+            logger.error("Error:", error);
             showToast("Error: " + error.message, "error");
         } finally {
             setIsSubmitting(false);

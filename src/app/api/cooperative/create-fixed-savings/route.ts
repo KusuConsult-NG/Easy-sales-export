@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, doc, getDoc } from "firebase/firestore";
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
             planId: result,
         });
     } catch (error: any) {
-        console.error("Failed to create fixed savings plan:", error);
+        logger.error("Failed to create fixed savings plan:", error);
 
         // Handle custom errors
         if (typeof error === 'string') {

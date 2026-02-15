@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import {
     TrendingUp, Package, DollarSign, ShoppingCart, AlertCircle,
     Activity, BarChart3, Users, Clock, ArrowUp, ArrowDown
@@ -42,7 +43,7 @@ export default function VendorOverviewPage() {
                 if (insights.success) setRevenueInsights(insights.insights);
                 if (activities.success) setActivityFeed(activities.activities || []);
             } catch (error) {
-                console.error("Dashboard load error:", error);
+                logger.error("Dashboard load error:", error);
             } finally {
                 setIsLoading(false);
             }

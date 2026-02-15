@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -69,7 +70,7 @@ export async function createConversationAction(params: {
             existing: false,
         };
     } catch (error: any) {
-        console.error("Create conversation error:", error);
+        logger.error("Create conversation error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -149,7 +150,7 @@ export async function sendMessageAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Send message error:", error);
+        logger.error("Send message error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -205,7 +206,7 @@ export async function markMessagesAsReadAction(conversationId: string) {
 
         return { success: true };
     } catch (error: any) {
-        console.error("Mark messages as read error:", error);
+        logger.error("Mark messages as read error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -239,7 +240,7 @@ export async function getConversationsAction() {
 
         return { success: true, conversations };
     } catch (error: any) {
-        console.error("Get conversations error:", error);
+        logger.error("Get conversations error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -290,7 +291,7 @@ export async function getConversationMessagesAction(
             messages: messages.reverse(), // Oldest first for display
         };
     } catch (error: any) {
-        console.error("Get messages error:", error);
+        logger.error("Get messages error:", error);
         return { success: false, error: error.message };
     }
 }

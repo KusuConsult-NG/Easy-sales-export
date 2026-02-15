@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { createAuditLog, logAdminAction } from "@/lib/audit-log";
 
@@ -76,7 +77,7 @@ export async function createAnnouncementAction(data: {
 
         return { success: true, announcementId: docRef.id };
     } catch (error) {
-        console.error("Announcement creation error:", error);
+        logger.error("Announcement creation error:", error);
         return { success: false, error: "Failed to create announcement" };
     }
 }
@@ -125,7 +126,7 @@ export async function getActiveAnnouncementsAction(
                 return true;
             });
     } catch (error) {
-        console.error("Failed to fetch announcements:", error);
+        logger.error("Failed to fetch announcements:", error);
         return [];
     }
 }
@@ -153,7 +154,7 @@ export async function deactivateAnnouncementAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Deactivation error:", error);
+        logger.error("Deactivation error:", error);
         return { success: false, error: "Failed to deactivate announcement" };
     }
 }
@@ -200,7 +201,7 @@ export async function createBannerAction(data: {
 
         return { success: true, bannerId: docRef.id };
     } catch (error) {
-        console.error("Banner creation error:", error);
+        logger.error("Banner creation error:", error);
         return { success: false, error: "Failed to create banner" };
     }
 }
@@ -241,7 +242,7 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
                 return now >= start && now <= end;
             });
     } catch (error) {
-        console.error("Failed to fetch banners:", error);
+        logger.error("Failed to fetch banners:", error);
         return [];
     }
 }
@@ -269,7 +270,7 @@ export async function deactivateBannerAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Deactivation error:", error);
+        logger.error("Deactivation error:", error);
         return { success: false, error: "Failed to deactivate banner" };
     }
 }

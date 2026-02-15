@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -36,7 +37,7 @@ export default function WaveShipmentsPage() {
             const result = await getShipmentTrackingAction(session.user.id);
             setShipments(result);
         } catch (error) {
-            console.error("Failed to load shipments:", error);
+            logger.error("Failed to load shipments:", error);
         } finally {
             setLoading(false);
         }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, use } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -85,7 +86,7 @@ export default function LessonPage(props: LessonPageProps) {
                     setCurrentModule(foundModule);
                 }
             } catch (error) {
-                console.error(error);
+                logger.error("Failed to load lesson data:", error);
             } finally {
                 if (mounted) setLoading(false);
             }
@@ -126,7 +127,7 @@ export default function LessonPage(props: LessonPageProps) {
                 setCurrentModule(foundModule);
             }
         } catch (error) {
-            console.error("Failed to refresh lesson:", error);
+            logger.error("Failed to refresh lesson:", error);
         }
     }, [courseId, lessonId, session]);
 

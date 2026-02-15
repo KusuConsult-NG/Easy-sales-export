@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -15,7 +16,7 @@ import {
     type WithdrawalActionState
 } from "@/lib/types/cooperative";
 import type {
-    CooperativeMembership,
+CooperativeMembership,
     CooperativeTransaction,
     JoinCooperativeState,
     MakeContributionState,
@@ -214,7 +215,7 @@ export async function registerCooperativeMemberAction(
             paymentUrl: paystackData.data.authorization_url,
         };
     } catch (error) {
-        console.error("Membership registration failed:", error);
+        logger.error("Membership registration failed:", error);
         return {
             error: error instanceof Error ? error.message : "Registration failed. Please try again.",
             success: false
@@ -298,7 +299,7 @@ export async function joinCooperativeAction(
             message: "Successfully joined the cooperative"
         };
     } catch (error) {
-        console.error("Join cooperative failed:", error);
+        logger.error("Join cooperative failed:", error);
         return {
             error: error instanceof Error ? error.message : "Failed to join cooperative",
             success: false
@@ -384,7 +385,7 @@ export async function makeContributionAction(
             message: `Successfully contributed ₦${amount.toLocaleString()}`
         };
     } catch (error) {
-        console.error("Contribution failed:", error);
+        logger.error("Contribution failed:", error);
         return {
             error: error instanceof Error ? error.message : "Failed to make contribution",
             success: false
@@ -429,7 +430,7 @@ export async function getMembershipAction(): Promise<GetMembershipState> {
             data: membership
         };
     } catch (error) {
-        console.error("Failed to get membership:", error);
+        logger.error("Failed to get membership:", error);
         return {
             error: error instanceof Error ? error.message : "Failed to get membership",
             success: false
@@ -463,7 +464,7 @@ export async function getTransactionsAction(): Promise<GetTransactionsState> {
             data: transactions
         };
     } catch (error) {
-        console.error("Failed to get transactions:", error);
+        logger.error("Failed to get transactions:", error);
         return {
             error: error instanceof Error ? error.message : "Failed to get transactions",
             success: false
@@ -500,7 +501,7 @@ export async function getUserTierAction(): Promise<{
 
         return { tier, totalContributions };
     } catch (error) {
-        console.error("Failed to get user tier:", error);
+        logger.error("Failed to get user tier:", error);
         return { tier: null, totalContributions: 0 };
     }
 }
@@ -609,7 +610,7 @@ export async function applyForLoanAction(
         };
 
     } catch (error) {
-        console.error("Loan application failed:", error);
+        logger.error("Loan application failed:", error);
         return {
             error: error instanceof Error ? error.message : "Failed to submit loan application",
             success: false
@@ -698,7 +699,7 @@ export async function createFixedSavingsAction(
         };
 
     } catch (error: any) {
-        console.error("Fixed savings creation failed:", error);
+        logger.error("Fixed savings creation failed:", error);
         return {
             error: error.message || "Failed to create fixed savings plan",
             success: false
@@ -759,7 +760,7 @@ export async function submitWithdrawalAction(
 
         return { error: null, success: true, message: "Withdrawal request submitted for review. Funds have been reserved." };
     } catch (error: any) {
-        console.error("Withdrawal error:", error);
+        logger.error("Withdrawal error:", error);
         return { error: error.message || "Failed to submit withdrawal", success: false };
     }
 }
@@ -799,7 +800,7 @@ export async function getDirectoryMembersAction(): Promise<{
 
         return { success: true, data: members };
     } catch (error) {
-        console.error("Failed to fetch directory:", error);
+        logger.error("Failed to fetch directory:", error);
         return { error: "Failed to load directory", success: false };
     }
 }

@@ -7,6 +7,7 @@
 'use client';
 
 import { useState } from 'react';
+import { logger } from '@/lib/logger';
 
 interface OrphanedUser {
     uid: string;
@@ -28,7 +29,7 @@ export default function OrphanedUsersPage() {
             const data = await response.json();
             setOrphanedUsers(data.users || []);
         } catch (error) {
-            console.error('Failed to detect orphaned users', error);
+            logger.error('Failed to detect orphaned users', error);
         } finally {
             setLoading(false);
         }
@@ -50,7 +51,7 @@ export default function OrphanedUsersPage() {
             // Refresh list
             await detectOrphaned();
         } catch (error) {
-            console.error('Failed to repair orphaned users', error);
+            logger.error('Failed to repair orphaned users', error);
         } finally {
             setRepairing(false);
         }
@@ -71,7 +72,7 @@ export default function OrphanedUsersPage() {
             // Refresh list
             await detectOrphaned();
         } catch (error) {
-            console.error('Failed to repair user', error);
+            logger.error('Failed to repair user', error);
         } finally {
             setRepairing(false);
         }

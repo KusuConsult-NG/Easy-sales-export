@@ -9,7 +9,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { logger } from "@/lib/logger";
+import { logger } from '@/lib/logger';
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 

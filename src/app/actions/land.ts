@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import type { LandListing } from "@/types/strict";
 
@@ -20,7 +21,7 @@ export async function getVerifiedLandListings(): Promise<LandListing[]> {
 
         return listings;
     } catch (error) {
-        console.error("Error fetching verified listings:", error);
+        logger.error("Error fetching verified listings:", error);
         return [];
     }
 }

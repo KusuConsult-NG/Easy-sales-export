@@ -5,6 +5,7 @@
 'use server';
 
 import { auth } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -106,7 +107,7 @@ export async function submitWithdrawalRequestAction(
                 );
             }
         } catch (emailError) {
-            console.error('Failed to send confirmation email:', emailError);
+            logger.error('Failed to send confirmation email:', emailError);
             // Don't fail the request if email fails
         }
 
@@ -117,7 +118,7 @@ export async function submitWithdrawalRequestAction(
             message: `Withdrawal request for ₦${data.amount.toLocaleString()} submitted successfully`,
         };
     } catch (error: any) {
-        console.error('Withdrawal request error:', error);
+        logger.error('Withdrawal request error:', error);
         return {
             error: error.message || 'Failed to submit withdrawal request',
             success: false,

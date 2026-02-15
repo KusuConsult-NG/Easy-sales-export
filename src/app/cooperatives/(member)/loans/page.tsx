@@ -3,6 +3,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import {
     DollarSign, Clock, TrendingUp, ArrowLeft, Users, FileText,
@@ -62,7 +63,7 @@ export default function LoansPage() {
                 setMembershipStatus("not_member");
             }
         } catch (error) {
-            console.error("Failed to check membership:", error);
+            logger.error("Failed to check membership:", error);
             setMembershipStatus("not_member");
         }
     };
@@ -76,7 +77,7 @@ export default function LoansPage() {
                 setProducts(data.products || []);
             }
         } catch (error) {
-            console.error("Failed to fetch loan products:", error);
+            logger.error("Failed to fetch loan products:", error);
         } finally {
             setIsLoading(false);
         }
@@ -91,7 +92,7 @@ export default function LoansPage() {
                 setApplications(data.applications || []);
             }
         } catch (error) {
-            console.error("Failed to fetch applications:", error);
+            logger.error("Failed to fetch applications:", error);
         }
     };
 

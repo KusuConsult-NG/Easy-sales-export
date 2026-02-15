@@ -1,13 +1,14 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
 import { createNotificationAction } from "@/app/actions/notifications";
 import {
-    WaveApplicationReviewSchema,
+WaveApplicationReviewSchema,
     WithdrawalProcessingSchema,
     UserVerificationToggleSchema,
     LandListingVerificationSchema,
@@ -92,7 +93,7 @@ export async function approveWaveApplicationAction(
             await invalidateServiceCache(userId, 'wave');
             console.log(`[Wave Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
-            console.error('[Wave Approval] Cache clear error:', cacheError);
+            logger.error('[Wave Approval] Cache clear error:', cacheError);
         }
 
         // 4. Send Approval Email
@@ -132,7 +133,7 @@ export async function approveWaveApplicationAction(
                     `
                 });
             } catch (emailError) {
-                console.error("Failed to send WAVE approval email:", emailError);
+                logger.error("Failed to send WAVE approval email:", emailError);
                 // Don't block success on email failure
             }
         }
@@ -149,7 +150,7 @@ export async function approveWaveApplicationAction(
             message: "WAVE application approved and user verified successfully",
         };
     } catch (error: any) {
-        console.error("Approve WAVE application error:", error);
+        logger.error("Approve WAVE application error:", error);
         return { error: "Failed to approve application", success: false };
     }
 }
@@ -189,7 +190,7 @@ export async function rejectWaveApplicationAction(
             message: "WAVE application rejected",
         };
     } catch (error: any) {
-        console.error("Reject WAVE application error:", error);
+        logger.error("Reject WAVE application error:", error);
         return { error: "Failed to reject application", success: false };
     }
 }
@@ -257,7 +258,7 @@ export async function processWithdrawalAction(
             message: `Withdrawal ${action === "approve" ? "approved" : "rejected"} successfully`,
         };
     } catch (error: any) {
-        console.error("Process withdrawal error:", error);
+        logger.error("Process withdrawal error:", error);
         return { error: "Failed to process withdrawal", success: false };
     }
 }
@@ -304,7 +305,7 @@ export async function toggleUserVerificationAction(
             await invalidateUserCache(userId);
             console.log(`[User Verification] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
-            console.error('[User Verification] Cache clear error:', cacheError);
+            logger.error('[User Verification] Cache clear error:', cacheError);
         }
 
         // Log audit
@@ -321,7 +322,7 @@ export async function toggleUserVerificationAction(
             message: `User ${newVerificationStatus ? "verified" : "unverified"} successfully`,
         };
     } catch (error: any) {
-        console.error("Toggle user verification error:", error);
+        logger.error("Toggle user verification error:", error);
         return { error: "Failed to update verification status", success: false };
     }
 }
@@ -366,7 +367,7 @@ export async function getWaveApplicationsAction(
             data: applications,
         };
     } catch (error: any) {
-        console.error("Get WAVE applications error:", error);
+        logger.error("Get WAVE applications error:", error);
         return { error: "Failed to fetch applications", success: false };
     }
 }
@@ -403,7 +404,7 @@ export async function getPendingWithdrawalsAction(): Promise<{
             data: withdrawals,
         };
     } catch (error: any) {
-        console.error("Get pending withdrawals error:", error);
+        logger.error("Get pending withdrawals error:", error);
         return { error: "Failed to fetch withdrawals", success: false };
     }
 }
@@ -440,7 +441,7 @@ export async function getPendingLandListings(): Promise<{
             listings,
         };
     } catch (error: any) {
-        console.error("Get pending land listings error:", error);
+        logger.error("Get pending land listings error:", error);
         return { error: "Failed to fetch land listings", success: false };
     }
 }
@@ -482,7 +483,7 @@ export async function verifyLandListing(
                 await invalidateServiceCache(ownerId, 'farmNation');
                 console.log(`[Land Verification] Cache cleared for user: ${ownerId}`);
             } catch (cacheError) {
-                console.error('[Land Verification] Cache clear error:', cacheError);
+                logger.error('[Land Verification] Cache clear error:', cacheError);
             }
         }
 
@@ -522,7 +523,7 @@ export async function verifyLandListing(
 
                 // Security: Don't send if email is missing
                 if (!listingData.ownerEmail) {
-                    console.error(`Missing ownerEmail forland listing ${listingId}`);
+                    logger.error(`Missing ownerEmail forland listing ${listingId}`);
                 } else {
                     await resend.emails.send({
                         from: "Easy Sales Export <noreply@easysalesexport.com>",
@@ -548,7 +549,7 @@ export async function verifyLandListing(
             message: `Land listing ${decision} successfully`,
         };
     } catch (error: any) {
-        console.error("Verify land listing error:", error);
+        logger.error("Verify land listing error:", error);
         return { error: "Failed to verify land listing", success: false };
     }
 }
@@ -588,7 +589,7 @@ export async function getPendingLoanApplications(): Promise<{
             applications,
         };
     } catch (error: any) {
-        console.error("Get pending loan applications error:", error);
+        logger.error("Get pending loan applications error:", error);
         return { error: "Failed to fetch loan applications", success: false };
     }
 }
@@ -636,7 +637,7 @@ export async function getAllExportRequestsAction(
             exports,
         };
     } catch (error: any) {
-        console.error("Get all export requests error:", error);
+        logger.error("Get all export requests error:", error);
         return { error: "Failed to fetch export requests", success: false };
     }
 }
@@ -690,7 +691,7 @@ export async function approveLoanApplication(
             await invalidateCooperativeCache(loanData.userId);
             console.log(`[Loan Approval] Cache cleared for user: ${loanData.userId}`);
         } catch (cacheError) {
-            console.error('[Loan Approval] Cache clear error:', cacheError);
+            logger.error('[Loan Approval] Cache clear error:', cacheError);
         }
 
         // Send approval email
@@ -700,7 +701,7 @@ export async function approveLoanApplication(
 
             // Security: Don't send if email is missing
             if (!loanData.userEmail) {
-                console.error(`Missing userEmail for loan application ${applicationId}`);
+                logger.error(`Missing userEmail for loan application ${applicationId}`);
             } else {
                 await resend.emails.send({
                     from: "Easy Sales Export <noreply@easysalesexport.com>",
@@ -758,7 +759,7 @@ export async function approveLoanApplication(
             message: "Loan application approved successfully",
         };
     } catch (error: any) {
-        console.error("Approve loan application error:", error);
+        logger.error("Approve loan application error:", error);
         return { error: "Failed to approve loan application", success: false };
     }
 }
@@ -804,7 +805,7 @@ export async function rejectLoanApplication(
 
             // Security: Don't send if email is missing
             if (!loanData.userEmail) {
-                console.error(`Missing userEmail for loan rejection ${applicationId}`);
+                logger.error(`Missing userEmail for loan rejection ${applicationId}`);
             } else {
                 await resend.emails.send({
                     from: "Easy Sales Export <noreply@easysalesexport.com>",
@@ -861,7 +862,7 @@ export async function rejectLoanApplication(
             message: "Loan application rejected",
         };
     } catch (error: any) {
-        console.error("Reject loan application error:", error);
+        logger.error("Reject loan application error:", error);
         return { error: "Failed to reject loan application", success: false };
     }
 }
@@ -903,7 +904,7 @@ export async function unlockUserAccount(email: string): Promise<ActionState> {
             message: `Account unlocked: ${email}`,
         };
     } catch (error: any) {
-        console.error("Unlock account error:", error);
+        logger.error("Unlock account error:", error);
         return { error: "Failed to unlock account", success: false };
     }
 }
@@ -1018,7 +1019,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             hasMore: snapshot.docs.length === pageSize
         };
     } catch (error: any) {
-        console.error("Get users error:", error);
+        logger.error("Get users error:", error);
         return { error: "Failed to fetch users: " + error.message, success: false };
     }
 }
@@ -1120,7 +1121,7 @@ export async function approveSellerVerificationAction(
             await invalidateSellerCache(userId);
             console.log(`[Seller Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
-            console.error('[Seller Approval] Cache clear error:', cacheError);
+            logger.error('[Seller Approval] Cache clear error:', cacheError);
         }
 
         // 4. Send Approval Email
@@ -1163,7 +1164,7 @@ export async function approveSellerVerificationAction(
                         `
                     });
                 } catch (emailError) {
-                    console.error("Failed to send seller approval email:", emailError);
+                    logger.error("Failed to send seller approval email:", emailError);
                 }
             }
         }
@@ -1180,7 +1181,7 @@ export async function approveSellerVerificationAction(
             message: "Seller verified successfully",
         };
     } catch (error: any) {
-        console.error("Approve seller verification error:", error);
+        logger.error("Approve seller verification error:", error);
         return { error: "Failed to verify seller", success: false };
     }
 }
@@ -1242,7 +1243,7 @@ export async function approveExportOnboardingAction(
             await invalidateServiceCache(userId, 'export');
             console.log(`[Export Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
-            console.error('[Export Approval] Cache clear error:', cacheError);
+            logger.error('[Export Approval] Cache clear error:', cacheError);
         }
 
         // 4. Send Approval Email
@@ -1274,7 +1275,7 @@ export async function approveExportOnboardingAction(
                     `
                 });
             } catch (emailError) {
-                console.error("Failed to send export approval email:", emailError);
+                logger.error("Failed to send export approval email:", emailError);
             }
         }
 
@@ -1290,7 +1291,7 @@ export async function approveExportOnboardingAction(
             message: "Export application approved successfully",
         };
     } catch (error: any) {
-        console.error("Approve export application error:", error);
+        logger.error("Approve export application error:", error);
         return { error: "Failed to approve export application", success: false };
     }
 }

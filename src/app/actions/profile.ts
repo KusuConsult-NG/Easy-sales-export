@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
@@ -56,7 +57,7 @@ export async function getUserProfileAction() {
             },
         };
     } catch (error: any) {
-        console.error("Get user profile error:", error);
+        logger.error("Get user profile error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -89,7 +90,7 @@ export async function updateUserProfileAction(data: {
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update user profile error:", error);
+        logger.error("Update user profile error:", error);
 
         if (error instanceof z.ZodError) {
             return { success: false, error: "Invalid profile data" };
@@ -127,7 +128,7 @@ export async function updateNotificationPreferencesAction(preferences: {
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update notification preferences error:", error);
+        logger.error("Update notification preferences error:", error);
 
         if (error instanceof z.ZodError) {
             return { success: false, error: "Invalid preferences data" };

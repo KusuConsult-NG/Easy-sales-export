@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -82,7 +83,7 @@ export async function setupTestCooperativeAction() {
             message: "Successfully set up test cooperative! Refresh the page to see your membership.",
         };
     } catch (error: any) {
-        console.error("Setup test cooperative error:", error);
+        logger.error("Setup test cooperative error:", error);
         return { error: `Failed to setup cooperative: ${error.message}`, success: false };
     }
 }

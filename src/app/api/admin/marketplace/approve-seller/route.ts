@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+// Rate limiter for admin actions (moderate - legitimate admin workload)
+const adminLimiter = rateLimit(rateLimitConfig.admin);
 
 /**
  * API Route: Approve Seller Verification (Admin Only)
  */
 export async function POST(request: NextRequest) {
+    // RATE LIMITING - Prevent admin endpoint abuse
+    const clientIp = getClientIp(request);
+    const rateLimitResult = await adminLimiter.check(clientIp);
+
+    if (!rateLimitResult.success) {
+        return createRateLimitResponse(rateLimitResult);
+    }
+
     try {
         const session = await auth();
         if (!session?.user) {
@@ -70,7 +84,7 @@ export async function POST(request: NextRequest) {
             message: "Seller approved successfully"
         });
     } catch (error) {
-        console.error("Failed to approve seller:", error);
+        logger.error("Failed to approve seller:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
             message: "MFA disabled",
         });
     } catch (error: any) {
-        console.error("MFA disable error:", error);
+        logger.error("MFA disable error:", error);
         return NextResponse.json(
             { success: false, error: "Failed to disable MFA" },
             { status: 500 }

@@ -12,6 +12,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import OnboardingLayout from "@/components/shared/OnboardingLayout";
@@ -191,12 +192,12 @@ export default function MarketplaceOnboarding() {
                     router.push("/marketplace/buyer/dashboard");
                 }
             } else {
-                console.error("Submission failed:", result.error);
+                logger.error("Submission failed:", result.error);
                 // Ideally show error toast here
             }
 
         } catch (error) {
-            console.error("Marketplace registration error:", error);
+            logger.error("Marketplace registration error:", error);
         }
     };
 

@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
@@ -88,7 +89,7 @@ export async function createDisputeAction(params: {
 
         return { success: true, disputeId: disputeRef.id };
     } catch (error: any) {
-        console.error("Create dispute error:", error);
+        logger.error("Create dispute error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -122,7 +123,7 @@ export async function getBuyerDisputesAction() {
 
         return { success: true, disputes };
     } catch (error: any) {
-        console.error("Get buyer disputes error:", error);
+        logger.error("Get buyer disputes error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -156,7 +157,7 @@ export async function getSellerDisputesAction() {
 
         return { success: true, disputes };
     } catch (error: any) {
-        console.error("Get seller disputes error:", error);
+        logger.error("Get seller disputes error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -203,7 +204,7 @@ export async function getAdminDisputesAction(filters?: {
 
         return { success: true, disputes };
     } catch (error: any) {
-        console.error("Get admin disputes error:", error);
+        logger.error("Get admin disputes error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -247,7 +248,7 @@ export async function getDisputeByIdAction(disputeId: string) {
 
         return { success: true, dispute: disputeData };
     } catch (error: any) {
-        console.error("Get dispute error:", error);
+        logger.error("Get dispute error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -327,7 +328,7 @@ export async function updateDisputeStatusAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update dispute error:", error);
+        logger.error("Update dispute error:", error);
         return { success: false, error: error.message };
     }
 }

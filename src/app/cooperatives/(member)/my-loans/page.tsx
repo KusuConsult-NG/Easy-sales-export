@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import Link from "next/link";
 import {
     DollarSign,
@@ -99,7 +100,7 @@ export default function MyLoansPage() {
                 setError(result.error || "Failed to load membership data");
             }
         } catch (error) {
-            console.error("Failed to load loans:", error);
+            logger.error("Failed to load loans:", error);
             setError("An unexpected error occurred while loading your loans");
         } finally {
             setLoading(false);

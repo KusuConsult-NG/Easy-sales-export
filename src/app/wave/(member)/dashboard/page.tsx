@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import {
     Heart,
@@ -58,7 +59,7 @@ export default function WaveDashboardPage() {
             const events = await getWaveTrainingEventsAction();
             setUpcomingEvents(events.slice(0, 3));
         } catch (error) {
-            console.error("Dashboard load error:", error);
+            logger.error("Dashboard load error:", error);
         } finally {
             setLoading(false);
         }

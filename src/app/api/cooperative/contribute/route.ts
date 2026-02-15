@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { auth } from '@/lib/auth';
+import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+// Rate limiter for cooperative contributions (prevent double submissions)
+const contributionLimiter = rateLimit(rateLimitConfig.payment);
 
 /**
  * Contribution Payment API
  * Initializes Paystack payment for cooperative contributions
  */
 export async function POST(request: NextRequest) {
+    // RATE LIMITING - Prevent payment spam/double submissions
+    const clientIp = getClientIp(request);
+    const rateLimitResult = await contributionLimiter.check(clientIp);
+
+    if (!rateLimitResult.success) {
+        return createRateLimitResponse(rateLimitResult);
+    }
+
     try {
         const session = await auth();
         if (!session?.user) {
@@ -83,7 +97,7 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
-        console.error('Contribution API error:', error);
+        logger.error('Contribution API error:', error);
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 }

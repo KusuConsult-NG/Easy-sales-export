@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
@@ -43,8 +44,8 @@ export async function POST(request: NextRequest) {
             message: "Onboarding marked complete",
         });
     } catch (error: any) {
-        console.error("Onboarding completion error:", error);
-        console.error("Error details:", {
+        logger.error("Onboarding completion error:", error);
+        logger.error("Error details:", {
             code: error.code,
             message: error.message,
             stack: error.stack,

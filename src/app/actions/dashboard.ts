@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -129,7 +130,7 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
             },
         };
     } catch (error: any) {
-        console.error("Dashboard stats error:", error);
+        logger.error("Dashboard stats error:", error);
         return { error: "Failed to fetch dashboard stats", success: false };
     }
 }
@@ -196,7 +197,7 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
             data: activities.slice(0, 5), // Return top 5
         };
     } catch (error: any) {
-        console.error("Recent activity error:", error);
+        logger.error("Recent activity error:", error);
         return { error: "Failed to fetch recent activity", success: false };
     }
 }
@@ -269,7 +270,7 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> {
             },
         };
     } catch (error: any) {
-        console.error("Escrow status error:", error);
+        logger.error("Escrow status error:", error);
         return { error: "Failed to fetch escrow status", success: false };
     }
 }

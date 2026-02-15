@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, collection } from "firebase/firestore";
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
             quizId: quizRef.id
         });
     } catch (error) {
-        console.error("Failed to create quiz:", error);
+        logger.error("Failed to create quiz:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

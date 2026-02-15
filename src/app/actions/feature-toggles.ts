@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -24,7 +25,7 @@ export async function getFeatureToggle(featureName: string): Promise<boolean> {
         const toggle = toggleDoc.data() as FeatureToggle;
         return toggle.enabled;
     } catch (error) {
-        console.error(`Failed to get feature toggle for ${featureName}:`, error);
+        logger.error(`Failed to get feature toggle for ${featureName}:`, error);
         // Return default on error
         return DEFAULT_TOGGLES[featureName] ?? false;
     }
@@ -85,7 +86,7 @@ export async function updateFeatureToggle(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Failed to update feature toggle:", error);
+        logger.error("Failed to update feature toggle:", error);
         return { success: false, error: error.message || "Failed to update toggle" };
     }
 }
@@ -112,7 +113,7 @@ export async function getAllFeatureToggles(): Promise<{
 
         return { success: true, data: toggles };
     } catch (error: any) {
-        console.error("Failed to get feature toggles:", error);
+        logger.error("Failed to get feature toggles:", error);
         return { success: false, error: error.message || "Failed to fetch toggles" };
     }
 }
@@ -156,7 +157,7 @@ export async function hasFeatureAccess(
 
         return true;
     } catch (error) {
-        console.error(`Failed to check feature access for ${featureName}:`, error);
+        logger.error(`Failed to check feature access for ${featureName}:`, error);
         return DEFAULT_TOGGLES[featureName] ?? false;
     }
 }

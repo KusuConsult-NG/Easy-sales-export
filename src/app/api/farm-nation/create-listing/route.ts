@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, collection } from "firebase/firestore";
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
             listingId: listingRef.id
         });
     } catch (error) {
-        console.error("Failed to create land listing:", error);
+        logger.error("Failed to create land listing:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

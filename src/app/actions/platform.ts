@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import {
@@ -106,7 +107,7 @@ export async function submitWaveApplicationAction(
             applicationId,
         };
     } catch (error: any) {
-        console.error("WAVE application error:", error);
+        logger.error("WAVE application error:", error);
 
         if (error.name === "ZodError") {
             const zodError = error as any;
@@ -185,7 +186,7 @@ export async function enrollInCourseAction(
             enrollmentId,
         };
     } catch (error: any) {
-        console.error("Enrollment error:", error);
+        logger.error("Enrollment error:", error);
 
         if (error.name === "ZodError") {
             return { error: "Please fill in all required fields correctly", success: false };
@@ -279,7 +280,7 @@ export async function submitWithdrawalAction(
             withdrawalId,
         };
     } catch (error: any) {
-        console.error("Withdrawal error:", error);
+        logger.error("Withdrawal error:", error);
 
         if (error.name === "ZodError") {
             return { error: "Please fill in all required fields correctly", success: false };

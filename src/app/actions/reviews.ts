@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { ProductReview, Order } from "@/lib/types/marketplace";
@@ -97,7 +98,7 @@ export async function createReviewAction(params: {
 
         return { success: true };
     } catch (error: any) {
-        console.error("Create review error:", error);
+        logger.error("Create review error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -140,7 +141,7 @@ export async function getProductReviewsAction(
 
         return { success: true, reviews: filteredReviews };
     } catch (error: any) {
-        console.error("Get product reviews error:", error);
+        logger.error("Get product reviews error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -172,7 +173,7 @@ export async function getUserReviewsAction() {
 
         return { success: true, reviews };
     } catch (error: any) {
-        console.error("Get user reviews error:", error);
+        logger.error("Get user reviews error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -240,7 +241,7 @@ export async function updateReviewAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update review error:", error);
+        logger.error("Update review error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -289,7 +290,7 @@ export async function moderateReviewAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Moderate review error:", error);
+        logger.error("Moderate review error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -339,7 +340,7 @@ export async function getSellerRatingAction(sellerId: string) {
             },
         };
     } catch (error: any) {
-        console.error("Get seller rating error:", error);
+        logger.error("Get seller rating error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -385,7 +386,7 @@ export async function getAdminReviewsAction(statusFilter?: "pending" | "approved
 
         return { success: true, reviews };
     } catch (error: any) {
-        console.error("Get admin reviews error:", error);
+        logger.error("Get admin reviews error:", error);
         return { success: false, error: error.message };
     }
 }

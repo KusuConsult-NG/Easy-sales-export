@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db, storage } from "@/lib/firebase";
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, Timestamp } from "firebase/firestore";
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
             certificates,
         });
     } catch (error: any) {
-        console.error("Cert fetch error:", error);
+        logger.error("Cert fetch error:", error);
         return NextResponse.json(
             { success: false, error: "Failed to fetch certificates" },
             { status: 500 }

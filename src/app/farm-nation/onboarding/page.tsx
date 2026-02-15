@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { Home, TrendingUp, Shield, CheckCircle } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
@@ -111,7 +112,7 @@ export default function FarmNationOnboardingPage() {
                 showToast(result.error || "Failed to complete onboarding", "error");
             }
         } catch (error) {
-            console.error("Error submitting onboarding:", error);
+            logger.error("Error submitting onboarding:", error);
             showToast("An error occurred. Please try again.", "error");
         }
     };

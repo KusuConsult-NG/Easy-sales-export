@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
@@ -92,7 +93,7 @@ export async function getCoursesAction(): Promise<Course[]> {
             ...doc.data(),
         })) as Course[];
     } catch (error) {
-        console.error("Failed to fetch courses:", error);
+        logger.error("Failed to fetch courses:", error);
         return [];
     }
 }
@@ -113,7 +114,7 @@ export async function getCourseByIdAction(courseId: string): Promise<Course | nu
             ...courseDoc.data(),
         } as Course;
     } catch (error) {
-        console.error("Failed to fetch course:", error);
+        logger.error("Failed to fetch course:", error);
         return null;
     }
 }
@@ -161,7 +162,7 @@ export async function enrollInCourseAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Enrollment error:", error);
+        logger.error("Enrollment error:", error);
         return { success: false, error: "Failed to enroll in course" };
     }
 }
@@ -211,7 +212,7 @@ export async function completeLessonAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Lesson completion error:", error);
+        logger.error("Lesson completion error:", error);
         return { success: false, error: "Failed to mark lesson as complete" };
     }
 }
@@ -260,7 +261,7 @@ export async function submitQuizScoreAction(
         await progressRef.set(progress);
         return { success: true, passed: false };
     } catch (error) {
-        console.error("Quiz submission error:", error);
+        logger.error("Quiz submission error:", error);
         return { success: false, error: "Failed to submit quiz" };
     }
 }
@@ -281,7 +282,7 @@ export async function getUserProgressAction(
 
         return progressDoc.data() as UserProgress;
     } catch (error) {
-        console.error("Failed to fetch progress:", error);
+        logger.error("Failed to fetch progress:", error);
         return null;
     }
 }
@@ -349,7 +350,7 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
             enrolledCourses,
         };
     } catch (error) {
-        console.error("Failed to fetch aggregate progress:", error);
+        logger.error("Failed to fetch aggregate progress:", error);
         return {
             totalCourses: 0,
             completedCourses: 0,
@@ -378,7 +379,7 @@ export async function getLiveSessionsAction(courseId?: string): Promise<LiveSess
             ...doc.data(),
         })) as LiveSession[];
     } catch (error) {
-        console.error("Failed to fetch live sessions:", error);
+        logger.error("Failed to fetch live sessions:", error);
         return [];
     }
 }
@@ -459,7 +460,7 @@ export async function submitAcademyApplicationAction(
 
         return { success: true, applicationId };
     } catch (error) {
-        console.error("Academy application submission error:", error);
+        logger.error("Academy application submission error:", error);
         return { success: false, error: "Failed to submit application. Please try again." };
     }
 }
@@ -493,7 +494,7 @@ export async function createCourseAction(data: Partial<Course>): Promise<{ succe
 
         return { success: true, id: docRef.id };
     } catch (error: any) {
-        console.error("Create course error:", error);
+        logger.error("Create course error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -520,7 +521,7 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update course error:", error);
+        logger.error("Update course error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -547,7 +548,7 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update modules error:", error);
+        logger.error("Update modules error:", error);
         return { success: false, error: error.message };
     }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useParams, useRouter } from "next/navigation";
 import { CheckCircle, Package, Truck, MapPin, CreditCard, ArrowLeft, Loader2 } from "lucide-react";
 import { getOrderByIdAction } from "@/app/actions/orders";
@@ -30,7 +31,7 @@ export default function OrderConfirmationPage() {
                 router.push("/marketplace");
             }
         } catch (error) {
-            console.error("Failed to load order:", error);
+            logger.error("Failed to load order:", error);
             router.push("/marketplace");
         } finally {
             setLoading(false);

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
@@ -142,7 +143,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
 
         return { eligible: true };
     } catch (error) {
-        console.error("WAVE eligibility check error:", error);
+        logger.error("WAVE eligibility check error:", error);
         return { eligible: false, reason: "Failed to check eligibility" };
     }
 }
@@ -215,7 +216,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             applicationId,
         };
     } catch (error: any) {
-        console.error("WAVE application submission error:", error);
+        logger.error("WAVE application submission error:", error);
         return {
             success: false,
             error: "Failed to submit application. Please try again."
@@ -259,7 +260,7 @@ export async function enrollInWaveAction(userId: string): Promise<{
 
         return { success: true };
     } catch (error) {
-        console.error("WAVE enrollment error:", error);
+        logger.error("WAVE enrollment error:", error);
         return { success: false, error: "Failed to enroll in WAVE program" };
     }
 }
@@ -298,7 +299,7 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
             ...doc.data(),
         })) as WaveResource[];
     } catch (error) {
-        console.error("Failed to fetch WAVE resources:", error);
+        logger.error("Failed to fetch WAVE resources:", error);
         return [];
     }
 }
@@ -325,7 +326,7 @@ export async function getWaveTrainingEventsAction(): Promise<WaveTrainingEvent[]
             date: doc.data().date?.toDate ? doc.data().date.toDate() : doc.data().date
         })) as WaveTrainingEvent[];
     } catch (error) {
-        console.error("Get training events error:", error);
+        logger.error("Get training events error:", error);
         return [];
     }
 }
@@ -371,7 +372,7 @@ export async function getShipmentTrackingAction(userId: string): Promise<Shipmen
 
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ShipmentTracking[];
     } catch (error) {
-        console.error("Get shipment tracking error:", error);
+        logger.error("Get shipment tracking error:", error);
         return [];
     }
 }
@@ -425,7 +426,7 @@ export async function updateShipmentStatusAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update shipment error:", error);
+        logger.error("Update shipment error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -510,7 +511,7 @@ export async function calculateEarningsAction(userId: string): Promise<MemberEar
             transactions: transactions.sort((a, b) => b.date.getTime() - a.date.getTime()),
         };
     } catch (error) {
-        console.error("Calculate earnings error:", error);
+        logger.error("Calculate earnings error:", error);
         return {
             memberId: userId,
             totalSales: 0,
@@ -592,7 +593,7 @@ export async function generateCertificateAction(
 
         return { success: true, certificate };
     } catch (error: any) {
-        console.error("Generate certificate error:", error);
+        logger.error("Generate certificate error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -614,7 +615,7 @@ export async function getMemberCertificatesAction(userId: string): Promise<WaveC
 
         return snapshot.docs.map(doc => doc.data()) as WaveCertificate[];
     } catch (error) {
-        console.error("Get certificates error:", error);
+        logger.error("Get certificates error:", error);
         return [];
     }
 }
@@ -629,7 +630,7 @@ export async function getCurrentUserCertificatesAction(): Promise<WaveCertificat
 
         return await getMemberCertificatesAction(session.user.id);
     } catch (error) {
-        console.error("Get current user certificates error:", error);
+        logger.error("Get current user certificates error:", error);
         return [];
     }
 }
@@ -667,7 +668,7 @@ export async function uploadWaveResourceAction(
 
         return { success: true, resourceId };
     } catch (error: any) {
-        console.error("Upload resource error:", error);
+        logger.error("Upload resource error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -692,7 +693,7 @@ export async function incrementResourceDownloadAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Increment download error:", error);
+        logger.error("Increment download error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -752,7 +753,7 @@ export async function registerForTrainingAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Training registration error:", error);
+        logger.error("Training registration error:", error);
         return { success: false, error: error.message || "Failed to register for training" };
     }
 }

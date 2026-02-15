@@ -1,5 +1,6 @@
 'use server';
 
+import { logger } from '@/lib/logger';
 import { db } from '@/lib/firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -92,7 +93,7 @@ export async function sendResetEmailAction(
             error: undefined
         };
     } catch (error) {
-        console.error('Failed to send reset email:', error);
+        logger.error('Failed to send reset email:', error);
         return {
             success: false,
             error: 'Failed to send reset email. Please try again later.'
@@ -152,7 +153,7 @@ export async function resetPasswordAction(
                 password: password
             });
         } catch (error) {
-            console.error('Failed to update password:', error);
+            logger.error('Failed to update password:', error);
             return { success: false, error: 'Failed to update password' };
         }
 
@@ -167,7 +168,7 @@ export async function resetPasswordAction(
             error: undefined
         };
     } catch (error) {
-        console.error('Password reset failed:', error);
+        logger.error('Password reset failed:', error);
         return {
             success: false,
             error: 'Password reset failed. Please try again.'

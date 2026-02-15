@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Camera, Upload, CheckCircle, XCircle, Clock, AlertCircle, Loader2 } from "lucide-react";
 import { verifyDigitalIDQR, type QRVerificationResult, type DigitalIDPayload } from "@/lib/digital-id";
-import { logger } from "@/lib/logger";
+import { logger } from '@/lib/logger';
 
 export default function VerifyIDPage() {
     const [qrData, setQrData] = useState<string>("");

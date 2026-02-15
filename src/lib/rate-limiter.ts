@@ -1,71 +1,82 @@
 /**
- * Rate Limiting Utility
+ * Rate Limiting Utility - REDIS-BACKED (Distributed)
  * 
  * Prevents abuse and DDoS attacks using token bucket algorithm.
- * Supports IP-based tracking with configurable limits per endpoint.
+ * NOW SUPPORTS DISTRIBUTED RATE LIMITING via Upstash Redis
  */
+
+import { redis } from './redis';
 
 interface RateLimitConfig {
     interval: number; // Time window in milliseconds
     maxRequests: number; // Maximum requests in window
 }
 
-interface RateLimitStore {
-    [key: string]: {
-        count: number;
-        resetTime: number;
-    };
-}
-
-// In-memory store (use Redis in production for multi-instance deployments)
-const limitStore: RateLimitStore = {};
-
 /**
- * Create a rate limiter with specified config
+ * Create a distributed rate limiter with Redis backend
  */
 export function rateLimit(config: RateLimitConfig) {
     return {
         check: async (identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> => {
             const now = Date.now();
-            const record = limitStore[identifier];
+            const key = `ratelimit:${identifier}`;
 
-            // Initialize or reset if window expired
-            if (!record || now > record.resetTime) {
-                limitStore[identifier] = {
-                    count: 1,
-                    resetTime: now + config.interval,
-                };
+            try {
+                // Get current rate limit data from Redis
+                const data = await redis.get<{ count: number; resetTime: number }>(key);
+
+                // Initialize or reset if window expired
+                if (!data || now > data.resetTime) {
+                    const resetTime = now + config.interval;
+
+                    await redis.set(key, { count: 1, resetTime }, {
+                        px: config.interval, // Set expiry in milliseconds
+                    });
+
+                    return {
+                        success: true,
+                        limit: config.maxRequests,
+                        remaining: config.maxRequests - 1,
+                        reset: resetTime,
+                    };
+                }
+
+                // Check if limit exceeded
+                if (data.count >= config.maxRequests) {
+                    return {
+                        success: false,
+                        limit: config.maxRequests,
+                        remaining: 0,
+                        reset: data.resetTime,
+                    };
+                }
+
+                // Increment count atomically
+                const newCount = data.count + 1;
+                await redis.set(key, { count: newCount, resetTime: data.resetTime }, {
+                    px: data.resetTime - now, // Preserve original expiry
+                });
 
                 return {
                     success: true,
                     limit: config.maxRequests,
-                    remaining: config.maxRequests - 1,
+                    remaining: config.maxRequests - newCount,
+                    reset: data.resetTime,
+                };
+            } catch (error) {
+                // Redis error - fail open (allow request) but log
+                console.error('[Rate Limiter] Redis error:', error);
+                return {
+                    success: true, // Fail open for availability
+                    limit: config.maxRequests,
+                    remaining: config.maxRequests,
                     reset: now + config.interval,
                 };
             }
-
-            // Check if limit exceeded
-            if (record.count >= config.maxRequests) {
-                return {
-                    success: false,
-                    limit: config.maxRequests,
-                    remaining: 0,
-                    reset: record.resetTime,
-                };
-            }
-
-            // Increment count
-            record.count++;
-
-            return {
-                success: true,
-                limit: config.maxRequests,
-                remaining: config.maxRequests - record.count,
-                reset: record.resetTime,
-            };
         },
     };
 }
+
 
 /**
  * Get client IP address from request

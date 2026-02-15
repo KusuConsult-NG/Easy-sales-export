@@ -5,11 +5,13 @@
  */
 
 import { cookies } from "next/headers";
+import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp, getApps } from "firebase-admin/app";
 import FarmNationSidebar from "./FarmNationSidebar";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export default async function FarmNationMemberLayout({
     children,
@@ -43,20 +45,22 @@ export default async function FarmNationMemberLayout({
             redirect(accessResult.redirectTo || "/farm-nation");
         }
     } catch (error) {
-        console.error("Session verification failed:", error);
+        logger.error("Session verification failed:", error);
         redirect("/farm-nation/login");
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            <FarmNationSidebar />
+        <ErrorBoundary>
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+                <FarmNationSidebar />
 
-            {/* Main Content - Offset for sidebar */}
-            <main className="lg:pl-64 min-h-screen transition-all">
-                <div className="p-4 lg:p-8 mt-16 lg:mt-0">
-                    {children}
-                </div>
-            </main>
-        </div>
+                {/* Main Content - Offset for sidebar */}
+                <main className="lg:pl-64 min-h-screen transition-all">
+                    <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </ErrorBoundary>
     );
 }

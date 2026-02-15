@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
@@ -37,7 +38,7 @@ export async function GET(
             certificate
         });
     } catch (error) {
-        console.error("Failed to verify certificate:", error);
+        logger.error("Failed to verify certificate:", error);
         return NextResponse.json(
             { success: false, message: "Verification failed" },
             { status: 500 }

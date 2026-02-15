@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { getAdminDb } from "@/lib/firebase-admin";
 import { auth } from "@/lib/auth";
 
@@ -82,7 +83,7 @@ export async function GET() {
         });
 
     } catch (error) {
-        console.error("Integrity check failed:", error);
+        logger.error("Integrity check failed:", error);
         return NextResponse.json({
             error: "Internal Server Error",
             details: error instanceof Error ? error.message : String(error)

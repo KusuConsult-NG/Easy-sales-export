@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { logger } from '@/lib/logger';
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft } from "lucide-react";
@@ -42,7 +43,7 @@ export default function CertificatePage() {
                     setProgress(progressData);
                 }
             } catch (err) {
-                console.error("Failed to load certificate data:", err);
+                logger.error("Failed to load certificate data:", err);
                 // Optionally set an error state here if needed
             } finally {
                 if (mounted) setLoading(false);

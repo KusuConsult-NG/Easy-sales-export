@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, use } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -61,7 +62,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                     }
                 }
             } catch (error) {
-                console.error(error);
+                logger.error("Error:", error);
             } finally {
                 if (mounted) setLoading(false);
             }

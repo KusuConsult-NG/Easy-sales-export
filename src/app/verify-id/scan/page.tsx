@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from '@/lib/logger';
 import { Camera, CheckCircle, XCircle, Loader2, User, Shield } from "lucide-react";
 import { BrowserQRCodeReader } from "@zxing/library";
 import { useToast } from "@/contexts/ToastContext";
@@ -56,7 +57,7 @@ export default function VerifyIDPage() {
                 }
             );
         } catch (error) {
-            console.error("QR Scanner error:", error);
+            logger.error("QR Scanner error:", error);
             showToast("Failed to start camera", "error");
             setIsScanning(false);
         }

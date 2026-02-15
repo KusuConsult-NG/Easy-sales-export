@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import dynamic from "next/dynamic";
 import { Filter, Grid, MapIcon, Search } from "lucide-react";
 
@@ -93,7 +94,7 @@ export default function FarmNationMapPage() {
                 setListings(mappableListings);
             }
         } catch (error) {
-            console.error("Failed to fetch listings:", error);
+            logger.error("Failed to fetch listings:", error);
         } finally {
             setIsLoading(false);
         }

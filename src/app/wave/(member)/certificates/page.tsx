@@ -7,6 +7,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import { Award, Download, Share2, Calendar, CheckCircle, TrendingUp, BookOpen, Star, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUserCertificatesAction, WaveCertificate } from "@/app/actions/wave";
@@ -22,7 +23,7 @@ export default function CertificatesPage() {
                 const certs = await getCurrentUserCertificatesAction();
                 setCertificates(certs);
             } catch (error) {
-                console.error("Failed to load certificates:", error);
+                logger.error("Failed to load certificates:", error);
             } finally {
                 setLoading(false);
             }

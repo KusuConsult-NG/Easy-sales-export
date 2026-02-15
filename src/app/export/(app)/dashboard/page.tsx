@@ -8,6 +8,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import Link from "next/link";
 import {
     TrendingUp,
@@ -63,7 +64,7 @@ export default function ExportDashboardPage() {
                     setInvestments(investmentsResult.data as ActiveInvestment[]);
                 }
             } catch (error) {
-                console.error("Failed to load dashboard:", error);
+                logger.error("Failed to load dashboard:", error);
             } finally {
                 setLoading(false);
             }

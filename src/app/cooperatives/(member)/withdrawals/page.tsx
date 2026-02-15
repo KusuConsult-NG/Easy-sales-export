@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import Link from "next/link";
 import {
     ArrowLeft,
@@ -67,7 +68,7 @@ export default function WithdrawalsHistoryPage() {
 
             setWithdrawals(data);
         } catch (error) {
-            console.error("Failed to load withdrawals:", error);
+            logger.error("Failed to load withdrawals:", error);
         } finally {
             setLoading(false);
         }

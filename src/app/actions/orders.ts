@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, Product } from "@/lib/types/marketplace";
@@ -119,7 +120,7 @@ export async function createOrderAction(
             // paymentUrl: paystackUrl, // Would be returned from Paystack
         };
     } catch (error: any) {
-        console.error("Create order error:", error);
+        logger.error("Create order error:", error);
         return {
             success: false,
             error: error.message || "Failed to create order",
@@ -153,7 +154,7 @@ export async function getOrderByIdAction(orderId: string) {
 
         return { success: true, order };
     } catch (error: any) {
-        console.error("Get order error:", error);
+        logger.error("Get order error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -194,7 +195,7 @@ export async function updateOrderPaymentAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update payment error:", error);
+        logger.error("Update payment error:", error);
         return { success: false, error: error.message };
     }
 }

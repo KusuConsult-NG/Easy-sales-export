@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { Briefcase, CheckCircle, XCircle, Loader2, AlertCircle, Search, Filter, DollarSign, Calendar, Eye, FileText } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { getPendingLoanApplications, approveLoanApplication, rejectLoanApplication } from "@/app/actions/admin";
@@ -52,7 +53,7 @@ export default function AdminLoansPage() {
                     }
                 }
             } catch (error) {
-                console.error("Failed to load pending loans:", error);
+                logger.error("Failed to load pending loans:", error);
                 if (mounted) {
                     setLoans([]);
                 }

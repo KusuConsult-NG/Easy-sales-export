@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
@@ -57,7 +58,7 @@ export async function getUserEscrowTransactions(): Promise<{ success: boolean; t
 
         return { success: true, transactions };
     } catch (error: any) {
-        console.error("Get escrow transactions error:", error);
+        logger.error("Get escrow transactions error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -124,7 +125,7 @@ export async function updateEscrowStatus(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update escrow status error:", error);
+        logger.error("Update escrow status error:", error);
 
         if (error instanceof z.ZodError) {
             return { success: false, error: "Invalid status value" };
@@ -214,7 +215,7 @@ export async function createEscrowDispute(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Create escrow dispute error:", error);
+        logger.error("Create escrow dispute error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -319,7 +320,7 @@ export async function releaseEscrowFunds(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Release escrow funds error:", error);
+        logger.error("Release escrow funds error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -417,7 +418,7 @@ export async function refundEscrowToBuyer(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Refund escrow error:", error);
+        logger.error("Refund escrow error:", error);
         return { success: false, error: error.message };
     }
 }

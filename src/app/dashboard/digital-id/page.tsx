@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { generateDigitalIDCard, formatMemberNumber, type DigitalIDCard as DigitalIDCardType } from "@/lib/digital-id";
 import DigitalIDCard from "@/components/DigitalIDCard";
@@ -51,7 +52,7 @@ export default function DigitalIDPage() {
 
                 setIdCard(card);
             } catch (err) {
-                console.error("Failed to generate digital ID:", err);
+                logger.error("Failed to generate digital ID:", err);
                 setError("Failed to load digital ID. Please try again.");
             } finally {
                 setLoading(false);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter, useParams } from "next/navigation";
 import VideoClassroom from "@/components/VideoClassroom";
 import { Video, BookOpen, ArrowLeft, Users } from "lucide-react";
@@ -37,7 +38,7 @@ export default function AcademyLiveClassPage() {
                 });
 
             } catch (error) {
-                console.error("Failed to fetch data:", error);
+                logger.error("Failed to fetch data:", error);
                 router.push("/academy/login");
             } finally {
                 setIsLoading(false);

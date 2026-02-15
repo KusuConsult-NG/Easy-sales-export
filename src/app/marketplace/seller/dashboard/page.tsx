@@ -7,6 +7,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import { Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle, Eye, Clock, CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getSellerAnalyticsAction, getSellerOrdersAction, getSellerProductsAction } from "@/app/actions/marketplace";
@@ -60,7 +61,7 @@ export default function SellerDashboard() {
                 }
 
             } catch (error) {
-                console.error("Failed to load dashboard data:", error);
+                logger.error("Failed to load dashboard data:", error);
             } finally {
                 setLoading(false);
             }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import {
     Filter,
     Download,
@@ -42,7 +43,7 @@ export default function AdminTransactionsPage() {
                 setTransactions(result.data);
             }
         } catch (error) {
-            console.error("Failed to load transactions:", error);
+            logger.error("Failed to load transactions:", error);
         } finally {
             setLoading(false);
         }

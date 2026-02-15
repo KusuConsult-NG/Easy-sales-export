@@ -12,6 +12,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import {
     ChevronLeft,
@@ -206,7 +207,7 @@ export default function WaveApplicationPage() {
                 showToast(result.error || "Failed to submit application. Please try again.", "error");
             }
         } catch (error) {
-            console.error("Submission error:", error);
+            logger.error("Submission error:", error);
             showToast("An unexpected error occurred. Please try again.", "error");
         } finally {
             setSubmitting(false);

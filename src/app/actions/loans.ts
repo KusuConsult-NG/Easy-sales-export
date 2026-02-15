@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
 import { calculateRepaymentSchedule, isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
@@ -147,7 +148,7 @@ export async function submitLoanApplicationAction(formData: {
 
         return { success: true, applicationId: docRef.id };
     } catch (error) {
-        console.error("Loan application error:", error);
+        logger.error("Loan application error:", error);
         return { success: false, error: "Failed to submit loan application" };
     }
 }
@@ -171,7 +172,7 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
             ...doc.data(),
         })) as LoanApplication[];
     } catch (error) {
-        console.error("Failed to fetch loan applications:", error);
+        logger.error("Failed to fetch loan applications:", error);
         return [];
     }
 }
@@ -195,7 +196,7 @@ export async function getPendingLoanApplicationsAction(): Promise<LoanApplicatio
             ...doc.data(),
         })) as LoanApplication[];
     } catch (error) {
-        console.error("Failed to fetch pending applications:", error);
+        logger.error("Failed to fetch pending applications:", error);
         return [];
     }
 }
@@ -243,7 +244,7 @@ export async function approveLoanAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Loan approval error:", error);
+        logger.error("Loan approval error:", error);
         return { success: false, error: "Failed to approve loan" };
     }
 }
@@ -294,7 +295,7 @@ export async function rejectLoanAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Loan rejection error:", error);
+        logger.error("Loan rejection error:", error);
         return { success: false, error: "Failed to reject loan" };
     }
 }
@@ -367,7 +368,7 @@ export async function disburseLoanAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Loan disbursement error:", error);
+        logger.error("Loan disbursement error:", error);
         return { success: false, error: error.message || "Failed to disburse loan" };
     }
 }
@@ -473,7 +474,7 @@ export async function getRepaymentScheduleAction(
 
         return { success: true, schedule: installments };
     } catch (error) {
-        console.error("Failed to fetch repayment schedule:", error);
+        logger.error("Failed to fetch repayment schedule:", error);
         return { success: false, error: "Failed to fetch repayment schedule" };
     }
 }
@@ -639,7 +640,7 @@ export async function submitRepaymentAction(data: {
 
         return { success: true, penalty: calculatedPenalty };
     } catch (error: any) {
-        console.error("Repayment submission error:", error);
+        logger.error("Repayment submission error:", error);
         return { success: false, error: error.message || "Failed to submit repayment" };
     }
 }
@@ -679,7 +680,7 @@ export async function getRepaymentHistoryAction(
 
         return { success: true, payments };
     } catch (error) {
-        console.error("Failed to fetch repayment history:", error);
+        logger.error("Failed to fetch repayment history:", error);
         return { success: false, error: "Failed to fetch repayment history" };
     }
 }

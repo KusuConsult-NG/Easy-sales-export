@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -78,7 +79,7 @@ async function verifyMFAHandler(request: NextRequest) {
 
         return response;
     } catch (error: any) {
-        console.error("MFA verification error:", error);
+        logger.error("MFA verification error:", error);
         return NextResponse.json(
             { success: false, error: "Failed to verify MFA code" },
             { status: 500 }

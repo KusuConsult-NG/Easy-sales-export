@@ -9,6 +9,8 @@ import { redirect } from "next/navigation";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp, getApps } from "firebase-admin/app";
+import { logger } from '@/lib/logger';
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import AcademySidebar from "./AcademySidebar";
 
@@ -44,20 +46,22 @@ export default async function AcademyLearnerLayout({
             redirect(accessResult.redirectTo || "/academy/application");
         }
     } catch (error) {
-        console.error("Session verification failed:", error);
+        logger.error("Session verification failed:", error);
         redirect("/academy/login");
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            <AcademySidebar />
+        <ErrorBoundary>
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+                <AcademySidebar />
 
-            {/* Main Content - Offset for sidebar */}
-            <main className="lg:pl-64 min-h-screen transition-all">
-                <div className="p-4 lg:p-8 mt-16 lg:mt-0">
-                    {children}
-                </div>
-            </main>
-        </div>
+                {/* Main Content - Offset for sidebar */}
+                <main className="lg:pl-64 min-h-screen transition-all">
+                    <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </ErrorBoundary>
     );
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -120,7 +121,7 @@ export async function getPendingContentAction(): Promise<{
         return { success: true, data: pendingItems };
 
     } catch (error: any) {
-        console.error("Get pending content error:", error);
+        logger.error("Get pending content error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -174,7 +175,7 @@ export async function approveContentAction(
         return { success: true };
 
     } catch (error: any) {
-        console.error("Approve content error:", error);
+        logger.error("Approve content error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -232,7 +233,7 @@ export async function rejectContentAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Reject content error:", error);
+        logger.error("Reject content error:", error);
         return { success: false, error: error.message };
     }
 }

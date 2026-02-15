@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { Plus, Search, Edit, Trash2, Eye, AlertCircle, CheckCircle, Loader2, Package } from "lucide-react";
 import Link from "next/link";
 import { getSellerProductsAction } from "@/app/actions/marketplace";
@@ -28,7 +29,7 @@ export default function SellerProductsPage() {
                     setProducts(result.products);
                 }
             } catch (error) {
-                console.error("Failed to load products:", error);
+                logger.error("Failed to load products:", error);
             } finally {
                 setLoading(false);
             }

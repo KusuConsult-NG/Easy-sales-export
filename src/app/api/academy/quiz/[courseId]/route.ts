@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 
@@ -54,7 +55,7 @@ export async function GET(
             attemptNumber
         });
     } catch (error) {
-        console.error("Failed to fetch quiz:", error);
+        logger.error("Failed to fetch quiz:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

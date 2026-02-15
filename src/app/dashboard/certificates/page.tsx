@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { Upload, Download, Trash2, FileText, Loader2, Plus } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
@@ -35,7 +36,7 @@ export default function CertificatesPage() {
                 setCertificates(data.certificates || []);
             }
         } catch (error) {
-            console.error("Failed to fetch certificates:", error);
+            logger.error("Failed to fetch certificates:", error);
         } finally {
             setIsLoading(false);
         }

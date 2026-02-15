@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle } from "lucide-react";
 import PersonalInfoStep from "./steps/PersonalInfoStep";
@@ -168,7 +169,7 @@ export default function AcademyApplicationPage() {
                 setErrors({ submit: response.error || "Failed to submit application" });
             }
         } catch (error) {
-            console.error("Application submission error:", error);
+            logger.error("Application submission error:", error);
             setErrors({ submit: "Failed to submit application. Please try again." });
         } finally {
             setIsSubmitting(false);

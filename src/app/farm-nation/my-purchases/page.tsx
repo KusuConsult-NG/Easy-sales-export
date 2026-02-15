@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -47,7 +48,7 @@ export default function MyPurchasesPage() {
                 setPurchases(result.requests as unknown as PurchaseRequest[]);
             }
         } catch (error) {
-            console.error("Failed to load purchases:", error);
+            logger.error("Failed to load purchases:", error);
         }
         setLoading(false);
     }

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -91,7 +92,7 @@ export async function logAuditAction(
 
         return { error: null, success: true };
     } catch (error: any) {
-        console.error("Audit log error:", error);
+        logger.error("Audit log error:", error);
         return { error: "Failed to log audit action", success: false };
     }
 }
@@ -130,7 +131,7 @@ export async function getAuditLogsAction(
             data: logs,
         };
     } catch (error: any) {
-        console.error("Get audit logs error:", error);
+        logger.error("Get audit logs error:", error);
         return { error: "Failed to fetch audit logs", success: false, data: null };
     }
 }

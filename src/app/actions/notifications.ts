@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 /**
@@ -42,7 +43,7 @@ export async function createNotificationAction(data: {
 
         return { success: true, notificationId: docRef.id };
     } catch (error) {
-        console.error("Notification creation error:", error);
+        logger.error("Notification creation error:", error);
         return { success: false, error: "Failed to create notification" };
     }
 }
@@ -72,7 +73,7 @@ export async function createBulkNotificationsAction(
 
         return { success: true, count: userIds.length };
     } catch (error) {
-        console.error("Bulk notification creation error:", error);
+        logger.error("Bulk notification creation error:", error);
         return { success: false, error: "Failed to create notifications" };
     }
 }
@@ -103,7 +104,7 @@ export async function getUserNotificationsAction(userId: string): Promise<Notifi
             } as Notification;
         });
     } catch (error) {
-        console.error("Failed to fetch notifications:", error);
+        logger.error("Failed to fetch notifications:", error);
         return [];
     }
 }
@@ -122,7 +123,7 @@ export async function markNotificationAsReadAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Mark as read error:", error);
+        logger.error("Mark as read error:", error);
         return { success: false, error: "Failed to mark as read" };
     }
 }
@@ -153,7 +154,7 @@ export async function markAllAsReadAction(userId: string): Promise<{ success: bo
 
         return { success: true };
     } catch (error) {
-        console.error("Mark all as read error:", error);
+        logger.error("Mark all as read error:", error);
         return { success: false, error: "Failed to mark all as read" };
     }
 }
@@ -171,7 +172,7 @@ export async function getUnreadCountAction(userId: string): Promise<number> {
 
         return snapshot.data().count;
     } catch (error) {
-        console.error("Failed to get unread count:", error);
+        logger.error("Failed to get unread count:", error);
         return 0;
     }
 }

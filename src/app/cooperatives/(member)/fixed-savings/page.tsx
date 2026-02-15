@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import {
     TrendingUp, Calendar, DollarSign, Clock, Plus,
@@ -53,7 +54,7 @@ export default function FixedSavingsPage() {
                 setMembershipStatus("not_member");
             }
         } catch (error) {
-            console.error("Failed to check membership:", error);
+            logger.error("Failed to check membership:", error);
             setMembershipStatus("not_member");
         }
     };
@@ -67,7 +68,7 @@ export default function FixedSavingsPage() {
                 setPlans(data.plans || []);
             }
         } catch (error) {
-            console.error("Failed to fetch plans:", error);
+            logger.error("Failed to fetch plans:", error);
         } finally {
             setIsLoading(false);
         }

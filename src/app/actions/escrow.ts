@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog, logFinancialAction } from "@/lib/audit-log";
 
@@ -89,7 +90,7 @@ export async function createEscrowAction(data: {
 
         return { success: true, escrowId: docRef.id };
     } catch (error) {
-        console.error("Escrow creation error:", error);
+        logger.error("Escrow creation error:", error);
         return { success: false, error: "Failed to create escrow transaction" };
     }
 }
@@ -127,7 +128,7 @@ export async function confirmEscrowPaymentAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Payment confirmation error:", error);
+        logger.error("Payment confirmation error:", error);
         return { success: false, error: "Failed to confirm payment" };
     }
 }
@@ -164,7 +165,7 @@ export async function requestEscrowReleaseAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Release request error:", error);
+        logger.error("Release request error:", error);
         return { success: false, error: "Failed to request release" };
     }
 }
@@ -205,7 +206,7 @@ export async function releaseEscrowAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Escrow release error:", error);
+        logger.error("Escrow release error:", error);
         return { success: false, error: "Failed to release escrow" };
     }
 }
@@ -259,7 +260,7 @@ export async function createDisputeAction(data: {
 
         return { success: true, disputeId: docRef.id };
     } catch (error) {
-        console.error("Dispute creation error:", error);
+        logger.error("Dispute creation error:", error);
         return { success: false, error: "Failed to create dispute" };
     }
 }
@@ -311,7 +312,7 @@ export async function resolveDisputeAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Dispute resolution error:", error);
+        logger.error("Dispute resolution error:", error);
         return { success: false, error: "Failed to resolve dispute" };
     }
 }
@@ -336,7 +337,7 @@ export async function sendEscrowMessageAction(data: {
 
         return { success: true };
     } catch (error) {
-        console.error("Message send error:", error);
+        logger.error("Message send error:", error);
         return { success: false, error: "Failed to send message" };
     }
 }
@@ -356,7 +357,7 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<Message
             ...doc.data(),
         })) as Message[];
     } catch (error) {
-        console.error("Failed to fetch messages:", error);
+        logger.error("Failed to fetch messages:", error);
         return [];
     }
 }
@@ -385,7 +386,7 @@ export async function getEscrowTransactionByIdAction(escrowId: string): Promise<
             }
         };
     } catch (error) {
-        console.error("Error fetching escrow transaction:", error);
+        logger.error("Error fetching escrow transaction:", error);
         return { success: false, error: "Failed to fetch escrow transaction" };
     }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import {
     Users,
     DollarSign,
@@ -26,7 +27,7 @@ export default function AdminDashboardPage() {
                 const data = await getDashboardStatsAction();
                 setStats(data);
             } catch (err) {
-                console.error("Failed to load dashboard stats", err);
+                logger.error("Failed to load dashboard stats", err);
                 setError("Failed to load dashboard data");
             } finally {
                 setLoading(false);

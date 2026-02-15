@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, deleteDoc } from "firebase/firestore";
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
             message: "Loan product deleted successfully"
         });
     } catch (error) {
-        console.error("Failed to delete loan product:", error);
+        logger.error("Failed to delete loan product:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

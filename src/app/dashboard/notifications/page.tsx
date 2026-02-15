@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -55,7 +56,7 @@ export default function NotificationsPage() {
             }));
             setNotifications(formattedData);
         } catch (error) {
-            console.error("Failed to load notifications:", error);
+            logger.error("Failed to load notifications:", error);
         } finally {
             setLoading(false);
         }
@@ -79,7 +80,7 @@ export default function NotificationsPage() {
             const { markNotificationAsReadAction } = await import("@/app/actions/notifications");
             await markNotificationAsReadAction(id);
         } catch (error) {
-            console.error("Failed to mark as read:", error);
+            logger.error("Failed to mark as read:", error);
             // Revert?
         }
     };
@@ -94,7 +95,7 @@ export default function NotificationsPage() {
             const { markAllAsReadAction } = await import("@/app/actions/notifications");
             await markAllAsReadAction(session.user.id);
         } catch (error) {
-            console.error("Failed to mark all as read:", error);
+            logger.error("Failed to mark all as read:", error);
         }
     };
 

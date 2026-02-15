@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit-log";
@@ -70,7 +71,7 @@ export async function approveAcademyApplicationAction(
             await invalidateServiceCache(userId, 'academy');
             console.log(`[Academy Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
-            console.error('[Academy Approval] Cache clear error:', cacheError);
+            logger.error('[Academy Approval] Cache clear error:', cacheError);
         }
 
         // 5. Send Approval Email
@@ -111,7 +112,7 @@ export async function approveAcademyApplicationAction(
                     `
                 });
             } catch (emailError) {
-                console.error("Failed to send Academy approval email:", emailError);
+                logger.error("Failed to send Academy approval email:", emailError);
                 // Don't block success on email failure
             }
         }
@@ -131,7 +132,7 @@ export async function approveAcademyApplicationAction(
             message: "Academy application approved successfully"
         };
     } catch (error: any) {
-        console.error("Approve Academy application error:", error);
+        logger.error("Approve Academy application error:", error);
         return { error: "Failed to approve application", success: false };
     }
 }
@@ -199,7 +200,7 @@ export async function rejectAcademyApplicationAction(
                     `
                 });
             } catch (emailError) {
-                console.error("Failed to send Academy rejection email:", emailError);
+                logger.error("Failed to send Academy rejection email:", emailError);
             }
         }
 
@@ -218,7 +219,7 @@ export async function rejectAcademyApplicationAction(
             message: "Academy application rejected"
         };
     } catch (error: any) {
-        console.error("Reject Academy application error:", error);
+        logger.error("Reject Academy application error:", error);
         return { error: "Failed to reject application", success: false };
     }
 }
@@ -254,7 +255,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
             data: applications,
         };
     } catch (error: any) {
-        console.error("Get pending Academy applications error:", error);
+        logger.error("Get pending Academy applications error:", error);
         return { error: "Failed to fetch applications", success: false };
     }
 }

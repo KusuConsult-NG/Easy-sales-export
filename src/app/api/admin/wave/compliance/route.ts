@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
@@ -148,7 +149,7 @@ export async function GET(request: NextRequest) {
             demographics,
         });
     } catch (error) {
-        console.error("Failed to fetch compliance data:", error);
+        logger.error("Failed to fetch compliance data:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

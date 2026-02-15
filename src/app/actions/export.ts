@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -134,7 +135,7 @@ export async function createExportWindowAction(
             orderId,
         };
     } catch (error: any) {
-        console.error("Create export window error:", error);
+        logger.error("Create export window error:", error);
 
         if (error.name === "ZodError") {
             return { error: "Please fill in all required fields correctly", success: false };
@@ -183,7 +184,7 @@ export async function updateExportStatusAction(
             message: `Status updated to ${newStatus}`,
         };
     } catch (error: any) {
-        console.error("Update export status error:", error);
+        logger.error("Update export status error:", error);
         return { error: "Failed to update status", success: false };
     }
 }
@@ -260,7 +261,7 @@ export async function getExportWindowsAction(
             data: exports,
         };
     } catch (error: any) {
-        console.error("Get export windows error:", error);
+        logger.error("Get export windows error:", error);
         return { error: "Failed to fetch export windows", success: false };
     }
 }
@@ -316,7 +317,7 @@ export async function getExportWindowDetailsAction(
             data: exportWindow,
         };
     } catch (error: any) {
-        console.error("Get export details error:", error);
+        logger.error("Get export details error:", error);
         return { error: "Failed to fetch export details", success: false };
     }
 }
@@ -382,7 +383,7 @@ export async function submitExportOnboardingAction(
             applicationId,
         };
     } catch (error: any) {
-        console.error("Submit export onboarding error:", error);
+        logger.error("Submit export onboarding error:", error);
         return { error: "Failed to submit onboarding application", success: false };
     }
 }
@@ -449,7 +450,7 @@ export async function getUserExportInvestmentsAction(): Promise<{
             data: investments,
         };
     } catch (error: any) {
-        console.error("Get user export investments error:", error);
+        logger.error("Get user export investments error:", error);
         return { error: "Failed to fetch investments", success: false };
     }
 }
@@ -516,7 +517,7 @@ export async function getUserExportStatsAction(): Promise<{
             },
         };
     } catch (error: any) {
-        console.error("Get user export stats error:", error);
+        logger.error("Get user export stats error:", error);
         return { error: "Failed to fetch statistics", success: false };
     }
 }

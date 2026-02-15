@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, use } from "react";
+import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Send, Loader2, MessageCircle, ArrowLeft, Shield } from "lucide-react";
@@ -65,7 +66,7 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
             setMessages(fetchedMessages);
             setLoading(false);
         } catch (error) {
-            console.error("Failed to load messages:", error);
+            logger.error("Failed to load messages:", error);
             setLoading(false);
         }
     }

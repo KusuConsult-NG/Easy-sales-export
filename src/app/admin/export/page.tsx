@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { Truck, CheckCircle, XCircle, Loader2, AlertCircle, Eye, Package } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { getAllExportRequestsAction } from "@/app/actions/admin";
@@ -38,7 +39,7 @@ export default function AdminExportPage() {
         if (result.success && result.exports) {
             setExports(result.exports);
         } else {
-            console.error(result.error);
+            logger.error(result.error ?? "Unknown error loading exports");
         }
         setLoading(false);
     }

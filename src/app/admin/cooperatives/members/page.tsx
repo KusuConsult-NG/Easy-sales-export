@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import Modal from "@/components/ui/Modal";
@@ -60,7 +61,7 @@ export default function CooperativeMembersPage() {
                 setApplications(data.members);
             }
         } catch (error) {
-            console.error("Failed to fetch applications:", error);
+            logger.error("Failed to fetch applications:", error);
         } finally {
             setIsLoading(false);
         }

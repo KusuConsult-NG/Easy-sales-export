@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { MapPin, FileText, Calendar, Check, X, Eye, CheckCircle, XCircle, Loader2, Search, Filter, Ruler, ExternalLink } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -61,7 +62,7 @@ export default function AdminLandVerificationPage() {
                 showToast(data.message || "Failed to fetch verifications", "error");
             }
         } catch (error) {
-            console.error("Failed to fetch verifications:", error);
+            logger.error("Failed to fetch verifications:", error);
             showToast("An error occurred while fetching verifications", "error");
         } finally {
             setIsLoading(false);

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
@@ -353,7 +354,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             message: "Certificate generated successfully",
         };
     } catch (error) {
-        console.error("Certificate generation error:", error);
+        logger.error("Certificate generation error:", error);
         return { success: false, error: "Failed to generate certificate" };
     }
 }

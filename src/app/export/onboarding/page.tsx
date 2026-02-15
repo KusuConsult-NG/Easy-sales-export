@@ -7,6 +7,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { Package, TrendingUp, Shield, CheckCircle } from "lucide-react";
 import { OnboardingLayout } from "@/components/onboarding/OnboardingLayout";
@@ -104,11 +105,11 @@ export default function ExportOnboardingPage() {
                 router.push("/export/onboarding/pending");
             } else {
                 // Handle error
-                console.error("Onboarding submission failed:", result.error);
+                logger.error("Onboarding submission failed:", result.error);
                 showToast(`Failed to submit: ${result.error}`, "error");
             }
         } catch (error) {
-            console.error("Error submitting onboarding:", error);
+            logger.error("Error submitting onboarding:", error);
             showToast("An error occurred. Please try again.", "error");
         }
     };

@@ -5,24 +5,28 @@
  */
 
 import { redirect } from "next/navigation";
+import { logger } from '@/lib/logger';
 import { getAuth } from "firebase-admin/auth";
 import { cookies } from "next/headers";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { initializeApp, getApps } from "firebase-admin/app";
 import MarketplaceSidebar from "./MarketplaceSidebar";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 async function SellerLayoutContent({ children }: { children: React.ReactNode }) {
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            <MarketplaceSidebar />
+        <ErrorBoundary>
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+                <MarketplaceSidebar />
 
-            {/* Main Content */}
-            <main className="lg:pl-64 min-h-screen transition-all">
-                <div className="p-4 lg:p-8 mt-16 lg:mt-0">
-                    {children}
-                </div>
-            </main>
-        </div>
+                {/* Main Content */}
+                <main className="lg:pl-64 min-h-screen transition-all">
+                    <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </ErrorBoundary>
     );
 }
 
@@ -85,7 +89,7 @@ export default async function SellerLayout({ children }: { children: React.React
                     redirect('/marketplace/onboarding');
                 }
             } catch (dbError) {
-                console.error("Failed to check seller status:", dbError);
+                logger.error("Failed to check seller status:", dbError);
                 // If DB check fails, treat as no status found, redirect to onboarding
                 redirect('/marketplace/onboarding');
             }
@@ -116,7 +120,7 @@ export default async function SellerLayout({ children }: { children: React.React
         // User has access, render the layout
         return <SellerLayoutContent>{children}</SellerLayoutContent>;
     } catch (error) {
-        console.error("Seller access check error:", error);
+        logger.error("Seller access check error:", error);
         redirect("/marketplace/login");
     }
 }

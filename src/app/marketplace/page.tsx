@@ -1,4 +1,5 @@
 import { ArrowRight, ShoppingCart, Star, TrendingUp, Shield, Package, CheckCircle, Home } from "lucide-react";
+import { logger } from '@/lib/logger';
 import Image from "next/image";
 import Link from "next/link";
 import { getRecommendedProductsAction } from "@/app/actions/marketplace";
@@ -13,7 +14,7 @@ export default async function MarketplaceLandingPage() {
         const result = await getRecommendedProductsAction(3);
         products = result.products || [];
     } catch (error) {
-        console.error("Failed to fetch recommended products:", error);
+        logger.error("Failed to fetch recommended products:", error);
         // Products will remain empty array, component will handle gracefully
     }
 

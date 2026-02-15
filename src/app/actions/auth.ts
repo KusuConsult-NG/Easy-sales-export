@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { User as FirestoreUser } from "@/lib/types/firestore";
-import { logger } from "@/lib/logger";
+import { logger } from '@/lib/logger';
 import { LEGACY_ROLE_MAP, type LegacyRole, type UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { ZodError } from "zod";

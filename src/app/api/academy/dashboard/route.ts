@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
             stats
         });
     } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
+        logger.error("Failed to fetch dashboard data:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -114,7 +115,7 @@ export async function getPropertiesAction(filters?: {
 
         return { success: true, properties };
     } catch (error: any) {
-        console.error("Get properties error:", error);
+        logger.error("Get properties error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -147,7 +148,7 @@ export async function getPropertyByIdAction(propertyId: string) {
 
         return { success: true, property };
     } catch (error: any) {
-        console.error("Get property error:", error);
+        logger.error("Get property error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -215,7 +216,7 @@ export async function listPropertyAction(input: PropertyListingInput) {
             propertyId: docRef.id,
         };
     } catch (error: any) {
-        console.error("List property error:", error);
+        logger.error("List property error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -247,7 +248,7 @@ export async function getMyPropertiesAction() {
 
         return { success: true, properties };
     } catch (error: any) {
-        console.error("Get my properties error:", error);
+        logger.error("Get my properties error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -334,7 +335,7 @@ export async function initiatePropertyPurchaseAction(
             amount: property.price,
         };
     } catch (error: any) {
-        console.error("Initiate purchase error:", error);
+        logger.error("Initiate purchase error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -366,7 +367,7 @@ export async function getMyPurchaseRequestsAction() {
 
         return { success: true, requests };
     } catch (error: any) {
-        console.error("Get purchase requests error:", error);
+        logger.error("Get purchase requests error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -421,7 +422,7 @@ export async function cancelPurchaseRequestAction(requestId: string) {
             message: "Purchase request cancelled successfully",
         };
     } catch (error: any) {
-        console.error("Cancel purchase request error:", error);
+        logger.error("Cancel purchase request error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -475,7 +476,7 @@ export async function deletePropertyAction(propertyId: string) {
             message: "Property deleted successfully",
         };
     } catch (error: any) {
-        console.error("Delete property error:", error);
+        logger.error("Delete property error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -528,7 +529,7 @@ export async function updatePropertyAction(propertyId: string, updates: Partial<
             message: "Property updated successfully",
         };
     } catch (error: any) {
-        console.error("Update property error:", error);
+        logger.error("Update property error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -634,7 +635,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
             },
         };
     } catch (error: any) {
-        console.error("Error submitting Farm Nation onboarding:", error);
+        logger.error("Error submitting Farm Nation onboarding:", error);
         return {
             success: false,
             error: "An error occurred while processing your onboarding. Please try again.",

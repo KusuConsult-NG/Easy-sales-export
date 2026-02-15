@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
 
@@ -81,7 +82,7 @@ export async function createExportWindowAction(data: {
 
         return { success: true, windowId: docRef.id };
     } catch (error) {
-        console.error("Export window creation error:", error);
+        logger.error("Export window creation error:", error);
         return { success: false, error: "Failed to create export window" };
     }
 }
@@ -100,7 +101,7 @@ export async function getActiveExportWindowsAction(): Promise<ExportWindow[]> {
             ...doc.data(),
         })) as ExportWindow[];
     } catch (error) {
-        console.error("Failed to fetch export windows:", error);
+        logger.error("Failed to fetch export windows:", error);
         return [];
     }
 }
@@ -174,7 +175,7 @@ export async function bookExportSlotAction(data: {
 
         return { success: true, slotId: slotRef.id };
     } catch (error) {
-        console.error("Slot booking error:", error);
+        logger.error("Slot booking error:", error);
         return { success: false, error: "Failed to book export slot" };
     }
 }
@@ -193,7 +194,7 @@ export async function getUserExportSlotsAction(userId: string): Promise<ExportSl
             ...doc.data(),
         })) as ExportSlot[];
     } catch (error) {
-        console.error("Failed to fetch export slots:", error);
+        logger.error("Failed to fetch export slots:", error);
         return [];
     }
 }

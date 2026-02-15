@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import {
     BarChart3,
     TrendingUp,
@@ -42,7 +43,7 @@ export default function SellerAnalyticsPage() {
                     setStats(result.analytics);
                 }
             } catch (error) {
-                console.error("Failed to load analytics:", error);
+                logger.error("Failed to load analytics:", error);
             } finally {
                 setLoading(false);
             }

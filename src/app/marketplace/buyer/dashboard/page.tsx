@@ -7,6 +7,7 @@
 "use client";
 
 import { ShoppingCart, Package, Clock, CheckCircle, Star, TrendingUp, Search, Loader2 } from "lucide-react";
+import { logger } from '@/lib/logger';
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { getBuyerStatsAction, getBuyerOrdersAction, getRecommendedProductsAction } from "@/app/actions/marketplace";
@@ -61,7 +62,7 @@ export default function BuyerDashboard() {
                     setRecommendedProducts(transformed);
                 }
             } catch (error) {
-                console.error("Failed to load buyer dashboard:", error);
+                logger.error("Failed to load buyer dashboard:", error);
             } finally {
                 setLoading(false);
             }

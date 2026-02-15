@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, doc, getDoc } from "firebase/firestore";
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
             applications
         });
     } catch (error) {
-        console.error("Failed to fetch loan applications:", error);
+        logger.error("Failed to fetch loan applications:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

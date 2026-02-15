@@ -5,11 +5,13 @@
  */
 
 import { cookies } from "next/headers";
+import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { getAuth } from "firebase-admin/auth";
 import { initializeApp, getApps } from "firebase-admin/app";
 import WaveSidebar from "./WaveSidebar";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export default async function WaveMemberLayout({
     children,
@@ -43,21 +45,23 @@ export default async function WaveMemberLayout({
             redirect(accessResult.redirectTo || "/wave/application");
         }
     } catch (error) {
-        console.error("Session verification failed:", error);
+        logger.error("Session verification failed:", error);
         redirect("/wave/login");
     }
 
     return (
-        <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-            {/* Sidebar */}
-            <WaveSidebar />
+        <ErrorBoundary>
+            <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
+                {/* Sidebar */}
+                <WaveSidebar />
 
-            {/* Main Content */}
-            <main className="flex-1 lg:ml-64">
-                <div className="p-4 lg:p-8">
-                    {children}
-                </div>
-            </main>
-        </div>
+                {/* Main Content */}
+                <main className="flex-1 lg:ml-64">
+                    <div className="p-4 lg:p-8">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </ErrorBoundary>
     );
 }

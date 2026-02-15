@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, getDoc, updateDoc, collection } from "firebase/firestore";
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
             certificateId: certificateRef.id
         });
     } catch (error) {
-        console.error("Failed to generate certificate:", error);
+        logger.error("Failed to generate certificate:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

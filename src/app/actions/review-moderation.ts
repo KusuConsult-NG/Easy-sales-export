@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -93,7 +94,7 @@ export async function getFlaggedReviewsAction(options?: {
 
         return { success: true, data: reviews };
     } catch (error: any) {
-        console.error("Failed to get flagged reviews:", error);
+        logger.error("Failed to get flagged reviews:", error);
         return { success: false, error: error.message || "Failed to fetch reviews" };
     }
 }
@@ -138,7 +139,7 @@ export async function approveReviewAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Failed to approve review:", error);
+        logger.error("Failed to approve review:", error);
         return { success: false, error: error.message || "Failed to approve review" };
     }
 }
@@ -217,7 +218,7 @@ export async function deleteReviewAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Failed to delete review:", error);
+        logger.error("Failed to delete review:", error);
         return { success: false, error: error.message || "Failed to delete review" };
     }
 }
@@ -277,7 +278,7 @@ export async function suspendReviewerAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Failed to suspend reviewer:", error);
+        logger.error("Failed to suspend reviewer:", error);
         return { success: false, error: error.message || "Failed to suspend user" };
     }
 }
@@ -333,7 +334,7 @@ export async function bulkApproveReviewsAction(
 
         return { success: true, approved: approvedCount };
     } catch (error: any) {
-        console.error("Failed to bulk approve reviews:", error);
+        logger.error("Failed to bulk approve reviews:", error);
         return { success: false, approved: 0, error: error.message || "Failed to approve reviews" };
     }
 }

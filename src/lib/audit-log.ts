@@ -66,7 +66,10 @@ export type AuditAction =
     | 'password_changed'
     | 'session_expired'
     | 'suspicious_activity'
-    | 'data_export';
+    | 'data_export'
+    // Academy Actions
+    | 'academy_approve'
+    | 'academy_reject';
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 

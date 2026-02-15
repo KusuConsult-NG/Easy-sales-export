@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { AuditActionType } from "@/types/strict";
@@ -115,7 +116,7 @@ export async function sendAIMessage(
                 response: null,
             };
         }
-        console.error("AI Chat Error:", error);
+        logger.error("AI Chat Error:", error);
         return {
             success: false,
             error: "Failed to get AI response. Please try again.",

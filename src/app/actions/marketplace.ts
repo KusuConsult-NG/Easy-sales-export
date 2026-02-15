@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     ref,
@@ -121,7 +122,7 @@ export async function submitSellerVerificationAction(
             verificationId,
         };
     } catch (error: any) {
-        console.error("Seller verification error:", error);
+        logger.error("Seller verification error:", error);
         return {
             success: false,
             error: error.message || "Failed to submit verification"
@@ -153,7 +154,7 @@ export async function getSellerVerificationAction() {
 
         return { success: true, verification };
     } catch (error: any) {
-        console.error("Get seller verification error:", error);
+        logger.error("Get seller verification error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -288,7 +289,7 @@ export async function submitMarketplaceOnboardingAction(
         return { success: true, verificationId };
 
     } catch (error: any) {
-        console.error("Marketplace onboarding error:", error);
+        logger.error("Marketplace onboarding error:", error);
         return { success: false, error: error.message || "Failed to submit application" };
     }
 }
@@ -452,7 +453,7 @@ export async function createProductAction(
             productId,
         };
     } catch (error: any) {
-        console.error("Create product error:", error);
+        logger.error("Create product error:", error);
         return {
             success: false,
             error: error.message || "Failed to create product"
@@ -480,7 +481,7 @@ export async function getSellerProductsAction() {
 
         return { success: true, products };
     } catch (error: any) {
-        console.error("Get seller products error:", error);
+        logger.error("Get seller products error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -505,7 +506,7 @@ export async function getSellerOrdersAction() {
 
         return { success: true, orders };
     } catch (error: any) {
-        console.error("Get seller orders error:", error);
+        logger.error("Get seller orders error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -573,7 +574,7 @@ export async function getSellerAnalyticsAction() {
             }
         };
     } catch (error: any) {
-        console.error("Get seller analytics error:", error);
+        logger.error("Get seller analytics error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -597,7 +598,7 @@ export async function getBuyerOrdersAction() {
 
         return { success: true, orders };
     } catch (error: any) {
-        console.error("Get buyer orders error:", error);
+        logger.error("Get buyer orders error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -637,7 +638,7 @@ export async function getBuyerStatsAction() {
             }
         };
     } catch (error: any) {
-        console.error("Get buyer stats error:", error);
+        logger.error("Get buyer stats error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -668,7 +669,7 @@ export async function getProductAction(productId: string) {
 
         return { success: true, product: { ...product, sellerName } };
     } catch (error: any) {
-        console.error("Get product error:", error);
+        logger.error("Get product error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -716,7 +717,7 @@ export async function getRecommendedProductsAction(limit: number = 3) {
 
         return { success: true, products: productsWithSellers };
     } catch (error: any) {
-        console.error("Get recommended products error:", error);
+        logger.error("Get recommended products error:", error);
         return { success: false, error: error.message, products: [] };
     }
 }
@@ -771,7 +772,7 @@ export async function deleteProductAction(productId: string) {
             message: "Product deleted successfully",
         };
     } catch (error: any) {
-        console.error("Delete product error:", error);
+        logger.error("Delete product error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -817,7 +818,7 @@ export async function getRelatedProductsAction(productId: string, limit: number 
 
         return { success: true, products };
     } catch (error: any) {
-        console.error("Get related products error:", error);
+        logger.error("Get related products error:", error);
         return { success: false, error: error.message, products: [] };
     }
 }

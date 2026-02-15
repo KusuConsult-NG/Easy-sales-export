@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { storage } from "@/lib/firebase";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -87,7 +88,7 @@ export async function uploadCertificateAction(
 
         return { success: true, certificateId: docRef.id };
     } catch (error) {
-        console.error("Certificate upload error:", error);
+        logger.error("Certificate upload error:", error);
         return { success: false, error: "Failed to upload certificate" };
     }
 }
@@ -105,7 +106,7 @@ export async function getUserCertificatesAction(userId: string): Promise<Certifi
             ...doc.data(),
         })) as Certificate[];
     } catch (error) {
-        console.error("Failed to fetch certificates:", error);
+        logger.error("Failed to fetch certificates:", error);
         return [];
     }
 }
@@ -150,7 +151,7 @@ export async function deleteCertificateAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Certificate deletion error:", error);
+        logger.error("Certificate deletion error:", error);
         return { success: false, error: "Failed to delete certificate" };
     }
 }
@@ -175,7 +176,7 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
 
         return { success: true };
     } catch (error) {
-        console.error("Failed to complete onboarding:", error);
+        logger.error("Failed to complete onboarding:", error);
         return { success: false, error: "Failed to complete onboarding" };
     }
 }
@@ -195,7 +196,7 @@ export async function checkOnboardingStatusAction(userId: string): Promise<boole
         const userData = userDoc.data();
         return userData?.onboardingCompleted === true;
     } catch (error) {
-        console.error("Failed to check onboarding status:", error);
+        logger.error("Failed to check onboarding status:", error);
         return false;
     }
 }

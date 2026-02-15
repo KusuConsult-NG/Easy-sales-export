@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import {
     Package, Plus, Edit, Trash2, CheckCircle, XCircle, Loader2, Search, Filter, Briefcase, DollarSign, Pencil, X
 } from "lucide-react";
@@ -48,7 +49,7 @@ export default function LoanProductsPage() {
                 setProducts(data.products || []);
             }
         } catch (error) {
-            console.error("Failed to fetch products:", error);
+            logger.error("Failed to fetch products:", error);
             showToast("Failed to fetch products", "error");
         } finally {
             setIsLoading(false);

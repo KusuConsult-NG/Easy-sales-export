@@ -7,6 +7,7 @@
 "use client";
 
 import { useState } from "react";
+import { logger } from '@/lib/logger';
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -131,7 +132,7 @@ function CooperativeOnboardingContent() {
                 setIsSubmitting(false);
             }
         } catch (error) {
-            console.error("Registration error:", error);
+            logger.error("Registration error:", error);
             showToast("An unexpected error occurred.", "error");
             setIsSubmitting(false);
         }

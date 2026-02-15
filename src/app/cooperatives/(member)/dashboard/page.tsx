@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import Link from "next/link";
 import {
     Wallet,
@@ -46,7 +47,7 @@ export default function CooperativeDashboardPage() {
                     setMembership(null);
                 }
             } catch (error) {
-                console.error("Failed to load dashboard data:", error);
+                logger.error("Failed to load dashboard data:", error);
             } finally {
                 setLoading(false);
             }

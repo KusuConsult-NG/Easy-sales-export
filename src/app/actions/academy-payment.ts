@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -89,7 +90,7 @@ export async function initializeEnrollmentPaymentAction(
             },
         };
     } catch (error: any) {
-        console.error("Payment initialization error:", error);
+        logger.error("Payment initialization error:", error);
         return {
             success: false,
             error: error.message || "Failed to initialize payment. Please try again.",
@@ -186,7 +187,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         };
     } catch (error: any) {
         // 🔒 SECURITY FIX #2: Sanitized error logging
-        console.error('[Payment Verification Error]', {
+        logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyEnrollment',
             reference,

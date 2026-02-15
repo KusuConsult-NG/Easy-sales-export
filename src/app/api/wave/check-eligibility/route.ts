@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
             eligible: gender === "female"
         });
     } catch (error) {
-        console.error("Failed to check WAVE eligibility:", error);
+        logger.error("Failed to check WAVE eligibility:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

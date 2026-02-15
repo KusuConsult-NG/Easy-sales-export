@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { TrendingUp, Award, Clock, Target, CheckCircle, BookOpen, Trophy, Loader2 } from "lucide-react";
 import { getUserAggregateProgressAction } from "@/app/actions/academy";
@@ -40,7 +41,7 @@ export default function ProgressPage() {
                     currentStreak: 0, // Placeholder for streak implementation
                 });
             } catch (error) {
-                console.error("Failed to load progress:", error);
+                logger.error("Failed to load progress:", error);
             } finally {
                 setLoading(false);
             }

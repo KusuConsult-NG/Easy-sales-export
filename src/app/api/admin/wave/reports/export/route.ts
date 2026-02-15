@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
             { status: 400 }
         );
     } catch (error) {
-        console.error("Failed to export report:", error);
+        logger.error("Failed to export report:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

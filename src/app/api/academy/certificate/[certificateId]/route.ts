@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
@@ -33,7 +34,7 @@ export async function GET(
             certificate
         });
     } catch (error) {
-        console.error("Failed to fetch certificate:", error);
+        logger.error("Failed to fetch certificate:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

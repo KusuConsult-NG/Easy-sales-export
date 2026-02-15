@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -56,7 +57,7 @@ export async function updateExportStatusAction(
             message: `Status updated to ${newStatus.replace("_", " ")}`,
         };
     } catch (error: any) {
-        console.error("Update export status error:", error);
+        logger.error("Update export status error:", error);
         return { error: "Failed to update status", success: false };
     }
 }

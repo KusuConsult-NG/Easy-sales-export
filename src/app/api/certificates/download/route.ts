@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
         // Redirect to Firebase Storage URL for download
         return NextResponse.redirect(certData.fileUrl);
     } catch (error: any) {
-        console.error("Download error:", error);
+        logger.error("Download error:", error);
         return NextResponse.json(
             { success: false, error: "Download failed" },
             { status: 500 }

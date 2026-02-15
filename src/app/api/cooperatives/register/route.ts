@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { collection, doc, setDoc, getDoc } from "firebase/firestore";
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
             reference: paymentReference,
         });
     } catch (error: any) {
-        console.error("Cooperative registration error:", error);
+        logger.error("Cooperative registration error:", error);
         return NextResponse.json(
             { success: false, error: error.message || "Registration failed" },
             { status: 500 }

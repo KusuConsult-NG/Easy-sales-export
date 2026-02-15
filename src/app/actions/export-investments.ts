@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp } from "firebase-admin/firestore";
@@ -41,7 +42,7 @@ export async function getExportOpportunities() {
 
         return { success: true, data: opportunities };
     } catch (error: any) {
-        console.error("Error fetching export opportunities:", error);
+        logger.error("Error fetching export opportunities:", error);
         return { success: false, error: error.message };
     }
 }
@@ -146,7 +147,7 @@ export async function seedExportOpportunities() {
         await Promise.all(promises);
         return { success: true, message: "Seeded export opportunities" };
     } catch (error: any) {
-        console.error("Error seeding:", error);
+        logger.error("Error seeding:", error);
         return { success: false, error: error.message };
     }
 }
@@ -173,7 +174,7 @@ export async function getExportOpportunityById(id: string) {
 
         return { success: true, data: opportunity };
     } catch (error: any) {
-        console.error("Error fetching export opportunity:", error);
+        logger.error("Error fetching export opportunity:", error);
         return { success: false, error: error.message };
     }
 }

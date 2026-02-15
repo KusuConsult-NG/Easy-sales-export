@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
             recoveryCodes,
         });
     } catch (error: any) {
-        console.error("MFA setup error:", error);
+        logger.error("MFA setup error:", error);
         return NextResponse.json(
             { success: false, error: "Setup failed" },
             { status: 500 }

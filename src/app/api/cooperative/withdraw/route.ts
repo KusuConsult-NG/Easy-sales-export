@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection } from 'firebase/firestore';
+import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+// Rate limiter for withdrawal requests (very strict for financial security)
+const withdrawalLimiter = rateLimit(rateLimitConfig.withdrawal);
 
 /**
  * Withdrawal Request API
  * Allows members to request withdrawal of their cooperative savings
  */
 export async function POST(request: NextRequest) {
+    // RATE LIMITING - Prevent withdrawal spam/abuse
+    const clientIp = getClientIp(request);
+    const rateLimitResult = await withdrawalLimiter.check(clientIp);
+
+    if (!rateLimitResult.success) {
+        return createRateLimitResponse(rateLimitResult);
+    }
+
     try {
         const session = await auth();
         if (!session?.user) {
@@ -123,7 +137,7 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
-        console.error('Withdrawal request error:', error);
+        logger.error('Withdrawal request error:', error);
         return NextResponse.json(
             { success: false, message: 'Internal server error' },
             { status: 500 }

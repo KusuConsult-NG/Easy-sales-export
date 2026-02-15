@@ -2,6 +2,7 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { verifyDigitalIDQR } from "@/lib/digital-id";
 import { createAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
@@ -65,7 +66,7 @@ async function verifyHandler(request: NextRequest) {
             data: result.payload,
         });
     } catch (error) {
-        console.error("QR verification error:", error);
+        logger.error("QR verification error:", error);
         return NextResponse.json(
             { error: "Verification failed" },
             { status: 500 }

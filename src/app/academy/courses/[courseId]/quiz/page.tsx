@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { Clock, CheckCircle, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
@@ -99,7 +100,7 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
                 setAttemptNumber(data.attemptNumber || 1);
             }
         } catch (error) {
-            console.error("Failed to fetch quiz:", error);
+            logger.error("Failed to fetch quiz:", error);
         } finally {
             setIsLoading(false);
         }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db, storage } from "@/lib/firebase";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
             message: "Certificate uploaded successfully",
         });
     } catch (error: any) {
-        console.error("Upload error:", error);
+        logger.error("Upload error:", error);
         return NextResponse.json(
             { success: false, error: "Upload failed" },
             { status: 500 }

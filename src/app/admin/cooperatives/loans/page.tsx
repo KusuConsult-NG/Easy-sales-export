@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { logger } from '@/lib/logger';
 import {
     DollarSign, Users, CheckCircle, XCircle, Clock,
     Search, Filter, Eye, FileText, TrendingUp, Calendar
@@ -56,7 +57,7 @@ export default function AdminLoansPage() {
                 setApplications(data.applications || []);
             }
         } catch (error) {
-            console.error("Failed to fetch loan applications:", error);
+            logger.error("Failed to fetch loan applications:", error);
             showToast("Failed to fetch loan applications.", "error");
         } finally {
             setIsLoading(false);

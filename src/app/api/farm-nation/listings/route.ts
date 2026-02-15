@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
             listings
         });
     } catch (error) {
-        console.error("Failed to fetch listings:", error);
+        logger.error("Failed to fetch listings:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

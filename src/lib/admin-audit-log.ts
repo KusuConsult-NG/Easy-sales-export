@@ -63,6 +63,8 @@ export type AuditAction =
     | 'course_updated'
     | 'quiz_created'
     | 'certificate_issued'
+    | 'academy_approve'
+    | 'academy_reject'
     // Content Moderation Actions
     | 'content:approve'
     | 'content:reject'
@@ -75,6 +77,7 @@ export type AuditAction =
     | 'suspicious_activity'
     | 'failed_login_attempt'
     | 'data_export';
+
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log";
 
@@ -69,7 +70,7 @@ export async function getAuditLogsAction(filters: {
 
         return { success: true, logs: limited };
     } catch (error: any) {
-        console.error("Failed to fetch audit logs:", error);
+        logger.error("Failed to fetch audit logs:", error);
         return { success: false, error: error.message || "Failed to fetch audit logs" };
     }
 }
@@ -128,7 +129,7 @@ export async function exportAuditLogsCSV(filters: {
 
         return { success: true, csv: csvContent };
     } catch (error: any) {
-        console.error("Failed to export audit logs:", error);
+        logger.error("Failed to export audit logs:", error);
         return { success: false, error: error.message || "Failed to export logs" };
     }
 }
@@ -205,7 +206,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
 
         return { success: true, stats };
     } catch (error: any) {
-        console.error("Failed to fetch audit stats:", error);
+        logger.error("Failed to fetch audit stats:", error);
         return { success: false, error: error.message || "Failed to fetch statistics" };
     }
 }

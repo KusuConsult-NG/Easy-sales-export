@@ -1,5 +1,7 @@
 'use server';
 
+import { logger } from '@/lib/logger';
+
 /**
  * Paystack Integration Server Actions
  * Handles bank verification and related Paystack API calls
@@ -42,7 +44,7 @@ export async function getBankList(): Promise<{ success: boolean; banks?: Bank[];
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
 
         if (!secretKey) {
-            console.error('PAYSTACK_SECRET_KEY not configured');
+            logger.error('PAYSTACK_SECRET_KEY not configured');
             return { success: false, error: 'Payment service not configured' };
         }
 
@@ -69,7 +71,7 @@ export async function getBankList(): Promise<{ success: boolean; banks?: Bank[];
             banks: data.data,
         };
     } catch (error) {
-        console.error('getBankList error:', error);
+        logger.error('getBankList error:', error);
         return {
             success: false,
             error: error instanceof Error ? error.message : 'Failed to fetch banks',
@@ -99,7 +101,7 @@ export async function verifyBankAccount(
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
 
         if (!secretKey) {
-            console.error('PAYSTACK_SECRET_KEY not configured');
+            logger.error('PAYSTACK_SECRET_KEY not configured');
             return { success: false, error: 'Payment service not configured' };
         }
 
@@ -141,7 +143,7 @@ export async function verifyBankAccount(
             accountName: data.data.account_name,
         };
     } catch (error) {
-        console.error('verifyBankAccount error:', error);
+        logger.error('verifyBankAccount error:', error);
 
         // Network or timeout errors
         if (error instanceof Error) {

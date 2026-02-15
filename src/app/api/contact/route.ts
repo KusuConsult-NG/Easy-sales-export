@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
         });
 
         if (error) {
-            console.error("Failed to send contact email:", error);
+            logger.error("Failed to send contact email:", error);
             return NextResponse.json(
                 { success: false, error: "Failed to send message. Please try again." },
                 { status: 500 }
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
             message: "Your message has been sent successfully!",
         });
     } catch (error) {
-        console.error("Contact form error:", error);
+        logger.error("Contact form error:", error);
         return NextResponse.json(
             { success: false, error: "An unexpected error occurred" },
             { status: 500 }

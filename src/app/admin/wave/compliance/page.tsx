@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { Users, TrendingUp, DollarSign, CheckCircle, XCircle, Clock, Download, BarChart3 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -42,7 +43,7 @@ export default function WAVECompliancePage() {
                 setDemographics(data.demographics);
             }
         } catch (error) {
-            console.error("Failed to fetch compliance data:", error);
+            logger.error("Failed to fetch compliance data:", error);
         } finally {
             setIsLoading(false);
         }
@@ -66,7 +67,7 @@ export default function WAVECompliancePage() {
                 document.body.removeChild(a);
             }
         } catch (error) {
-            console.error("Failed to export report:", error);
+            logger.error("Failed to export report:", error);
         }
     };
 

@@ -5,19 +5,23 @@
  */
 
 import { redirect } from "next/navigation";
+import { logger } from '@/lib/logger';
 import { getAuth } from "firebase-admin/auth";
 import { cookies } from "next/headers";
 import { checkServiceAccess } from "@/lib/auth/service-access";
 import { initializeApp, getApps } from "firebase-admin/app";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 async function BuyerLayoutContent({ children }: { children: React.ReactNode }) {
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            {/* Main Content - Full Width */}
-            <main className="w-full">
-                {children}
-            </main>
-        </div>
+        <ErrorBoundary>
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+                {/* Main Content - Full Width */}
+                <main className="w-full">
+                    {children}
+                </main>
+            </div>
+        </ErrorBoundary>
     );
 }
 
@@ -55,7 +59,7 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
         // User has access, render the layout
         return <BuyerLayoutContent>{children}</BuyerLayoutContent>;
     } catch (error) {
-        console.error("Buyer access check error:", error);
+        logger.error("Buyer access check error:", error);
         redirect("/marketplace/login");
     }
 }

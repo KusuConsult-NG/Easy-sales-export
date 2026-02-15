@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { SoilQuality, type LandListing } from "@/types/strict";
 import { getVerifiedLandListings } from "@/app/actions/land";
-import { logger } from "@/lib/logger";
+import { logger } from '@/lib/logger';
 
 //Dynamically import LandMap to prevent SSR issues with leaflet
 const LandMap = dynamic(

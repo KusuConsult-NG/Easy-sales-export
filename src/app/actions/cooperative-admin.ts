@@ -6,6 +6,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -123,7 +124,7 @@ export async function getCooperativeStatsAction(): Promise<{
             },
         };
     } catch (error) {
-        console.error("Get cooperative stats error:", error);
+        logger.error("Get cooperative stats error:", error);
         return { success: false, error: "Failed to fetch statistics" };
     }
 }
@@ -171,7 +172,7 @@ export async function getAllMembersAction(options?: {
 
         return { success: true, data: members };
     } catch (error) {
-        console.error("Get all members error:", error);
+        logger.error("Get all members error:", error);
         return { success: false, error: "Failed to fetch members" };
     }
 }
@@ -210,7 +211,7 @@ export async function updateMemberStatusAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Update member status error:", error);
+        logger.error("Update member status error:", error);
         return { success: false, error: "Failed to update member status" };
     }
 }
@@ -263,7 +264,7 @@ export async function getAllTransactionsAction(options?: {
 
         return { success: true, data: transactions };
     } catch (error) {
-        console.error("Get all transactions error:", error);
+        logger.error("Get all transactions error:", error);
         return { success: false, error: "Failed to fetch transactions" };
     }
 }
@@ -367,7 +368,7 @@ export async function getContributionReportsAction(options?: {
             },
         };
     } catch (error) {
-        console.error("Get contribution reports error:", error);
+        logger.error("Get contribution reports error:", error);
         return { success: false, error: "Failed to generate report" };
     }
 }
@@ -417,7 +418,7 @@ export async function getRecentActivityAction(): Promise<{
 
         return { success: true, data: activities };
     } catch (error) {
-        console.error("Get recent activity error:", error);
+        logger.error("Get recent activity error:", error);
         return { success: false, error: "Failed to fetch activity" };
     }
 }

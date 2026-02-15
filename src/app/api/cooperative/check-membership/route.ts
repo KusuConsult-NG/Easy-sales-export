@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
             data: membershipData
         });
     } catch (error) {
-        console.error("Failed to check membership:", error);
+        logger.error("Failed to check membership:", error);
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog, logAdminAction } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
@@ -76,7 +77,7 @@ export async function createLandListingAction(data: {
 
         return { success: true, listingId: docRef.id };
     } catch (error) {
-        console.error("Land listing creation error:", error);
+        logger.error("Land listing creation error:", error);
         return { success: false, error: "Failed to create land listing" };
     }
 }
@@ -109,7 +110,7 @@ async function submitForVerificationAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Verification submission error:", error);
+        logger.error("Verification submission error:", error);
         return { success: false, error: "Failed to submit for verification" };
     }
 }
@@ -148,7 +149,7 @@ export async function verifyLandListingAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Land verification error:", error);
+        logger.error("Land verification error:", error);
         return { success: false, error: "Failed to verify listing" };
     }
 }
@@ -190,7 +191,7 @@ export async function rejectLandListingAction(
 
         return { success: true };
     } catch (error) {
-        console.error("Land rejection error:", error);
+        logger.error("Land rejection error:", error);
         return { success: false, error: "Failed to reject listing" };
     }
 }
@@ -246,7 +247,7 @@ export async function searchLandListingsAction(filters: {
 
         return results;
     } catch (error) {
-        console.error("Land search error:", error);
+        logger.error("Land search error:", error);
         return [];
     }
 }
@@ -266,7 +267,7 @@ export async function getPendingLandListingsAction(): Promise<LandListing[]> {
             ...doc.data(),
         })) as LandListing[];
     } catch (error) {
-        console.error("Failed to fetch pending listings:", error);
+        logger.error("Failed to fetch pending listings:", error);
         return [];
     }
 }
@@ -347,7 +348,7 @@ export async function submitLandListingAction(data: {
 
         return { success: true, listingId: docRef.id };
     } catch (error: any) {
-        console.error("Land listing submission error:", error);
+        logger.error("Land listing submission error:", error);
         return { success: false, error: error.message || "Failed to submit land listing" };
     }
 }
@@ -366,7 +367,7 @@ export async function getPropertyByIdAction(id: string): Promise<LandListing | n
             return null;
         }
     } catch (error) {
-        console.error("Error fetching property:", error);
+        logger.error("Error fetching property:", error);
         return null;
     }
 }
@@ -414,7 +415,7 @@ export async function submitLandInquiryAction(data: {
 
         return { success: true };
     } catch (error: any) {
-        console.error("Submit inquiry error:", error);
+        logger.error("Submit inquiry error:", error);
         return { success: false, error: error.message || "Failed to send message" };
     }
 }
@@ -431,7 +432,7 @@ export async function getLandInquiriesAction(userId: string): Promise<{ success:
         const inquiries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         return { success: true, inquiries };
     } catch (error: any) {
-        console.error("Get inquiries error:", error);
+        logger.error("Get inquiries error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -450,7 +451,7 @@ export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ suc
             return { success: false, error: "Inquiry not found" };
         }
     } catch (error: any) {
-        console.error("Get inquiry error:", error);
+        logger.error("Get inquiry error:", error);
         return { success: false, error: error.message };
     }
 }

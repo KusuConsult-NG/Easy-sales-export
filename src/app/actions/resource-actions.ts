@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -128,7 +129,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
 
         return { success: true, resourceId: docRef.id };
     } catch (error: any) {
-        console.error("Resource upload error:", error);
+        logger.error("Resource upload error:", error);
         return { success: false, error: error.message || "Failed to upload resource" };
     }
 }
@@ -153,7 +154,7 @@ export async function getResourcesAction(category?: string): Promise<WaveResourc
             ...doc.data(),
         })) as WaveResource[];
     } catch (error) {
-        console.error("Failed to fetch resources:", error);
+        logger.error("Failed to fetch resources:", error);
         return [];
     }
 }
@@ -197,7 +198,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{
 
         return { success: true, url: resource.fileUrl };
     } catch (error: any) {
-        console.error("Download tracking error:", error);
+        logger.error("Download tracking error:", error);
         return { success: false, error: error.message || "Failed to track download" };
     }
 }
@@ -241,7 +242,7 @@ export async function deleteResourceAction(resourceId: string): Promise<{
 
         return { success: true };
     } catch (error: any) {
-        console.error("Delete resource error:", error);
+        logger.error("Delete resource error:", error);
         return { success: false, error: error.message || "Failed to delete resource" };
     }
 }
@@ -291,7 +292,7 @@ export async function updateResourceAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update resource error:", error);
+        logger.error("Update resource error:", error);
         return { success: false, error: error.message || "Failed to update resource" };
     }
 }

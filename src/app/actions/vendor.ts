@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAuditLog } from "@/lib/audit-log";
@@ -86,7 +87,7 @@ export async function getVendorOrdersAction(filters?: {
 
         return { success: true, orders };
     } catch (error: any) {
-        console.error("Get vendor orders error:", error);
+        logger.error("Get vendor orders error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -128,7 +129,7 @@ export async function updateVendorOrderStatusAction(
 
         return { success: true };
     } catch (error: any) {
-        console.error("Update vendor order error:", error);
+        logger.error("Update vendor order error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -169,7 +170,7 @@ export async function getVendorProductsAction(filters?: {
 
         return { success: true, products };
     } catch (error: any) {
-        console.error("Get vendor products error:", error);
+        logger.error("Get vendor products error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -229,7 +230,7 @@ export async function updateVendorProductInventoryAction(
 
         return { success: true, newStock };
     } catch (error: any) {
-        console.error("Update inventory error:", error);
+        logger.error("Update inventory error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -263,7 +264,7 @@ export async function toggleVendorProductStatusAction(
 
         return { success: true, newStatus };
     } catch (error: any) {
-        console.error("Toggle product status error:", error);
+        logger.error("Toggle product status error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -313,7 +314,7 @@ export async function deleteVendorProductAction(
             message: "Product deleted successfully",
         };
     } catch (error: any) {
-        console.error("Delete vendor product error:", error);
+        logger.error("Delete vendor product error:", error);
         return { success: false, error: error.message };
     }
 }

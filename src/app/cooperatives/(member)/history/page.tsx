@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { History as HistoryIcon, Download, Search, Calendar, ChevronDown, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getTransactionsAction } from "@/app/actions/cooperative";
@@ -26,7 +27,7 @@ export default function CooperativeHistoryPage() {
                     setTransactions(res.data);
                 }
             } catch (error) {
-                console.error("Failed to load history:", error);
+                logger.error("Failed to load history:", error);
             } finally {
                 setLoading(false);
             }

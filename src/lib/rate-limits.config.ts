@@ -34,4 +34,22 @@ export const rateLimitConfig = {
         interval: 60 * 60 * 1000, // 1 hour
         maxRequests: 20, // 20 uploads per hour
     },
+
+    // Payment operations - strict (prevent double submission fraud)
+    payment: {
+        interval: 60 * 1000, // 1 minute
+        maxRequests: 10,
+    },
+
+    // Cooperative withdrawals - very strict (financial security)
+    withdrawal: {
+        interval: 60 * 1000, // 1 minute
+        maxRequests: 5,
+    },
+
+    // Admin operations - generous (legitimate admin workload)
+    admin: {
+        interval: 60 * 1000, // 1 minute
+        maxRequests: 100, // 100 admin actions per minute
+    },
 };

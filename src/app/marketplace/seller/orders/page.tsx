@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { Package, Search, Eye, Truck, CheckCircle, Clock, XCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { getSellerOrdersAction } from "@/app/actions/marketplace";
@@ -28,7 +29,7 @@ export default function SellerOrdersPage() {
                     setOrders(result.orders);
                 }
             } catch (error) {
-                console.error("Failed to load orders:", error);
+                logger.error("Failed to load orders:", error);
             } finally {
                 setLoading(false);
             }

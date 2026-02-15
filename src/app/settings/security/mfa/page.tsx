@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { Shield, Key, Download, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
@@ -25,7 +26,7 @@ export default function MFASetupPage() {
             const data = await response.json();
             setMfaEnabled(data.enabled || false);
         } catch (error) {
-            console.error("Failed to check MFA status:", error);
+            logger.error("Failed to check MFA status:", error);
         }
     };
 

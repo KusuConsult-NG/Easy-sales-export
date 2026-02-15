@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import {
     Users,
@@ -54,7 +55,7 @@ export default function AdminCooperativeDashboardPage() {
                 setActivities(activityRes.data);
             }
         } catch (error) {
-            console.error("Failed to load dashboard:", error);
+            logger.error("Failed to load dashboard:", error);
         } finally {
             setLoading(false);
         }

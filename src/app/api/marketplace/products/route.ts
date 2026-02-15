@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logger } from '@/lib/logger';
 
 /**
  * Marketplace Products API
@@ -235,7 +236,7 @@ export async function GET(request: Request) {
             total: products.length,
         });
     } catch (error: any) {
-        console.error("Marketplace products API error:", error);
+        logger.error("Marketplace products API error:", error);
         return NextResponse.json(
             { success: false, error: error.message },
             { status: 500 }

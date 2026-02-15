@@ -85,7 +85,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             displayName: userData.fullName,
                             photoURL: null,
                             roles: userData.roles || [],
-                            serviceRegistrations: userData.serviceRegistrations,
+                            serviceRegistrations: (userData as any).serviceRegistrations || {},
                             createdAt: userData.createdAt,
                             updatedAt: userData.updatedAt,
                         },
@@ -159,6 +159,7 @@ declare module "next-auth" {
         image?: string | null;
         roles: UserRole[]; // Multi-role support
         verified?: boolean; // Email verification status
+        serviceRegistrations?: any; // Service access tracking
     }
 
     interface Session {

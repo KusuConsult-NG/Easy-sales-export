@@ -5,6 +5,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 
@@ -65,7 +66,7 @@ export async function checkWaveMembershipAction(): Promise<{
             },
         };
     } catch (error) {
-        console.error("WAVE membership check error:", error);
+        logger.error("WAVE membership check error:", error);
         return { enrolled: false };
     }
 }
@@ -124,7 +125,7 @@ export async function getWaveMemberStatsAction(): Promise<{
             },
         };
     } catch (error) {
-        console.error("Failed to get member stats:", error);
+        logger.error("Failed to get member stats:", error);
         return { success: false, error: "Failed to fetch stats" };
     }
 }
@@ -172,7 +173,7 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{
 
         return { success: true };
     } catch (error) {
-        console.error("Failed to track resource access:", error);
+        logger.error("Failed to track resource access:", error);
         return { success: false, error: "Failed to track access" };
     }
 }
@@ -202,7 +203,7 @@ export async function getUserTrainingRegistrationsAction(): Promise<{
 
         return { success: true, registrations };
     } catch (error) {
-        console.error("Failed to get registrations:", error);
+        logger.error("Failed to get registrations:", error);
         return { success: false, error: "Failed to fetch registrations" };
     }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { redis, CACHE_TTL } from '@/lib/redis';
+import { auth } from '@/lib/auth';
 
 /**
  * Redis Cache Monitoring API
@@ -8,17 +9,23 @@ import { redis, CACHE_TTL } from '@/lib/redis';
  * Returns cache statistics for monitoring
  */
 export async function GET(request: NextRequest) {
-    try {
-        // Get Redis database info
-        const info = await redis.info();
+    // ADMIN AUTHENTICATION REQUIRED
+    const session = await auth();
+    if (!session?.user?.roles?.includes('admin') &&
+        !session?.user?.roles?.includes('super_admin')) {
+        return NextResponse.json(
+            { error: 'Unauthorized: Admin access required' },
+            { status: 403 }
+        );
+    }
 
+    try {
         // Parse cache statistics
         const stats = {
             status: 'connected',
             hitRate: 'N/A', // Upstash dashboard has this
             keysCount: 0,
             memoryUsed: 'N/A',
-            uptimeSeconds: 0,
             timestamp: new Date().toISOString(),
         };
 
@@ -51,8 +58,17 @@ export async function GET(request: NextRequest) {
  * DELETE /api/cache/monitor
  */
 export async function DELETE(request: NextRequest) {
+    // ADMIN AUTHENTICATION REQUIRED
+    const session = await auth();
+    if (!session?.user?.roles?.includes('admin') &&
+        !session?.user?.roles?.includes('super_admin')) {
+        return NextResponse.json(
+            { error: 'Unauthorized: Admin access required' },
+            { status: 403 }
+        );
+    }
+
     try {
-        // TODO: Add admin authentication check
 
         // Clear all keys
         const keys = await redis.keys('*');

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { logger } from '@/lib/logger';
 import Link from "next/link";
 import {
     Wallet,
@@ -61,7 +62,7 @@ export default function MySavingsPage() {
                 setSavings([]);
             }
         } catch (error) {
-            console.error("Failed to load savings:", error);
+            logger.error("Failed to load savings:", error);
             setSavings([]);
         } finally {
             setLoading(false);
