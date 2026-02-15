@@ -205,7 +205,7 @@ export default function MarketplaceProductsPage() {
                 </div>
 
                 {/* CTA Section */}
-                <div className="mt-16 bg-gradient-to-r from-green-600 to-emerald-600 rounded-3xl p-12 text-center text-white">
+                <div className="mt-16 bg-linear-to-r from-green-600 to-emerald-600 rounded-3xl p-12 text-center text-white">
                     <h2 className="text-3xl font-bold mb-4">
                         Want to Sell Your Products?
                     </h2>

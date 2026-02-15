@@ -300,7 +300,7 @@ export default function InvestmentDetailPage() {
                                 </div>
                                 <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3">
                                     <div
-                                        className="bg-gradient-to-r from-purple-600 to-pink-600 h-3 rounded-full transition-all"
+                                        className="bg-linear-to-r from-purple-600 to-pink-600 h-3 rounded-full transition-all"
                                         style={{ width: `${investment.progress}%` }}
                                     ></div>
                                 </div>
@@ -487,7 +487,7 @@ export default function InvestmentDetailPage() {
                         )}
 
                         {/* CTA */}
-                        <div className="bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white">
+                        <div className="bg-linear-to-br from-purple-600 to-pink-600 rounded-2xl p-6 text-white">
                             <h3 className="font-bold mb-2">Need Help?</h3>
                             <p className="text-sm text-purple-100 mb-4">
                                 Contact support for questions about your investment
