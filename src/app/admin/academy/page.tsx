@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Search, BookOpen, Edit, Trash2 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { getCoursesAction, type Course } from "@/app/actions/academy";
 import { toast } from "sonner";
 import { Timestamp } from "firebase/firestore";
@@ -104,7 +105,7 @@ export default function AcademyAdminPage() {
                             <div key={course.id} className="group bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md transition-all border border-slate-100 dark:border-slate-800 overflow-hidden flex flex-col">
                                 <div className="h-40 bg-slate-100 dark:bg-slate-800 relative">
                                     {course.thumbnail ? (
-                                        <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
+                                        <Image src={course.thumbnail} alt={course.title} fill className="object-cover" />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center text-slate-300 dark:text-slate-600">
                                             <BookOpen className="w-12 h-12" />

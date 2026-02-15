@@ -18,7 +18,7 @@ const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
 
         const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             // Only allow digits, spaces, +, (, ), and -
-            let inputValue = e.target.value;
+            const inputValue = e.target.value;
 
             // Remove all non-numeric characters except + at the start
             const cleaned = inputValue.replace(/[^\d+]/g, '');

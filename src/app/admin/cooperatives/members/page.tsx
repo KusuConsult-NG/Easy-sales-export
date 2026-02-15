@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
@@ -44,15 +44,7 @@ export default function CooperativeMembersPage() {
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "suspended">("all");
     const [searchQuery, setSearchQuery] = useState("");
 
-    useEffect(() => {
-        fetchApplications();
-    }, []);
-
-    useEffect(() => {
-        filterApplications();
-    }, [applications, statusFilter, searchQuery]);
-
-    const fetchApplications = async () => {
+    const fetchApplications = useCallback(async () => {
         try {
             const response = await fetch("/api/admin/cooperative/members");
             const data = await response.json();
@@ -65,9 +57,9 @@ export default function CooperativeMembersPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
-    const filterApplications = () => {
+    const filterApplications = useCallback(() => {
         let filtered = applications;
 
         // Filter by status
@@ -87,7 +79,15 @@ export default function CooperativeMembersPage() {
         }
 
         setFilteredApplications(filtered);
-    };
+    }, [applications, statusFilter, searchQuery]);
+
+    useEffect(() => {
+        fetchApplications();
+    }, [fetchApplications]);
+
+    useEffect(() => {
+        filterApplications();
+    }, [filterApplications]);
 
     const handleApprove = async (applicationId: string) => {
         if (!confirm("Are you sure you want to approve this membership application?")) {

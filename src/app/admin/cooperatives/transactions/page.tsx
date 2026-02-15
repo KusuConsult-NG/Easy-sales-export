@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import {
     Filter,
@@ -26,11 +26,7 @@ export default function AdminTransactionsPage() {
     const [statusFilter, setStatusFilter] = useState<TransactionStatus>("all");
     const [searchTerm, setSearchTerm] = useState("");
 
-    useEffect(() => {
-        loadTransactions();
-    }, [typeFilter, statusFilter]);
-
-    async function loadTransactions() {
+    const loadTransactions = useCallback(async () => {
         setLoading(true);
         try {
             const result = await getAllTransactionsAction({
@@ -47,7 +43,11 @@ export default function AdminTransactionsPage() {
         } finally {
             setLoading(false);
         }
-    }
+    }, [typeFilter, statusFilter]);
+
+    useEffect(() => {
+        loadTransactions();
+    }, [loadTransactions]);
 
     function getStatusIcon(status: string) {
         switch (status) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getAllFeatureToggles, updateFeatureToggle } from "@/app/actions/feature-toggles";
 import { FEATURE_METADATA, type FeatureToggle, FEATURE_CATEGORIES } from "@/lib/feature-toggles";
 import { Shield, ToggleLeft, ToggleRight, Loader2, CheckCircle, XCircle, AlertTriangle, Search, Filter } from "lucide-react";
@@ -14,18 +14,21 @@ export default function FeatureTogglesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
 
-    async function loadToggles() {
+    // Use useCallback to prevent unnecessary recreations
+    const loadToggles = useCallback(async () => {
         setLoading(true);
         const result = await getAllFeatureToggles();
         if (result.success && result.data) {
             setToggles(result.data);
         }
         setLoading(false);
-    }
+    }, []);
 
+    // Initial data fetch on mount - legitimate use case for calling async function in effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => {
         loadToggles();
-    }, []);
+    }, [loadToggles]);
 
     async function handleToggle(featureId: string, currentState: boolean) {
         setUpdating(featureId);

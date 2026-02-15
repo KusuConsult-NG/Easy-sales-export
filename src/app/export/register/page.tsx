@@ -14,6 +14,7 @@ export default function ExportRegisterPage() {
                         src="/images/modules/export.png"
                         alt="Export Windows"
                         fill
+                        priority
                         className="object-contain"
                     />
                 </div>

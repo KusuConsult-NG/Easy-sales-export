@@ -14,6 +14,7 @@ export default function WaveRegisterPage() {
                         src="/images/modules/wave.png"
                         alt="WAVE"
                         fill
+                        priority
                         className="object-contain"
                     />
                 </div>

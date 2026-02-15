@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import {
     Package, Plus, Edit, Trash2, CheckCircle, XCircle, Loader2, Search, Filter, Briefcase, DollarSign, Pencil, X
@@ -35,11 +35,7 @@ export default function LoanProductsPage() {
         isActive: true
     });
 
-    useEffect(() => {
-        fetchProducts();
-    }, []);
-
-    const fetchProducts = async () => {
+    const fetchProducts = useCallback(async () => {
         setIsLoading(true);
         try {
             const response = await fetch("/api/admin/cooperative/loan-products");
@@ -54,7 +50,11 @@ export default function LoanProductsPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [showToast]);
+
+    useEffect(() => {
+        fetchProducts();
+    }, [fetchProducts]);
 
     const handleOpenModal = (product?: LoanProduct) => {
         if (product) {

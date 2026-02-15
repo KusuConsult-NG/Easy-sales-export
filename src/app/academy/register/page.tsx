@@ -14,6 +14,7 @@ export default function AcademyRegisterPage() {
                         src="/images/modules/academy.png"
                         alt="Academy"
                         fill
+                        priority
                         className="object-contain"
                     />
                 </div>

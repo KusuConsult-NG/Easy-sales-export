@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle, ArrowRight, ArrowLeft, FileText, Shield } from "lucide-react";
 
 interface TermsStepProps {
@@ -79,9 +80,9 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                         />
                         <span className="text-sm text-slate-900 dark:text-white group-hover:text-teal-600 transition-colors">
                             I have read and agree to the{" "}
-                            <a href="/terms" target="_blank" className="text-teal-600 hover:underline font-medium">
+                            <Link href="/terms" target="_blank" className="text-teal-600 hover:underline font-medium">
                                 Terms of Service
-                            </a>{" "}
+                            </Link>{" "}
                             <span className="text-red-500">*</span>
                         </span>
                     </label>
@@ -119,9 +120,9 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                         />
                         <span className="text-sm text-slate-900 dark:text-white group-hover:text-teal-600 transition-colors">
                             I acknowledge the{" "}
-                            <a href="/privacy" target="_blank" className="text-teal-600 hover:underline font-medium">
+                            <Link href="/privacy" target="_blank" className="text-teal-600 hover:underline font-medium">
                                 Privacy Policy
-                            </a>{" "}
+                            </Link>{" "}
                             <span className="text-red-500">*</span>
                         </span>
                     </label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import { Truck, CheckCircle, XCircle, Loader2, AlertCircle, Eye, Package } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
@@ -30,8 +30,8 @@ export default function AdminExportPage() {
     const [actionLoading, setActionLoading] = useState(false);
     const [filter, setFilter] = useState("all");
 
-    // Load exports
-    async function loadExports() {
+    // Load exports with useCallback to prevent recreating on every render
+    const loadExports = useCallback(async () => {
         setLoading(true);
         const result = await getAllExportRequestsAction(
             filter === "all" ? undefined : (filter as "pending" | "in_transit" | "delivered" | "completed")
@@ -42,11 +42,13 @@ export default function AdminExportPage() {
             logger.error(result.error ?? "Unknown error loading exports");
         }
         setLoading(false);
-    }
+    }, [filter]);
 
+    // Data fetching on filter change - legitimate use case for calling async function in effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => {
         loadExports();
-    }, [filter]);
+    }, [loadExports]);
 
     // Handle Status Update
     async function handleStatusUpdate(newStatus: "pending" | "in_transit" | "delivered" | "completed") {

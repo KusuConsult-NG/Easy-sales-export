@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import Image from "next/image";
 import { ArrowRight, CheckCircle, Lock } from "lucide-react";
 import Link from "next/link";
 
@@ -71,14 +72,14 @@ export default function OnboardingGuide({
                                         <div
                                             key={index}
                                             className={`flex items-start gap-3 p-4 rounded-xl transition-all ${step.completed
-                                                    ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
-                                                    : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                                                ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                                                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
                                                 }`}
                                         >
                                             <div
                                                 className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${step.completed
-                                                        ? "bg-green-600 dark:bg-green-500"
-                                                        : "bg-slate-200 dark:bg-slate-700"
+                                                    ? "bg-green-600 dark:bg-green-500"
+                                                    : "bg-slate-200 dark:bg-slate-700"
                                                     }`}
                                             >
                                                 {step.completed ? (
@@ -135,13 +136,13 @@ export default function OnboardingGuide({
                             )}
                         </div>
 
-                        {/* Right: Illustration/Image */}
-                        <div className="hidden lg:block">
+                        <div className="hidden lg:block relative aspect-square">
                             {imageSrc ? (
-                                <img
+                                <Image
                                     src={imageSrc}
                                     alt={title}
-                                    className="w-full h-auto rounded-2xl shadow-2xl"
+                                    fill
+                                    className="object-cover rounded-2xl shadow-2xl"
                                 />
                             ) : (
                                 <div className="w-full aspect-square bg-linear-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center">

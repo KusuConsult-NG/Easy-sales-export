@@ -13,6 +13,7 @@ export default function CooperativeRegisterPage() {
                         src="/images/modules/cooperative.png"
                         alt="Cooperative"
                         fill
+                        priority
                         className="object-contain"
                     />
                 </div>

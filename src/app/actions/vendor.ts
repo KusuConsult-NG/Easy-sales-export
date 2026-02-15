@@ -288,7 +288,7 @@ export async function deleteVendorProductAction(
         }
 
         const productData = productDoc.data();
-        
+
         // Verify ownership
         if (productData?.vendorId !== session.user.id) {
             return { success: false, error: "Unauthorized" };

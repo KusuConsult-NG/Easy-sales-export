@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Upload, X, FileText } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -85,7 +86,9 @@ export default function DocumentUpload({
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             {preview ? (
-                                <img src={preview} alt="Preview" className="w-16 h-16 object-cover rounded" />
+                                <div className="relative w-16 h-16">
+                                    <Image src={preview} alt="Preview" fill className="object-cover rounded" />
+                                </div>
                             ) : (
                                 <FileText className="w-12 h-12 text-slate-400" />
                             )}

@@ -14,6 +14,7 @@ export default function MarketplaceRegisterPage() {
                         src="/images/modules/marketplace.png"
                         alt="Marketplace"
                         fill
+                        priority
                         className="object-contain"
                     />
                 </div>

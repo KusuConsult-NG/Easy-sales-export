@@ -14,6 +14,7 @@ export default function FarmNationRegisterPage() {
                         src="/images/modules/farm-nation.png"
                         alt="Farm Nation"
                         fill
+                        priority
                         className="object-contain"
                     />
                 </div>

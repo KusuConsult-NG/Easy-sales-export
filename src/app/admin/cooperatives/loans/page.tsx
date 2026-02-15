@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import {
     DollarSign, Users, CheckCircle, XCircle, Clock,
@@ -39,15 +39,7 @@ export default function AdminLoansPage() {
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    useEffect(() => {
-        fetchApplications();
-    }, []);
-
-    useEffect(() => {
-        filterApplications();
-    }, [applications, searchQuery, filterStatus]);
-
-    const fetchApplications = async () => {
+    const fetchApplications = useCallback(async () => {
         setIsLoading(true);
         try {
             const response = await fetch("/api/admin/cooperative/loan-applications");
@@ -62,9 +54,9 @@ export default function AdminLoansPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [showToast]);
 
-    const filterApplications = () => {
+    const filterApplications = useCallback(() => {
         let filtered = applications;
 
         // Filter by status
@@ -84,7 +76,15 @@ export default function AdminLoansPage() {
         }
 
         setFilteredApplications(filtered);
-    };
+    }, [applications, searchQuery, filterStatus]);
+
+    useEffect(() => {
+        fetchApplications();
+    }, [fetchApplications]);
+
+    useEffect(() => {
+        filterApplications();
+    }, [filterApplications]);
 
     const handleApprove = async (applicationId: string) => {
         if (!confirm("Are you sure you want to approve this loan application?")) {
@@ -468,7 +468,7 @@ export default function AdminLoansPage() {
                                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
                                     Status
                                 </h3>
-                                <span className={`inline - flex px - 3 py - 1 rounded - full text - sm font - bold ${selectedApplication.status === "pending"
+                                <span className={`inline-flex px-3 py-1 rounded-full text-sm font-bold ${selectedApplication.status === "pending"
                                     ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
                                     : selectedApplication.status === "approved" || selectedApplication.status === "disbursed" || selectedApplication.status === "active"
                                         ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"

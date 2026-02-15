@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
     CheckCircle,
@@ -223,8 +224,8 @@ export default function LandVerificationPage() {
                                         <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Images ({listing.images.length})</p>
                                         <div className="grid grid-cols-4 gap-2">
                                             {listing.images.slice(0, 4).map((img, i) => (
-                                                <div key={i} className="aspect-square bg-slate-200 dark:bg-slate-700 rounded overflow-hidden">
-                                                    <img src={img} alt="" className="w-full h-full object-cover" />
+                                                <div key={i} className="aspect-square bg-slate-200 dark:bg-slate-700 rounded overflow-hidden relative">
+                                                    <Image src={img} alt="" fill className="object-cover" />
                                                 </div>
                                             ))}
                                         </div>

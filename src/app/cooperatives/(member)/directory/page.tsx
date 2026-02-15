@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Users, Search, MapPin, Filter, Mail, Phone } from "lucide-react";
 import { getDirectoryMembersAction } from "@/app/actions/cooperative";
 
@@ -85,9 +86,9 @@ export default function CooperativeDirectoryPage() {
                     <div key={member.id} className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all group">
                         <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-linear-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden">
+                                <div className="w-12 h-12 bg-linear-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden relative">
                                     {member.image ? (
-                                        <img src={member.image} alt={member.name} className="w-full h-full object-cover" />
+                                        <Image src={member.image} alt={member.name} fill className="object-cover" />
                                     ) : (
                                         member.name.charAt(0)
                                     )}

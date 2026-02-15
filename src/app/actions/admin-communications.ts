@@ -22,7 +22,7 @@ export interface CreateAnnouncementState {
  */
 async function getRecipientEmails(segment: string): Promise<string[]> {
     try {
-        let query = db.collection('users');
+        const query = db.collection('users');
         let snapshot;
 
         // Simple segmentation based on roles or status

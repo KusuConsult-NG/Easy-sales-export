@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import { MapPin, FileText, Calendar, Check, X, Eye, CheckCircle, XCircle, Loader2, Search, Filter, Ruler, ExternalLink } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
@@ -42,15 +42,7 @@ export default function AdminLandVerificationPage() {
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    useEffect(() => {
-        fetchVerifications();
-    }, []);
-
-    useEffect(() => {
-        filterVerificationsByStatus();
-    }, [verifications, filterStatus]);
-
-    const fetchVerifications = async () => {
+    const fetchVerifications = useCallback(async () => {
         setIsLoading(true);
         try {
             const response = await fetch("/api/admin/farm-nation/land-verifications");
@@ -67,15 +59,23 @@ export default function AdminLandVerificationPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [showToast]);
 
-    const filterVerificationsByStatus = () => {
+    const filterVerificationsByStatus = useCallback(() => {
         if (filterStatus === "all") {
             setFilteredVerifications(verifications);
         } else {
             setFilteredVerifications(verifications.filter(v => v.verificationStatus === filterStatus));
         }
-    };
+    }, [verifications, filterStatus]);
+
+    useEffect(() => {
+        fetchVerifications();
+    }, [fetchVerifications]);
+
+    useEffect(() => {
+        filterVerificationsByStatus();
+    }, [filterVerificationsByStatus]);
 
     const handleApprove = async (verificationId: string) => {
         if (!confirm("Approve this land listing?")) return;
@@ -177,8 +177,8 @@ export default function AdminLandVerificationPage() {
                         <button
                             onClick={() => setFilterStatus("all")}
                             className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "all"
-                                    ? "bg-primary text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
+                                ? "bg-primary text-white"
+                                : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                                 } `}
                         >
                             All
@@ -186,8 +186,8 @@ export default function AdminLandVerificationPage() {
                         <button
                             onClick={() => setFilterStatus("pending")}
                             className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "pending"
-                                    ? "bg-yellow-600 text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
+                                ? "bg-yellow-600 text-white"
+                                : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                                 } `}
                         >
                             Pending ({stats.pending})
@@ -195,8 +195,8 @@ export default function AdminLandVerificationPage() {
                         <button
                             onClick={() => setFilterStatus("verified")}
                             className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "verified"
-                                    ? "bg-green-600 text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
+                                ? "bg-green-600 text-white"
+                                : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                                 } `}
                         >
                             Verified ({stats.verified})
@@ -204,8 +204,8 @@ export default function AdminLandVerificationPage() {
                         <button
                             onClick={() => setFilterStatus("rejected")}
                             className={`px - 4 py - 2 rounded - lg font - semibold transition - all ${filterStatus === "rejected"
-                                    ? "bg-red-600 text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
+                                ? "bg-red-600 text-white"
+                                : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white"
                                 } `}
                         >
                             Rejected ({stats.rejected})
@@ -260,10 +260,10 @@ export default function AdminLandVerificationPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`px - 3 py - 1 rounded - full text - xs font - semibold ${verification.verificationStatus === "pending"
-                                                        ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                                                        : verification.verificationStatus === "verified"
-                                                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                                    ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                                                    : verification.verificationStatus === "verified"
+                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                        : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                                                     } `}>
                                                     {verification.verificationStatus}
                                                 </span>
