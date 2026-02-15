@@ -19,15 +19,26 @@ export default function ContactPage() {
         setIsSubmitting(true);
 
         try {
-            // Send via mailto link as fallback
-            const mailtoLink = `mailto:${COMPANY_INFO.contact.cooperative.email}?subject=${encodeURIComponent(formData.subject)}&body=${encodeURIComponent(`Name: ${formData.name}\nEmail: ${formData.email}\n\n${formData.message}`)}`;
-            window.location.href = mailtoLink;
-            toast.success("Opening your email client...");
+            const response = await fetch("/api/contact", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(formData),
+            });
 
-            // Reset form
-            setFormData({ name: "", email: "", subject: "", message: "" });
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                toast.success("Message sent successfully! We'll get back to you soon.");
+                // Reset form
+                setFormData({ name: "", email: "", subject: "", message: "" });
+            } else {
+                toast.error(data.error || "Failed to send message. Please try again.");
+            }
         } catch (error) {
-            toast.error("Failed to open email client. Please email us directly.");
+            console.error("Contact form error:", error);
+            toast.error("Failed to send message. Please email us directly at info@easysalesexport.com");
         } finally {
             setIsSubmitting(false);
         }
