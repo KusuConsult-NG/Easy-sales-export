@@ -45,7 +45,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     // Success: Reset rate limit counter
                     await resetLoginAttempts(email);
 
-                    // Fetch user profile from Firestore using Admin SDK (Bypasses security rules & ensures consistency)
+                    // Fetch user profile - CHECK CACHE FIRST
+                    const { getUserProfile } = await import("@/lib/user-cache");
+                    const cachedProfile = await getUserProfile(userCredential.user.uid);
+
+                    if (cachedProfile) {
+                        // Cache hit - use cached profile
+                        console.log('[Auth] Using cached user profile for:', email);
+                        return {
+                            id: cachedProfile.id,
+                            email: cachedProfile.email,
+                            name: cachedProfile.displayName,
+                            image: cachedProfile.photoURL || null,
+                            roles: (cachedProfile.roles || []) as UserRole[],
+                            verified: true,
+                        };
+                    }
+
+                    // Cache miss - fetch from Firestore using Admin SDK
+                    console.log('[Auth] Cache miss - fetching from Firestore:', email);
                     const { getAdminDb } = await import("@/lib/firebase-admin");
                     const adminDb = getAdminDb();
 
@@ -56,6 +74,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     }
 
                     const userData = userDoc.data() as FirestoreUser;
+
+                    // Cache the profile for next time
+                    const { setCache, CacheKeys, CACHE_TTL } = await import("@/lib/redis");
+                    await setCache(
+                        CacheKeys.userProfile(userCredential.user.uid),
+                        {
+                            id: userCredential.user.uid,
+                            email: userData.email,
+                            displayName: userData.fullName,
+                            photoURL: null,
+                            roles: userData.roles || [],
+                            serviceRegistrations: userData.serviceRegistrations,
+                            createdAt: userData.createdAt,
+                            updatedAt: userData.updatedAt,
+                        },
+                        CACHE_TTL.USER_PROFILE
+                    );
 
                     // Return user object for NextAuth session
                     return {

@@ -1,0 +1,104 @@
+import { deleteCache, CacheKeys } from './redis';
+
+/**
+ * Cache Invalidation Functions
+ * Call these when user data changes to ensure cache stays fresh
+ */
+
+/**
+ * Invalidate ALL user-related cache
+ * Use after major user updates (approval, role changes, etc.)
+ */
+export async function invalidateUserCache(userId: string): Promise<void> {
+    try {
+        await Promise.all([
+            deleteCache(CacheKeys.userProfile(userId)),
+            deleteCache(CacheKeys.userPermissions(userId)),
+            deleteCache(CacheKeys.userSession(userId)),
+            deleteCache(CacheKeys.userStats(userId)),
+            // Service-specific caches
+            deleteCache(`seller:status:${userId}`),
+            deleteCache(`cooperative:member:${userId}`),
+        ]);
+        console.log(`[Cache Invalidation] Cleared all cache for user: ${userId}`);
+    } catch (error) {
+        console.error(`[Cache Invalidation] Error clearing cache for ${userId}:`, error);
+    }
+}
+
+/**
+ * Invalidate seller status cache
+ * Call after admin approves/rejects seller
+ */
+export async function invalidateSellerCache(userId: string): Promise<void> {
+    try {
+        await Promise.all([
+            deleteCache(`seller:status:${userId}`),
+            deleteCache(CacheKeys.userProfile(userId)), // Also clear profile
+        ]);
+        console.log(`[Cache Invalidation] Cleared seller cache for: ${userId}`);
+    } catch (error) {
+        console.error(`[Cache Invalidation] Error clearing seller cache:`, error);
+    }
+}
+
+/**
+ * Invalidate cooperative member cache
+ * Call after membership status changes
+ */
+export async function invalidateCooperativeCache(userId: string): Promise<void> {
+    try {
+        await Promise.all([
+            deleteCache(`cooperative:member:${userId}`),
+            deleteCache(CacheKeys.userProfile(userId)),
+        ]);
+        console.log(`[Cache Invalidation] Cleared cooperative cache for: ${userId}`);
+    } catch (error) {
+        console.error(`[Cache Invalidation] Error clearing cooperative cache:`, error);
+    }
+}
+
+/**
+ * Invalidate service access cache
+ * Call after service registration status changes (Wave, Academy, Export, Farm Nation)
+ */
+export async function invalidateServiceCache(userId: string, service?: string): Promise<void> {
+    try {
+        // Always clear user profile (contains serviceRegistrations)
+        await deleteCache(CacheKeys.userProfile(userId));
+        console.log(`[Cache Invalidation] Cleared ${service || 'service'} cache for: ${userId}`);
+    } catch (error) {
+        console.error(`[Cache Invalidation] Error clearing service cache:`, error);
+    }
+}
+
+/**
+ * Batch invalidate multiple users
+ * Use after bulk admin actions
+ */
+export async function invalidateMultipleUsers(userIds: string[]): Promise<void> {
+    try {
+        await Promise.all(
+            userIds.map(userId => invalidateUserCache(userId))
+        );
+        console.log(`[Cache Invalidation] Cleared cache for ${userIds.length} users`);
+    } catch (error) {
+        console.error(`[Cache Invalidation] Error in batch invalidation:`, error);
+    }
+}
+
+/**
+ * USAGE EXAMPLES:
+ * 
+ * // After admin approves seller:
+ * await invalidateSellerCache(userId);
+ * 
+ * // After admin approves Wave applicant:
+ * await invalidateServiceCache(userId, 'wave');
+ * 
+ * // After user updates their profile:
+ * await invalidateUserCache(userId);
+ * 
+ * // After bulk approval of 10 users:
+ * await invalidateMultipleUsers([userId1, userId2, ...]);
+ */

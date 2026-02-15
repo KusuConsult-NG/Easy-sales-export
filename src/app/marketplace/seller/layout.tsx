@@ -57,34 +57,60 @@ export default async function SellerLayout({ children }: { children: React.React
             redirect("/marketplace/onboarding");
         }
 
-        // ADDITIONAL CHECK: Verify seller approval status from marketplace_sellers
-        const { getAdminDb } = await import("@/lib/firebase-admin");
-        const adminDb = getAdminDb();
+        // ADDITIONAL CHECK: Verify seller approval status - CHECK CACHE FIRST
+        const { getCached, setCache, CacheKeys, CACHE_TTL } = await import("@/lib/redis");
+        const cacheKey = `seller:status:${userId}`;
 
-        try {
-            const sellerDoc = await adminDb.collection('marketplace_sellers').doc(userId).get();
+        let sellerStatus = await getCached<{ status: string; businessName?: string }>(cacheKey);
 
-            if (sellerDoc.exists) {
-                const sellerData = sellerDoc.data();
+        if (!sellerStatus) {
+            // Cache miss - fetch from Firestore
+            const { getAdminDb } = await import("@/lib/firebase-admin");
+            const adminDb = getAdminDb();
 
-                // Block pending sellers
-                if (sellerData?.status === 'pending') {
-                    redirect('/marketplace/onboarding/pending');
-                }
+            try {
+                const sellerDoc = await adminDb.collection('marketplace_sellers').doc(userId).get();
 
-                // Block rejected sellers
-                if (sellerData?.status === 'rejected') {
-                    redirect('/marketplace/onboarding/rejected');
-                }
+                if (sellerDoc.exists) {
+                    const sellerData = sellerDoc.data();
+                    sellerStatus = {
+                        status: sellerData?.status || 'pending',
+                        businessName: sellerData?.businessName,
+                    };
 
-                // Only approved sellers can access dashboard
-                if (sellerData?.status !== 'approved') {
+                    // Cache for 2 minutes
+                    await setCache(cacheKey, sellerStatus, CACHE_TTL.USER_PERMISSIONS);
+                } else {
+                    // If sellerDoc does not exist, redirect to onboarding
                     redirect('/marketplace/onboarding');
                 }
+            } catch (dbError) {
+                console.error("Failed to check seller status:", dbError);
+                // If DB check fails, treat as no status found, redirect to onboarding
+                redirect('/marketplace/onboarding');
             }
-        } catch (dbError) {
-            console.error("Failed to check seller status:", dbError);
-            // Continue - don't block if check fails
+        }
+
+        // Now, apply status checks using sellerStatus (from cache or Firestore)
+        if (!sellerStatus) {
+            // This case should ideally be handled by the 'else' block above,
+            // but as a fallback if sellerStatus is still null/undefined after cache/DB check
+            redirect('/marketplace/onboarding');
+        }
+
+        // Block pending sellers
+        if (sellerStatus.status === 'pending') {
+            redirect('/marketplace/onboarding/pending');
+        }
+
+        // Block rejected sellers
+        if (sellerStatus.status === 'rejected') {
+            redirect('/marketplace/onboarding/rejected');
+        }
+
+        // Only approved sellers can access dashboard
+        if (sellerStatus.status !== 'approved') {
+            redirect('/marketplace/onboarding');
         }
 
         // User has access, render the layout

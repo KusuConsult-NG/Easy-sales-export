@@ -10,14 +10,39 @@ import {
     ServiceName,
     ServiceAccessResult,
     UserWithServices,
-    VerificationStatus
+    VerificationStatus,
+    ServiceRole,
 } from "@/types/service-registration";
 
 /**
- * Get user data with service registrations
+ * Get user data with service registrations - WITH CACHING
  */
 export async function getUserWithServices(userId: string): Promise<UserWithServices | null> {
     try {
+        // CHECK CACHE FIRST (Edge Runtime compatible)
+        if (typeof process !== 'undefined' && process.env.UPSTASH_REDIS_REST_URL) {
+            try {
+                // Dynamic import for Edge Runtime compatibility
+                const { getUserProfile } = await import("@/lib/user-cache");
+                const cachedProfile = await getUserProfile(userId);
+
+                if (cachedProfile && cachedProfile.serviceRegistrations) {
+                    // Cache hit - convert to UserWithServices format
+                    return {
+                        uid: cachedProfile.id,
+                        email: cachedProfile.email,
+                        name: cachedProfile.displayName,
+                        roles: (cachedProfile.roles || []) as ServiceRole[],
+                        serviceRegistrations: cachedProfile.serviceRegistrations,
+                    } as UserWithServices;
+                }
+            } catch (cacheError) {
+                // Cache error - fall through to Firestore
+                console.error('[getUserWithServices] Cache error:', cacheError);
+            }
+        }
+
+        // Cache miss or cache unavailable - fetch from Firestore
         const userRef = doc(db, "users", userId);
         const userSnap = await getDoc(userRef);
 
@@ -25,7 +50,33 @@ export async function getUserWithServices(userId: string): Promise<UserWithServi
             return null;
         }
 
-        return userSnap.data() as UserWithServices;
+        const userData = userSnap.data() as UserWithServices;
+
+        // Cache the result for next time (Edge Runtime safe)
+        if (typeof process !== 'undefined' && process.env.UPSTASH_REDIS_REST_URL) {
+            try {
+                const { setCache, CacheKeys, CACHE_TTL } = await import("@/lib/redis");
+                await setCache(
+                    CacheKeys.userProfile(userId),
+                    {
+                        id: userId,
+                        email: userData.email,
+                        displayName: userData.name || '',
+                        photoURL: null,
+                        roles: userData.roles || [],
+                        serviceRegistrations: userData.serviceRegistrations,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    },
+                    CACHE_TTL.USER_PROFILE
+                );
+            } catch (cacheError) {
+                // Caching failed - not critical, continue
+                console.error('[getUserWithServices] Cache set error:', cacheError);
+            }
+        }
+
+        return userData;
     } catch (error) {
         console.error("Error fetching user data:", error);
         return null;

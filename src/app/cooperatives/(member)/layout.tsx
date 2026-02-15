@@ -50,15 +50,28 @@ export default async function CooperativeMemberLayout({
             redirect(accessResult.redirectTo || "/cooperatives/onboarding");
         }
 
-        // Fetch membership details for Sidebar
-        const db = getAdminDb();
-        const memberSnapshot = await db.collection("cooperative_members").doc(userId).get();
-        if (memberSnapshot.exists) {
-            const data = memberSnapshot.data();
+        // Fetch membership details for Sidebar - CHECK CACHE FIRST
+        const { getCached, setCache, CACHE_TTL } = await import("@/lib/redis");
+        const cacheKey = `cooperative:member:${userId}`;
+
+        let memberData = await getCached<any>(cacheKey);
+
+        if (!memberData) {
+            // Cache miss - fetch from Firestore
+            const db = getAdminDb();
+            const memberSnapshot = await db.collection("cooperative_members").doc(userId).get();
+            if (memberSnapshot.exists) {
+                memberData = memberSnapshot.data();
+                // Cache for 5 minutes
+                await setCache(cacheKey, memberData, CACHE_TTL.USER_PROFILE);
+            }
+        }
+
+        if (memberData) {
             userProfile = {
-                firstName: data?.firstName || "",
-                lastName: data?.lastName || "",
-                tier: data?.membershipTier || ""
+                firstName: memberData?.firstName || "",
+                lastName: memberData?.lastName || "",
+                tier: memberData?.membershipTier || ""
             };
         }
     } catch (error) {
