@@ -94,6 +94,13 @@ export async function getLandListings(filters?: z.infer<typeof landSearchSchema>
                 .orderBy('createdAt', 'desc');
         }
 
+        if (filters?.limit) {
+            listingsQuery = listingsQuery.limit(filters.limit);
+        } else {
+            // Default limit for safety - scaling protection
+            listingsQuery = listingsQuery.limit(50);
+        }
+
         const snapshot = await listingsQuery.get();
 
         let listings = snapshot.docs.map(doc => {

@@ -11,9 +11,10 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
     ChevronLeft,
     ChevronRight,
@@ -176,6 +177,22 @@ export default function WaveApplicationPage() {
     const [formData, setFormData] = useState<WaveApplicationData>(INITIAL_DATA);
     const [submitting, setSubmitting] = useState(false);
     const { showToast } = useToast();
+    const { data: session, status } = useSession();
+
+    useEffect(() => {
+        if (status === "unauthenticated") {
+            showToast("You must be logged in to apply for WAVE", "error");
+            router.push("/login?callbackUrl=/wave/application");
+        }
+    }, [status, router, showToast]);
+
+    if (status === "loading") {
+        return (
+            <div className="min-h-screen bg-stone-900 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            </div>
+        );
+    }
 
     const updateFormData = (data: Partial<WaveApplicationData>) => {
         setFormData((prev) => ({ ...prev, ...data }));

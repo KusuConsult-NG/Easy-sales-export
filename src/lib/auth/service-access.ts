@@ -307,7 +307,7 @@ function checkAcademyAccess(user: UserWithServices): ServiceAccessResult {
     if (!registration) {
         return {
             hasAccess: false,
-            redirectTo: "/academy/onboarding",
+            redirectTo: "/academy/setup",
             message: "Complete onboarding to access Academy"
         };
     }
@@ -318,7 +318,7 @@ function checkAcademyAccess(user: UserWithServices): ServiceAccessResult {
 
     return {
         hasAccess: false,
-        redirectTo: "/academy/onboarding",
+        redirectTo: "/academy/setup",
         message: "Complete onboarding to access Academy"
     };
 }

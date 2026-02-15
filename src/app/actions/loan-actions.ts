@@ -285,7 +285,11 @@ export async function getLoanStatistics() {
     }
 
     try {
-        const loansSnapshot = await db.collection('loan_applications').get();
+        // Optimization: Select only necessary fields to reduce bandwidth
+        // Ideally, use Distributed Counters or Firestore Aggregation queries for 100k+ scale
+        const loansSnapshot = await db.collection('loan_applications')
+            .select('status', 'amount')
+            .get();
 
         const stats = {
             total: loansSnapshot.size,
@@ -301,7 +305,7 @@ export async function getLoanStatistics() {
         loansSnapshot.docs.forEach(doc => {
             const data = doc.data();
             const status = data.status as LoanStatus;
-            const amount = data.amount as number;
+            const amount = data.amount as number || 0;
 
             stats.totalAmount += amount;
 

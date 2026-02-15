@@ -59,6 +59,7 @@ export const landSearchSchema = z.object({
     electricityAccess: z.boolean().optional(),
     roadAccess: z.boolean().optional(),
     status: z.enum(['pending_verification', 'verified', 'rejected']).optional(),
+    limit: z.number().optional(),
 });
 
 export type LandListingData = z.infer<typeof landListingSchema>;

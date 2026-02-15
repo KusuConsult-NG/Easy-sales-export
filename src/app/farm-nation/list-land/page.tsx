@@ -101,32 +101,48 @@ export default function ListLandPage() {
 
         try {
             // 1. Upload Images
-            const imageUrls: string[] = [];
-            for (const image of media.images) {
+            // Use Promise.all for parallel uploads to prevent hanging
+            const imageUploadPromises = media.images.map(image => {
                 const path = `farm-nation/${session.user.id}/images/${Date.now()}_${image.name}`;
-                const url = await uploadFile(image, path);
-                imageUrls.push(url);
-            }
+                return uploadFile(image, path);
+            });
+
+            const imageUrls = await Promise.all(imageUploadPromises);
 
             // 2. Upload Documents
             const documentUrls: string[] = [];
-            // Map simplified for MVP - storing URLs in array parallel to type, or could be improved schema
-            // Using simple push for now, ideally map specific document types
+
+            // Upload documents in parallel if they exist
+            const docUploads = [];
+
             if (documents.landTitle) {
                 const path = `farm-nation/${session.user.id}/docs/${Date.now()}_title_${documents.landTitle.name}`;
-                const url = await uploadFile(documents.landTitle, path);
-                documentUrls.push(url); // 0 is title
+                docUploads.push(uploadFile(documents.landTitle, path));
+            } else {
+                docUploads.push(Promise.resolve(null)); // Placeholder
             }
+
             if (documents.surveyPlan) {
                 const path = `farm-nation/${session.user.id}/docs/${Date.now()}_survey_${documents.surveyPlan.name}`;
-                const url = await uploadFile(documents.surveyPlan, path);
-                documentUrls.push(url); // 1 is survey
+                docUploads.push(uploadFile(documents.surveyPlan, path));
+            } else {
+                docUploads.push(Promise.resolve(null)); // Placeholder
             }
+
             if (documents.taxClearance) {
                 const path = `farm-nation/${session.user.id}/docs/${Date.now()}_tax_${documents.taxClearance.name}`;
-                const url = await uploadFile(documents.taxClearance, path);
-                documentUrls.push(url); // 2 is tax
+                docUploads.push(uploadFile(documents.taxClearance, path));
             }
+
+            const uploadedDocs = await Promise.all(docUploads);
+
+            // Filter out nulls and push to documentUrls
+            // Note: The original code pushed to documentUrls sequentially. 
+            // We need to maintain that logic if the backend expects specific order, 
+            // but the original code just pushed them.
+            uploadedDocs.forEach(url => {
+                if (url) documentUrls.push(url);
+            });
 
             // 3. Submit Data
             const result = await submitLandListingAction({

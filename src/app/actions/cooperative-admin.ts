@@ -37,10 +37,8 @@ export async function getCooperativeStatsAction(): Promise<{
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
-        const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        // Check admin role directly from session (Performance Optimization)
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -147,10 +145,8 @@ export async function getAllMembersAction(options?: {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
-        const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        // Check admin role directly from session (Performance Optimization)
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -187,10 +183,8 @@ export async function updateMemberStatusAction(
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
-        const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        // Check admin role directly from session (Performance Optimization)
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -235,10 +229,8 @@ export async function getAllTransactionsAction(options?: {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
-        const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        // Check admin role directly from session (Performance Optimization)
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -293,10 +285,8 @@ export async function getContributionReportsAction(options?: {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
-        const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        // Check admin role directly from session (Performance Optimization)
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -393,10 +383,8 @@ export async function getRecentActivityAction(): Promise<{
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
-        const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        // Check admin role directly from session (Performance Optimization)
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
         }
 

@@ -37,7 +37,7 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
         if (platform === 'export') return '/export/onboarding';
         if (platform === 'cooperatives') return '/cooperatives/onboarding';
         if (platform === 'farm-nation') return '/farm-nation/onboarding';
-        if (platform === 'academy') return '/academy/onboarding';
+        if (platform === 'academy') return '/academy/setup';
         if (platform === 'wave') return '/wave/application';
     }
 
@@ -71,7 +71,7 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
 
     // Academy
     if (roles.includes('academy_participant')) {
-        return '/academy/onboarding';
+        return '/academy/setup';
     }
 
     // Fallback for general users or edge cases
@@ -154,7 +154,14 @@ export async function registerAction(prevState: any, formData: FormData) {
             email,
             password,
             confirmPassword,
+            phone: formData.get("phone") as string,
+            gender: gender,
         });
+
+        // Ensure gender is provided if required by specific modules (like WAVE)
+        if (platforms.includes("wave") && !validatedData.gender) {
+            return { error: "Gender is required for WAVE program", success: false, redirectUrl: "" };
+        }
 
         // Validate platforms (at least one required)
         const allowedPlatforms = ["marketplace", "export", "cooperatives", "farm-nation", "academy", "wave"];
