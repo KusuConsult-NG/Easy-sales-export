@@ -6,7 +6,7 @@ import Image from "next/image";
 import { ArrowRight, Sparkles } from "lucide-react";
 
 export default function HubHero() {
-    // Hero background image slider
+    // Hero background image slider - lazy load most images
     const heroImages = [
         "/images/hub/photo_2026-02-14 15.20.02.jpeg",
         "/images/hub/photo_2026-02-14 15.20.11.jpeg",
@@ -21,6 +21,7 @@ export default function HubHero() {
         "/images/hub/photo_2026-02-14 15.21.49.jpeg",
     ];
     const [currentHeroImage, setCurrentHeroImage] = useState(0);
+    const [loadedImages, setLoadedImages] = useState(2); // Only load first 2 initially
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -29,11 +30,19 @@ export default function HubHero() {
         return () => clearInterval(timer);
     }, [heroImages.length]);
 
+    // Lazy load remaining images after mount
+    useEffect(() => {
+        const loadTimer = setTimeout(() => {
+            setLoadedImages(heroImages.length);
+        }, 2000); // Load rest after 2 seconds
+        return () => clearTimeout(loadTimer);
+    }, [heroImages.length]);
+
     return (
         <div className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-linear-to-br from-primary via-primary/80 to-blue-600 dark:from-primary/90 dark:via-primary/70 dark:to-blue-700">
             {/* Background Image Slider */}
             <div className="absolute inset-0 overflow-hidden">
-                {heroImages.map((img, index) => (
+                {heroImages.slice(0, loadedImages).map((img, index) => (
                     <div
                         key={index}
                         className={`absolute inset-0 transition-opacity duration-2000 ${index === currentHeroImage ? "opacity-20" : "opacity-0"
