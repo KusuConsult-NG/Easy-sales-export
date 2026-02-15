@@ -243,7 +243,7 @@ export default function InvestmentDetailPage() {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* Header */}
-            <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-8">
+            <div className="bg-linear-to-r from-purple-600 to-pink-600 text-white py-8">
                 <div className="max-w-7xl mx-auto px-8">
                     <Link
                         href="/export/dashboard"
@@ -268,10 +268,10 @@ export default function InvestmentDetailPage() {
                         </div>
                         <span
                             className={`px-4 py-2 rounded-full text-sm font-bold ${investment.status === "active"
-                                    ? "bg-green-500 text-white"
-                                    : investment.status === "completed"
-                                        ? "bg-blue-500 text-white"
-                                        : "bg-amber-500 text-white"
+                                ? "bg-green-500 text-white"
+                                : investment.status === "completed"
+                                    ? "bg-blue-500 text-white"
+                                    : "bg-amber-500 text-white"
                                 }`}
                         >
                             {investment.status.charAt(0).toUpperCase() + investment.status.slice(1)}
@@ -323,10 +323,10 @@ export default function InvestmentDetailPage() {
                                             <div className="flex flex-col items-center">
                                                 <div
                                                     className={`w-10 h-10 rounded-full flex items-center justify-center ${milestone.status === "completed"
-                                                            ? "bg-green-100 dark:bg-green-900/30"
-                                                            : milestone.status === "current"
-                                                                ? "bg-purple-100 dark:bg-purple-900/30"
-                                                                : "bg-slate-100 dark:bg-slate-700"
+                                                        ? "bg-green-100 dark:bg-green-900/30"
+                                                        : milestone.status === "current"
+                                                            ? "bg-purple-100 dark:bg-purple-900/30"
+                                                            : "bg-slate-100 dark:bg-slate-700"
                                                         }`}
                                                 >
                                                     {milestone.status === "completed" ? (
@@ -334,8 +334,8 @@ export default function InvestmentDetailPage() {
                                                     ) : (
                                                         <span
                                                             className={`text-sm font-bold ${milestone.status === "current"
-                                                                    ? "text-purple-600 dark:text-purple-400"
-                                                                    : "text-slate-400"
+                                                                ? "text-purple-600 dark:text-purple-400"
+                                                                : "text-slate-400"
                                                                 }`}
                                                         >
                                                             {index + 1}
@@ -345,8 +345,8 @@ export default function InvestmentDetailPage() {
                                                 {index < investment.milestones.length - 1 && (
                                                     <div
                                                         className={`w-0.5 h-16 my-2 ${milestone.status === "completed"
-                                                                ? "bg-green-200 dark:bg-green-900/30"
-                                                                : "bg-slate-200 dark:bg-slate-700"
+                                                            ? "bg-green-200 dark:bg-green-900/30"
+                                                            : "bg-slate-200 dark:bg-slate-700"
                                                             }`}
                                                     ></div>
                                                 )}
@@ -465,8 +465,8 @@ export default function InvestmentDetailPage() {
                                                 </span>
                                                 <span
                                                     className={`text-xs px-2 py-1 rounded-full ${payment.status === "paid"
-                                                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                                                         }`}
                                                 >
                                                     {payment.status}

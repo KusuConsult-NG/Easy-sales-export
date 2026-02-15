@@ -71,7 +71,7 @@ export default function MarketplaceProductsPage() {
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* Header */}
-            <div className="bg-gradient-to-r from-green-600 to-emerald-600 text-white py-16">
+            <div className="bg-linear-to-r from-green-600 to-emerald-600 text-white py-16">
                 <div className="max-w-7xl mx-auto px-8">
                     <div className="flex items-center gap-3 mb-4">
                         <Package className="w-8 h-8" />
