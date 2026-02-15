@@ -196,7 +196,7 @@ export default function ProgressPage() {
                     </div>
 
                     {/* Info Card */}
-                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border border-blue-200 dark:border-blue-800 rounded-2xl p-6">
+                    <div className="bg-linear-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border border-blue-200 dark:border-blue-800 rounded-2xl p-6">
                         <div className="flex gap-4">
                             <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shrink-0">
                                 <Target className="w-6 h-6 text-white" />

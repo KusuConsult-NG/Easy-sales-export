@@ -189,7 +189,7 @@ export default function MyCoursesPage() {
                                 </div>
 
                                 {/* Thumbnail */}
-                                <div className="h-32 bg-gradient-to-br from-green-500 to-emerald-600 relative">
+                                <div className="h-32 bg-linear-to-br from-green-500 to-emerald-600 relative">
                                     <div className="absolute inset-0 flex items-center justify-center">
                                         <Award className="w-12 h-12 text-white/30" />
                                     </div>
