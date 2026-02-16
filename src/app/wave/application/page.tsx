@@ -183,8 +183,40 @@ export default function WaveApplicationPage() {
         if (status === "unauthenticated") {
             showToast("You must be logged in to apply for WAVE", "error");
             router.push("/login?callbackUrl=/wave/application");
+            return;
         }
-    }, [status, router, showToast]);
+
+        // CHECK: If user already has a pending application, redirect to review-pending
+        if (session?.user?.id) {
+            // We can check the service registrations from the session if available, 
+            // or we might need to fetch it.
+            // For now, let's assuming session updates on login. 
+            // If the user just applied, they might need to refresh session.
+
+            // However, a more robust check involves calling a server action to check status
+            // to avoid relying on stale session data.
+            checkApplicationStatus();
+        }
+    }, [status, router, showToast, session]);
+
+    const checkApplicationStatus = async () => {
+        try {
+            // Import dynamically or use a server action helper
+            const { checkWaveStatusAction } = await import("@/app/actions/wave");
+            const status = await checkWaveStatusAction();
+
+            if (status === "pending" || status === "under_review") {
+                router.replace("/wave/application/review-pending");
+            } else if (status === "approved") {
+                router.replace("/wave/dashboard");
+            } else if (status === "rejected") {
+                // Stay on form, but maybe show a message?
+                // For now, allow re-application logic to handle it (form is visible)
+            }
+        } catch (error) {
+            console.error("Failed to check status", error);
+        }
+    };
 
     if (status === "loading") {
         return (
