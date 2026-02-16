@@ -312,7 +312,7 @@ function checkAcademyAccess(user: UserWithServices): ServiceAccessResult {
         };
     }
 
-    if (user.roles.includes("academy_student")) {
+    if (user.roles.includes("academy_participant")) {
         return { hasAccess: true };
     }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, BookOpen, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, BookOpen, Edit, Trash2, Users } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { getCoursesAction, type Course } from "@/app/actions/academy";
@@ -69,13 +69,22 @@ export default function AcademyAdminPage() {
                         <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Academy Management</h1>
                         <p className="text-slate-600 dark:text-slate-400 mt-1">Create and manage courses, lessons, and quizzes</p>
                     </div>
-                    <Link
-                        href="/admin/academy/create"
-                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center gap-2 transition-colors"
-                    >
-                        <Plus className="w-5 h-5" />
-                        Create New Course
-                    </Link>
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href="/admin/academy/applications"
+                            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-medium flex items-center gap-2 transition-colors"
+                        >
+                            <Users className="w-5 h-5" />
+                            Applications
+                        </Link>
+                        <Link
+                            href="/admin/academy/create"
+                            className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center gap-2 transition-colors"
+                        >
+                            <Plus className="w-5 h-5" />
+                            Create New Course
+                        </Link>
+                    </div>
                 </div>
 
                 {/* Filters */}

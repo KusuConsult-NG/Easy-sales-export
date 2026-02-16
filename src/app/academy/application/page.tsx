@@ -8,7 +8,9 @@ import PersonalInfoStep from "./steps/PersonalInfoStep";
 import EducationStep from "./steps/EducationStep";
 import InterestsStep from "./steps/InterestsStep";
 import ReviewStep from "./ReviewStep";
-import { submitAcademyApplicationAction } from "@/app/actions/academy";
+import { checkAcademyStatusAction, submitAcademyApplicationAction } from "@/app/actions/academy";
+import { useSession } from "next-auth/react";
+import { useToast } from "@/contexts/ToastContext";
 
 interface PersonalInfoData {
     fullName: string;
@@ -43,8 +45,49 @@ export default function AcademyApplicationPage() {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [acceptTerms, setAcceptTerms] = useState(false);
+    const { data: session } = useSession();
+    const { showToast } = useToast();
+
+    useEffect(() => {
+        const checkStatus = async () => {
+            try {
+                const status = await checkAcademyStatusAction();
+                if (status === "pending" || status === "under_review") {
+                    router.replace("/academy/application/pending");
+                } else if (status === "approved" || status === "active") {
+                    router.replace("/academy/dashboard");
+                } else {
+                    setIsLoading(false);
+                }
+            } catch (error) {
+                logger.error("Failed to check Academy status:", error);
+                setIsLoading(false);
+            }
+        };
+
+        if (session) {
+            checkStatus();
+        } else {
+            // If not logged in, we might want to redirect to login, 
+            // but the page might be accessible to see the form before login? 
+            // Usually we enforce login for applications.
+            // For now, let's just stop loading.
+            setIsLoading(false);
+            // Alternatively:
+            // router.replace("/academy/login?callbackUrl=/academy/application");
+        }
+    }, [router, session]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        );
+    }
 
     const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
         fullName: "",

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { Home, TrendingUp, Shield, CheckCircle } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import { submitFarmNationOnboardingAction } from "@/app/actions/farm-nation";
+import { submitFarmNationOnboardingAction, checkFarmNationStatusAction } from "@/app/actions/farm-nation";
 
 // Step components (to be created)
 import RoleSelectionStep from "./steps/RoleSelectionStep";
@@ -60,6 +60,36 @@ export default function FarmNationOnboardingPage() {
     const [currentStepId, setCurrentStepId] = useState("role");
     const [steps, setSteps] = useState<OnboardingStep[]>(ONBOARDING_STEPS);
     const [formData, setFormData] = useState<any>({});
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Check existing application status on mount
+    useEffect(() => {
+        const checkStatus = async () => {
+            try {
+                const status = await checkFarmNationStatusAction();
+                if (status === "pending" || status === "under_review") {
+                    router.replace("/farm-nation/onboarding/pending");
+                } else if (status === "approved" || status === "active") {
+                    // Redirect based on role if possible, or generic dashboard
+                    router.replace("/farm-nation/properties");
+                } else {
+                    setIsLoading(false);
+                }
+            } catch (error) {
+                logger.error("Failed to check Farm Nation status:", error);
+                setIsLoading(false);
+            }
+        };
+        checkStatus();
+    }, [router]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+            </div>
+        );
+    }
 
     const currentStepIndex = steps.findIndex((s) => s.id === currentStepId);
 

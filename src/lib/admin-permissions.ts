@@ -53,6 +53,7 @@ export type AdminPermission =
 
     // WAVE
     | "wave:approve_applications"
+    | "academy:approve_applications"
     | "wave:manage_training"
 
     // Academy

@@ -18,7 +18,7 @@ import {
     GraduationCap
 } from "lucide-react";
 import { useState } from "react";
-import { signOut } from "next-auth/react";
+
 
 const NAV_ITEMS = [
     { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
@@ -97,7 +97,19 @@ export default function AdminSidebar() {
                             <p className="text-sm font-medium text-white truncate">Administrator</p>
                         </div>
                         <button
-                            onClick={() => signOut({ callbackUrl: "/" })}
+                            onClick={async () => {
+                                // Client-side cleanup for Firebase Auth
+                                try {
+                                    const { signOut } = await import("firebase/auth");
+                                    const { auth } = await import("@/lib/firebase");
+                                    await signOut(auth);
+                                } catch (e) {
+                                    console.error("Firebase signout failed", e);
+                                }
+                                // Server-side cleanup via Server Action
+                                const { logoutAction } = await import("@/app/actions/auth");
+                                await logoutAction();
+                            }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-slate-800 hover:text-red-300 rounded-xl transition-colors"
                         >
                             <LogOut size={20} />

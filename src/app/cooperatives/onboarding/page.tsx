@@ -19,7 +19,7 @@ import { useToast } from "@/contexts/ToastContext";
 import PersonalInfoStep from "./steps/PersonalInfoStep";
 import NextOfKinStep from "./steps/NextOfKinStep";
 import DocumentUploadStep from "./steps/DocumentUploadStep";
-import { getMembershipAction } from "@/app/actions/cooperative";
+import { getMembershipAction, checkCooperativeStatusAction } from "@/app/actions/cooperative";
 import { Loader2 } from "lucide-react";
 
 function CooperativeOnboardingContent() {
@@ -33,8 +33,19 @@ function CooperativeOnboardingContent() {
     const [tier, setTier] = useState<"basic" | "premium">("basic"); // From server
 
     useEffect(() => {
-        const checkPayment = async () => {
+        const checkStatus = async () => {
             try {
+                // Check if already applied/approved
+                // NOTE: We check this BEFORE payment because if they are pending/approved they shouldn't be here anyway
+                const status = await checkCooperativeStatusAction();
+                if (status === "pending" || status === "under_review") {
+                    router.replace("/cooperatives/onboarding/pending");
+                    return;
+                } else if (status === "active" || status === "approved") {
+                    router.replace("/cooperatives/dashboard");
+                    return;
+                }
+
                 const result = await getMembershipAction();
                 if (result.success && result.data) {
                     if (result.data.paymentStatus !== "completed") {
@@ -56,7 +67,7 @@ function CooperativeOnboardingContent() {
                 setIsLoading(false);
             }
         };
-        checkPayment();
+        checkStatus();
     }, [router, showToast]);
 
     const [personalInfo, setPersonalInfo] = useState({

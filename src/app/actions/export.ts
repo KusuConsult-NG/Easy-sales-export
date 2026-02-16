@@ -571,3 +571,29 @@ export async function getUserExportStatsAction(): Promise<{
         return { error: "Failed to fetch statistics", success: false };
     }
 }
+
+// ============================================
+// Check Export Application Status Action
+// ============================================
+
+export async function checkExportStatusAction(): Promise<string | null> {
+    try {
+        const session = await auth();
+        if (!session?.user) return null;
+
+        // Check user document for service registration
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        const registration = userData?.serviceRegistrations?.export;
+
+        if (registration?.status) {
+            return registration.status;
+        }
+
+        return null;
+    } catch (error) {
+        logger.error("Error checking export status:", error);
+        return null;
+    }
+}

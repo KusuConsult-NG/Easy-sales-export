@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
 import { createNotificationAction } from "@/app/actions/notifications";
 import {
-WaveApplicationReviewSchema,
+    WaveApplicationReviewSchema,
     WithdrawalProcessingSchema,
     UserVerificationToggleSchema,
     LandListingVerificationSchema,
@@ -1293,5 +1293,173 @@ export async function approveExportOnboardingAction(
     } catch (error: any) {
         logger.error("Approve export application error:", error);
         return { error: "Failed to approve export application", success: false };
+    }
+}
+// ============================================
+// Academy Application Management (Admin)
+// ============================================
+
+export async function getAcademyApplicationsAction(
+    statusFilter?: "pending" | "approved" | "rejected"
+): Promise<{
+    error: string | null;
+    success: boolean;
+    data?: any[];
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
+            // Fallback for now/testing or add permission
+            if (!session?.user?.roles?.includes("admin")) {
+                return { error: "Unauthorized: Permission required - academy:approve_applications", success: false };
+            }
+        }
+
+        let query = db.collection("ACADEMY_APPLICATIONS")
+            .orderBy("submittedAt", "desc");
+
+        if (statusFilter) {
+            query = db.collection("ACADEMY_APPLICATIONS")
+                .where("status", "==", statusFilter)
+                .orderBy("submittedAt", "desc");
+        }
+
+        const snapshot = await query.get();
+        const applications = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            submittedAt: doc.data().submittedAt?.toDate() || new Date(),
+            reviewedAt: doc.data().reviewedAt?.toDate(),
+        }));
+
+        return {
+            error: null,
+            success: true,
+            data: applications,
+        };
+    } catch (error: any) {
+        logger.error("Get Academy applications error:", error);
+        return { error: "Failed to fetch applications", success: false };
+    }
+}
+
+export async function approveAcademyApplicationAction(
+    applicationId: string
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        if (!session?.user || !session.user.roles?.includes("admin")) {
+            return { error: "Unauthorized", success: false };
+        }
+
+        // Get application first
+        const appRef = db.collection("ACADEMY_APPLICATIONS").doc(applicationId);
+        const appDoc = await appRef.get();
+
+        if (!appDoc.exists) {
+            return { error: "Application not found", success: false };
+        }
+
+        const appData = appDoc.data()!;
+        const userId = appData.userId;
+        const userEmail = appData.personalInfo?.email;
+
+        if (!userId) {
+            return { error: "Application missing user ID", success: false };
+        }
+
+        // 1. Update Application Status
+        await appRef.update({
+            status: "approved",
+            reviewedBy: session.user.id,
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // 2. Update User Service Registration & Role
+        await db.collection(COLLECTIONS.USERS).doc(userId).set({
+            serviceRegistrations: {
+                academy: {
+                    status: "approved",
+                    approvedAt: FieldValue.serverTimestamp(),
+                }
+            },
+            roles: FieldValue.arrayUnion("academy_participant"),
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // 3. Clear Cache
+        try {
+            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+            await invalidateServiceCache(userId, 'academy');
+        } catch (cacheError) {
+            logger.error('[Academy Approval] Cache clear error:', cacheError);
+        }
+
+        // 4. Send Email (Optional/TODO)
+
+        // 5. Audit
+        await logAuditAction("academy_approve", applicationId, "application", {
+            adminId: session.user.id,
+            userId: userId,
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: "Academy application approved successfully",
+        };
+    } catch (error: any) {
+        logger.error("Approve Academy application error:", error);
+        return { error: "Failed to approve application", success: false };
+    }
+}
+
+export async function rejectAcademyApplicationAction(
+    applicationId: string,
+    reason: string
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        if (!session?.user || !session.user.roles?.includes("admin")) {
+            return { error: "Unauthorized", success: false };
+        }
+
+        await db.collection("ACADEMY_APPLICATIONS").doc(applicationId).update({
+            status: "rejected",
+            rejectionReason: reason,
+            reviewedBy: session.user.id,
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        const appDoc = await db.collection("ACADEMY_APPLICATIONS").doc(applicationId).get();
+        if (appDoc.exists) {
+            const userId = appDoc.data()?.userId;
+            if (userId) {
+                await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                    serviceRegistrations: {
+                        academy: {
+                            status: "rejected",
+                        }
+                    },
+                    updatedAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+        }
+
+        await logAuditAction("academy_reject", applicationId, "application", {
+            reason,
+            adminId: session.user.id,
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: "Academy application rejected",
+        };
+    } catch (error: any) {
+        logger.error("Reject Academy application error:", error);
+        return { error: "Failed to reject application", success: false };
     }
 }

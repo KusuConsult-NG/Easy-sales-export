@@ -16,6 +16,35 @@ import type { SellerVerification, Product, CartItem, Order } from "@/lib/types/m
 import { hasRole } from "@/lib/role-utils";
 import { unstable_cache } from "next/cache";
 
+// ============================================
+// Check Marketplace Application Status Action
+// ============================================
+
+export async function checkMarketplaceStatusAction(): Promise<{ status: string; accountType?: string } | null> {
+    try {
+        const session = await auth();
+        if (!session?.user) return null;
+
+        // Check user document for service registration
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        const registration = userData?.serviceRegistrations?.marketplace;
+
+        if (registration?.status) {
+            return {
+                status: registration.status,
+                accountType: registration.accountType
+            };
+        }
+
+        return null;
+    } catch (error) {
+        logger.error("Error checking Marketplace status:", error);
+        return null;
+    }
+}
+
 // ============================================================================
 // SELLER VERIFICATION
 // ============================================================================

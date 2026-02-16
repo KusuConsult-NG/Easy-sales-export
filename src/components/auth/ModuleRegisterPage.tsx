@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { registerAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 
 export interface ModuleRegisterProps {
     moduleName: string;
@@ -86,6 +86,8 @@ function ModuleRegisterContent({
     // Enhanced initial state for client-side redirect
     const [state, formAction, isPending] = useActionState(registerAction, { error: "", success: false, redirectUrl: "" });
 
+    const { data: session } = useSession();
+
     // Handle client-side Login & Redirect after successful registration
     // This removes the server-side "Race Condition" by using standard client auth flow
     useEffect(() => {
@@ -121,6 +123,36 @@ function ModuleRegisterContent({
 
         performAutoLogin();
     }, [state, formData.email, formData.password, router, showToast]);
+
+    // CHECK: If user is already logged in, redirect to the appropriate onboarding flow
+    // This prevents logged-in users from seeing the registration form
+    useEffect(() => {
+        if (session) {
+            let redirectPath = "/dashboard"; // Default fallback
+
+            // Determine redirect path based on platform/module
+            if (platforms.includes("wave")) {
+                redirectPath = "/wave/application";
+            } else if (platforms.includes("academy")) {
+                redirectPath = "/academy/application";
+            } else if (platforms.includes("export")) {
+                redirectPath = "/export/onboarding";
+            } else if (platforms.includes("cooperatives")) {
+                redirectPath = "/cooperatives/onboarding";
+            } else if (platforms.includes("farm-nation")) {
+                redirectPath = "/farm-nation/onboarding";
+            } else if (platforms.includes("marketplace")) {
+                redirectPath = "/marketplace/onboarding";
+            }
+
+            // If callbackUrl exists and is valid, it might prioritize that, 
+            // but for "register" page, we usually want to force the module flow if already logged in.
+            // However, if they were redirected here with a specific goal, maybe respect it?
+            // For now, module flow is safer.
+
+            router.replace(redirectPath);
+        }
+    }, [session, platforms, router]);
 
     // Password Strength Logic
     const passwordStrength = useMemo(() => {

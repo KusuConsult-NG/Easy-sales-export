@@ -6,9 +6,32 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 
+import { COLLECTIONS } from "@/lib/types/firestore";
+
 /**
- * Academy (LMS) - Courses, Progress Tracking, Live Sessions
+ * Check Academy application status for current user
  */
+export async function checkAcademyStatusAction(): Promise<string | null> {
+    try {
+        const session = await auth();
+        if (!session?.user) return null;
+
+        // Check user document for service registration
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        const registration = userData?.serviceRegistrations?.academy;
+
+        if (registration?.status) {
+            return registration.status;
+        }
+
+        return null;
+    } catch (error) {
+        logger.error("Check Academy status error:", error);
+        return null;
+    }
+}
 
 export interface Course {
     id?: string;

@@ -80,7 +80,30 @@ export default function MarketplaceOnboarding() {
         if (status === "unauthenticated" || !session) {
             // Redirect to marketplace-specific registration
             router.replace("/marketplace/register?returnUrl=/marketplace/onboarding");
+            return;
         }
+
+        const checkStatus = async () => {
+            try {
+                // Dynamically import to avoid server-client boundary issues if needed, or import at top
+                const { checkMarketplaceStatusAction } = await import("@/app/actions/marketplace");
+                const result = await checkMarketplaceStatusAction();
+
+                if (result?.status === "pending" || result?.status === "under_review") {
+                    router.replace("/marketplace/onboarding/pending");
+                } else if (result?.status === "approved" || result?.status === "active") {
+                    if (result.accountType === "seller" || result.accountType === "both") {
+                        router.replace("/marketplace/seller/dashboard");
+                    } else {
+                        router.replace("/marketplace/buyer/dashboard");
+                    }
+                }
+            } catch (error) {
+                logger.error("Failed to check Marketplace status:", error);
+            }
+        };
+        checkStatus();
+
     }, [session, status, router]);
 
     // Show loading while checking auth

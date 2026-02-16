@@ -558,6 +558,32 @@ export async function getUserTierAction(): Promise<{
 }
 
 // ============================================
+// Check Cooperative Application Status Action
+// ============================================
+
+export async function checkCooperativeStatusAction(): Promise<string | null> {
+    try {
+        const session = await auth();
+        if (!session?.user) return null;
+
+        // Check user document for service registration
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        const registration = userData?.serviceRegistrations?.cooperatives;
+
+        if (registration?.status) {
+            return registration.status;
+        }
+
+        return null;
+    } catch (error) {
+        logger.error("Error checking cooperative status:", error);
+        return null;
+    }
+}
+
+// ============================================
 // LOAN MANAGEMENT (PRD Phase 2)
 // ============================================
 

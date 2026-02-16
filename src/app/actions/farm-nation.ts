@@ -693,3 +693,29 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         };
     }
 }
+
+// ============================================
+// Check Farm Nation Application Status Action
+// ============================================
+
+export async function checkFarmNationStatusAction(): Promise<string | null> {
+    try {
+        const session = await auth();
+        if (!session?.user) return null;
+
+        // Check user document for service registration
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        const registration = userData?.serviceRegistrations?.farmNation;
+
+        if (registration?.status) {
+            return registration.status;
+        }
+
+        return null;
+    } catch (error) {
+        logger.error("Error checking Farm Nation status:", error);
+        return null;
+    }
+}

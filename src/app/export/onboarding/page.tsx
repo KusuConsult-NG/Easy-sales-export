@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { Package, TrendingUp, Shield, CheckCircle } from "lucide-react";
@@ -15,7 +15,7 @@ import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { useToast } from "@/contexts/ToastContext";
 import { OnboardingStep } from "@/types/service-registration";
 
-import { submitExportOnboardingAction } from "@/app/actions/export";
+import { submitExportOnboardingAction, checkExportStatusAction } from "@/app/actions/export";
 
 // Import step components
 import { InvestmentProfileStep } from "./steps/InvestmentProfileStep";
@@ -60,6 +60,36 @@ export default function ExportOnboardingPage() {
     const [currentStepId, setCurrentStepId] = useState("profile");
     const [steps, setSteps] = useState<OnboardingStep[]>(ONBOARDING_STEPS);
     const [formData, setFormData] = useState<any>({});
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Check existing application status on mount
+    useEffect(() => {
+        const checkStatus = async () => {
+            try {
+                const status = await checkExportStatusAction();
+                if (status === "pending_approval" || status === "pending" || status === "under_review") {
+                    router.replace("/export/onboarding/pending");
+                } else if (status === "approved" || status === "active") {
+                    router.replace("/export/dashboard");
+                } else {
+                    setIsLoading(false);
+                }
+            } catch (error) {
+                logger.error("Failed to check export status:", error);
+                setIsLoading(false);
+            }
+        };
+
+        checkStatus();
+    }, [router]);
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+            </div>
+        );
+    }
 
     const currentStepIndex = steps.findIndex((s) => s.id === currentStepId);
 
