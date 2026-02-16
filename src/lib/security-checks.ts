@@ -81,7 +81,7 @@ export function validateRequiredEnvVars(): void {
         'FIREBASE_PROJECT_ID',
         'PAYSTACK_SECRET_KEY',
         'RESEND_API_KEY',
-        'GEMINI_API_KEY',
+        'OPENAI_API_KEY',
         'UPSTASH_REDIS_REST_URL',
         'UPSTASH_REDIS_REST_TOKEN',
     ];

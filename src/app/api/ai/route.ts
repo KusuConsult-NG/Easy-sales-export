@@ -43,48 +43,47 @@ export async function POST(req: Request) {
         const userMessage = message.toLowerCase();
 
         // 1. Check for valid API Key
-        const apiKey = process.env.GEMINI_API_KEY;
+        const apiKey = process.env.OPENAI_API_KEY;
 
         if (apiKey) {
             try {
-                // Call Gemini API (REST) to avoid adding heavyweight SDK
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                // Call OpenAI API
+                const response = await fetch("https://api.openai.com/v1/chat/completions", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`,
                     },
                     body: JSON.stringify({
-                        contents: [
-                            {
-                                role: "user",
-                                parts: [{ text: SYSTEM_PROMPT + "\n\nUser Question: " + message }]
-                            }
+                        model: "gpt-3.5-turbo", // Cost-effective and fast
+                        messages: [
+                            { role: "system", content: SYSTEM_PROMPT },
+                            { role: "user", content: message }
                         ],
-                        generationConfig: {
-                            temperature: 0.7,
-                            maxOutputTokens: 150,
-                        }
+                        temperature: 0.7,
+                        max_tokens: 150,
                     })
                 });
 
                 if (response.ok) {
                     const data = await response.json();
-                    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    const reply = data.choices?.[0]?.message?.content;
 
                     if (reply) {
                         return NextResponse.json({ reply });
                     }
                 } else {
-                    logger.error("Gemini API Error:", await response.text());
+                    const errorText = await response.text();
+                    logger.error("OpenAI API Error:", errorText);
                     // Fallthrough to rules
                 }
 
             } catch (apiError) {
-                logger.error("Gemini Request Failed:", apiError);
+                logger.error("OpenAI Request Failed:", apiError);
                 // Fallthrough to rules
             }
         } else {
-            logger.warn("GEMINI_API_KEY not found, using fallback rules.");
+            logger.warn("OPENAI_API_KEY not found, using fallback rules.");
         }
 
         // 2. Rules-based Logic (Fallback)
