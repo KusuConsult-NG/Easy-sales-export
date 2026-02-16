@@ -71,7 +71,31 @@ function ModuleLoginContent({
         if (status === "authenticated") {
             router.replace(callbackUrl);
         }
-    }, [status, router, callbackUrl]);
+
+        // Handle URL error parameters (e.g. from middleware redirect)
+        const errorParam = searchParams.get("error");
+        if (errorParam) {
+            // Map error codes to user-friendly messages
+            const errorMap: Record<string, string> = {
+                "session_expired": "Your session has expired. Please log in again.",
+                "access_denied": "You do not have permission to access that resource.",
+                "admin_access_denied": "You do not have administrator privileges.",
+                "feature_disabled": "That feature is currently disabled.",
+                "unauthorized": "Please log in to access this page.",
+                "Configuration": "Server configuration error.",
+                "Default": "Authentication failed."
+            };
+
+            const message = errorMap[errorParam] || "An authentication error occurred.";
+
+            // Prevent toast spam by checking if we just showed it (optional, but good UX)
+            // For now, just show it
+            setTimeout(() => showToast(message, "error"), 500);
+
+            // Optional: Clean URL
+            // router.replace(pathname); 
+        }
+    }, [status, router, callbackUrl, searchParams, showToast]);
 
     const [formData, setFormData] = useState({
         email: "",
