@@ -21,10 +21,6 @@ export async function rateLimit(
     request: NextRequest,
     identifier?: string
 ): Promise<{ success: boolean; remaining?: number; error?: string }> {
-    // 🔥 EMERGENCY BYPASS: Always allow requests
-    return { success: true, remaining: 9999 };
-
-    /*
     // Get identifier from parameter, or fallback to IP from headers
     const key =
         identifier ||
@@ -58,7 +54,6 @@ export async function rateLimit(
             remaining: 1,
         };
     }
-    */
 }
 
 /**

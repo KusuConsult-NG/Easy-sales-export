@@ -81,23 +81,15 @@ export async function middleware(request: NextRequest) {
     // 🛡️ GLOBAL RATE LIMITING (Edge Compatible)
     // Protects against DDoS and abuse
 
-    // Skip rate limiting for static assets and Next.js internals that might be missed by matcher
-    const isStaticAsset = pathname.endsWith('.svg') ||
-        pathname.endsWith('.png') ||
-        pathname.endsWith('.jpg') ||
-        pathname.endsWith('.ico') ||
-        pathname.includes('_next');
-
-    // Skip rate limiting for RSC (React Server Components) payloads which can be frequent on navigation
-    // But keep it for actual API calls and page loads to prevent abuse
-    // RFC: We might want to limit RSC eventually, but with a much higher limit.
-    // For now, let's treat them as "safe" internal navigation requests to fix the 429s.
-    const isRscRequest = request.nextUrl.searchParams.has('_rsc');
+    // OPTIMIZATION: Only rate limit API routes to avoid blocking execution/latency on UI page loads.
+    // Vercel/Next.js handles basic DDoS protection for static pages.
+    // We strictly protect our database and expensive API endpoints here.
+    const isApiRoute = pathname.startsWith('/api');
 
     // Default to success/skipped
     let rateLimitResult: { success: boolean; remaining?: number; error?: string } = { success: true, remaining: 100 };
 
-    if (!isStaticAsset && !isRscRequest) {
+    if (isApiRoute) {
         rateLimitResult = await rateLimit(request);
 
         if (!rateLimitResult.success) {
