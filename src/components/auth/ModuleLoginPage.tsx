@@ -278,7 +278,7 @@ function ModuleLoginContent({
 
                 {/* Footer */}
                 <p className={`mt-8 text-center text-sm ${isCustomBg ? 'text-emerald-200/40 uppercase tracking-widest font-semibold' : 'text-slate-500 dark:text-slate-400'} relative z-10`}>
-                    {isCustomBg ? 'Implemented by Easy Sales Export' : `© ${new Date().getFullYear()} Easy Sales Export`}
+                    {isCustomBg ? 'Implemented by Easy Sales Export' : `© ${new Date().getFullYear()} Easy Sales Export • v1.0.1 (Fix)`}
                 </p>
             </div>
         </div>

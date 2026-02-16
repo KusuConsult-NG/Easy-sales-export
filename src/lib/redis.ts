@@ -1,10 +1,19 @@
 import { Redis } from '@upstash/redis';
 
-// Initialize Redis client
-const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+// Initialize Redis client safely
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+const redis = (redisUrl && redisToken)
+    ? new Redis({ url: redisUrl, token: redisToken })
+    : {
+        // Mock limited interface if missing (prevents crash)
+        get: async () => null,
+        setex: async () => false,
+        del: async () => false,
+        keys: async () => [],
+        // Add other methods as needed by rate-limit
+    } as unknown as Redis;
 
 export { redis };
 
