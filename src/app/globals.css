@@ -35,6 +35,12 @@
   }
 }
 
+/* Check for class-based dark mode (set by ThemeContext) */
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+}
+
 /* Animations */
 @keyframes slideInUp {
   from {

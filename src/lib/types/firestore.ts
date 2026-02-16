@@ -61,15 +61,52 @@ export interface User {
 
 export interface ExportWindow {
     id: string;
-    orderId: string;
+    title?: string; // e.g. "Q1 2026 Yam Export"
+    orderId: string; // @deprecated - leaving for compatibility
     commodity: "yam" | "sesame" | "hibiscus" | "other";
     quantity: string;
-    amount: number;
-    status: "pending" | "in_transit" | "delivered" | "completed";
+    amount: number; // Minimum investment
+    roi: string; // e.g. "15-20%"
+    duration: string; // e.g. "6 months"
+    totalSpots?: number;
+    spotsFilled?: number;
+    image?: string;
+    status: "pending" | "open" | "active" | "completed" | "closed" | "in_transit" | "delivered";
+
+    // Deep Data Fields
+    description?: string;
+    specifications?: string[]; // List of product specs
+    benefits?: string[]; // List of investment benefits
+    documents?: {
+        name: string;
+        url?: string;
+        required: boolean;
+    }[];
+    timeline?: {
+        phase: string;
+        date: string;
+        description: string;
+        status: "pending" | "active" | "completed";
+    }[];
+
+    userId?: string; // Creator/Admin
+    startDate?: Date;
+    endDate?: Date;
+    deliveryDate?: Date; // Legacy support
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface ExportOnboardingApplication {
+    applicationId: string;
     userId: string;
-    orderDate: Date;
-    deliveryDate?: Date;
-    escrowReleaseDate?: Date;
+    userEmail?: string | null;
+    profile: any;
+    kyc: any;
+    bank: any;
+    terms: any;
+    status: "pending_review" | "approved" | "rejected";
+    submittedAt: Date;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -185,11 +222,13 @@ export interface LandListing {
 
 export interface EscrowTransaction {
     id: string;
+    orderId: string; // Link to the master order
     buyerId: string;
     sellerId: string;
     amount: number;
-    status: "pending" | "funded" | "released" | "disputed";
+    status: "pending" | "funded" | "released" | "disputed" | "refunded";
     createdAt: Date;
+    releasedAt?: Date;
 }
 
 export interface Dispute {

@@ -80,19 +80,38 @@ export async function middleware(request: NextRequest) {
 
     // 🛡️ GLOBAL RATE LIMITING (Edge Compatible)
     // Protects against DDoS and abuse
-    const rateLimitResult = await rateLimit(request);
 
-    if (!rateLimitResult.success) {
-        return NextResponse.json(
-            { error: rateLimitResult.error || "Too many requests" },
-            {
-                status: 429,
-                headers: {
-                    'Retry-After': '60',
-                    'Content-Type': 'application/json'
+    // Skip rate limiting for static assets and Next.js internals that might be missed by matcher
+    const isStaticAsset = pathname.endsWith('.svg') ||
+        pathname.endsWith('.png') ||
+        pathname.endsWith('.jpg') ||
+        pathname.endsWith('.ico') ||
+        pathname.includes('_next');
+
+    // Skip rate limiting for RSC (React Server Components) payloads which can be frequent on navigation
+    // But keep it for actual API calls and page loads to prevent abuse
+    // RFC: We might want to limit RSC eventually, but with a much higher limit.
+    // For now, let's treat them as "safe" internal navigation requests to fix the 429s.
+    const isRscRequest = request.nextUrl.searchParams.has('_rsc');
+
+    // Default to success/skipped
+    let rateLimitResult: { success: boolean; remaining?: number; error?: string } = { success: true, remaining: 100 };
+
+    if (!isStaticAsset && !isRscRequest) {
+        rateLimitResult = await rateLimit(request);
+
+        if (!rateLimitResult.success) {
+            return NextResponse.json(
+                { error: rateLimitResult.error || "Too many requests" },
+                {
+                    status: 429,
+                    headers: {
+                        'Retry-After': '60',
+                        'Content-Type': 'application/json'
+                    }
                 }
-            }
-        );
+            );
+        }
     }
 
     // Get session using getToken (Edge Runtime compatible)

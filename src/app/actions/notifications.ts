@@ -11,7 +11,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 export interface Notification {
     id?: string;
     userId: string;
-    type: "info" | "success" | "warning" | "error";
+    type: "info" | "success" | "warning" | "error" | "loan" | "payment" | "wave" | "withdrawal" | "land";
     title: string;
     message: string;
     link?: string;
@@ -26,7 +26,7 @@ export interface Notification {
  */
 export async function createNotificationAction(data: {
     userId: string;
-    type: "info" | "success" | "warning" | "error";
+    type: "info" | "success" | "warning" | "error" | "loan" | "payment" | "wave" | "withdrawal" | "land";
     title: string;
     message: string;
     link?: string;

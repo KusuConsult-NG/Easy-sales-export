@@ -56,7 +56,7 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
 
     // Cooperative (Check BEFORE WAVE to prevent female cooperative users going to WAVE)
     if (roles.includes('cooperative_member')) {
-        return '/cooperatives/onboarding';
+        return '/cooperatives/payment';
     }
 
     // WAVE Program (females auto-enrolled) - Now checked AFTER Cooperative

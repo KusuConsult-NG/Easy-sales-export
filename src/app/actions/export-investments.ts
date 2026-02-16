@@ -3,8 +3,9 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { COLLECTIONS, type ExportWindow } from "@/lib/types/firestore";
 import { Timestamp } from "firebase-admin/firestore";
+import { unstable_cache } from "next/cache";
 
 export type ExportOpportunity = {
     id: string;
@@ -14,167 +15,154 @@ export type ExportOpportunity = {
     closeDate: Date | string;
     minInvestment: number;
     projectedROI: string;
-    status: "Open" | "Opening Soon" | "Closed";
+    status: string;
     spotsLeft: number;
     totalSpots: number;
     image: string;
+    // Deep data
+    description?: string;
+    specifications?: string[];
+    benefits?: string[];
+    documents?: {
+        name: string;
+        url?: string;
+        required: boolean;
+    }[];
+    timeline?: {
+        phase: string;
+        duration: string;
+        description: string;
+        status: string;
+    }[];
 };
 
 /**
  * Get all export investment opportunities
  */
+
+
+
+/**
+ * Get all export investment opportunities
+ */
+
+// Internal cached version
+const getCachedExportOpportunities = unstable_cache(
+    async () => {
+        try {
+            const snapshot = await db.collection(COLLECTIONS.EXPORT_WINDOWS)
+                .where("status", "in", ["open", "active"])
+                .orderBy("createdAt", "desc")
+                .get();
+
+            const opportunities = snapshot.docs.map(doc => {
+                const data = doc.data() as ExportWindow;
+                return {
+                    id: doc.id,
+                    commodity: data.commodity,
+                    destination: (data as any).destination || "International",
+                    openDate: (data.startDate as any)?.toDate?.().toISOString() || new Date().toISOString(),
+                    closeDate: (data.endDate as any)?.toDate?.().toISOString() || new Date().toISOString(),
+                    minInvestment: data.amount,
+                    projectedROI: data.roi,
+                    status: data.status === "active" ? "Opening Soon" : "Open",
+                    spotsLeft: (data.totalSpots || 0) - (data.spotsFilled || 0),
+                    totalSpots: data.totalSpots || 0,
+                    image: data.image || "/images/export-placeholder.jpg",
+                    // Deep data
+                    description: data.description,
+                    specifications: data.specifications || [],
+                    benefits: data.benefits || [],
+                    documents: data.documents || [],
+                    timeline: data.timeline?.map((t: any) => ({
+                        phase: t.phase,
+                        duration: t.date || t.duration || "TBD",
+                        description: t.description || "",
+                        status: t.status || "pending"
+                    })) || [],
+                };
+            });
+
+            return { success: true, data: opportunities };
+        } catch (error: any) {
+            logger.error("Error fetching export opportunities:", error);
+            return { success: false, error: error.message };
+        }
+    },
+    ["export-opportunities"],
+    { revalidate: 3600, tags: ["export-opportunities"] }
+);
+
+/**
+ * Get all export investment opportunities
+ */
 export async function getExportOpportunities() {
-    try {
-        const snapshot = await db.collection("export_opportunities")
-            .orderBy("createdAt", "desc")
-            .get();
-
-        const opportunities = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                // Convert Timestamps to ISO strings or Dates as needed for serialization
-                openDate: (data.openDate as Timestamp)?.toDate?.().toISOString() || data.openDate,
-                closeDate: (data.closeDate as Timestamp)?.toDate?.().toISOString() || data.closeDate,
-            };
-        }) as ExportOpportunity[];
-
-        return { success: true, data: opportunities };
-    } catch (error: any) {
-        logger.error("Error fetching export opportunities:", error);
-        return { success: false, error: error.message };
-    }
+    return getCachedExportOpportunities();
 }
 
 /**
  * Seed initial export opportunities (Temporary helper) - Admin Only
  */
 export async function seedExportOpportunities() {
-    const session = await auth();
-    if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
-        return { success: false, error: "Unauthorized: Admin access required" };
-    }
-
-    const minInvestments = [500000, 1000000, 750000, 1500000, 600000, 2000000];
-    const opportunities = [
-        {
-            commodity: "Premium Yam Tubers",
-            destination: "United Kingdom",
-            openDate: new Date("2024-03-15"),
-            closeDate: new Date("2024-03-30"),
-            minInvestment: 500000,
-            projectedROI: "22%",
-            status: "Open",
-            spotsLeft: 12,
-            totalSpots: 50,
-            image: "/images/logo.jpg",
-            createdAt: new Date()
-        },
-        {
-            commodity: "Sesame Seeds (White)",
-            destination: "China",
-            openDate: new Date("2024-03-10"),
-            closeDate: new Date("2024-04-05"),
-            minInvestment: 1000000,
-            projectedROI: "18%",
-            status: "Open",
-            spotsLeft: 8,
-            totalSpots: 40,
-            image: "/images/logo.jpg",
-            createdAt: new Date()
-        },
-        {
-            commodity: "Dried Hibiscus Flowers",
-            destination: "USA",
-            openDate: new Date("2024-03-20"),
-            closeDate: new Date("2024-04-10"),
-            minInvestment: 750000,
-            projectedROI: "20%",
-            status: "Open",
-            spotsLeft: 15,
-            totalSpots: 60,
-            image: "/images/logo.jpg",
-            createdAt: new Date()
-        },
-        {
-            commodity: "Shea Butter (Organic)",
-            destination: "France",
-            openDate: new Date("2024-03-25"),
-            closeDate: new Date("2024-04-15"),
-            minInvestment: 1500000,
-            projectedROI: "25%",
-            status: "Open",
-            spotsLeft: 5,
-            totalSpots: 30,
-            image: "/images/logo.jpg",
-            createdAt: new Date()
-        },
-        {
-            commodity: "Ginger (Fresh)",
-            destination: "Netherlands",
-            openDate: new Date("2024-04-01"),
-            closeDate: new Date("2024-04-20"),
-            minInvestment: 600000,
-            projectedROI: "19%",
-            status: "Opening Soon",
-            spotsLeft: 20,
-            totalSpots: 80,
-            image: "/images/logo.jpg",
-            createdAt: new Date()
-        },
-        {
-            commodity: "Cashew Nuts (Raw)",
-            destination: "Vietnam",
-            openDate: new Date("2024-04-05"),
-            closeDate: new Date("2024-04-25"),
-            minInvestment: 2000000,
-            projectedROI: "24%",
-            status: "Opening Soon",
-            spotsLeft: 10,
-            totalSpots: 40,
-            image: "/images/logo.jpg",
-            createdAt: new Date()
-        }
-    ];
-
-    try {
-        const promises = opportunities.map(async (opp) => {
-            const docRef = db.collection("export_opportunities").doc();
-            await docRef.set(opp);
-        });
-
-        await Promise.all(promises);
-        return { success: true, message: "Seeded export opportunities" };
-    } catch (error: any) {
-        logger.error("Error seeding:", error);
-        return { success: false, error: error.message };
-    }
+    // Legacy seeding function - discouraged now that we use real Export Windows
+    return { success: false, error: "Seeding is deprecated. Please create Export Windows from Admin Panel." };
 }
 
 /**
  * Get single export opportunity by ID
  */
-export async function getExportOpportunityById(id: string) {
-    try {
-        const docRef = db.collection("export_opportunities").doc(id);
-        const snapshot = await docRef.get();
 
-        if (!snapshot.exists) {
-            return { success: false, error: "Opportunity not found" };
+// Internal cached version
+const getCachedExportOpportunityById = (id: string) => unstable_cache(
+    async () => {
+        try {
+            const docRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(id);
+            const snapshot = await docRef.get();
+
+            if (!snapshot.exists) {
+                return { success: false, error: "Opportunity not found" };
+            }
+
+            const data = snapshot.data() as ExportWindow;
+
+            const opportunity: ExportOpportunity = {
+                id: snapshot.id,
+                commodity: data.commodity,
+                destination: (data as any).destination || "International",
+                openDate: (data.startDate as any)?.toDate?.().toISOString() || new Date().toISOString(),
+                closeDate: (data.endDate as any)?.toDate?.().toISOString() || new Date().toISOString(),
+                minInvestment: data.amount,
+                projectedROI: data.roi,
+                status: data.status === "active" ? "Opening Soon" : "Open",
+                spotsLeft: (data.totalSpots || 0) - (data.spotsFilled || 0),
+                totalSpots: data.totalSpots || 0,
+                image: data.image || "/images/export-placeholder.jpg",
+                // Deep data
+                description: data.description,
+                specifications: data.specifications || [],
+                benefits: data.benefits || [],
+                documents: data.documents || [],
+                timeline: data.timeline?.map((t: any) => ({
+                    phase: t.phase,
+                    duration: t.date || t.duration || "TBD",
+                    description: t.description || "",
+                    status: t.status || "pending"
+                })) || [],
+            };
+
+            return { success: true, data: opportunity };
+        } catch (error: any) {
+            logger.error("Error fetching export opportunity:", error);
+            return { success: false, error: error.message };
         }
+    },
+    [`export-opportunity-${id}`],
+    { revalidate: 3600, tags: [`export-opportunity-${id}`] }
+)();
 
-        const data = snapshot.data()!;
-        const opportunity = {
-            id: snapshot.id,
-            ...data,
-            openDate: (data.openDate as Timestamp)?.toDate?.().toISOString() || data.openDate,
-            closeDate: (data.closeDate as Timestamp)?.toDate?.().toISOString() || data.closeDate,
-        } as ExportOpportunity;
-
-        return { success: true, data: opportunity };
-    } catch (error: any) {
-        logger.error("Error fetching export opportunity:", error);
-        return { success: false, error: error.message };
-    }
+/**
+ * Get single export opportunity by ID
+ */
+export async function getExportOpportunityById(id: string) {
+    return getCachedExportOpportunityById(id);
 }

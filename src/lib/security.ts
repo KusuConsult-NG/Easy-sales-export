@@ -67,8 +67,8 @@ export function validatePassword(password: string): PasswordValidationResult {
  * Rate Limiting Configuration
  */
 export const rateLimitConfig = {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutes
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10), // 1 minute (was 15 min)
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '200', 10), // 200 requests per minute
 };
 
 /**

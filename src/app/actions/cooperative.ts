@@ -16,7 +16,7 @@ import {
     type WithdrawalActionState
 } from "@/lib/types/cooperative";
 import type {
-CooperativeMembership,
+    CooperativeMembership,
     CooperativeTransaction,
     JoinCooperativeState,
     MakeContributionState,
@@ -43,6 +43,100 @@ CooperativeMembership,
 /**
  * Register a new cooperative member with Paystack payment integration
  */
+/**
+ * 1. INITIATE PAYMENT (Step 1)
+ * Creates a partial membership record and initializes Paystack
+ */
+export async function initiateCooperativePaymentAction(
+    tier: "basic" | "premium"
+): Promise<{
+    success: boolean;
+    paymentUrl?: string;
+    error?: string;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "You must be logged in", success: false };
+        }
+
+        const userId = session.user.id;
+        const registrationFee = tier === "basic" ? 10000 : 20000;
+
+        // Create or update partial membership record
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+
+        // Check if already paid
+        const memberDoc = await memberRef.get();
+        if (memberDoc.exists && memberDoc.data()?.paymentStatus === "completed") {
+            return { error: "You have already paid. Please proceed to onboarding.", success: false };
+        }
+
+        await memberRef.set({
+            userId,
+            membershipTier: tier,
+            registrationFee,
+            membershipStatus: "pending",
+            paymentStatus: "pending",
+            updatedAt: FieldValue.serverTimestamp(),
+            // Preserve creation date if exists
+            createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // Initialize Paystack
+        const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!paystackSecretKey) {
+            return { error: "Payment system not configured", success: false };
+        }
+
+        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${paystackSecretKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                email: session.user.email,
+                amount: registrationFee * 100,
+                metadata: {
+                    userId,
+                    membershipTier: tier,
+                    purpose: "cooperative_membership_registration",
+                },
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/payment/callback`,
+            }),
+        });
+
+        if (!paystackResponse.ok) {
+            return { error: "Failed to initialize payment", success: false };
+        }
+
+        const paystackData = await paystackResponse.json();
+
+        if (!paystackData.status || !paystackData.data?.authorization_url) {
+            return { error: "Failed to generate payment link", success: false };
+        }
+
+        // Save reference
+        await memberRef.update({
+            paymentReference: paystackData.data.reference,
+        });
+
+        return {
+            success: true,
+            paymentUrl: paystackData.data.authorization_url,
+        };
+
+    } catch (error) {
+        logger.error("Initiate payment failed:", error);
+        return { error: "Failed to initiate payment", success: false };
+    }
+}
+
+/**
+ * 2. COMPLETE REGISTRATION (Step 2)
+ * Submits profile data after payment is confirmed.
+ */
 export async function registerCooperativeMemberAction(
     formData: FormData
 ): Promise<MembershipRegistrationState> {
@@ -54,12 +148,23 @@ export async function registerCooperativeMemberAction(
 
         const userId = session.user.id;
 
-        // Check if user is already a member
+        // Check for existing partial record with payment
         const existingMemberRef = db.collection("cooperative_members").doc(userId);
         const existingMember = await existingMemberRef.get();
 
-        if (existingMember.exists) {
-            return { error: "You are already registered as a cooperative member", success: false };
+        if (!existingMember.exists) {
+            return { error: "No membership record found. Please complete payment first.", success: false };
+        }
+
+        const memberData = existingMember.data();
+
+        // 🔒 Verify Payment Status
+        if (memberData?.paymentStatus !== "completed") {
+            return {
+                error: "Payment not verified. Please ensure you have completed the payment step.",
+                success: false,
+                // Optional: Provide payment URL again?
+            };
         }
 
         // Parse and validate form data
@@ -78,10 +183,11 @@ export async function registerCooperativeMemberAction(
             nextOfKinName: formData.get("nextOfKinName") as string,
             nextOfKinPhone: formData.get("nextOfKinPhone") as string,
             nextOfKinAddress: formData.get("nextOfKinAddress") as string,
-            membershipTier: formData.get("membershipTier") as "basic" | "premium",
+            // Membership Tier comes from existing record, but we can validate if sent
+            membershipTier: memberData.membershipTier as "basic" | "premium",
         };
 
-        // Extract document data (uploaded to Firebase Storage)
+        // Extract document data
         const documents = {
             validId: formData.get("validIdUrl") ? {
                 name: formData.get("validIdName") as string,
@@ -109,16 +215,14 @@ export async function registerCooperativeMemberAction(
         }
 
         const validatedData = validationResult.data;
-        const registrationFee = validatedData.membershipTier === "basic" ? 10000 : 20000;
 
-        // Create membership record
-        const membershipData = {
-            userId,
+        // Update membership record with profile data
+        const updatedData = {
             firstName: validatedData.firstName,
             middleName: validatedData.middleName,
             lastName: validatedData.lastName,
             dateOfBirth: validatedData.dateOfBirth,
-            gender: validatedData.gender,
+            gender: validatedData.gender, // Make sure this matches schema
             email: validatedData.email,
             phone: validatedData.phone,
             stateOfOrigin: validatedData.stateOfOrigin,
@@ -130,89 +234,36 @@ export async function registerCooperativeMemberAction(
                 phone: validatedData.nextOfKinPhone,
                 address: validatedData.nextOfKinAddress,
             },
-            // Documents
             documents: {
                 validId: documents.validId,
                 passportPhoto: documents.passportPhoto,
                 proofOfAddress: documents.proofOfAddress,
             },
             bvn: bvn,
-            membershipTier: validatedData.membershipTier,
-            registrationFee,
-            membershipStatus: "pending" as const,
-            paymentStatus: "pending" as const,
-            createdAt: FieldValue.serverTimestamp(),
+            // Keep status as pending (admin review needed)
+            membershipStatus: "pending",
             updatedAt: FieldValue.serverTimestamp(),
         };
 
-        // Save to Firestore
-        await existingMemberRef.set(membershipData);
+        // Save to Firestore (Merge)
+        await existingMemberRef.update(updatedData);
 
-        // CRITICAL: Update user.serviceRegistrations to link membership with auth
+        // Update user service registration
         await db.collection(COLLECTIONS.USERS).doc(userId).set({
             serviceRegistrations: {
                 cooperatives: {
                     status: "pending",
-                    registrationDate: FieldValue.serverTimestamp(),
                     membershipTier: validatedData.membershipTier,
+                    onboardingCompletedAt: FieldValue.serverTimestamp(),
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        // Initialize Paystack payment
-        const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
-        if (!paystackSecretKey) {
-            return {
-                error: "Payment system not configured. Please contact support.",
-                success: false
-            };
-        }
-
-        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${paystackSecretKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                email: validatedData.email,
-                amount: registrationFee * 100, // Paystack expects amount in kobo
-                metadata: {
-                    userId,
-                    membershipTier: validatedData.membershipTier,
-                    purpose: "cooperative_membership_registration",
-                },
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/payment/callback`,
-            }),
-        });
-
-        if (!paystackResponse.ok) {
-            return {
-                error: "Failed to initialize payment. Please try again.",
-                success: false
-            };
-        }
-
-        const paystackData = await paystackResponse.json();
-
-        if (!paystackData.status || !paystackData.data?.authorization_url) {
-            return {
-                error: "Failed to generate payment link. Please try again.",
-                success: false
-            };
-        }
-
-        // Update membership with payment reference
-        await existingMemberRef.update({
-            paymentReference: paystackData.data.reference,
-        });
-
         return {
             error: null,
             success: true,
-            message: "Registration initiated. Redirecting to payment...",
-            paymentUrl: paystackData.data.authorization_url,
+            message: "Application submitted successfully.",
         };
     } catch (error) {
         logger.error("Membership registration failed:", error);

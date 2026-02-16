@@ -20,6 +20,7 @@ interface DocumentUploadStepProps {
     onChange: (data: any) => void;
     onNext: () => void;
     onBack: () => void;
+    isSubmitting?: boolean;
 }
 
 interface UploadState {
@@ -28,7 +29,7 @@ interface UploadState {
     error?: string;
 }
 
-export default function DocumentUploadStep({ data, onChange, onNext, onBack }: DocumentUploadStepProps) {
+export default function DocumentUploadStep({ data, onChange, onNext, onBack, isSubmitting = false }: DocumentUploadStepProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [bvnConsent, setBvnConsent] = useState(false);
     const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>({
@@ -410,9 +411,17 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                 </button>
                 <button
                     onClick={handleContinue}
-                    className="px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
+                    disabled={isSubmitting}
+                    className="px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                    Continue to Payment
+                    {isSubmitting ? (
+                        <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Submitting...
+                        </>
+                    ) : (
+                        "Submit Application"
+                    )}
                 </button>
             </div>
         </div>

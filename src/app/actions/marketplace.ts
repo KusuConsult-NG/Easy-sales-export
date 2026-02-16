@@ -14,6 +14,7 @@ import { uploadFileToStorage } from "@/lib/storage-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SellerVerification, Product, CartItem, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
+import { unstable_cache } from "next/cache";
 
 // ============================================================================
 // SELLER VERIFICATION
@@ -671,49 +672,62 @@ export async function getProductAction(productId: string) {
 /**
  * Get recommended products for buyers
  */
-export async function getRecommendedProductsAction(limit: number = 3) {
-    try {
-        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", "active")
-            .where("availableQuantity", ">", 0)
-            .get();
 
-        let products = snapshot.docs.map(doc => doc.data() as Product);
+// Internal cache
+const getCachedRecommendedProducts = unstable_cache(
+    async (limit: number) => {
+        try {
+            const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
+                .where("status", "==", "active")
+                .where("availableQuantity", ">", 0)
+                .get();
 
-        // Sort by rating and views to get best products
-        products = products
-            .sort((a, b) => {
-                // Prioritize products with ratings, then views
-                const scoreA = (a.rating || 0) * 10 + (a.views || 0);
-                const scoreB = (b.rating || 0) * 10 + (b.views || 0);
-                return scoreB - scoreA;
-            })
-            .slice(0, limit);
+            let products = snapshot.docs.map(doc => doc.data() as Product);
 
-        // Fetch seller names for each product
-        const productsWithSellers = await Promise.all(
-            products.map(async (product) => {
-                let sellerName = "Unknown Seller";
-                if (product.sellerId) {
-                    const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
-                    const userSnap = await userRef.get();
-                    if (userSnap.exists) {
-                        const userData = userSnap.data();
-                        sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
+            // Sort by rating and views to get best products
+            products = products
+                .sort((a, b) => {
+                    // Prioritize products with ratings, then views
+                    const scoreA = (a.rating || 0) * 10 + (a.views || 0);
+                    const scoreB = (b.rating || 0) * 10 + (b.views || 0);
+                    return scoreB - scoreA;
+                })
+                .slice(0, limit);
+
+            // Fetch seller names for each product
+            const productsWithSellers = await Promise.all(
+                products.map(async (product) => {
+                    let sellerName = "Unknown Seller";
+                    if (product.sellerId) {
+                        const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
+                        const userSnap = await userRef.get();
+                        if (userSnap.exists) {
+                            const userData = userSnap.data();
+                            sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
+                        }
                     }
-                }
-                return {
-                    ...product,
-                    sellerName,
-                };
-            })
-        );
+                    return {
+                        ...product,
+                        sellerName,
+                    };
+                })
+            );
 
-        return { success: true, products: productsWithSellers };
-    } catch (error: any) {
-        logger.error("Get recommended products error:", error);
-        return { success: false, error: error.message, products: [] };
-    }
+            return { success: true, products: productsWithSellers };
+        } catch (error: any) {
+            logger.error("Get recommended products error:", error);
+            return { success: false, error: error.message, products: [] };
+        }
+    },
+    ["recommended-products"],
+    { revalidate: 3600, tags: ["recommended-products"] }
+);
+
+/**
+ * Get recommended products for buyers
+ */
+export async function getRecommendedProductsAction(limit: number = 3) {
+    return getCachedRecommendedProducts(limit);
 }
 
 
@@ -774,45 +788,59 @@ export async function deleteProductAction(productId: string) {
 /**
  * Get related products based on category and location
  */
-export async function getRelatedProductsAction(productId: string, limit: number = 4) {
-    try {
-        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
-        const productSnap = await productRef.get();
 
-        if (!productSnap.exists) {
-            return { success: false, error: "Product not found", products: [] };
-        }
+// Internal cache
+const getCachedRelatedProducts = (productId: string, limit: number) => unstable_cache(
+    async () => {
+        try {
+            const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
+            const productSnap = await productRef.get();
 
-        const product = productSnap.data() as Product;
+            if (!productSnap.exists) {
+                return { success: false, error: "Product not found", products: [] };
+            }
 
-        // Query by same category
-        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("category", "==", product.category)
-            .where("status", "==", "active")
-            .limit(limit + 1)
-            .get();
+            const product = productSnap.data() as Product;
 
-        let products = snapshot.docs
-            .map(doc => doc.data() as Product)
-            .filter(p => p.id !== productId);
-
-        // If not enough, add random active products
-        if (products.length < limit) {
-            const additionalSnapshot = await db.collection(COLLECTIONS.PRODUCTS)
+            // Query by same category
+            const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
+                .where("category", "==", product.category)
                 .where("status", "==", "active")
-                .limit(limit * 2)
+                .limit(limit + 1)
                 .get();
 
-            const additional = additionalSnapshot.docs
+            let products = snapshot.docs
                 .map(doc => doc.data() as Product)
-                .filter(p => p.id !== productId && !products.find(existing => existing.id === p.id));
+                .filter(p => p.id !== productId);
 
-            products = [...products, ...additional].slice(0, limit);
+            // If not enough, add random active products
+            if (products.length < limit) {
+                const randomSnapshot = await db.collection(COLLECTIONS.PRODUCTS)
+                    .where("status", "==", "active")
+                    .limit(limit * 2)
+                    .get();
+
+                const randomProducts = randomSnapshot.docs
+                    .map(doc => doc.data() as Product)
+                    .filter(p => p.id !== productId && !products.find(existing => existing.id === p.id));
+
+                products = [...products, ...randomProducts].slice(0, limit);
+            }
+
+            return { success: true, products: products.slice(0, limit) };
+        } catch (error: any) {
+            logger.error("Get related products error:", error);
+            return { success: false, error: error.message, products: [] };
         }
+    },
+    [`related-products-${productId}`],
+    { revalidate: 3600, tags: [`related-products-${productId}`] }
+)();
 
-        return { success: true, products };
-    } catch (error: any) {
-        logger.error("Get related products error:", error);
-        return { success: false, error: error.message, products: [] };
-    }
+/**
+ * Get related products based on category and location
+ */
+export async function getRelatedProductsAction(productId: string, limit: number = 4) {
+    return getCachedRelatedProducts(productId, limit);
 }
+

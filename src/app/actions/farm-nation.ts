@@ -70,13 +70,28 @@ export async function getPropertiesAction(filters?: {
     maxPrice?: number;
     minSize?: number;
     maxSize?: number;
+    search?: string;
+    limit?: number;
+    lastDocId?: string;
 }) {
     try {
-        const propertiesRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES);
-        const snapshot = await propertiesRef
-            .where("status", "in", ["available", "pending"])
-            .orderBy("createdAt", "desc")
-            .get();
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES);
+
+        // Sorting
+        query = query.orderBy("createdAt", "desc");
+
+        // Pagination Cursor
+        if (filters?.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(filters.lastDocId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        const pageSize = filters?.limit || 20;
+        query = query.limit(pageSize);
+
+        const snapshot = await query.get();
 
         let properties = snapshot.docs.map((doc) => {
             const data = doc.data();
@@ -88,8 +103,16 @@ export async function getPropertiesAction(filters?: {
             };
         }) as Property[];
 
-        // Client-side filtering (Firestore has query limitations)
+        // Apply filters (Client-side for now as Firestore is limited)
         if (filters) {
+            if (filters.search) {
+                const searchLower = filters.search.toLowerCase();
+                properties = properties.filter(p =>
+                    p.name.toLowerCase().includes(searchLower) ||
+                    p.location.toLowerCase().includes(searchLower) ||
+                    p.state.toLowerCase().includes(searchLower)
+                );
+            }
             if (filters.state && filters.state !== "all") {
                 properties = properties.filter((p) => p.state === filters.state);
             }
@@ -113,9 +136,36 @@ export async function getPropertiesAction(filters?: {
             }
         }
 
-        return { success: true, properties };
+        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+
+        return {
+            success: true,
+            properties,
+            lastDocId: lastDoc?.id,
+            hasMore: snapshot.docs.length === pageSize
+        };
     } catch (error: any) {
         logger.error("Get properties error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function approveFarmNationSellerAction(userId: string) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+        // Update user
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            "serviceRegistrations.farmNation.status": "approved",
+            "serviceRegistrations.farmNation.approvedAt": FieldValue.serverTimestamp(),
+            "serviceRegistrations.farmNation.approvedBy": session.user.id,
+            roles: FieldValue.arrayUnion("farm-nation-seller")
+        });
+
+        return { success: true, message: "Seller approved successfully" };
+    } catch (error: any) {
+        logger.error("Approve seller error:", error);
         return { success: false, error: error.message };
     }
 }
@@ -615,12 +665,13 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
                 },
                 serviceRegistrations: {
                     farmNation: {
-                        status: "approved", // Farm Nation has instant approval
+                        status: "pending", // Strict gating: Admin must approve
                         role: data.role,
                         completedAt: FieldValue.serverTimestamp(),
+                        submittedAt: FieldValue.serverTimestamp(),
                     }
                 },
-                isVerified: true, // Instant verification for Farm Nation
+                // isVerified: true, // REMOVED: User must be verified by Admin
                 roles: FieldValue.arrayUnion(...roles),
                 updatedAt: FieldValue.serverTimestamp(),
             },

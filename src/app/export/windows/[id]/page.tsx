@@ -97,34 +97,51 @@ export default function ExportWindowDetailPage() {
         minInvestment: new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(windowData.minInvestment),
         openDate: new Date(windowData.openDate).toLocaleDateString(),
         closeDate: new Date(windowData.closeDate).toLocaleDateString(),
-        // Mock extended data since DB only has basics
-        description: "This premium export opportunity is secured and managed by experienced professionals. Invest in high-demand agricultural commodities with verified international buyers.",
-        specifications: {
-            "Commodity Type": windowData.commodity,
-            "Destination": windowData.destination,
-            "Status": windowData.status,
-            "Total Spots": windowData.totalSpots.toString(),
-            "Certification": "Export Certified"
-        },
-        timeline: [
-            { phase: "Investment Period", duration: "15 days", description: "Open for funding" },
-            { phase: "Procurement", duration: "14 days", description: "Sourcing and aggregation" },
-            { phase: "Export & Shipping", duration: "20 days", description: "Logistics to destination" },
-            { phase: "Returns", duration: "7 days", description: "Profit distribution" }
-        ],
-        documents: [
-            "Export License",
-            "Insurance Policy",
-            "Quality Certificate",
-            "Investment Agreement"
-        ],
-        benefits: [
-            `Projected ROI: ${windowData.projectedROI}`,
-            "Secure Payment",
-            "Fully Insured",
-            "Expert Management",
-            "Trackable Shipment"
-        ]
+        // Use real deep data with fallbacks
+        description: windowData.description || "This premium export opportunity is secured and managed by experienced professionals.",
+        specifications: windowData.specifications && windowData.specifications.length > 0
+            ? windowData.specifications.reduce((acc: any, curr: string) => {
+                // If spec is "Key: Value", parse it. Otherwise use generic key
+                const parts = curr.split(":");
+                if (parts.length > 1) {
+                    acc[parts[0].trim()] = parts[1].trim();
+                } else {
+                    acc[`Spec ${Object.keys(acc).length + 1}`] = curr;
+                }
+                return acc;
+            }, {})
+            : {
+                "Commodity Type": windowData.commodity,
+                "Destination": windowData.destination,
+                "Status": windowData.status,
+                "Total Spots": windowData.totalSpots.toString(),
+                "Certification": "Export Certified"
+            },
+        timeline: windowData.timeline && windowData.timeline.length > 0
+            ? windowData.timeline
+            : [
+                { phase: "Investment Period", duration: "15 days", description: "Open for funding" },
+                { phase: "Procurement", duration: "14 days", description: "Sourcing and aggregation" },
+                { phase: "Export & Shipping", duration: "20 days", description: "Logistics to destination" },
+                { phase: "Returns", duration: "7 days", description: "Profit distribution" }
+            ],
+        documents: windowData.documents && windowData.documents.length > 0
+            ? windowData.documents.map((d: any) => d.name || d)
+            : [
+                "Export License",
+                "Insurance Policy",
+                "Quality Certificate",
+                "Investment Agreement"
+            ],
+        benefits: windowData.benefits && windowData.benefits.length > 0
+            ? windowData.benefits
+            : [
+                `Projected ROI: ${windowData.projectedROI}`,
+                "Secure Payment",
+                "Fully Insured",
+                "Expert Management",
+                "Trackable Shipment"
+            ]
     };
 
     return (
@@ -198,7 +215,7 @@ export default function ExportWindowDetailPage() {
                                             className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2"
                                         >
                                             <dt className="font-semibold text-slate-900 dark:text-white">{key}</dt>
-                                            <dd className="text-slate-600 dark:text-slate-400">{value}</dd>
+                                            <dd className="text-slate-600 dark:text-slate-400">{String(value)}</dd>
                                         </div>
                                     ))}
                                 </dl>

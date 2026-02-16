@@ -6,10 +6,8 @@
 
 import { redirect } from "next/navigation";
 import { logger } from '@/lib/logger';
-import { getAuth } from "firebase-admin/auth";
-import { cookies } from "next/headers";
 import { checkServiceAccess } from "@/lib/auth/service-access";
-import { initializeApp, getApps } from "firebase-admin/app";
+import { auth } from "@/lib/auth"; // Use NextAuth session
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 async function BuyerLayoutContent({ children }: { children: React.ReactNode }) {
@@ -26,25 +24,15 @@ async function BuyerLayoutContent({ children }: { children: React.ReactNode }) {
 }
 
 export default async function BuyerLayout({ children }: { children: React.ReactNode }) {
-    // Initialize Firebase Admin if needed
-    if (getApps().length === 0) {
-        initializeApp();
-    }
+    // Get NextAuth session
+    const session = await auth();
 
-    const auth = getAuth();
-
-    // Get session cookie
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
+    if (!session?.user?.id) {
         redirect("/marketplace/login");
     }
 
     try {
-        // Verify session
-        const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
-        const userId = decodedClaims.uid;
+        const userId = session.user.id;
 
         // Check marketplace access (buyer)
         const accessResult = await checkServiceAccess(userId, "marketplace");

@@ -137,3 +137,98 @@ export async function getProductsByCategoryAction(category: string) {
         return { success: false, error: error.message, products: [] };
     }
 }
+
+// ============================================================================
+// ORDER MANAGEMENT
+// ============================================================================
+
+export async function getBuyerOrdersAction() {
+    try {
+        const { auth } = await import("@/lib/auth");
+        const session = await auth();
+
+        if (!session?.user) {
+            return { success: false, error: "Authentication required" };
+        }
+
+        const snapshot = await db.collection("marketplaceOrders")
+            .where("buyerId", "==", session.user.id)
+            .orderBy("createdAt", "desc")
+            .get();
+
+        const orders = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                ...data,
+                // Format dates for client
+                date: data.createdAt?.toDate().toLocaleDateString() || "N/A",
+                estimatedDelivery: data.estimatedDelivery?.toDate().toLocaleDateString() || "Pending",
+                deliveredDate: data.deliveredAt?.toDate().toLocaleDateString(),
+            };
+        });
+
+        return { success: true, orders };
+    } catch (error: any) {
+        logger.error("Get buyer orders error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function confirmOrderReceiptAction(orderId: string) {
+    try {
+        const { auth } = await import("@/lib/auth");
+        const { FieldValue } = await import("firebase-admin/firestore");
+        const session = await auth();
+
+        if (!session?.user) {
+            return { success: false, error: "Authentication required" };
+        }
+
+        // 1. Get Order
+        const orderRef = db.collection("marketplaceOrders").doc(orderId);
+        const orderDoc = await orderRef.get();
+
+        if (!orderDoc.exists) {
+            return { success: false, error: "Order not found" };
+        }
+
+        const orderData = orderDoc.data();
+
+        // 2. Verify Buyer
+        if (orderData?.buyerId !== session.user.id) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        if (orderData?.orderStatus !== "in_transit" && orderData?.orderStatus !== "processing") {
+            // Allow confirming if it's processing or in_transit
+        }
+
+        await db.runTransaction(async (transaction) => {
+            // 3. Update Order Status
+            transaction.update(orderRef, {
+                orderStatus: "delivered",
+                paymentStatus: "paid_to_seller", // Escrow released
+                deliveredAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // 4. Release Escrow Funds
+            const escrowQuery = await db.collection("escrow_transactions")
+                .where("orderId", "==", orderId)
+                .get();
+
+            escrowQuery.docs.forEach(doc => {
+                transaction.update(doc.ref, {
+                    status: "released",
+                    releasedAt: FieldValue.serverTimestamp(),
+                });
+            });
+        });
+
+        return { success: true, message: "Order confirmed and funds released to seller(s)." };
+
+    } catch (error: any) {
+        logger.error("Confirm receipt error:", error);
+        return { success: false, error: error.message };
+    }
+}

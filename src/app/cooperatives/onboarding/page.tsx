@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -16,11 +16,11 @@ import { CooperativeErrorBoundary } from "@/components/errors/CooperativeErrorBo
 import { useToast } from "@/contexts/ToastContext";
 
 // Steps
-import TierSelectionStep from "./steps/TierSelectionStep";
 import PersonalInfoStep from "./steps/PersonalInfoStep";
 import NextOfKinStep from "./steps/NextOfKinStep";
 import DocumentUploadStep from "./steps/DocumentUploadStep";
-import PaymentStep from "./steps/PaymentStep";
+import { getMembershipAction } from "@/app/actions/cooperative";
+import { Loader2 } from "lucide-react";
 
 function CooperativeOnboardingContent() {
     const router = useRouter();
@@ -28,10 +28,36 @@ function CooperativeOnboardingContent() {
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Form data
-    const [tierData, setTierData] = useState({
-        tier: "" as "basic" | "premium" | ""
-    });
+
+    const [isLoading, setIsLoading] = useState(true);
+    const [tier, setTier] = useState<"basic" | "premium">("basic"); // From server
+
+    useEffect(() => {
+        const checkPayment = async () => {
+            try {
+                const result = await getMembershipAction();
+                if (result.success && result.data) {
+                    if (result.data.paymentStatus !== "completed") {
+                        showToast("Please complete payment first", "error");
+                        router.push("/cooperatives/payment");
+                        return;
+                    }
+                    setTier(result.data.membershipTier);
+                } else {
+                    // No membership record found -> Redirect to payment
+                    showToast("Please complete payment first", "error");
+                    router.push("/cooperatives/payment");
+                    return;
+                }
+            } catch (error) {
+                console.error("Payment check failed", error);
+                router.push("/cooperatives/payment");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        checkPayment();
+    }, [router, showToast]);
 
     const [personalInfo, setPersonalInfo] = useState({
         fullName: "",
@@ -61,14 +87,12 @@ function CooperativeOnboardingContent() {
         bvn: ""
     });
 
-    const totalSteps = 5;
+    const totalSteps = 3;
 
     const steps = [
-        { number: 1, name: "Tier Selection" },
-        { number: 2, name: "Personal Info" },
-        { number: 3, name: "Next of Kin" },
-        { number: 4, name: "Documents" },
-        { number: 5, name: "Payment" }
+        { number: 1, name: "Personal Info" },
+        { number: 2, name: "Next of Kin" },
+        { number: 3, name: "Documents" },
     ];
 
     const handleComplete = async () => {
@@ -76,8 +100,8 @@ function CooperativeOnboardingContent() {
         try {
             const formData = new FormData();
 
-            // Tier
-            formData.append("membershipTier", tierData.tier);
+            // Tier (From Server, verified)
+            formData.append("membershipTier", tier);
 
             // Personal Info
             const nameParts = personalInfo.fullName.trim().split(" ");
@@ -124,9 +148,10 @@ function CooperativeOnboardingContent() {
             // Call Server Action
             const result = await registerCooperativeMemberAction(formData);
 
-            if (result.success && result.paymentUrl) {
-                // Redirect to Paystack
-                window.location.href = result.paymentUrl;
+            if (result.success) {
+                showToast("Application submitted successfully!", "success");
+                // Redirect to pending page
+                router.push("/cooperatives/onboarding/pending");
             } else {
                 showToast(result.error || "Registration failed. Please try again.", "error");
                 setIsSubmitting(false);
@@ -201,44 +226,38 @@ function CooperativeOnboardingContent() {
 
             {/* Content */}
             <div className="max-w-4xl mx-auto px-8 py-12">
-                {currentStep === 1 && (
-                    <TierSelectionStep
-                        data={tierData}
-                        onChange={setTierData}
-                        onNext={() => setCurrentStep(2)}
-                    />
-                )}
-                {currentStep === 2 && (
-                    <PersonalInfoStep
-                        data={personalInfo}
-                        onChange={setPersonalInfo}
-                        onNext={() => setCurrentStep(3)}
-                        onBack={() => setCurrentStep(1)}
-                    />
-                )}
-                {currentStep === 3 && (
-                    <NextOfKinStep
-                        data={nextOfKin}
-                        onChange={setNextOfKin}
-                        onNext={() => setCurrentStep(4)}
-                        onBack={() => setCurrentStep(2)}
-                    />
-                )}
-                {currentStep === 4 && (
-                    <DocumentUploadStep
-                        data={documents}
-                        onChange={setDocuments}
-                        onNext={() => setCurrentStep(5)}
-                        onBack={() => setCurrentStep(3)}
-                    />
-                )}
-                {currentStep === 5 && (
-                    <PaymentStep
-                        tierData={tierData as { tier: "basic" | "premium" }}
-                        onComplete={handleComplete}
-                        onBack={() => setCurrentStep(4)}
-                        isSubmitting={isSubmitting}
-                    />
+                {isLoading ? (
+                    <div className="flex justify-center py-20">
+                        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+                    </div>
+                ) : (
+                    <>
+                        {currentStep === 1 && (
+                            <PersonalInfoStep
+                                data={personalInfo}
+                                onChange={setPersonalInfo}
+                                onNext={() => setCurrentStep(2)}
+                                onBack={() => router.push("/cooperatives")} // Back to dashboard/hub
+                            />
+                        )}
+                        {currentStep === 2 && (
+                            <NextOfKinStep
+                                data={nextOfKin}
+                                onChange={setNextOfKin}
+                                onNext={() => setCurrentStep(3)}
+                                onBack={() => setCurrentStep(1)}
+                            />
+                        )}
+                        {currentStep === 3 && (
+                            <DocumentUploadStep
+                                data={documents}
+                                onChange={setDocuments}
+                                onNext={handleComplete}
+                                onBack={() => setCurrentStep(2)}
+                                isSubmitting={isSubmitting} // Pass submitting state to final step
+                            />
+                        )}
+                    </>
                 )}
             </div>
         </div>

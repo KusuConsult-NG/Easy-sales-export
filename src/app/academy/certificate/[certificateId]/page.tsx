@@ -59,15 +59,14 @@ export default function CertificatePage() {
 
     const handleDownload = () => {
         setDownloading(true);
-        // Generate certificate number
-        const certNumber = `ACAD-${new Date().getFullYear()}-${courseId.substring(0, 6).toUpperCase()}`;
+        // Use Server-Side PDF Generation API
+        const date = new Date().toISOString().split('T')[0];
+        const name = encodeURIComponent(session?.user?.name || 'Student');
+        const url = `/api/academy/certificate/${courseId}?name=${name}&date=${date}`;
 
-        // In production, this would call a backend API to generate PDF
-        // For now, we'll simulate and open print dialog
-        setTimeout(() => {
-            window.print();
-            setDownloading(false);
-        }, 500);
+        // Open in new tab (browser handles download/view)
+        window.open(url, '_blank');
+        setDownloading(false);
     };
 
     const handleShare = () => {
@@ -261,7 +260,7 @@ export default function CertificatePage() {
 
                 {/* Print Instructions */}
                 <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400 print:hidden">
-                    <p>💡 Tip: Click "Download PDF" to save or print your certificate</p>
+                    <p>💡 Tip: Click "Download PDF" to get your official verifiable certificate.</p>
                 </div>
             </div>
         </div>

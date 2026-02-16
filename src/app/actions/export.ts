@@ -30,25 +30,15 @@ export const exportWindowSchema = z.object({
 export type ExportWindowFormData = z.infer<typeof exportWindowSchema>;
 
 // Type definitions
-type ExportWindow = {
-    id: string;
-    orderId: string;
-    commodity: string;
-    quantity: string;
-    amount: number;
-    status: "pending" | "in_transit" | "delivered" | "completed";
-    userId: string;
-    orderDate: Date;
-    deliveryDate?: Date;
-    escrowReleaseDate?: Date;
-    createdAt: Date;
-    updatedAt: Date;
-};
+
+import type { ExportWindow, ExportOnboardingApplication } from "@/lib/types/firestore";
 
 type ActionErrorState = {
     error: string;
     success: false;
 };
+
+
 
 type CreateExportSuccessState = {
     error: null;
@@ -190,6 +180,45 @@ export async function updateExportStatusAction(
 }
 
 // ============================================
+// Update Export Window Details Action
+// ============================================
+
+export async function updateExportWindowAction(
+    exportId: string,
+    updateData: Partial<ExportWindow>
+): Promise<{ error: string | null; success: boolean }> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "Authentication required", success: false };
+        }
+
+        // Verify Admin
+        if (!session.user.roles?.includes("admin")) {
+            return { error: "Unauthorized access", success: false };
+        }
+
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+
+        // Remove undefined fields
+        const cleanData = JSON.parse(JSON.stringify(updateData));
+        delete cleanData.id;
+        delete cleanData.createdAt;
+        delete cleanData.updatedAt;
+
+        await exportRef.update({
+            ...cleanData,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return { error: null, success: true };
+    } catch (error: any) {
+        logger.error("Update export window error:", error);
+        return { error: "Failed to update export window", success: false };
+    }
+}
+
+// ============================================
 // Get Export Windows Action
 // ============================================
 
@@ -228,11 +257,20 @@ export async function getExportWindowsAction(
                 commodity: data.commodity,
                 quantity: data.quantity,
                 amount: data.amount,
+                roi: data.roi || "N/A",
+                duration: data.duration || "N/A",
                 status: data.status,
                 userId: data.userId,
-                orderDate: data.orderDate?.toDate() || new Date(),
+                // Deep data
+                description: data.description,
+                specifications: data.specifications || [],
+                benefits: data.benefits || [],
+                documents: data.documents || [],
+                timeline: data.timeline || [],
+
+                startDate: data.startDate?.toDate(),
+                endDate: data.endDate?.toDate(),
                 deliveryDate: data.deliveryDate?.toDate(),
-                escrowReleaseDate: data.escrowReleaseDate?.toDate(),
                 createdAt: data.createdAt?.toDate() || new Date(),
                 updatedAt: data.updatedAt?.toDate() || new Date(),
             };
@@ -270,9 +308,11 @@ export async function getExportWindowsAction(
 // Get Export Window Details Action
 // ============================================
 
+export const getExportRequestByIdAction = getExportWindowDetailsAction; // Alias
+
 export async function getExportWindowDetailsAction(
     exportId: string
-): Promise<{ error: string | null; success: boolean; data?: ExportWindow }> {
+): Promise<{ error: string | null; success: boolean; data?: ExportWindow; export?: ExportWindow }> {
     try {
         const session = await auth();
         if (!session?.user) {
@@ -302,11 +342,20 @@ export async function getExportWindowDetailsAction(
             commodity: data.commodity,
             quantity: data.quantity,
             amount: data.amount,
+            roi: data.roi || "N/A",
+            duration: data.duration || "N/A",
             status: data.status,
             userId: data.userId,
-            orderDate: data.orderDate?.toDate() || new Date(),
+            // Deep data
+            description: data.description,
+            specifications: data.specifications || [],
+            benefits: data.benefits || [],
+            documents: data.documents || [],
+            timeline: data.timeline || [],
+
+            startDate: data.startDate?.toDate(),
+            endDate: data.endDate?.toDate(),
             deliveryDate: data.deliveryDate?.toDate(),
-            escrowReleaseDate: data.escrowReleaseDate?.toDate(),
             createdAt: data.createdAt?.toDate() || new Date(),
             updatedAt: data.updatedAt?.toDate() || new Date(),
         };
@@ -315,6 +364,7 @@ export async function getExportWindowDetailsAction(
             error: null,
             success: true,
             data: exportWindow,
+            export: exportWindow // For compatibility
         };
     } catch (error: any) {
         logger.error("Get export details error:", error);

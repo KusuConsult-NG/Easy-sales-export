@@ -126,7 +126,7 @@ function ModuleLoginContent({
                 {/* Logo & Header */}
                 <div className="text-center mb-6 md:mb-8 relative z-10">
                     <Link href={`/${redirectDefault.split('/')[1]}`} className="inline-flex items-center justify-center mb-4 md:mb-6 hover:opacity-90 transition-opacity">
-                        <div className={`w-12 h-12 md:w-16 md:h-16 bg-linear-to-br ${theme.logoGradient} rounded-2xl flex items-center justify-center shadow-xl ${theme.logoShadow} text-white transform rotate-3 hover:rotate-6 transition-transform overflow-hidden`}>
+                        <div className={`w-12 h-12 md:w-16 md:h-16 bg-linear-to-br ${theme.logoGradient} rounded-2xl flex items-center justify-center shadow-xl ${theme.logoShadow} text-white transition-transform hover:scale-105`}>
                             {logoImage ? (
                                 <div className="w-full h-full p-2">
                                     <Image

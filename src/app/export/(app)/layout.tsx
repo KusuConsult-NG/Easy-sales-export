@@ -7,10 +7,8 @@
 
 import { redirect } from "next/navigation";
 import { logger } from '@/lib/logger';
-import { getAuth } from "firebase-admin/auth";
-import { cookies } from "next/headers";
 import { checkServiceAccess } from "@/lib/auth/service-access";
-import { initializeApp, getApps } from "firebase-admin/app";
+import { auth } from "@/lib/auth"; // Use NextAuth session
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import ExportSidebar from "./ExportSidebar";
@@ -20,25 +18,15 @@ export default async function ExportAppLayout({
 }: {
     children: React.ReactNode;
 }) {
-    // Initialize Firebase Admin if needed
-    if (getApps().length === 0) {
-        initializeApp();
-    }
+    // Get NextAuth session
+    const session = await auth();
 
-    const auth = getAuth();
-
-    // Get session cookie
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
+    if (!session?.user?.id) {
         redirect("/export/login");
     }
 
     try {
-        // Verify session
-        const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
-        const userId = decodedClaims.uid;
+        const userId = session.user.id;
 
         // Check service access
         const accessResult = await checkServiceAccess(userId, "export");

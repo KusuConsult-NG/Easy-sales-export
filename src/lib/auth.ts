@@ -109,7 +109,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }),
     ],
     callbacks: {
-        async jwt({ token, user }) {
+        async jwt({ token, user, trigger }) {
             // On sign in, store user info in JWT
             if (user) {
                 token.id = user.id;
@@ -118,6 +118,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.image = user.image;
                 token.roles = user.roles; // Multi-role support
                 token.verified = user.verified ?? true; // Email verification status
+
+                // CRITICAL: Generate Firebase Custom Token for client-side SDK authentication
+                try {
+                    const { getAdminAuth } = await import("@/lib/firebase-admin");
+                    const adminAuth = getAdminAuth();
+                    // Create custom token with claims matching the user's role
+                    const customToken = await adminAuth.createCustomToken(user.id, {
+                        roles: user.roles,
+                        verified: user.verified ?? true
+                    });
+                    token.firebaseToken = customToken;
+                } catch (error) {
+                    console.error("Failed to generate custom token:", error);
+                }
+            }
+
+            // Ensure Firebase Custom Token exists (mint if missing or expired check could go here)
+            // We mint it if it's missing, which handles existing sessions and new logins
+            if (!token.firebaseToken && token.id) {
+                try {
+                    const { getAdminAuth } = await import("@/lib/firebase-admin");
+                    const adminAuth = getAdminAuth();
+                    const roles = (token.roles as any[]) || [];
+                    const verified = (token.verified as boolean) ?? true;
+
+                    // Create custom token
+                    const customToken = await adminAuth.createCustomToken(token.id as string, {
+                        roles,
+                        verified
+                    });
+                    token.firebaseToken = customToken;
+                } catch (error) {
+                    console.error("Failed to generate custom token in JWT callback:", error);
+                }
             }
 
             return token;
@@ -131,6 +165,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 session.user.image = token.image as string | null;
                 session.user.roles = (token.roles as UserRole[]) || []; // Multi-role support
                 session.user.verified = token.verified as boolean;
+
+                // Pass custom token to client
+                if (token.firebaseToken) {
+                    session.firebaseToken = token.firebaseToken as string;
+                }
             }
             return session;
         },
@@ -163,6 +202,7 @@ declare module "next-auth" {
     }
 
     interface Session {
+        firebaseToken?: string; // Custom token for Firebase SDK
         user: {
             id: string;
             email: string;
@@ -182,5 +222,6 @@ declare module "next-auth/jwt" {
         image?: string | null;
         roles: UserRole[]; // Multi-role support
         verified: boolean;
+        firebaseToken?: string;
     }
 }

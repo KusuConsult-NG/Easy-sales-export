@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClientLayout } from "@/components/layout/ClientLayout";
@@ -16,21 +16,55 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+import type { Metadata, Viewport } from "next";
+
+export const viewport: Viewport = {
+  themeColor: "#166534",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: "Easy Sales Export - Agricultural Export Platform",
-  description:
-    "Nigeria's premier platform for agricultural export management. Export yam, sesame seeds, and dried hibiscus to international markets.",
-  keywords: [
-    "agricultural export",
-    "Nigeria",
-    "yam export",
-    "sesame seeds",
-    "hibiscus",
-    "export platform",
-  ],
+  title: {
+    default: "Easy Sales Export - Agricultural Export Platform",
+    template: "%s | Easy Sales Export"
+  },
+  description: "Nigeria's premier platform for agricultural export management. Export yam, sesame seeds, and dried hibiscus to international markets.",
+  keywords: ["agricultural export", "Nigeria", "yam export", "sesame seeds", "hibiscus", "export platform", "Easy Sales Export"],
+  authors: [{ name: "KusuConsult-NG" }],
+  creator: "KusuConsult-NG",
+  metadataBase: new URL("https://easysalesexport.com"),
+  openGraph: {
+    type: "website",
+    locale: "en_NG",
+    url: "https://easysalesexport.com",
+    title: "Easy Sales Export - Agricultural Export Platform",
+    description: "Start your agricultural export journey today. Managed windows, marketplace, and academy.",
+    siteName: "Easy Sales Export",
+    images: [
+      {
+        url: "/images/og-image.jpg", // Ensure this exists or use logo
+        width: 1200,
+        height: 630,
+        alt: "Easy Sales Export Platform",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Easy Sales Export",
+    description: "Nigeria's premier agricultural export platform.",
+    images: ["/images/og-image.jpg"], // Fallback to same image
+    creator: "@EasySalesExport",
+  },
   icons: {
     icon: "/images/logo.jpg",
     apple: "/images/logo.jpg",
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 

@@ -2,25 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { logger } from '@/lib/logger';
-import { Truck, CheckCircle, XCircle, Loader2, AlertCircle, Eye, Package } from "lucide-react";
+import { Truck, CheckCircle, XCircle, Loader2, AlertCircle, Eye, Package, Pencil } from "lucide-react";
+import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 import { getAllExportRequestsAction } from "@/app/actions/admin";
 import { updateExportStatusAction } from "@/app/actions/export";
-
-// Import types if needed, or define locally for now
-type ExportWindow = {
-    id: string;
-    orderId: string;
-    commodity: string;
-    quantity: string;
-    amount: number;
-    status: string;
-    userId: string;
-    orderDate: Date;
-    deliveryDate?: Date;
-    createdAt: Date;
-    [key: string]: any;
-};
+import type { ExportWindow } from "@/lib/types/firestore";
 
 export default function AdminExportPage() {
     const { showToast } = useToast();
@@ -181,7 +168,13 @@ export default function AdminExportPage() {
                                             <td className="px-6 py-4 text-slate-500">
                                                 {new Date(exp.createdAt).toLocaleDateString()}
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-6 py-4 text-right flex justify-end gap-2">
+                                                <Link
+                                                    href={`/admin/export/edit/${exp.id}`}
+                                                    className="inline-flex items-center justify-center p-2 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </Link>
                                                 <button
                                                     onClick={() => setSelectedExport(exp)}
                                                     className="inline-flex items-center justify-center p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"

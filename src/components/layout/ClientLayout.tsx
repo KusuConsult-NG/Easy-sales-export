@@ -8,6 +8,7 @@ import { Toaster } from "sonner";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { FirebaseAuthProvider } from "@/components/providers/FirebaseAuthProvider";
 
 interface ClientLayoutProps {
     children: ReactNode;
@@ -16,14 +17,20 @@ interface ClientLayoutProps {
 // Routes that should NOT have the Sidebar (auth pages, landing page, etc.)
 const noSidebarRoutes = [
     '/auth',
-    '/dashboard',
+    '/contact',
+    '/api',
+    '/admin' // Admin has its own layout/sidebar
+];
+
+// Routes that are strictly landing pages (exact match) where sidebar should be hidden even if authenticated
+const landingPages = [
+    '/',
     '/wave',
-    '/cooperatives/landing',
+    '/cooperatives',
     '/marketplace',
-    '/academy',
-    '/export',
     '/farm-nation',
-    '/contact'
+    '/academy',
+    '/export'
 ];
 
 function LayoutContent({ children }: ClientLayoutProps) {
@@ -32,14 +39,14 @@ function LayoutContent({ children }: ClientLayoutProps) {
 
     // Check if current route should have the Sidebar
     // Requirements:
-    // 1. User must be authenticated (session exists)
-    // 2. Not on excluded routes (landing pages, auth, etc.)
-    // 3. Not on home page
+    // 1. User must be authenticated
+    // 2. Not on excluded routes
+    // 3. Not on a landing page (exact match)
     const shouldShowSidebar =
         status === "authenticated" &&
         session &&
-        pathname !== '/' &&
-        !noSidebarRoutes.some(route => pathname.startsWith(route));
+        !noSidebarRoutes.some(route => pathname.startsWith(route)) &&
+        !landingPages.includes(pathname);
 
     return (
         <ToastProvider>
@@ -64,7 +71,9 @@ function LayoutContent({ children }: ClientLayoutProps) {
 export function ClientLayout({ children }: ClientLayoutProps) {
     return (
         <SessionProvider>
-            <LayoutContent>{children}</LayoutContent>
+            <FirebaseAuthProvider>
+                <LayoutContent>{children}</LayoutContent>
+            </FirebaseAuthProvider>
         </SessionProvider>
     );
 }
