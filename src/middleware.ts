@@ -9,7 +9,7 @@ import type { UserRole } from "@/lib/types/roles";
  * Enhanced Next.js Middleware for Route Protection
  * 
  * Features:
- * - Session timeout detect ion
+ * - Session timeout detection
  * - Feature toggle enforcement
  * - Multi-role access control with permissions matrix
  * - Security headers
@@ -81,15 +81,18 @@ export async function middleware(request: NextRequest) {
     // 🛡️ GLOBAL RATE LIMITING (Edge Compatible)
     // Protects against DDoS and abuse
 
-    // OPTIMIZATION: Only rate limit API routes to avoid blocking execution/latency on UI page loads.
-    // Vercel/Next.js handles basic DDoS protection for static pages.
-    // We strictly protect our database and expensive API endpoints here.
+    // OPTIMIZATION: 
+    // 1. Block rate limiting on static page loads (GET) to ensure instant navigation.
+    // 2. Enforce limiting on API routes AND Server Actions (POST/PUT/DELETE) to prevent abuse.
+
+    // Check if request is a state-changing operation (Server Action or API mutation)
+    const isWriteOperation = request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS';
     const isApiRoute = pathname.startsWith('/api');
 
     // Default to success/skipped
     let rateLimitResult: { success: boolean; remaining?: number; error?: string } = { success: true, remaining: 100 };
 
-    if (isApiRoute) {
+    if (isApiRoute || isWriteOperation) {
         rateLimitResult = await rateLimit(request);
 
         if (!rateLimitResult.success) {
