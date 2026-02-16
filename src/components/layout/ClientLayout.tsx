@@ -40,13 +40,22 @@ function LayoutContent({ children }: ClientLayoutProps) {
     // Check if current route should have the Sidebar
     // Requirements:
     // 1. User must be authenticated
-    // 2. Not on excluded routes
+    // 2. Not on excluded routes (admin, auth, api)
     // 3. Not on a landing page (exact match)
+    // 4. Not on onboarding/login/registration flows for specific apps
+    const isExcludedFlow =
+        pathname.includes('/login') ||
+        pathname.includes('/register') ||
+        pathname.includes('/onboarding') ||
+        pathname.includes('/application') || // Wave application
+        pathname.includes('/join');
+
     const shouldShowSidebar =
         status === "authenticated" &&
         session &&
         !noSidebarRoutes.some(route => pathname.startsWith(route)) &&
-        !landingPages.includes(pathname);
+        !landingPages.includes(pathname) &&
+        !isExcludedFlow;
 
     return (
         <ToastProvider>
