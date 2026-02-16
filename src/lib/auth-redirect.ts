@@ -20,32 +20,32 @@
 export function getModuleAuthUrl(pathname: string, type: 'login' | 'register'): string {
     // Marketplace module - violet theme
     if (pathname.startsWith('/marketplace')) {
-        return `/marketplace/${type}`;
+        return type === 'login' ? `/auth/login?module=marketplace` : `/marketplace/${type}`;
     }
 
     // Cooperatives module - purple theme
     if (pathname.startsWith('/cooperatives')) {
-        return `/cooperatives/${type}`;
+        return type === 'login' ? `/auth/login?module=cooperatives` : `/cooperatives/${type}`;
     }
 
     // Export module - slate theme
     if (pathname.startsWith('/export')) {
-        return `/export/${type}`;
+        return type === 'login' ? `/auth/login?module=export` : `/export/${type}`;
     }
 
     // Farm Nation module - emerald theme
     if (pathname.startsWith('/farm-nation')) {
-        return `/farm-nation/${type}`;
+        return type === 'login' ? `/auth/login?module=farm-nation` : `/farm-nation/${type}`;
     }
 
     // WAVE module - default theme
     if (pathname.startsWith('/wave')) {
-        return `/wave/${type}`;
+        return type === 'login' ? `/auth/login?module=wave` : `/wave/${type}`;
     }
 
     // Academy module - if it has custom auth pages
     if (pathname.startsWith('/academy')) {
-        return `/academy/${type}`;
+        return type === 'login' ? `/auth/login?module=academy` : `/academy/${type}`;
     }
 
     // Default to Auth Portal for all other routes

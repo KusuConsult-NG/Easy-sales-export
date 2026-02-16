@@ -52,7 +52,7 @@ function AuthErrorContent() {
                 <div className="space-y-3">
                     <Link
                         href="/auth/login"
-                        className="block w-full py-3 px-4 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-3 px-4 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
                     >
                         Try Again
                         <ArrowRight className="w-4 h-4" />
