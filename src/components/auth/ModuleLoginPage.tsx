@@ -8,7 +8,8 @@ import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2,
 import { loginAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 export interface ModuleLoginProps {
     moduleName: string;
@@ -63,6 +64,14 @@ function ModuleLoginContent({
     const { showToast } = useToast();
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get("callbackUrl") || redirectDefault;
+    const { status } = useSession();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (status === "authenticated") {
+            router.replace(callbackUrl);
+        }
+    }, [status, router, callbackUrl]);
 
     const [formData, setFormData] = useState({
         email: "",

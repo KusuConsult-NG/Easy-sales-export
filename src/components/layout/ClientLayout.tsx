@@ -30,7 +30,8 @@ const landingPages = [
     '/marketplace',
     '/farm-nation',
     '/academy',
-    '/export'
+    '/export',
+    '/wave/landing'
 ];
 
 function LayoutContent({ children }: ClientLayoutProps) {
