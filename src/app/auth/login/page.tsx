@@ -1,4 +1,6 @@
 
+"use client";
+
 import ModuleLoginPage from "@/components/auth/ModuleLoginPage";
 import { LayoutGrid } from "lucide-react";
 
