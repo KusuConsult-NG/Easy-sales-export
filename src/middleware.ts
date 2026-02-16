@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { canAccessRoute } from "@/lib/role-app-mapping";
+import { rateLimit } from "@/lib/rate-limit";
 import type { UserRole } from "@/lib/types/roles";
 
 /**
@@ -75,6 +76,23 @@ export async function middleware(request: NextRequest) {
 
     if (isAuthPage) {
         return NextResponse.next();
+    }
+
+    // 🛡️ GLOBAL RATE LIMITING (Edge Compatible)
+    // Protects against DDoS and abuse
+    const rateLimitResult = await rateLimit(request);
+
+    if (!rateLimitResult.success) {
+        return NextResponse.json(
+            { error: rateLimitResult.error || "Too many requests" },
+            {
+                status: 429,
+                headers: {
+                    'Retry-After': '60',
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
     }
 
     // Get session using getToken (Edge Runtime compatible)
@@ -253,9 +271,15 @@ export async function middleware(request: NextRequest) {
         "base-uri 'self'",
         "form-action 'self'",
         "frame-ancestors 'none'",
+        "upgrade-insecure-requests"
     ];
 
     response.headers.set("Content-Security-Policy", cspDirectives.join("; "));
+
+    // 🛡️ Add Rate Limit Headers (monitoring)
+    if (rateLimitResult.remaining !== undefined) {
+        response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
+    }
 
     // Cache-Control for protected routes (Prevent caching of sensitive data)
     if (session) {
