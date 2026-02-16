@@ -18,6 +18,7 @@ import {
     GraduationCap
 } from "lucide-react";
 import { useState } from "react";
+import { logoutAction } from "@/app/actions/auth";
 
 
 const NAV_ITEMS = [
@@ -107,7 +108,6 @@ export default function AdminSidebar() {
                                     console.error("Firebase signout failed", e);
                                 }
                                 // Server-side cleanup via Server Action
-                                const { logoutAction } = await import("@/app/actions/auth");
                                 await logoutAction();
                             }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-slate-800 hover:text-red-300 rounded-xl transition-colors"
