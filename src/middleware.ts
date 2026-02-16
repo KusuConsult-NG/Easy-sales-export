@@ -66,6 +66,13 @@ const SESSION_TIMEOUT_MS = parseInt(process.env.SESSION_TIMEOUT_MINUTES || "30",
 export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
 
+    // Default to success/skipped
+    let rateLimitResult: { success: boolean; remaining?: number; error?: string } = { success: true, remaining: 100 };
+
+    // Get session using getToken (Edge Runtime compatible)
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    const session = token ? { user: token } : null;
+
     // CRITICAL: Skip middleware for all auth pages to prevent redirect loops
     // This includes: /auth/login, /auth/register, /marketplace/login, /export/login, etc.
     const isAuthPage = pathname.includes('/login') || // Allows /wave/login, /export/login, etc.
@@ -75,43 +82,12 @@ export async function middleware(request: NextRequest) {
         pathname === '/auth/get-started';
 
     if (isAuthPage) {
+        // If user is already authenticated, redirect them to dashboard
+        if (session) {
+            return NextResponse.redirect(new URL("/dashboard", request.url));
+        }
         return NextResponse.next();
     }
-
-    // 🛡️ GLOBAL RATE LIMITING (Edge Compatible)
-    // Protects against DDoS and abuse
-
-    // OPTIMIZATION: 
-    // 1. Block rate limiting on static page loads (GET) to ensure instant navigation.
-    // 2. Enforce limiting on API routes AND Server Actions (POST/PUT/DELETE) to prevent abuse.
-
-    // Check if request is a state-changing operation (Server Action or API mutation)
-    const isWriteOperation = request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS';
-    const isApiRoute = pathname.startsWith('/api');
-
-    // Default to success/skipped
-    let rateLimitResult: { success: boolean; remaining?: number; error?: string } = { success: true, remaining: 100 };
-
-    if (isApiRoute || isWriteOperation) {
-        rateLimitResult = await rateLimit(request);
-
-        if (!rateLimitResult.success) {
-            return NextResponse.json(
-                { error: rateLimitResult.error || "Too many requests" },
-                {
-                    status: 429,
-                    headers: {
-                        'Retry-After': '60',
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-        }
-    }
-
-    // Get session using getToken (Edge Runtime compatible)
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-    const session = token ? { user: token } : null;
 
     // Check session timeout
     if (session) {
