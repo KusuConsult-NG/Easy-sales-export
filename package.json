@@ -38,6 +38,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "file-type": "^21.3.0",
     "firebase": "^12.8.0",
     "framer-motion": "^12.31.1",
     "html2canvas": "^1.4.1",
