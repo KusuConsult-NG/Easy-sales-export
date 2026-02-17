@@ -61,17 +61,22 @@ function ModuleLoginContent({
     theme,
     backgroundConfig = { type: "standard" }
 }: ModuleLoginProps) {
-    const { showToast } = useToast();
+    const { data: session, status } = useSession();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get("callbackUrl") || redirectDefault;
-    const { status } = useSession();
-    const router = useRouter();
+    const errorParam = searchParams.get("error");
+    const { showToast } = useToast();
 
+    // Client-side redirect if already authenticated
     useEffect(() => {
-        if (status === "authenticated") {
+        if (status === "authenticated" && session?.user) {
             router.replace(callbackUrl);
         }
+    }, [status, session, router, callbackUrl]);
 
+    // Error handling
+    useEffect(() => {
         // Handle URL error parameters (e.g. from middleware redirect)
         const errorParam = searchParams.get("error");
         if (errorParam) {
@@ -307,7 +312,7 @@ function ModuleLoginContent({
                 {/* Footer */}
                 <div className="mt-8 text-center relative z-10 space-y-4">
                     <p className={`text-sm ${isCustomBg ? 'text-emerald-200/40 uppercase tracking-widest font-semibold' : 'text-slate-500 dark:text-slate-400'}`}>
-                        {isCustomBg ? 'Implemented by Easy Sales Export' : `© ${new Date().getFullYear()} Easy Sales Export • v1.0.1 (Fix)`}
+                        {isCustomBg ? 'Implemented by Easy Sales Export' : `© ${new Date().getFullYear()} Easy Sales Export`}
                     </p>
                     <div className={`flex items-center justify-center gap-6 text-sm ${isCustomBg ? 'text-emerald-200/60' : 'text-slate-500 dark:text-slate-400'}`}>
                         <Link href="/privacy" className="hover:underline hover:text-primary transition-colors">
