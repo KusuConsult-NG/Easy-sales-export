@@ -21,6 +21,7 @@ export type AuditAction =
     | "user_unverify"
     | "user_role_change"
     | "user_role_update"
+    | "user_delete"
     | "account_unlock"
     | "export_create"
     | "export_status_update"

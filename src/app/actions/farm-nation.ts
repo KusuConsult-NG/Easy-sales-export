@@ -232,33 +232,40 @@ export async function listPropertyAction(input: PropertyListingInput) {
             };
         }
 
-        // Validate Location (Strict)
-        if (!isValidState(input.state)) {
+        // Validate with Zod
+        const { farmNationListingSchema } = await import("@/lib/validations/land");
+        const validation = farmNationListingSchema.safeParse(input);
+
+        if (!validation.success) {
             return {
                 success: false,
-                error: `Invalid State: "${input.state}". Please select a valid Nigerian state.`,
+                error: validation.error.issues[0]?.message || "Validation failed",
             };
         }
-        if (!isValidLGA(input.state, input.lga)) {
-            return {
-                success: false,
-                error: `Invalid LGA: "${input.lga}" is not in ${input.state}.`,
-            };
+
+        const validatedData = validation.data;
+
+        // Check State/LGA Validity after basic schema check
+        if (!isValidState(validatedData.state)) {
+            return { success: false, error: `Invalid State: "${validatedData.state}"` };
+        }
+        if (!isValidLGA(validatedData.state, validatedData.lga)) {
+            return { success: false, error: `Invalid LGA: "${validatedData.lga}" in ${validatedData.state}` };
         }
 
         // Create property
         const property = {
-            name: input.name,
-            description: input.description,
-            location: input.location,
-            state: normalizeLocation(input.state),
-            lga: normalizeLocation(input.lga),
-            price: input.price,
-            size: input.size,
-            type: input.type,
-            category: input.category,
-            features: input.features,
-            leaseDuration: input.leaseDuration || null,
+            name: validatedData.name,
+            description: validatedData.description,
+            location: validatedData.location,
+            state: normalizeLocation(validatedData.state),
+            lga: normalizeLocation(validatedData.lga),
+            price: validatedData.price,
+            size: validatedData.size,
+            type: validatedData.type,
+            category: validatedData.category,
+            features: validatedData.features,
+            leaseDuration: validatedData.leaseDuration || null,
             images: [], // Will be uploaded separately
             ownerId: session.user.id,
             ownerName: userData.name || "Unknown",

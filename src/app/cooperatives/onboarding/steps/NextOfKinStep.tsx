@@ -20,7 +20,10 @@ interface NextOfKinStepProps {
     onBack: () => void;
 }
 
+import { useToast } from "@/contexts/ToastContext";
+
 export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOfKinStepProps) {
+    const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const relationships = [
@@ -61,6 +64,9 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
     const handleContinue = () => {
         if (validate()) {
             onNext();
+        } else {
+            showToast("Please provide all required next of kin details", "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
         }
     };
 

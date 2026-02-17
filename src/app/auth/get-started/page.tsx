@@ -7,31 +7,22 @@ import { COMPANY_INFO } from "@/lib/constants";
 
 const REGISTRATION_PATHS = [
     {
-        id: "cooperative",
-        title: "Cooperative Member",
-        description: "Join a cooperative to access loans, savings, and community support.",
-        iconImage: "/images/modules/cooperative.png",
-        color: "bg-purple-600",
-        href: "/cooperatives/register", // Direct specific register
-        benefits: ["Access low-interest loans", "High-yield savings", "Community network"],
-    },
-    {
         id: "wave",
-        title: "WAVE Application",
+        title: "WAVE Program",
         description: "Women's Agribusiness Venture Empowerment program application.",
         iconImage: "/images/modules/wave.png",
         color: "bg-green-600",
-        href: "/wave/application", // WAVE Official Beneficiary Application Form
+        href: "/wave/application",
         benefits: ["Business grants", "Mentorship", "Exclusive training"],
     },
     {
-        id: "export-windows",
-        title: "Export Windows",
-        description: "Join bulk export opportunities and access international markets.",
-        iconImage: "/images/modules/export.png",
-        color: "bg-blue-600",
-        href: "/export/register",
-        benefits: ["International buyers", "Volume aggregation", "Premium pricing"],
+        id: "cooperative",
+        title: "Cooperatives",
+        description: "Join a cooperative to access loans, savings, and community support.",
+        iconImage: "/images/modules/cooperative.png",
+        color: "bg-purple-600",
+        href: "/cooperatives/register",
+        benefits: ["Access low-interest loans", "High-yield savings", "Community network"],
     },
     {
         id: "marketplace",
@@ -43,8 +34,17 @@ const REGISTRATION_PATHS = [
         benefits: ["Verified buyers & sellers", "Secure payments", "Nationwide delivery"],
     },
     {
+        id: "export-windows",
+        title: "Export Windows",
+        description: "Join bulk export opportunities and access international markets.",
+        iconImage: "/images/modules/export.png",
+        color: "bg-blue-600",
+        href: "/export/register",
+        benefits: ["International buyers", "Volume aggregation", "Premium pricing"],
+    },
+    {
         id: "farm-nation",
-        title: "Farm Nation Investor",
+        title: "Farm Nation",
         description: "Invest in agricultural land and verified farm projects.",
         iconImage: "/images/modules/farm-nation.png",
         color: "bg-emerald-600",
@@ -53,7 +53,7 @@ const REGISTRATION_PATHS = [
     },
     {
         id: "academy",
-        title: "Academy Student",
+        title: "Academy",
         description: "Learn modern farming techniques and business skills.",
         iconImage: "/images/modules/academy.png",
         color: "bg-orange-600",

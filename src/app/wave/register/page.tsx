@@ -4,6 +4,7 @@ import ModuleRegisterPage from "@/components/auth/ModuleRegisterPage";
 import { Sparkles } from "lucide-react";
 import Image from "next/image";
 
+// Force rebuild: WAVE Registration Page
 export default function WaveRegisterPage() {
     return (
         <ModuleRegisterPage

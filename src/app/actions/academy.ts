@@ -668,15 +668,28 @@ export async function submitAcademyApplicationAction(
  * ADMIN ACTIONS
  */
 
-export async function createCourseAction(data: Partial<Course>): Promise<{ success: boolean; id?: string; error?: string }> {
+export async function createCourseAction(data: any): Promise<{ success: boolean; id?: string; error?: string }> {
     try {
         const session = await auth();
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
 
+        // Validate with Zod
+        const { createCourseSchema } = await import("@/lib/validations/course");
+        const validation = createCourseSchema.safeParse(data);
+
+        if (!validation.success) {
+            return {
+                success: false,
+                error: validation.error.issues[0]?.message || "Validation failed",
+            };
+        }
+
+        const validatedData = validation.data;
+
         const docRef = await db.collection("academy_courses").add({
-            ...data,
+            ...validatedData,
             instructorId: session.user.id, // Ensure instructor is linked
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),

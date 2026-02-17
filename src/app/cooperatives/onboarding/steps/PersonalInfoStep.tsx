@@ -27,7 +27,10 @@ interface PersonalInfoStepProps {
     onBack: () => void;
 }
 
+import { useToast } from "@/contexts/ToastContext";
+
 export default function PersonalInfoStep({ data, onChange, onNext, onBack }: PersonalInfoStepProps) {
+    const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const nigeriaStates = [
@@ -89,6 +92,9 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
     const handleContinue = () => {
         if (validate()) {
             onNext();
+        } else {
+            showToast("Please provide all required personal information", "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
         }
     };
 

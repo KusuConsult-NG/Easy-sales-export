@@ -194,6 +194,14 @@ export async function rejectContentAction(
         const timestamp = FieldValue.serverTimestamp();
         const adminId = session.user.id;
 
+        // Validate reason
+        if (!reason || reason.trim().length < 5) {
+            return { success: false, error: "Rejection reason must be at least 5 characters" };
+        }
+        if (reason.length > 500) {
+            return { success: false, error: "Rejection reason is too long (max 500 characters)" };
+        }
+
         switch (type) {
             case "products":
                 await db.collection("marketplace_products").doc(id).update({

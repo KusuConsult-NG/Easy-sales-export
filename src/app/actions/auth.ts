@@ -221,11 +221,23 @@ export async function registerAction(prevState: any, formData: FormData) {
             gender: gender,
         };
 
-        await db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({
-            ...userProfile,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        try {
+            await db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({
+                ...userProfile,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        } catch (firestoreError: any) {
+            logger.error("Firestore profile creation failed, rolling back Auth user:", firestoreError);
+            // ROLLBACK: Delete the Auth user so they can try again (prevents "Ghost User" state)
+            try {
+                await adminAuth.deleteUser(userRecord.uid);
+                logger.info(`Rollback successful for user ${userRecord.uid}`);
+            } catch (rollbackError) {
+                logger.error(`CRITICAL: Failed to rollback user ${userRecord.uid}:`, rollbackError);
+            }
+            throw new Error("Failed to create user profile. Please try again.");
+        }
 
         // REGISTRATION MUST ESTABLISH SESSION — DO NOT MODIFY
         // Redirect to module-specific onboarding after registration

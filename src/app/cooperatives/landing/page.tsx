@@ -734,7 +734,7 @@ export default function CooperativeLandingPage() {
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-slate-900 mb-1">Phone</h4>
-                                    <p className="text-slate-600">+234 XXX XXX XXXX</p>
+                                    <p className="text-slate-600">+234 800 000 0000</p>
                                 </div>
                             </div>
 

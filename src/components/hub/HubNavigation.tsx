@@ -17,11 +17,11 @@ export default function HubNavigation() {
             label: "Ecosystem",
             href: "#",
             dropdown: [
+                { label: "Cooperatives", href: "/cooperatives" },
                 { label: "Marketplace", href: "/marketplace" },
+                { label: "Export Windows", href: "/export" },
                 { label: "Farm Nation", href: "/farm-nation" },
                 { label: "Academy", href: "/academy" },
-                { label: "Cooperative", href: "/cooperatives" },
-                { label: "Export Window", href: "/export" },
             ],
         },
         { label: "WAVE Program", href: "/wave/landing" },

@@ -29,7 +29,10 @@ interface UploadState {
     error?: string;
 }
 
+import { useToast } from "@/contexts/ToastContext";
+
 export default function DocumentUploadStep({ data, onChange, onNext, onBack, isSubmitting = false }: DocumentUploadStepProps) {
+    const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [bvnConsent, setBvnConsent] = useState(false);
     const [torAgreed, setTorAgreed] = useState(false);
@@ -132,6 +135,9 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
     const handleContinue = () => {
         if (validate()) {
             onNext();
+        } else {
+            showToast("Please correct the errors in the form", "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
         }
     };
 

@@ -91,6 +91,26 @@ export async function createExportWindowAction(
         // Validate with Zod
         const validatedData = exportWindowSchema.parse(exportData);
 
+        // 🔒 SECURITY: KYC & Compliance Enforcement
+        // 1. Check if user is verified (KYC)
+        // Note: We need to fetch the fresh user doc to be sure, session might be stale.
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        if (!userData?.isVerified) {
+            return { error: "Compliance Error: You must complete KYC verification to create Export Windows.", success: false };
+        }
+
+        // 2. Check for Service Registration (CAC/NEPC)
+        const exportReg = userData?.serviceRegistrations?.export;
+        const serviceNumber = exportReg?.registrationNumber || userData?.cacNumber; // Fallback to general CAC
+
+        if (!serviceNumber && userData?.serviceRegistrations?.export?.status !== "approved") {
+            // Strict: Must have explicit export registration OR at least a verified CAC on file if we allow that.
+            // Plan said "Validate serviceRegistrationNumber is present".
+            return { error: "Compliance Error: Missing Export Service Registration (NEPC/CAC).", success: false };
+        }
+
         // Generate unique order ID
         const orderId = `EXP-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 

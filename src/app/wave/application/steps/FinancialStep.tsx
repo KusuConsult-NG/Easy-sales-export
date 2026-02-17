@@ -15,7 +15,10 @@ interface Props {
     onBack: () => void;
 }
 
+import { useToast } from "@/contexts/ToastContext";
+
 export default function FinancialStep({ data, updateData, onNext, onBack }: Props) {
+    const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const validateForm = (): boolean => {
@@ -41,6 +44,9 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
     const handleNext = () => {
         if (validateForm()) {
             onNext();
+        } else {
+            showToast("Please provide all required financial details", "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
         }
     };
 
@@ -67,8 +73,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.hasBankAccount === option.value
-                                        ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
                                     }`}
                             >
                                 <input
@@ -155,8 +161,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.isMemberOfCooperative === option.value
-                                        ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
                                     }`}
                             >
                                 <input
@@ -207,8 +213,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToJoinCooperative === option.value
-                                        ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
                                     }`}
                             >
                                 <input

@@ -229,20 +229,23 @@ export async function submitWithdrawalAction(
 
         // Transactional execution for Financial Integrity
         await db.runTransaction(async (transaction) => {
-            const memberRef = db
-                .collection(COLLECTIONS.COOPERATIVES)
-                .doc(validatedData.cooperativeId)
-                .collection("members")
-                .doc(session.user.id);
-
+            // CORRECT PATTERN: Use Root Collection for members (Standardized)
+            const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
             const memberDoc = await transaction.get(memberRef);
 
             if (!memberDoc.exists) {
-                throw new Error("You are not a member of this cooperative");
+                throw new Error("You are not a member of any cooperative");
             }
 
             const memberData = memberDoc.data();
-            const currentBalance = memberData?.balance || 0;
+
+            // Validate that the user belongs to the target cooperative
+            if (memberData?.cooperativeId !== validatedData.cooperativeId) {
+                throw new Error("Membership mismatch: You do not belong to this cooperative");
+            }
+
+            // Use 'savingsBalance' as per schema, fallback to 'balance' if legacy
+            const currentBalance = memberData?.savingsBalance || memberData?.balance || 0;
 
             // Check if user has sufficient balance
             if (currentBalance < validatedData.amount) {
@@ -256,15 +259,14 @@ export async function submitWithdrawalAction(
             }
 
             // 1. Lock Funds (Decrement Balance immediately)
+            // Use 'savingsBalance' to be consistent with cooperative.ts
             transaction.update(memberRef, {
-                balance: FieldValue.increment(-validatedData.amount),
+                savingsBalance: FieldValue.increment(-validatedData.amount),
                 lockedBalance: FieldValue.increment(validatedData.amount),
                 updatedAt: FieldValue.serverTimestamp(),
             });
 
             // 2. Create Withdrawal Request
-            // Use same collection as other action? Valid question. 
-            // platform.ts uses COLLECTIONS.WITHDRAWALS. 
             const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
             transaction.set(withdrawalRef, {
                 userId: session.user.id,

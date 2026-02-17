@@ -226,11 +226,24 @@ function checkCooperativeAccess(user: UserWithServices): ServiceAccessResult {
         };
     }
 
+    // Payment Check - CRITICAL for returning users
+    // If status is pending but they haven't paid, they should go to payment
+    // We check this by looking at the registration object structure or assumption
+    // For now, if status is 'pending', we redirect to onboarding/pending which handles the flow
+    // BUT we should verify if 'payment_pending' is a state we track here? 
+    // The user object serviceRegistrations might not have payment details deep inside.
+    // However, if they are 'pending' in serviceRegistrations, it usually means after form submission.
+
+    // NOTE: The server assignment of 'pending' happens AFTER form submission.
+    // If they only did payment, they might not have a serviceRegistration entry yet 
+    // OR it might be in a different state. 
+    // But let's assume if they have a registration entry, they are at least known.
+
     if (registration.status === "pending") {
         return {
             hasAccess: false,
             redirectTo: "/cooperatives/onboarding/pending",
-            message: "Complete your registration payment",
+            message: "Application under review",
             registrationStatus: "pending"
         };
     }

@@ -137,15 +137,24 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
         const cooperativeId = userData?.cooperativeId;
 
         if (cooperativeId) {
-            const memberDoc = await db
-                .collection(COLLECTIONS.COOPERATIVES)
-                .doc(cooperativeId)
-                .collection("members")
-                .doc(userId)
-                .get();
+            // Priority: Check Root Collection (Standardized)
+            const rootMemberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
-            if (memberDoc.exists) {
-                cooperativeSavings = memberDoc.data()?.balance || 0;
+            if (rootMemberDoc.exists) {
+                const data = rootMemberDoc.data();
+                cooperativeSavings = data?.savingsBalance || data?.balance || 0;
+            } else {
+                // Fallback: Check Nested Collection (Legacy)
+                const nestedMemberDoc = await db
+                    .collection(COLLECTIONS.COOPERATIVES)
+                    .doc(cooperativeId)
+                    .collection("members")
+                    .doc(userId)
+                    .get();
+
+                if (nestedMemberDoc.exists) {
+                    cooperativeSavings = nestedMemberDoc.data()?.balance || 0;
+                }
             }
         }
 

@@ -376,17 +376,49 @@ export async function createProductAction(
         }
 
         if (userData?.sellerVerificationStatus !== "approved") {
-            // Allow creation if pending for testing, or enforce strict? 
-            // The prompt says "Fixing Marketplace Onboarding". 
-            // If they are just onboarding, they might not be approved yet. 
-            // But let's stick to the requirement.
-            // For now, let's strictly enforce approved status as per original code.
-            // If audit reveals this blocks testing, we can relax it.
-            if (userData?.sellerVerificationStatus !== "approved") {
-                return { success: false, error: "Your seller account must be approved first" };
-            }
+            return { success: false, error: "Your seller account must be approved first" };
         }
 
+        // Extract and Prepare Data for Validation
+        let certifications = [];
+        try {
+            certifications = JSON.parse(formData.get("certifications") as string || "[]");
+        } catch (e) { }
+
+        const rawData = {
+            title: formData.get("title"),
+            description: formData.get("description"),
+            category: formData.get("category"),
+            retailPrice: parseFloat(formData.get("retailPrice") as string),
+            bulkPrice: formData.get("bulkPrice") ? parseFloat(formData.get("bulkPrice") as string) : undefined,
+            exportPrice: formData.get("exportPrice") ? parseFloat(formData.get("exportPrice") as string) : undefined,
+            availableQuantity: parseInt(formData.get("availableQuantity") as string),
+            minimumOrderQuantity: parseInt(formData.get("minimumOrderQuantity") as string),
+            bulkMinQuantity: formData.get("bulkMinQuantity") ? parseInt(formData.get("bulkMinQuantity") as string) : undefined,
+            exportMinQuantity: formData.get("exportMinQuantity") ? parseInt(formData.get("exportMinQuantity") as string) : undefined,
+            unit: formData.get("unit"),
+            state: formData.get("state"),
+            lga: formData.get("lga"),
+            deliveryMethod: formData.get("deliveryMethod"),
+            estimatedDeliveryDays: formData.get("estimatedDeliveryDays") ? parseInt(formData.get("estimatedDeliveryDays") as string) : undefined,
+            certifications,
+            bulkAvailable: formData.get("bulkAvailable") === "true",
+            exportReady: formData.get("exportReady") === "true",
+            videoUrl: formData.get("videoUrl") || "",
+        };
+
+        // Validate with Zod
+        const { productSchema } = await import("@/lib/validations/marketplace");
+        const validation = productSchema.safeParse(rawData);
+
+        if (!validation.success) {
+            return {
+                success: false,
+                error: validation.error.issues[0]?.message || "Validation failed",
+            };
+        }
+
+        const validatedData = validation.data;
         const productId = `product_${userId}_${Date.now()}`;
 
         // 1. Handle Image Uploads (Admin SDK Storage)
@@ -394,15 +426,11 @@ export async function createProductAction(
             const extension = file.name.split('.').pop();
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
             const destination = `products/${userId}/${productId}/${fileName}`;
-
-            // Use signed URLs for product images too for now to match behavior
-            // In future, making them public via isPublic: true is better for caching
             return await uploadFileToStorage(file, destination, false);
         };
 
         const imageUrls: string[] = [];
-
-        // Process uploaded files (productImages_0, productImages_1, etc.)
+        // Process uploaded files
         for (const key of Array.from(formData.keys())) {
             if (key.startsWith("productImages_")) {
                 const file = formData.get(key) as File;
@@ -416,51 +444,47 @@ export async function createProductAction(
         // Create product
         const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
 
-        // Parse pricing tiers
+        // Construct Pricing Tiers
         const pricingTiers = [];
-        const retailPrice = parseFloat(formData.get("retailPrice") as string);
-        const bulkPrice = formData.get("bulkPrice") as string;
-        const exportPrice = formData.get("exportPrice") as string;
+        pricingTiers.push({ type: "retail" as const, price: validatedData.retailPrice, minQuantity: 1 });
 
-        pricingTiers.push({ type: "retail" as const, price: retailPrice, minQuantity: 1 });
-
-        if (bulkPrice) {
+        if (validatedData.bulkPrice && validatedData.bulkAvailable) {
             pricingTiers.push({
                 type: "bulk" as const,
-                price: parseFloat(bulkPrice),
-                minQuantity: parseInt(formData.get("bulkMinQuantity") as string || "50")
+                price: validatedData.bulkPrice,
+                minQuantity: validatedData.bulkMinQuantity || 50
             });
         }
 
-        if (exportPrice) {
+        if (validatedData.exportPrice && validatedData.exportReady) {
             pricingTiers.push({
                 type: "export" as const,
-                price: parseFloat(exportPrice),
-                minQuantity: parseInt(formData.get("exportMinQuantity") as string || "100")
+                price: validatedData.exportPrice,
+                minQuantity: validatedData.exportMinQuantity || 100
             });
         }
 
         const productData: Product = {
             id: productId,
             sellerId: userId,
-            title: formData.get("title") as string,
-            description: formData.get("description") as string,
-            category: formData.get("category") as any,
-            images: imageUrls, // Use uploaded URLs
-            videoUrl: (formData.get("videoUrl") as string) || undefined,
+            title: validatedData.title,
+            description: validatedData.description,
+            category: validatedData.category as any, // Cast to generic or specific enum if needed
+            images: imageUrls,
+            videoUrl: validatedData.videoUrl || undefined,
             pricingTiers,
-            availableQuantity: parseInt(formData.get("availableQuantity") as string),
-            minimumOrderQuantity: parseInt(formData.get("minimumOrderQuantity") as string),
-            unit: formData.get("unit") as string,
+            availableQuantity: validatedData.availableQuantity,
+            minimumOrderQuantity: validatedData.minimumOrderQuantity,
+            unit: validatedData.unit,
             location: {
-                state: formData.get("state") as string,
-                lga: formData.get("lga") as string,
+                state: validatedData.state,
+                lga: validatedData.lga,
             },
-            deliveryMethod: formData.get("deliveryMethod") as any,
-            estimatedDeliveryDays: parseInt(formData.get("estimatedDeliveryDays") as string || "0") || undefined,
-            certifications: JSON.parse(formData.get("certifications") as string || "[]"),
-            bulkAvailable: formData.get("bulkAvailable") === "true",
-            exportReady: formData.get("exportReady") === "true",
+            deliveryMethod: validatedData.deliveryMethod as any,
+            estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
+            certifications: validatedData.certifications,
+            bulkAvailable: validatedData.bulkAvailable || false,
+            exportReady: validatedData.exportReady || false,
             status: "active",
             views: 0,
             orders: 0,

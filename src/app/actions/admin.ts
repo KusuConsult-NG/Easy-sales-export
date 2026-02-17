@@ -1216,6 +1216,8 @@ export async function approveSellerVerificationAction(
             verifiedBy: session.user.id, // Track who verified the user
             verifiedAt: FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("seller"),
+            // SYNC CONTACT INFO: Update phone with verified number to prevent data drift
+            phone: verificationData.phoneNumber,
             updatedAt: FieldValue.serverTimestamp(),
         });
 

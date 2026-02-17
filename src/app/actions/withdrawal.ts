@@ -38,10 +38,21 @@ export async function submitWithdrawalRequestAction(
         const userId = session.user.id;
         const userEmail = session.user.email!;
 
-        // Validate amount
-        if (data.amount < 1000) {
-            return { error: 'Minimum withdrawal amount is ₦1,000', success: false };
+        // Validate Input with Zod
+        // We omit cooperativeId because this action infers it from the user's membership record
+        const { withdrawalSchema } = await import("@/lib/schemas");
+        const submissionSchema = withdrawalSchema.omit({ cooperativeId: true });
+
+        const validation = submissionSchema.safeParse(data);
+
+        if (!validation.success) {
+            return {
+                success: false,
+                error: validation.error.issues[0]?.message || "Invalid withdrawal data",
+            };
         }
+
+        const validatedData = validation.data;
 
         // Transactional execution for Financial Integrity
         await db.runTransaction(async (transaction) => {
@@ -56,14 +67,14 @@ export async function submitWithdrawalRequestAction(
             const availableBalance = membership.savingsBalance || 0;
 
             // Validate balance
-            if (data.amount > availableBalance) {
+            if (validatedData.amount > availableBalance) {
                 throw new Error(`Insufficient balance. Available: ₦${availableBalance.toLocaleString()}`);
             }
 
             // 1. Decrement Savings Balance (Lock funds)
             transaction.update(membershipRef, {
-                savingsBalance: FieldValue.increment(-data.amount),
-                lockedBalance: FieldValue.increment(data.amount), // Track locked funds
+                savingsBalance: FieldValue.increment(-validatedData.amount),
+                lockedBalance: FieldValue.increment(validatedData.amount), // Track locked funds
                 updatedAt: FieldValue.serverTimestamp(),
             });
 
@@ -73,60 +84,53 @@ export async function submitWithdrawalRequestAction(
                 userId,
                 userEmail,
                 userName: session.user.name || userEmail,
-                amount: data.amount,
-                bankName: data.bankName,
-                accountNumber: data.accountNumber,
-                accountName: data.accountName,
-                reason: data.reason || 'Personal withdrawal',
+                cooperativeId: membership.cooperativeId, // Link to coop
+                amount: validatedData.amount,
+                bankName: validatedData.bankName,
+                accountNumber: validatedData.accountNumber,
+                accountName: validatedData.accountName,
+                reason: validatedData.reason || 'Personal withdrawal',
                 status: 'pending',
                 requestedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
-
-            // Note: Audit log cannot be easily done INSIDE transaction if it uses a different collection structure 
-            // that doesn't need strict consistency with this. 
-            // We will do audit log AFTER transaction.
         });
 
         // Create audit log (After successful transaction)
         await createAdminAuditLog({
-            action: 'payment_initiated', // Using existing audit action type
+            action: 'payment_initiated',
             userId,
             userEmail,
-            targetId: `W-${Date.now()}`, // We don't have the ID easily from inside transaction unless we generate it before. 
-            // Actually we can generate doc ref outside. But for now using timestamp ID for audit or just generic.
-            // Let's improve this: We should generate ref outside to have ID.
+            targetId: `W-${Date.now()}`,
             targetType: 'withdrawal',
             metadata: {
-                amount: data.amount,
-                bankName: data.bankName,
-                accountNumber: data.accountNumber,
+                amount: validatedData.amount,
+                bankName: validatedData.bankName,
+                accountNumber: validatedData.accountNumber,
             },
-            details: `Withdrawal request of ₦${data.amount.toLocaleString()} submitted`,
+            details: `Withdrawal request of ₦${validatedData.amount.toLocaleString()} submitted`,
         });
 
-        // Send confirmation email (dynamically imported to avoid build issues if missing)
+        // Send confirmation email
         try {
             const { sendWithdrawalConfirmationEmail } = await import('@/lib/email-notifications');
             if (sendWithdrawalConfirmationEmail) {
                 await sendWithdrawalConfirmationEmail(
                     userEmail,
                     session.user.name || userEmail,
-                    data.amount,
-                    "PENDING" // ID not easily available here without refactoring, passing string
+                    validatedData.amount,
+                    "PENDING"
                 );
             }
         } catch (emailError) {
             logger.error('Failed to send confirmation email:', emailError);
-            // Don't fail the request if email fails
         }
-
 
         return {
             error: null,
             success: true,
-            message: `Withdrawal request for ₦${data.amount.toLocaleString()} submitted successfully`,
+            message: `Withdrawal request for ₦${validatedData.amount.toLocaleString()} submitted successfully`,
         };
     } catch (error: any) {
         logger.error('Withdrawal request error:', error);

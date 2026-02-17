@@ -14,17 +14,37 @@ export const landListingSchema = z.object({
         address: z.string().min(5, "Address required"),
         city: z.string().min(2, "City required"),
         state: z.string().min(2, "State required"),
+        lga: z.string().optional(), // Added for compatibility
     }),
 
-    acreage: z.number().min(0.1, "Acreage must be at least 0.1").max(10000, "Acreage too large"),
-    soilQuality: z.nativeEnum(SoilQuality),
-    price: z.number().min(1000, "Price must be at least ₦1,000").max(1000000000, "Price too high"),
+    price: z.number().positive("Price must be positive"),
+    size: z.number().positive("Size must be positive"), // in Hectares
 
-    waterAccess: z.boolean(),
-    electricityAccess: z.boolean(),
-    roadAccess: z.boolean(),
+    soilQuality: z.nativeEnum(SoilQuality).optional(),
+    waterSource: z.enum(["borehole", "river", "rain", "dam", "none"]).optional(),
 
-    images: z.array(z.string().url()).min(1, "At least one image required").max(10, "Maximum 10 images"),
+    features: z.array(z.string()),
+    images: z.array(z.string().url()).min(1, "At least one image required"),
+});
+
+export type LandListingInput = z.infer<typeof landListingSchema>;
+
+/**
+ * Farm Nation Listing Schema
+ * Matches formatting of PropertyListingInput in server actions
+ */
+export const farmNationListingSchema = z.object({
+    name: z.string().min(5, "Name must be at least 5 characters"),
+    description: z.string().min(10, "Description must be at least 10 characters"),
+    location: z.string().min(2, "Location address is required"),
+    state: z.string().min(2, "State is required"),
+    lga: z.string().min(2, "LGA is required"),
+    price: z.number().positive("Price must be positive"),
+    size: z.number().positive("Size must be positive"),
+    type: z.enum(["sale", "lease"]),
+    category: z.string().min(1, "Category is required"),
+    features: z.array(z.string()),
+    leaseDuration: z.number().optional(),
 });
 
 /**

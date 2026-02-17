@@ -31,7 +31,7 @@ export const DEFAULT_MODULE: ModuleConfig = {
 
 export const MODULE_CONFIGS: Record<string, ModuleConfig> = {
     wave: {
-        name: "WAVE",
+        name: "WAVE Program",
         description: "Women's Agribusiness",
         theme: "emerald",
         icon: Sparkles,

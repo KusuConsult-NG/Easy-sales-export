@@ -24,7 +24,10 @@ const NIGERIAN_STATES = [
     "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
 ];
 
+import { useToast } from "@/contexts/ToastContext";
+
 export default function PersonalDetailsStep({ data, updateData, onNext }: Props) {
+    const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const calculateAge = (dobString: string): number => {
@@ -74,6 +77,9 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
     const handleNext = () => {
         if (validateForm()) {
             onNext();
+        } else {
+            showToast("Please correct the errors in the form", "error");
+            window.scrollTo({ top: 0, behavior: "smooth" });
         }
     };
 
@@ -351,8 +357,8 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             <label
                                 key={status.value}
                                 className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.maritalStatus === status.value
-                                        ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
                                     }`}
                             >
                                 <input

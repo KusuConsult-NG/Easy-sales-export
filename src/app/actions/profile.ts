@@ -64,6 +64,11 @@ export async function getUserProfileAction() {
 
 /**
  * Update user profile information
+ * 
+ * 🔒 SECURITY NOTE: 
+ * Identity fields like 'gender' and 'dateOfBirth' are EXCLUDED from this action.
+ * They are set once during registration/verification and should ONLY be changeable 
+ * via a specific admin request to prevent "Identity Hopping" in programs like WAVE.
  */
 export async function updateUserProfileAction(data: {
     phone?: string;
