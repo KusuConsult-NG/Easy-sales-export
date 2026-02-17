@@ -26,6 +26,9 @@ export interface OrderItem {
 /**
  * Create a new order
  */
+/**
+ * Create a new order with atomic inventory checking
+ */
 export async function createOrderAction(
     items: OrderItem[],
     deliveryAddress: {
@@ -45,80 +48,96 @@ export async function createOrderAction(
 
         const userId = session.user.id;
 
-        // Fetch product details for all items
-        const orderItems = await Promise.all(
-            items.map(async (item) => {
-                const productDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(item.productId).get();
+        // 🔒 TRANSACTION: Prevent Overselling
+        return await db.runTransaction(async (transaction) => {
+            // 1. Read all products first (Concurrency requirement)
+            const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
+            const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
+            const orderItems: any[] = [];
+            let subtotal = 0;
+            let sellerId = "";
+
+            // 2. Validate Inventory & Calculate Logic
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const productDoc = productDocs[i];
 
                 if (!productDoc.exists) {
                     throw new Error(`Product ${item.productId} not found`);
                 }
 
                 const product = productDoc.data() as Product;
-                const tier = product.pricingTiers.find(t => t.type === item.tierType);
 
-                if (!tier) {
-                    throw new Error(`Pricing tier ${item.tierType} not found for product`);
+                // 2a. Check Inventory Strictness
+                if (product.availableQuantity < item.quantity) {
+                    throw new Error(`OUT OF STOCK: "${product.title}" has only ${product.availableQuantity} units remaining.`);
                 }
 
-                return {
+                const tier = product.pricingTiers.find(t => t.type === item.tierType);
+                if (!tier) {
+                    throw new Error(`Pricing tier ${item.tierType} not found for product ${product.title}`);
+                }
+
+                const totalPrice = tier.price * item.quantity;
+                subtotal += totalPrice;
+                if (i === 0) sellerId = product.sellerId; // Simple single-seller assumption for now
+
+                // 2b. Decrement Inventory in Transaction
+                transaction.update(productRefs[i], {
+                    availableQuantity: product.availableQuantity - item.quantity,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+
+                orderItems.push({
                     productId: item.productId,
                     productTitle: product.title,
                     quantity: item.quantity,
                     unitPrice: tier.price,
-                    totalPrice: tier.price * item.quantity,
+                    totalPrice: totalPrice,
                     tier: item.tierType,
-                };
-            })
-        );
+                });
+            }
 
-        // Calculate totals
-        const subtotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
-        const deliveryFee = 5000; // Flat delivery fee for now
-        const total = subtotal + deliveryFee;
+            const deliveryFee = 5000;
+            const total = subtotal + deliveryFee;
 
-        // Get seller ID from first product (multi-vendor orders handled separately later)
-        const firstProduct = await db.collection(COLLECTIONS.PRODUCTS).doc(items[0].productId).get();
-        const sellerId = firstProduct.exists ? (firstProduct.data() as Product).sellerId : "";
+            // 3. Create Order
+            const orderRef = db.collection(COLLECTIONS.ORDERS).doc();
+            const orderId = orderRef.id;
 
-        // Create order document
-        const orderData: Partial<Order> = {
-            orderNumber: `ORD-${Date.now()}`,
-            buyerId: userId,
-            sellerId,
-            items: orderItems,
-            deliveryAddress: {
-                recipientName: session.user.name || "",
-                recipientPhone: deliveryAddress.phone,
-                street: deliveryAddress.street,
-                city: deliveryAddress.city,
-                state: deliveryAddress.state,
-                lga: deliveryAddress.lga,
-            },
-            subtotal,
-            deliveryFee,
-            serviceFee: 0,
-            totalAmount: total,
-            status: "pending_payment",
-            buyerConfirmed: false,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+            const orderData: Partial<Order> = {
+                id: orderId,
+                orderNumber: `ORD-${Date.now()}`,
+                buyerId: userId,
+                sellerId,
+                items: orderItems,
+                deliveryAddress: {
+                    recipientName: session.user.name || "",
+                    recipientPhone: deliveryAddress.phone,
+                    street: deliveryAddress.street,
+                    city: deliveryAddress.city,
+                    state: deliveryAddress.state,
+                    lga: deliveryAddress.lga,
+                },
+                subtotal,
+                deliveryFee,
+                serviceFee: 0,
+                totalAmount: total,
+                status: "pending_payment",
+                buyerConfirmed: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
 
-        const orderRef = await db.collection(COLLECTIONS.ORDERS).add(orderData);
-        const orderId = orderRef.id;
+            transaction.set(orderRef, orderData);
 
-        // Update order with ID
-        await orderRef.update({ id: orderId });
+            return {
+                success: true,
+                orderId,
+            };
+        });
 
-        // In production, initialize Paystack payment here
-        // For now, return success with orderId
-
-        return {
-            success: true,
-            orderId,
-            // paymentUrl: paystackUrl, // Would be returned from Paystack
-        };
     } catch (error: any) {
         logger.error("Create order error:", error);
         return {
