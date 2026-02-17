@@ -30,7 +30,7 @@ export default function WebsiteFooter() {
                     {/* Brand */}
                     <div className="lg:col-span-2">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg">
+                            <div className="w-12 h-12 bg-linear-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg">
                                 <span className="text-white font-bold text-xl">ES</span>
                             </div>
                             <div>
@@ -113,7 +113,7 @@ export default function WebsiteFooter() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <Phone className="w-4 h-4" />
-                                <span>+234 800 000 0000</span>
+                                <span>+234 916 144 0202</span>
                             </div>
                         </div>
                     </div>
