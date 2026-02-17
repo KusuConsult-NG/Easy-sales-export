@@ -36,58 +36,77 @@ type MembershipApplication = {
 export default function CooperativeMembersPage() {
     const { showToast } = useToast();
     const [applications, setApplications] = useState<MembershipApplication[]>([]);
-    const [filteredApplications, setFilteredApplications] = useState<MembershipApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [selectedApplication, setSelectedApplication] = useState<MembershipApplication | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "suspended">("all");
     const [searchQuery, setSearchQuery] = useState("");
 
-    const fetchApplications = useCallback(async () => {
+    // Pagination State
+    const [lastCreatedAt, setLastCreatedAt] = useState<string | undefined>(undefined);
+    const [hasMore, setHasMore] = useState(false);
+
+    const fetchApplications = useCallback(async (loadMore = false) => {
+        if (loadMore) {
+            setIsLoadingMore(true);
+        } else {
+            setIsLoading(true);
+        }
+
         try {
-            const response = await fetch("/api/admin/cooperative/members");
+            const params = new URLSearchParams({
+                limit: "20",
+                status: statusFilter
+            });
+
+            if (loadMore && lastCreatedAt) {
+                params.append("lastCreatedAt", lastCreatedAt);
+            }
+
+            const response = await fetch(`/api/admin/cooperative/members?${params.toString()}`);
             const data = await response.json();
 
             if (data.success) {
-                setApplications(data.members);
+                if (loadMore) {
+                    setApplications(prev => [...prev, ...data.members]);
+                } else {
+                    setApplications(data.members);
+                }
+
+                setHasMore(data.hasMore);
+                setLastCreatedAt(data.lastCreatedAt);
             }
         } catch (error) {
             logger.error("Failed to fetch applications:", error);
+            showToast("Failed to load members", "error");
         } finally {
             setIsLoading(false);
+            setIsLoadingMore(false);
         }
-    }, []);
+    }, [statusFilter, lastCreatedAt]);
 
-    const filterApplications = useCallback(() => {
-        let filtered = applications;
-
-        // Filter by status
-        if (statusFilter !== "all") {
-            filtered = filtered.filter(app => app.membershipStatus === statusFilter);
-        }
-
-        // Filter by search query
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(app =>
-                app.firstName.toLowerCase().includes(query) ||
-                app.lastName.toLowerCase().includes(query) ||
-                app.email.toLowerCase().includes(query) ||
-                app.phone.includes(query)
-            );
-        }
-
-        setFilteredApplications(filtered);
-    }, [applications, statusFilter, searchQuery]);
-
+    // Initial Load & Filter Change
     useEffect(() => {
-        fetchApplications();
-    }, [fetchApplications]);
+        // Reset pagination when filter changes
+        setLastCreatedAt(undefined);
+        fetchApplications(false);
+    }, [statusFilter]);
 
-    useEffect(() => {
-        filterApplications();
-    }, [filterApplications]);
+    // Client-side search (still useful for the current batch)
+    // For true scalability, search should also be server-side, but that requires full text search service (e.g. Algolia)
+    // or simple Firestore prefixes. For now, we filter the *loaded* users.
+    const filteredApplications = applications.filter(app => {
+        if (!searchQuery) return true;
+        const query = searchQuery.toLowerCase();
+        return (
+            app.firstName.toLowerCase().includes(query) ||
+            app.lastName.toLowerCase().includes(query) ||
+            app.email.toLowerCase().includes(query) ||
+            app.phone.includes(query)
+        );
+    });
 
     const handleApprove = async (applicationId: string) => {
         if (!confirm("Are you sure you want to approve this membership application?")) {
@@ -343,6 +362,29 @@ export default function CooperativeMembersPage() {
                     </div>
                 )}
             </div>
+
+            {/* Load More Button */}
+            {hasMore && (
+                <div className="mt-8 flex justify-center">
+                    <button
+                        onClick={() => fetchApplications(true)}
+                        disabled={isLoadingMore}
+                        className="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                    >
+                        {isLoadingMore ? (
+                            <>
+                                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                Loading...
+                            </>
+                        ) : (
+                            <>
+                                Load More Users
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
+
 
             {/* Details Modal */}
             <Modal

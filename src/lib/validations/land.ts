@@ -70,8 +70,8 @@ export const landVerificationSchema = z.object({
 export const landSearchSchema = z.object({
     minPrice: z.number().optional(),
     maxPrice: z.number().optional(),
-    minAcreage: z.number().optional(),
-    maxAcreage: z.number().optional(),
+    minSize: z.number().optional(),
+    maxSize: z.number().optional(),
     soilQuality: z.nativeEnum(SoilQuality).optional(),
     state: z.string().optional(),
     city: z.string().optional(),

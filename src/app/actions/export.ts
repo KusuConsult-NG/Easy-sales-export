@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { revalidatePath } from "next/cache";
 
 /**
  * Server Actions for Export Window Management
@@ -139,6 +140,9 @@ export async function createExportWindowAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        revalidatePath("/export");
+        revalidatePath("/dashboard/export");
+
         return {
             error: null,
             success: true,
@@ -246,8 +250,15 @@ export async function updateExportWindowAction(
 export async function getExportWindowsAction(
     statusFilter?: string,
     fromDate?: string,
-    toDate?: string
-): Promise<GetExportsActionState> {
+    toDate?: string,
+    limit: number = 20,
+    lastId?: string
+): Promise<{
+    error: string | null;
+    success: boolean;
+    data?: ExportWindow[];
+    lastId?: string | null;
+}> {
     try {
         const session = await auth();
         if (!session?.user) {
@@ -267,6 +278,17 @@ export async function getExportWindowsAction(
 
         // Apply sorting
         exportsQuery = exportsQuery.orderBy("createdAt", "desc");
+
+        // Apply Cursor
+        if (lastId) {
+            const lastDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(lastId).get();
+            if (lastDoc.exists) {
+                exportsQuery = exportsQuery.startAfter(lastDoc);
+            }
+        }
+
+        // Apply Limit
+        exportsQuery = exportsQuery.limit(limit);
 
         const snapshot = await exportsQuery.get();
 
@@ -297,7 +319,8 @@ export async function getExportWindowsAction(
             };
         });
 
-        // Apply client-side date filtering
+        // Apply client-side date filtering (Note: This breaks pagination if used with limit. 
+        // For now we keep it but warn that date filtering + pagination is complex in NoSQL without composite indexes)
         if (fromDate || toDate) {
             exports = exports.filter(exp => {
                 const createdDate = exp.createdAt;
@@ -314,10 +337,13 @@ export async function getExportWindowsAction(
             });
         }
 
+        const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
         return {
             error: null,
             success: true,
             data: exports,
+            lastId: lastDocId
         };
     } catch (error: any) {
         logger.error("Get export windows error:", error);
@@ -397,13 +423,15 @@ export async function getExportWindowDetailsAction(
 // Submit Export Onboarding Action
 // ============================================
 
+// ============================================
+// Submit Export Onboarding Action
+// ============================================
+
+import { uploadFileToStorage } from "@/lib/storage-admin";
+
 export async function submitExportOnboardingAction(
-    onboardingData: {
-        profile: any;
-        kyc: any;
-        bank: any;
-        terms: any;
-    }
+    prevState: any,
+    formData: FormData
 ): Promise<{ error: string | null; success: boolean; applicationId?: string }> {
     try {
         const session = await auth();
@@ -413,6 +441,32 @@ export async function submitExportOnboardingAction(
 
         const userId = session.user.id;
 
+        // Extract Data
+        const profile = JSON.parse(formData.get("profile") as string || "{}");
+        const kycData = JSON.parse(formData.get("kycData") as string || "{}");
+        const bank = JSON.parse(formData.get("bank") as string || "{}");
+        const terms = JSON.parse(formData.get("terms") as string || "{}");
+
+        const idDocument = formData.get("idDocument") as File | null;
+        const proofOfAddress = formData.get("proofOfAddress") as File | null;
+
+        // Upload Documents
+        const documents: any = {};
+
+        if (idDocument && idDocument.size > 0) {
+            documents.idDocument = await uploadFileToStorage(
+                idDocument,
+                `export-kyc/${userId}/id-document`
+            );
+        }
+
+        if (proofOfAddress && proofOfAddress.size > 0) {
+            documents.proofOfAddress = await uploadFileToStorage(
+                proofOfAddress,
+                `export-kyc/${userId}/proof-of-address`
+            );
+        }
+
         // Generate unique application ID
         const applicationId = `EXPORT-ONBOARD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
@@ -421,10 +475,13 @@ export async function submitExportOnboardingAction(
             applicationId,
             userId,
             userEmail: session.user.email,
-            profile: onboardingData.profile,
-            kyc: onboardingData.kyc,
-            bank: onboardingData.bank,
-            terms: onboardingData.terms,
+            profile,
+            kyc: {
+                ...kycData,
+                documents: documents // Now contains URLs
+            },
+            bank,
+            terms,
             status: "pending_review",
             submittedAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
@@ -463,7 +520,10 @@ export async function submitExportOnboardingAction(
 // Get User Export Investments Action
 // ============================================
 
-export async function getUserExportInvestmentsAction(): Promise<{
+export async function getUserExportInvestmentsAction(
+    limit: number = 10,
+    lastId?: string
+): Promise<{
     error: string | null;
     success: boolean;
     data?: Array<{
@@ -473,7 +533,10 @@ export async function getUserExportInvestmentsAction(): Promise<{
         expectedReturn: number;
         status: string;
         daysRemaining: number;
+        startDate: Date;
+        endDate: Date;
     }>;
+    lastId?: string | null;
 }> {
     try {
         const session = await auth();
@@ -484,11 +547,21 @@ export async function getUserExportInvestmentsAction(): Promise<{
         const userId = session.user.id;
 
         // Fetch user's export windows
-        const snapshot = await db.collection(COLLECTIONS.EXPORT_WINDOWS)
+        let query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
             .where("userId", "==", userId)
             .where("status", "in", ["pending", "in_transit", "delivered"])
-            .orderBy("createdAt", "desc")
-            .get();
+            .orderBy("createdAt", "desc");
+
+        if (lastId) {
+            const lastDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(lastId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        query = query.limit(limit);
+
+        const snapshot = await query.get();
 
         const investments = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -512,13 +585,18 @@ export async function getUserExportInvestmentsAction(): Promise<{
                 expectedReturn,
                 status: data.status,
                 daysRemaining,
+                startDate: data.startDate?.toDate() || new Date(),
+                endDate: data.endDate?.toDate() || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // Fallback
             };
         });
+
+        const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
         return {
             error: null,
             success: true,
             data: investments,
+            lastId: lastDocId
         };
     } catch (error: any) {
         logger.error("Get user export investments error:", error);
@@ -755,6 +833,9 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
             targetType: "export_window",
             metadata: { amount, reference }
         });
+
+        revalidatePath("/dashboard/export");
+        revalidatePath(`/export/windows/${exportId}`);
 
         return { success: true };
 

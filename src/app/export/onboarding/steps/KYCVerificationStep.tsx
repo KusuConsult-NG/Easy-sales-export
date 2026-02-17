@@ -59,8 +59,8 @@ export function KYCVerificationStep({
             kyc: {
                 kycData,
                 documents: {
-                    idDocument: idDocument.name, // In production, upload to storage and save URL
-                    proofOfAddress: proofOfAddress.name,
+                    idDocument: idDocument,
+                    proofOfAddress: proofOfAddress,
                 },
             },
         });

@@ -6,12 +6,15 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { Package, Clock, CheckCircle, XCircle, Search, Eye, AlertCircle, Loader2, ShieldCheck } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Package, Clock, CheckCircle, XCircle, Search, Eye, AlertCircle, Loader2, ShieldCheck, Truck } from "lucide-react";
 import Link from "next/link";
-import { getBuyerOrdersAction, confirmOrderReceiptAction } from "@/app/actions/marketplace-buyer";
+import { getBuyerOrdersAction } from "@/app/actions/marketplace";
+import { confirmOrderReceiptAction } from "@/app/actions/marketplace-buyer";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
+import { useDebounce } from "@/hooks/useDebounce";
+import { logger } from "@/lib/logger";
 
 export default function OrdersPage() {
     const [orders, setOrders] = useState<any[]>([]);
@@ -21,18 +24,54 @@ export default function OrdersPage() {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const { showToast } = useToast();
 
-    useEffect(() => {
-        loadOrders();
-    }, []);
+    // Pagination State
+    const [lastId, setLastId] = useState<string | undefined>(undefined);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
 
-    async function loadOrders() {
-        setLoading(true);
-        const result = await getBuyerOrdersAction();
-        if (result.success && result.orders) {
-            setOrders(result.orders);
+    const debouncedSearch = useDebounce(searchQuery, 500);
+
+    const fetchOrders = useCallback(async (isReset: boolean = false) => {
+        try {
+            if (isReset) {
+                setLoading(true);
+            } else {
+                setLoadingMore(true);
+            }
+
+            const currentLastId = isReset ? undefined : lastId;
+            const result = await getBuyerOrdersAction({
+                limit: 20,
+                lastId: currentLastId,
+                status: filterStatus
+            });
+
+            if (result.success && result.orders) {
+                setOrders(prev => isReset ? result.orders : [...prev, ...result.orders]);
+                setLastId(result.lastId);
+                setHasMore(!!result.hasMore);
+            } else if (result.error) {
+                logger.error("Failed to load orders:", { error: result.error });
+            }
+        } catch (error) {
+            logger.error("Failed to load orders:", { error });
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
         }
-        setLoading(false);
-    }
+    }, [filterStatus, lastId]);
+
+    // Effect for Filter changes (Reset)
+    useEffect(() => {
+        fetchOrders(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filterStatus]);
+
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore) {
+            fetchOrders(false);
+        }
+    };
 
     const handleConfirmReceipt = async (orderId: string) => {
         if (!confirm("Are you sure you have received this order? This will release funds to the seller.")) return;
@@ -42,7 +81,8 @@ export default function OrdersPage() {
             const result = await confirmOrderReceiptAction(orderId);
             if (result.success) {
                 showToast("Order confirmed! Funds released.", "success");
-                loadOrders(); // Refresh list
+                // Update local status instead of full reload to save bandwidth
+                setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, orderStatus: 'delivered', paymentStatus: 'released' } : o));
             } else {
                 showToast(result.error || "Failed to confirm", "error");
             }
@@ -71,7 +111,7 @@ export default function OrdersPage() {
                 bg: "bg-orange-100 dark:bg-orange-900/30",
                 text: "text-orange-700 dark:text-orange-300",
                 label: "In Transit",
-                icon: Package
+                icon: Truck
             },
             delivered: {
                 bg: "bg-green-100 dark:bg-green-900/30",
@@ -89,20 +129,12 @@ export default function OrdersPage() {
         return configs[status as keyof typeof configs] || configs.processing;
     };
 
-    const filteredOrders = orders.filter(order => {
-        const matchesStatus = filterStatus === "all" || order.orderStatus === filterStatus;
-        const matchesSearch = order.orderId.toLowerCase().includes(searchQuery.toLowerCase());
-        // Note: product/seller search removed for now as we have items array
-        return matchesStatus && matchesSearch;
+    // Client-side filtering for search query on *loaded* orders
+    const visibleOrders = orders.filter(order => {
+        if (!searchQuery) return true;
+        const lowerQuery = searchQuery.toLowerCase();
+        return order.orderId.toLowerCase().includes(lowerQuery);
     });
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-primary" />
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -154,7 +186,11 @@ export default function OrdersPage() {
 
                 {/* Orders List */}
                 <div className="space-y-4">
-                    {filteredOrders.length === 0 ? (
+                    {loading && orders.length === 0 ? (
+                        <div className="min-h-[200px] flex items-center justify-center">
+                            <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                        </div>
+                    ) : visibleOrders.length === 0 ? (
                         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-12 text-center">
                             <Package className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
                             <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
@@ -168,7 +204,7 @@ export default function OrdersPage() {
                             </Link>
                         </div>
                     ) : (
-                        filteredOrders.map((order) => {
+                        visibleOrders.map((order) => {
                             const statusConfig = getStatusConfig(order.orderStatus);
                             const StatusIcon = statusConfig.icon;
                             // Use first item for display title if multiple
@@ -262,7 +298,27 @@ export default function OrdersPage() {
                         })
                     )}
                 </div>
+
+                {/* Load More */}
+                {hasMore && (
+                    <div className="mt-8 flex justify-center">
+                        <button
+                            onClick={handleLoadMore}
+                            disabled={loadingMore}
+                            className="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {loadingMore ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Loading...
+                                </>
+                            ) : (
+                                "Load More Orders"
+                            )}
+                        </button>
+                    </div>
+                )}
             </div>
-        </div >
+        </div>
     );
 }

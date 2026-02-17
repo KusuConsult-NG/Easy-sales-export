@@ -146,8 +146,8 @@ export default function AcademyLandingPage() {
                             <div
                                 key={index}
                                 className={`relative bg-white dark:bg-slate-800 rounded-2xl overflow-hidden transition-all duration-300 ${tier.highlight
-                                        ? 'shadow-2xl scale-105 border-2 border-blue-600 z-10'
-                                        : 'shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl'
+                                    ? 'shadow-2xl scale-105 border-2 border-blue-600 z-10'
+                                    : 'shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl'
                                     }`}
                             >
                                 {tier.highlight && (
@@ -177,8 +177,8 @@ export default function AcademyLandingPage() {
                                         <Link
                                             href={`/academy/register?plan=${tier.title.toLowerCase().replace(' ', '-')}`}
                                             className={`inline-block w-full py-3 rounded-xl font-bold transition-colors ${tier.highlight
-                                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600'
+                                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600'
                                                 }`}
                                         >
                                             Choose {tier.title}
@@ -241,6 +241,19 @@ export default function AcademyLandingPage() {
                         View Program Options Again
                         <ArrowRight className="w-5 h-5" />
                     </Link>
+                </div>
+            </div>
+
+            {/* Disclaimer Section */}
+            <div className="bg-slate-100 dark:bg-slate-900 py-12 border-t border-slate-200 dark:border-slate-800">
+                <div className="max-w-4xl mx-auto px-8 text-center">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">Disclaimer</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+                        All export training services provided by Easy Sales Export LTD. are for informational and educational purposes only. Participants are solely responsible for complying with all applicable export regulations, customs laws, and international trade requirements.
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                        The Company makes no representations or warranties regarding specific financial outcomes or regulatory approvals.
+                    </p>
                 </div>
             </div>
         </div>

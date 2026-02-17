@@ -86,7 +86,7 @@ export default function LandMapPage() {
                             </p>
                             <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
                                 <p>📍 {listing.location.city}, {listing.location.state}</p>
-                                <p>📏 {listing.acreage} acres</p>
+                                <p>📏 {(listing.size * 2.47).toFixed(1)} acres</p>
                                 <p>🌱 {listing.soilQuality} soil quality</p>
                             </div>
                         </div>

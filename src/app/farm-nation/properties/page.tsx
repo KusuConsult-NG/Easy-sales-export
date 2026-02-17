@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { logger } from '@/lib/logger';
-import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2 } from "lucide-react";
+import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { searchLandListingsAction, type LandListing } from "@/app/actions/land-listings";
@@ -23,9 +23,19 @@ function PropertiesContent() {
     // State for data
     const [properties, setProperties] = useState<LandListing[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [lastDocId, setLastDocId] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
 
-    const loadProperties = async () => {
-        setLoading(true);
+    // Initial load & Filter change
+    const loadProperties = async (reset = true) => {
+        if (reset) {
+            setLoading(true);
+            setProperties([]);
+        } else {
+            setLoadingMore(true);
+        }
+
         try {
             // Parse price range
             let minPrice, maxPrice;
@@ -34,18 +44,22 @@ function PropertiesContent() {
             else if (filters.priceRange === "50m-100m") { minPrice = 50000000; maxPrice = 100000000; }
             else if (filters.priceRange === "above-100m") { minPrice = 100000000; }
 
-            const results = await searchLandListingsAction({
+            const currentLastDoc = reset ? undefined : lastDocId || undefined;
+
+            const result = await searchLandListingsAction({
                 state: filters.location || undefined,
                 category: filters.propertyType || undefined,
                 minPrice,
                 maxPrice,
+                limit: 12,
+                lastDocId: currentLastDoc,
             });
 
             // Client-side text search (basic)
-            let filtered = results;
+            let filteredResults = result.listings;
             if (searchTerm) {
                 const lowerTerm = searchTerm.toLowerCase();
-                filtered = results.filter(p =>
+                filteredResults = result.listings.filter(p =>
                     p.title.toLowerCase().includes(lowerTerm) ||
                     p.description.toLowerCase().includes(lowerTerm) ||
                     p.location.lga.toLowerCase().includes(lowerTerm) ||
@@ -53,21 +67,38 @@ function PropertiesContent() {
                 );
             }
 
-            setProperties(filtered);
+            if (reset) {
+                setProperties(filteredResults);
+            } else {
+                setProperties(prev => [...prev, ...filteredResults]);
+            }
+
+            setLastDocId(result.lastDocId);
+            setHasMore(!!result.lastDocId);
+
         } catch (error) {
             logger.error("Error:", error);
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
     };
 
+    // Trigger load on filter change
     useEffect(() => {
         // Debounce search
         const timer = setTimeout(() => {
-            loadProperties();
+            loadProperties(true);
         }, 500);
         return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filters, searchTerm]);
+
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore) {
+            loadProperties(false);
+        }
+    };
 
     const handleFilterChange = (key: keyof typeof filters, value: string) => {
         setFilters(prev => ({ ...prev, [key]: value }));
@@ -189,86 +220,111 @@ function PropertiesContent() {
                         </button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {properties.map((property) => (
-                            <div
-                                key={property.id}
-                                className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 group"
-                            >
-                                {/* Property Image */}
-                                <div className="relative h-48 bg-slate-200 dark:bg-slate-700">
-                                    <Image
-                                        src={property.images[0] || "/placeholder-land.jpg"}
-                                        alt={property.title}
-                                        fill
-                                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                                    />
-                                    <div className="absolute top-4 right-4">
-                                        <span className="px-3 py-1 bg-teal-600 text-white text-xs font-bold rounded-full capitalize">
-                                            {property.category}
-                                        </span>
-                                    </div>
-                                    <div className="absolute top-4 left-4">
-                                        <span className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full capitalize">
-                                            {property.status === 'verified' ? 'Available' : property.status}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Property Details */}
-                                <div className="p-6">
-                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">
-                                        {property.title}
-                                    </h3>
-                                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-4">
-                                        <MapPin className="w-4 h-4 shrink-0" />
-                                        <span className="text-sm line-clamp-1">
-                                            {property.location.address}, {property.location.state}
-                                        </span>
-                                    </div>
-
-                                    {/* Features / Details */}
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                        {property.soilType && (
-                                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-white rounded">
-                                                {property.soilType}
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {properties.map((property) => (
+                                <div
+                                    key={property.id}
+                                    className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 group"
+                                >
+                                    {/* Property Image */}
+                                    <div className="relative h-48 bg-slate-200 dark:bg-slate-700">
+                                        <Image
+                                            src={property.images[0] || "/placeholder-land.jpg"}
+                                            alt={property.title}
+                                            fill
+                                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                        />
+                                        <div className="absolute top-4 right-4">
+                                            <span className="px-3 py-1 bg-teal-600 text-white text-xs font-bold rounded-full capitalize">
+                                                {property.category}
                                             </span>
-                                        )}
-                                        {property.waterSource && (
-                                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-white rounded">
-                                                {property.waterSource}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Price & Size */}
-                                    <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700 mb-4">
-                                        <div>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Size</p>
-                                            <p className="font-semibold text-slate-900 dark:text-white flex items-center gap-1">
-                                                <Layers className="w-4 h-4" />
-                                                {property.size}
-                                            </p>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Price</p>
-                                            <p className="text-xl font-bold text-teal-600">
-                                                ₦{(property.price / 1000000).toFixed(1)}M
-                                            </p>
+                                        <div className="absolute top-4 left-4">
+                                            <span className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full capitalize">
+                                                {property.status === 'verified' ? 'Available' : property.status}
+                                            </span>
                                         </div>
                                     </div>
 
-                                    {/* CTA */}
-                                    <Link
-                                        href={`/farm-nation/property/${property.id}`}
-                                        className="block w-full text-center px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition"
-                                    >
-                                        View Details
-                                    </Link>
+                                    {/* Property Details */}
+                                    <div className="p-6">
+                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">
+                                            {property.title}
+                                        </h3>
+                                        <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-4">
+                                            <MapPin className="w-4 h-4 shrink-0" />
+                                            <span className="text-sm line-clamp-1">
+                                                {property.location.address}, {property.location.state}
+                                            </span>
+                                        </div>
+
+                                        {/* Features / Details */}
+                                        <div className="flex flex-wrap gap-2 mb-4">
+                                            {property.soilType && (
+                                                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-white rounded">
+                                                    {property.soilType}
+                                                </span>
+                                            )}
+                                            {property.waterSource && (
+                                                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-white rounded">
+                                                    {property.waterSource}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Price & Size */}
+                                        <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700 mb-4">
+                                            <div>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Size</p>
+                                                <p className="font-semibold text-slate-900 dark:text-white flex items-center gap-1">
+                                                    <Layers className="w-4 h-4" />
+                                                    {property.size}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Price</p>
+                                                <p className="text-xl font-bold text-teal-600">
+                                                    ₦{(property.price / 1000000).toFixed(1)}M
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* CTA */}
+                                        <Link
+                                            href={`/farm-nation/property/${property.id}`}
+                                            className="block w-full text-center px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition"
+                                        >
+                                            View Details
+                                        </Link>
+                                    </div>
                                 </div>
+                            ))}
+                        </div>
+
+                        {/* Load More Button */}
+                        {hasMore && (
+                            <div className="mt-12 flex justify-center">
+                                <button
+                                    onClick={handleLoadMore}
+                                    disabled={loadingMore}
+                                    className="flex items-center gap-2 px-8 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-all"
+                                >
+                                    {loadingMore ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Loading more...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <RefreshCw className="w-5 h-5" />
+                                            Load More Listings
+                                        </>
+                                    )}
+                                </button>
                             </div>
-                        ))}
-                    </div>
+                        )}
+                    </>
                 )}
 
                 {/* CTA Section */}

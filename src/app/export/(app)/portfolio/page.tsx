@@ -6,47 +6,100 @@
 
 "use client";
 
-import { useState } from "react";
-import { PieChart, TrendingUp, Calendar, DollarSign } from "lucide-react";
+import { useState, useEffect } from "react";
+import { PieChart, TrendingUp, Calendar, DollarSign, Loader2, RefreshCw } from "lucide-react";
 import BackButton from "@/components/ui/BackButton";
+import { getUserExportInvestmentsAction, getUserExportStatsAction } from "@/app/actions/export";
+import { toast } from "sonner";
+
+interface Investment {
+    id: string;
+    commodity: string;
+    amount: number;
+    expectedReturn: number;
+    roi: number; // approximate or calculated
+    status: string;
+    startDate: string | Date;
+    endDate: string | Date;
+}
 
 export default function ExportPortfolioPage() {
-    const portfolioData = {
-        totalValue: 2500000,
-        totalReturns: 450000,
-        roi: 18,
-        investments: [
-            {
-                id: "1",
-                commodity: "Yam Tubers",
-                amount: 1000000,
-                returns: 220000,
-                roi: 22,
-                status: "active",
-                startDate: "2026-01-15",
-                endDate: "2026-07-15",
-            },
-            {
-                id: "2",
-                commodity: "Sesame Seeds",
-                amount: 750000,
-                returns: 150000,
-                roi: 20,
-                status: "active",
-                startDate: "2026-02-01",
-                endDate: "2026-06-01",
-            },
-            {
-                id: "3",
-                commodity: "Hibiscus",
-                amount: 750000,
-                returns: 135000,
-                roi: 18,
-                status: "active",
-                startDate: "2026-01-20",
-                endDate: "2026-06-20",
-            },
-        ],
+    const [stats, setStats] = useState({
+        totalValue: 0,
+        totalReturns: 0,
+        roi: 0
+    });
+    const [investments, setInvestments] = useState<Investment[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [lastId, setLastId] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
+
+    useEffect(() => {
+        async function loadStats() {
+            const result = await getUserExportStatsAction();
+            if (result.success && result.data) {
+                const totalVal = result.data.totalInvested;
+                const totalRet = result.data.totalReturns + result.data.pendingReturns;
+                // Simple aggregate ROI
+                const avgRoi = totalVal > 0 ? Math.round(((totalRet - totalVal) / totalVal) * 100) : 0;
+
+                setStats({
+                    totalValue: totalVal,
+                    totalReturns: result.data.totalReturns + result.data.pendingReturns, // Show all expected returns
+                    roi: avgRoi
+                });
+            }
+        }
+        loadStats();
+    }, []);
+
+    async function loadInvestments(reset = true) {
+        if (reset) {
+            setLoading(true);
+            setInvestments([]);
+        } else {
+            setLoadingMore(true);
+        }
+
+        try {
+            const currentLastId = reset ? undefined : lastId || undefined;
+            const result = await getUserExportInvestmentsAction(10, currentLastId);
+
+            if (result.success && result.data) {
+                const mappedInvestments = result.data.map(inv => ({
+                    ...inv,
+                    roi: inv.amount > 0 ? Math.round((inv.expectedReturn / inv.amount) * 100) : 0 // Calculate ROI dynamically
+                }));
+
+                if (reset) {
+                    setInvestments(mappedInvestments);
+                } else {
+                    setInvestments(prev => [...prev, ...mappedInvestments]);
+                }
+                setLastId(result.lastId || null);
+                setHasMore(!!result.lastId);
+            } else {
+                toast.error(result.error || "Failed to load investments");
+            }
+        } catch (error) {
+            console.error("Failed to load investments:", error);
+            toast.error("Failed to load investments");
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
+        }
+    }
+
+    useEffect(() => {
+        loadInvestments();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore) {
+            loadInvestments(false);
+        }
     };
 
     return (
@@ -73,7 +126,7 @@ export default function ExportPortfolioPage() {
                             <DollarSign className="w-5 h-5 text-orange-600" />
                         </div>
                         <div className="text-3xl font-bold text-slate-900 dark:text-white">
-                            ₦{portfolioData.totalValue.toLocaleString()}
+                            ₦{stats.totalValue.toLocaleString()}
                         </div>
                     </div>
 
@@ -85,7 +138,7 @@ export default function ExportPortfolioPage() {
                             <TrendingUp className="w-5 h-5 text-green-600" />
                         </div>
                         <div className="text-3xl font-bold text-green-600">
-                            +₦{portfolioData.totalReturns.toLocaleString()}
+                            +₦{stats.totalReturns.toLocaleString()}
                         </div>
                     </div>
 
@@ -97,7 +150,7 @@ export default function ExportPortfolioPage() {
                             <PieChart className="w-5 h-5 text-blue-600" />
                         </div>
                         <div className="text-3xl font-bold text-blue-600">
-                            {portfolioData.roi}%
+                            {stats.roi}%
                         </div>
                     </div>
                 </div>
@@ -134,7 +187,19 @@ export default function ExportPortfolioPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {portfolioData.investments.map((investment) => (
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={6} className="text-center py-12">
+                                            <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600" />
+                                        </td>
+                                    </tr>
+                                ) : investments.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="text-center py-12 text-slate-500">
+                                            No investments found
+                                        </td>
+                                    </tr>
+                                ) : (investments.map((investment) => (
                                     <tr
                                         key={investment.id}
                                         className="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
@@ -148,7 +213,7 @@ export default function ExportPortfolioPage() {
                                             ₦{investment.amount.toLocaleString()}
                                         </td>
                                         <td className="p-4 text-green-600 font-medium">
-                                            +₦{investment.returns.toLocaleString()}
+                                            +₦{investment.expectedReturn.toLocaleString()}
                                         </td>
                                         <td className="p-4">
                                             <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium">
@@ -168,10 +233,32 @@ export default function ExportPortfolioPage() {
                                             </span>
                                         </td>
                                     </tr>
-                                ))}
+                                )))}
                             </tbody>
                         </table>
                     </div>
+                    {/* Pagination */}
+                    {hasMore && (
+                        <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                            <button
+                                onClick={handleLoadMore}
+                                disabled={loadingMore}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
+                            >
+                                {loadingMore ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Loading more...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="w-4 h-4" />
+                                        Load More
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

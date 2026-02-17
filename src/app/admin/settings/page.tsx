@@ -44,6 +44,14 @@ export default function AdminSettingsPage() {
             href: "/admin/settings/logs",
             color: "text-purple-600",
             bg: "bg-purple-100 dark:bg-purple-900/20"
+        },
+        {
+            title: "System Maintenance",
+            description: "Cleanup abandoned data and optimize DB",
+            icon: Settings, // Reusing settings icon or importa valid one like Trash2/Wrench if available
+            href: "/admin/settings/maintenance",
+            color: "text-orange-600",
+            bg: "bg-orange-100 dark:bg-orange-900/20"
         }
     ];
 

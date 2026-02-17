@@ -1,35 +1,69 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Package2, TrendingUp, Calendar, MapPin, ArrowRight, Filter, Search, Database } from "lucide-react";
+import { Package2, TrendingUp, Calendar, MapPin, ArrowRight, Filter, Search, Database, Loader2, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { getExportOpportunities, seedExportOpportunities, type ExportOpportunity } from "@/app/actions/export-investments";
+import { toast } from "sonner";
 
 export default function ExportWindowsPage() {
     const [exportWindows, setExportWindows] = useState<ExportOpportunity[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [seeding, setSeeding] = useState(false);
+    const [lastDocId, setLastDocId] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
 
-    async function loadWindows() {
-        setLoading(true);
-        const result = await getExportOpportunities();
-        if (result.success && result.data) {
-            setExportWindows(result.data);
+    async function loadWindows(reset = true) {
+        if (reset) {
+            setLoading(true);
+            setExportWindows([]);
+        } else {
+            setLoadingMore(true);
         }
-        setLoading(false);
+
+        try {
+            const currentLastId = reset ? undefined : lastDocId || undefined;
+            const result = await getExportOpportunities(12, currentLastId);
+
+            if (result.success && result.data) {
+                if (reset) {
+                    setExportWindows(result.data);
+                } else {
+                    setExportWindows(prev => [...prev, ...result.data]);
+                }
+                setLastDocId(result.lastId || null);
+                setHasMore(!!result.lastId);
+            } else {
+                toast.error(result.error || "Failed to load export windows");
+            }
+        } catch (error) {
+            console.error("Failed to load export windows:", error);
+            toast.error("Failed to load export windows");
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
+        }
     }
 
     useEffect(() => {
         loadWindows();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     async function handleSeed() {
         setSeeding(true);
         await seedExportOpportunities();
-        await loadWindows();
+        await loadWindows(true);
         setSeeding(false);
     }
+
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore) {
+            loadWindows(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -97,7 +131,7 @@ export default function ExportWindowsPage() {
                 {/* Export Windows Grid */}
                 {loading ? (
                     <div className="flex justify-center py-20">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                        <Loader2 className="animate-spin h-12 w-12 text-purple-600" />
                     </div>
                 ) : exportWindows.length === 0 ? (
                     <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-2xl shadow-lg">
@@ -208,18 +242,27 @@ export default function ExportWindowsPage() {
                 )}
 
                 {/* Pagination */}
-                <div className="mt-12 flex justify-center gap-2">
-                    <button className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition">
-                        Previous
-                    </button>
-                    <button className="px-4 py-2 bg-purple-600 text-white rounded-xl font-semibold">1</button>
-                    <button className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition">
-                        2
-                    </button>
-                    <button className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition">
-                        Next
-                    </button>
-                </div>
+                {hasMore && !loading && (
+                    <div className="mt-12 flex justify-center">
+                        <button
+                            onClick={handleLoadMore}
+                            disabled={loadingMore}
+                            className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-all"
+                        >
+                            {loadingMore ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Loading more...
+                                </>
+                            ) : (
+                                <>
+                                    <RefreshCw className="w-4 h-4" />
+                                    Load More
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
 
                 {/* CTA Section */}
                 <div className="mt-16 bg-linear-to-r from-purple-600 to-pink-600 rounded-3xl p-12 text-center text-white">

@@ -178,7 +178,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 {/* Voted in Last Election */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
-                        Have you voted in the last general election? *
+                        Did you vote in the last general election? *
                     </label>
                     <div className="flex gap-4">
                         {[

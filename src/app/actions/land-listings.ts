@@ -208,16 +208,33 @@ export async function searchLandListingsAction(filters: {
     maxPrice?: number;
     soilType?: string;
     waterSource?: string;
-}): Promise<LandListing[]> {
+    limit?: number;
+    lastDocId?: string;
+}): Promise<{ listings: LandListing[]; lastDocId: string | null }> {
     try {
-        let q = db.collection("land_listings").where("status", "==", "verified");
+        let q = db.collection("land_listings")
+            .where("status", "==", "verified")
+            .orderBy("createdAt", "desc"); // Ensure stable ordering
 
         if (filters.state) {
+            // Note: Mixing equality and range/inequality filters requires composite indexes
+            // or client-side filtering. For now, strict equality is fine with orderBy.
             q = q.where("location.state", "==", filters.state);
         }
         if (filters.category) {
             q = q.where("category", "==", filters.category);
         }
+
+        // Pagination
+        if (filters.lastDocId) {
+            const lastDoc = await db.collection("land_listings").doc(filters.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
+
+        const limit = filters.limit || 12;
+        q = q.limit(limit);
 
         const snapshot = await q.get();
         let results = snapshot.docs.map((doc) => ({
@@ -225,7 +242,7 @@ export async function searchLandListingsAction(filters: {
             ...doc.data(),
         })) as LandListing[];
 
-        // Client-side filtering for numeric ranges
+        // Client-side filtering for numeric ranges (until complex indexes are built)
         if (filters.minSize) {
             results = results.filter((l) => l.size >= filters.minSize!);
         }
@@ -245,10 +262,12 @@ export async function searchLandListingsAction(filters: {
             results = results.filter((l) => l.waterSource === filters.waterSource);
         }
 
-        return results;
+        const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+        return { listings: results, lastDocId };
     } catch (error) {
         logger.error("Land search error:", error);
-        return [];
+        return { listings: [], lastDocId: null };
     }
 }
 

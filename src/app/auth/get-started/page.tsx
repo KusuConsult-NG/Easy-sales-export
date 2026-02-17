@@ -145,13 +145,27 @@ export default function GetStartedPage() {
                     ))}
                 </div>
 
-                <div className="mt-16 text-center">
+                <div className="mt-16 text-center space-y-8">
                     <p className="text-slate-500 dark:text-slate-400">
                         Want to explore first?{" "}
                         <Link href="/marketplace" className="text-primary font-semibold hover:underline">
                             Browse Marketplace
                         </Link>
                     </p>
+
+                    <div className="flex items-center justify-center gap-6 text-sm text-slate-500 dark:text-slate-400 pt-8 border-t border-slate-200 dark:border-slate-800">
+                        <Link href="/privacy" className="hover:underline hover:text-primary transition-colors">
+                            Privacy Policy
+                        </Link>
+                        <span>•</span>
+                        <Link href="/terms" className="hover:underline hover:text-primary transition-colors">
+                            Terms & Conditions
+                        </Link>
+                        <span>•</span>
+                        <Link href="/refund-policy" className="hover:underline hover:text-primary transition-colors">
+                            Refund Policy
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>

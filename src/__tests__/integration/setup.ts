@@ -92,7 +92,7 @@ export const TEST_LOAN_APPLICATION = {
 
 export const TEST_LAND_LISTING = {
     title: 'Prime Agricultural Land',
-    acreage: 5,
+    size: 2.02, // approx 5 acres
     location: { city: 'Kaduna', state: 'Kaduna' },
     price: 2000000,
     soilQuality: 'Excellent' as const,

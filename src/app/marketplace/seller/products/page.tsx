@@ -6,14 +6,16 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { logger } from '@/lib/logger';
-import { Plus, Search, Edit, Trash2, Eye, AlertCircle, CheckCircle, Loader2, Package } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Eye, AlertCircle, Loader2, Package } from "lucide-react";
 import Link from "next/link";
-import { getSellerProductsAction } from "@/app/actions/marketplace";
+import { getSellerProductsAction, deleteProductAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import BackButton from "@/components/ui/BackButton";
+import { useDebounce } from "@/hooks/useDebounce";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function SellerProductsPage() {
     const [loading, setLoading] = useState(true);
@@ -21,21 +23,79 @@ export default function SellerProductsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState("all");
 
-    useEffect(() => {
-        async function loadProducts() {
-            try {
-                const result = await getSellerProductsAction();
-                if (result.success && result.products) {
-                    setProducts(result.products);
-                }
-            } catch (error) {
-                logger.error("Failed to load products:", error);
-            } finally {
-                setLoading(false);
+    // Pagination State
+    const [lastId, setLastId] = useState<string | undefined>(undefined);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+
+    const debouncedSearch = useDebounce(searchQuery, 500);
+    const { showToast } = useToast();
+
+    const fetchProducts = useCallback(async (isReset: boolean = false) => {
+        try {
+            if (isReset) {
+                setLoading(true);
+            } else {
+                setLoadingMore(true);
             }
+
+            // If resetting, we use undefined as lastId
+            // If loading more, we use the current lastId from state
+            const currentLastId = isReset ? undefined : lastId;
+
+            const result = await getSellerProductsAction({
+                limit: 20,
+                lastId: currentLastId,
+                status: filterStatus,
+                search: debouncedSearch
+            });
+
+            if (result.success && result.products) {
+                setProducts(prev => isReset ? result.products : [...prev, ...result.products]);
+                setLastId(result.lastId);
+                setHasMore(!!result.hasMore);
+            } else if (result.error) {
+                logger.error("Failed to load products:", { error: result.error });
+            }
+        } catch (error) {
+            logger.error("Failed to load products:", { error });
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
         }
-        loadProducts();
-    }, []);
+    }, [filterStatus, debouncedSearch, lastId]); // lastId dependency is tricky here
+
+    // Effect for Search and Filter changes (Reset)
+    useEffect(() => {
+        fetchProducts(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filterStatus, debouncedSearch]);
+
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore) {
+            fetchProducts(false);
+        }
+    };
+
+    const handleDeleteProduct = async (productId: string, productTitle: string) => {
+        if (!confirm(`Are you sure you want to delete "${productTitle}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const result = await deleteProductAction(productId);
+            if (result.success) {
+                showToast("Product deleted successfully", "success");
+                // Remove from local state
+                setProducts(prev => prev.filter(p => p.id !== productId));
+            } else {
+                showToast(result.error || "Failed to delete product", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred while deleting", "error");
+            logger.error("Delete product error:", { error });
+        }
+    };
 
     const getStatusConfig = (status: string) => {
         const configs: Record<string, { bg: string; text: string; label: string }> = {
@@ -50,26 +110,6 @@ export default function SellerProductsPage() {
         }
         return configs[status] || configs.active;
     };
-
-    const filteredProducts = products.filter(product => {
-        const matchesSearch = product.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            product.category.toLowerCase().includes(searchQuery.toLowerCase());
-
-        let matchesStatus = true;
-        if (filterStatus === "all") matchesStatus = true;
-        else if (filterStatus === "low_stock") matchesStatus = product.availableQuantity > 0 && product.availableQuantity < 50;
-        else matchesStatus = product.status === filterStatus;
-
-        return matchesSearch && matchesStatus;
-    });
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-green-600" />
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -160,14 +200,20 @@ export default function SellerProductsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                            {filteredProducts.length === 0 ? (
+                            {loading && products.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} className="px-6 py-12 text-center">
+                                        <Loader2 className="w-8 h-8 animate-spin text-green-600 mx-auto" />
+                                    </td>
+                                </tr>
+                            ) : products.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-8 text-center text-slate-500 dark:text-slate-400">
                                         No products found. <Link href="/marketplace/sell/create" className="text-green-600 hover:underline">Add your first product</Link>
                                     </td>
                                 </tr>
                             ) : (
-                                filteredProducts.map((product) => {
+                                products.map((product) => {
                                     // Determine display status (check for low stock overrides)
                                     let displayStatus = product.status;
                                     if (product.status === "active" && product.availableQuantity < 50 && product.availableQuantity > 0) {
@@ -175,19 +221,15 @@ export default function SellerProductsPage() {
                                     }
 
                                     const statusConfig = getStatusConfig(displayStatus);
-
                                     const retailPrice = product.pricingTiers?.find(t => t.type === "retail")?.price || product.pricingTiers?.[0]?.price || 0;
 
                                     return (
                                         <tr key={product.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                                             <td className="px-6 py-4">
                                                 <div>
-                                                    <p className="font-semibold text-slate-900 dark:text-white">
+                                                    <p className="font-semibold text-slate-900 dark:text-white line-clamp-1">
                                                         {product.title}
                                                     </p>
-                                                    <div className="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                                                        <Package className="h-5 w-5 text-slate-500" />
-                                                    </div>
                                                     <div className="flex items-center gap-2 mt-1 text-sm text-slate-600 dark:text-slate-400">
                                                         <Eye className="w-4 h-4" />
                                                         <span>{product.views || 0} views</span>
@@ -207,7 +249,7 @@ export default function SellerProductsPage() {
                                                     product.availableQuantity < 50 ? 'text-orange-600' :
                                                         'text-green-600'
                                                     }`}>
-                                                    {product.availableQuantity}{product.unit}
+                                                    {product.availableQuantity} {product.unit}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-slate-900 dark:text-white">
@@ -235,6 +277,7 @@ export default function SellerProductsPage() {
                                                         <Edit className="w-5 h-5" />
                                                     </Link>
                                                     <button
+                                                        onClick={() => handleDeleteProduct(product.id, product.title)}
                                                         className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
                                                         title="Delete"
                                                     >
@@ -250,8 +293,28 @@ export default function SellerProductsPage() {
                     </table>
                 </div>
 
+                {/* Load More */}
+                {hasMore && (
+                    <div className="mt-8 flex justify-center">
+                        <button
+                            onClick={handleLoadMore}
+                            disabled={loadingMore}
+                            className="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {loadingMore ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Loading...
+                                </>
+                            ) : (
+                                "Load More Products"
+                            )}
+                        </button>
+                    </div>
+                )}
+
                 {/* Low Stock Alert */}
-                {filteredProducts.some(p => p.availableQuantity < 50) && (
+                {products.some(p => p.availableQuantity < 50 && p.availableQuantity > 0) && (
                     <div className="mt-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-6">
                         <div className="flex items-start gap-4">
                             <AlertCircle className="w-6 h-6 text-orange-600 shrink-0 mt-0.5" />
@@ -260,22 +323,8 @@ export default function SellerProductsPage() {
                                     Stock Alert
                                 </h3>
                                 <p className="text-sm text-orange-800 dark:text-orange-300 mb-3">
-                                    You have products with low or zero stock. Restock soon to avoid lost sales.
+                                    You have products with low stock. Restock soon to avoid lost sales.
                                 </p>
-                                <div className="flex gap-3">
-                                    {filteredProducts
-                                        .filter(p => p.availableQuantity < 50)
-                                        .slice(0, 3)
-                                        .map(product => (
-                                            <Link
-                                                key={product.id}
-                                                href={`/marketplace/seller/products/${product.id}/edit`}
-                                                className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-semibold hover:bg-orange-700"
-                                            >
-                                                Restock {product.title}
-                                            </Link>
-                                        ))}
-                                </div>
                             </div>
                         </div>
                     </div>

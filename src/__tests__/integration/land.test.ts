@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 
-import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, where, updateDoc } from 'firebase/firestore';
 import {
     createTestUser,
     cleanupTestData,
@@ -74,7 +74,7 @@ describe('Land Listing Integration Tests', () => {
 
             // 2. Admin verifies listing (in real app, this would check admin role)
             // For this test, we'll just update the status
-            await listingRef.update({
+            await updateDoc(listingRef, {
                 verificationStatus: 'verified',
                 verifiedAt: new Date(),
                 verifiedBy: 'admin-uid',

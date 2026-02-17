@@ -37,7 +37,7 @@ test.describe('Marketplace Purchase Flow', () => {
         await page.goto('/marketplace');
 
         // Add product to cart
-        await page.click('[data-testid="product-card"]').first();
+        await page.locator('[data-testid="product-card"]').first().click();
         await page.click('text=Add to Cart');
         await expect(page.locator('text=Added to cart')).toBeVisible();
 
@@ -67,7 +67,7 @@ test.describe('Marketplace Purchase Flow', () => {
 
         // Add to cart and checkout
         await page.goto('/marketplace');
-        await page.click('[data-testid="product-card"]').first();
+        await page.locator('[data-testid="product-card"]').first().click();
         await page.click('text=Add to Cart');
         await page.goto('/marketplace/checkout');
 
@@ -93,7 +93,7 @@ test.describe('Dispute Flow', () => {
         await page.goto('/dashboard/orders');
 
         // Open first delivered order
-        await page.click('[data-testid="order-card"]').first();
+        await page.locator('[data-testid="order-card"]').first().click();
 
         // Open dispute
         await page.click('text=Open Dispute');

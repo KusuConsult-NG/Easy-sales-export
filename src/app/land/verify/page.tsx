@@ -111,7 +111,7 @@ export default function LandVerificationPage() {
                             </div>
                             <div>
                                 <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                                    {listings.reduce((sum, l) => sum + l.acreage, 0).toFixed(1)}
+                                    {listings.reduce((sum, l) => sum + (l.size * 2.47), 0).toFixed(1)}
                                 </p>
                                 <p className="text-sm text-slate-600 dark:text-slate-400">Total Acres</p>
                             </div>
@@ -183,7 +183,7 @@ export default function LandVerificationPage() {
                                             ₦{listing.price.toLocaleString()}
                                         </p>
                                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                                            {listing.acreage} acres
+                                            {(listing.size * 2.47).toFixed(1)} acres
                                         </p>
                                     </div>
                                 </div>

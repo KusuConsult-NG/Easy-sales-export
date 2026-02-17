@@ -21,7 +21,7 @@ describe('Security Checks', () => {
 
     describe('validateProductionSecrets', () => {
         it('should pass in development mode with weak secrets', async () => {
-            process.env.NODE_ENV = 'development';
+            (process.env as any).NODE_ENV = 'development';
             process.env.NEXTAUTH_SECRET = 'demo-secret-key';
 
             const { validateProductionSecrets } = await import('@/lib/security-checks');
@@ -31,7 +31,7 @@ describe('Security Checks', () => {
         });
 
         it('should fail in production mode with weak secrets', async () => {
-            process.env.NODE_ENV = 'production';
+            (process.env as any).NODE_ENV = 'production';
             process.env.NEXTAUTH_SECRET = 'demo-secret-key';
             process.env.MFA_SECRET_KEY = 'placeholder';
             process.env.QR_ENCRYPTION_KEY = 'test-secret';
@@ -44,7 +44,7 @@ describe('Security Checks', () => {
         });
 
         it('should fail with short secrets in production', async () => {
-            process.env.NODE_ENV = 'production';
+            (process.env as any).NODE_ENV = 'production';
             process.env.NEXTAUTH_SECRET = 'short';
             process.env.MFA_SECRET_KEY = 'short';
             process.env.QR_ENCRYPTION_KEY = 'short';
@@ -56,7 +56,7 @@ describe('Security Checks', () => {
         });
 
         it('should pass with strong secrets in production', async () => {
-            process.env.NODE_ENV = 'production';
+            (process.env as any).NODE_ENV = 'production';
             process.env.NEXTAUTH_SECRET = 'a'.repeat(64); // 64 character random string
             process.env.MFA_SECRET_KEY = 'b'.repeat(64);
             process.env.QR_ENCRYPTION_KEY = 'c'.repeat(64);
@@ -70,7 +70,7 @@ describe('Security Checks', () => {
 
     describe('validateRequiredEnvVars', () => {
         it('should fail when required vars are missing', async () => {
-            process.env.NODE_ENV = 'production';
+            (process.env as any).NODE_ENV = 'production';
             delete process.env.NEXTAUTH_SECRET;
             delete process.env.PAYSTACK_SECRET_KEY;
 

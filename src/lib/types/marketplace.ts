@@ -129,6 +129,9 @@ export interface Product {
     rating: number;
     reviewCount: number;
 
+    // Denormalized Data
+    sellerName?: string;
+
     createdAt: Date;
     updatedAt: Date;
 }

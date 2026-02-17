@@ -127,14 +127,43 @@ export default function ExportOnboardingPage() {
 
     const handleSubmit = async (finalData: any) => {
         try {
-            const result = await submitExportOnboardingAction(finalData);
+            const formData = new FormData();
+
+            // 1. Append Profile Data
+            if (finalData.profile) {
+                formData.append("profile", JSON.stringify(finalData.profile));
+            }
+
+            // 2. Append KYC Data (Text)
+            if (finalData.kyc?.kycData) {
+                formData.append("kycData", JSON.stringify(finalData.kyc.kycData));
+            }
+
+            // 3. Append KYC Documents (Files)
+            if (finalData.kyc?.documents?.idDocument) {
+                formData.append("idDocument", finalData.kyc.documents.idDocument);
+            }
+            if (finalData.kyc?.documents?.proofOfAddress) {
+                formData.append("proofOfAddress", finalData.kyc.documents.proofOfAddress);
+            }
+
+            // 4. Append Bank Data
+            if (finalData.bank) {
+                formData.append("bank", JSON.stringify(finalData.bank));
+            }
+
+            // 5. Append Terms
+            if (finalData.terms) {
+                formData.append("terms", JSON.stringify(finalData.terms));
+            }
+
+            // Submit using FormData
+            const result = await submitExportOnboardingAction(null, formData);
 
             if (result.success) {
-                // Successfully submitted - redirect to pending page
                 showToast("Onboarding submitted successfully!", "success");
                 router.push("/export/onboarding/pending");
             } else {
-                // Handle error
                 logger.error("Onboarding submission failed:", result.error);
                 showToast(`Failed to submit: ${result.error}`, "error");
             }

@@ -10,6 +10,7 @@ import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { createAdminAuditLog } from '@/lib/audit-log-admin';
+import { revalidatePath } from 'next/cache';
 
 interface WithdrawalRequestData {
     amount: number;
@@ -126,6 +127,9 @@ export async function submitWithdrawalRequestAction(
         } catch (emailError) {
             logger.error('Failed to send confirmation email:', emailError);
         }
+
+        revalidatePath('/dashboard/wallet');
+        revalidatePath('/cooperatives/loans');
 
         return {
             error: null,

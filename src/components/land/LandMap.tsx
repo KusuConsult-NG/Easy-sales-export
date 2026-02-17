@@ -154,7 +154,7 @@ export function LandMap({
                                     {/* Acreage */}
                                     <div>
                                         <p className="text-slate-900">
-                                            <span className="font-semibold">{listing.acreage}</span> acres
+                                            <span className="font-semibold">{(listing.size * 2.47).toFixed(1)}</span> acres
                                         </p>
                                     </div>
 

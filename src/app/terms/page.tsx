@@ -18,162 +18,64 @@ export default function TermsPage() {
 
                 {/* Content */}
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8 lg:p-12 space-y-8">
-                    {/* Acceptance */}
+                    <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                        These Terms & Conditions govern the use of services provided by <strong>Easy Sales Export LTD.</strong>. By accessing our website or purchasing our services, you agree to be legally bound by these Terms.
+                    </p>
+
                     <section>
-                        <div className="flex items-center gap-3 mb-4">
-                            <FileCheck className="w-6 h-6 text-primary" />
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                Acceptance of Terms
-                            </h2>
-                        </div>
-                        <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                            By accessing and using {COMPANY_INFO.name}'s platform, you agree to be bound by these Terms and Conditions. If you do not agree with any part of these terms, please do not use our services.
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">1. Services</h2>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            The Company provides live export training programs, recorded digital courses, educational materials, and cooperative-related services subject to separate agreements.
                         </p>
                     </section>
 
-                    {/* Platform Services */}
                     <section>
-                        <div className="flex items-center gap-3 mb-4">
-                            <Users className="w-6 h-6 text-primary" />
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                Platform Services
-                            </h2>
-                        </div>
-                        <p className="text-slate-600 dark:text-slate-400 mb-4">
-                            {COMPANY_INFO.name} provides the following services:
-                        </p>
-                        <ul className="space-y-3 text-slate-600 dark:text-slate-400">
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Agricultural export window coordination and facilitation</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Cooperative society membership and financial services</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Agricultural marketplace for produce trading</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>WAVE agricultural training program</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Agricultural education through Farm Nation LMS</span>
-                            </li>
-                        </ul>
-                    </section>
-
-                    {/* User Obligations */}
-                    <section>
-                        <div className="flex items-center gap-3 mb-4">
-                            <Scale className="w-6 h-6 text-primary" />
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                User Obligations
-                            </h2>
-                        </div>
-                        <ul className="space-y-3 text-slate-600 dark:text-slate-400">
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Provide accurate and truthful information during registration</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Maintain the confidentiality of your account credentials</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Comply with all applicable laws and regulations</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Not engage in fraudulent activities or misuse platform services</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Respect intellectual property rights</span>
-                            </li>
-                        </ul>
-                    </section>
-
-                    {/* Financial Services */}
-                    <section>
-                        <div className="flex items-center gap-3 mb-4">
-                            <DollarSign className="w-6 h-6 text-primary" />
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                Financial Services & Payments
-                            </h2>
-                        </div>
-                        <ul className="space-y-3 text-slate-600 dark:text-slate-400">
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Cooperative contributions are processed through secure payment gateways</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Loan applications are subject to approval based on contribution history and tier</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>Interest rates and terms are clearly disclosed before approval</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                                <span className="text-primary mt-1">•</span>
-                                <span>All financial transactions are recorded in audit logs</span>
-                            </li>
-                        </ul>
-                    </section>
-
-                    {/* Liability */}
-                    <section>
-                        <div className="flex items-center gap-3 mb-4">
-                            <Shield className="w-6 h-6 text-primary" />
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                Limitation of Liability
-                            </h2>
-                        </div>
-                        <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                            {COMPANY_INFO.name} acts as a facilitator and platform provider. We are not responsible for the quality, safety, or legality of products listed, the accuracy of user-generated content, or the ability of users to complete transactions. Our liability is limited to the extent permitted by law.
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">2. Account Responsibility</h2>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Users are responsible for maintaining confidentiality of login credentials and for all activities conducted under their account.
                         </p>
                     </section>
 
-                    {/* Account Termination */}
                     <section>
-                        <div className="flex items-center gap-3 mb-4">
-                            <AlertTriangle className="w-6 h-6 text-primary" />
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                Account Termination
-                            </h2>
-                        </div>
-                        <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                            We reserve the right to suspend or terminate accounts that violate these terms, engage in fraudulent activities, or pose security risks to the platform. Users may also request account deletion at any time.
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">3. Payment Terms</h2>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Full payment is required prior to access. The Company reserves the right to modify pricing at any time.
                         </p>
                     </section>
 
-                    {/* Changes to Terms */}
                     <section>
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
-                            Changes to Terms
-                        </h2>
-                        <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                            We may update these Terms and Conditions from time to time. Continued use of the platform after changes constitutes acceptance of the updated terms. We will notify users of significant changes via email or platform notifications.
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">4. Intellectual Property Rights</h2>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            All course materials, videos, documents, branding, and proprietary methodologies are the exclusive property of the Company. Unauthorized reproduction, recording, redistribution, resale, or public sharing is strictly prohibited.
                         </p>
                     </section>
 
-                    {/* Contact */}
-                    <section className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
-                            Questions?
-                        </h2>
-                        <p className="text-slate-600 dark:text-slate-400 mb-4">
-                            If you have questions about these Terms and Conditions, please contact us:
+                    <section>
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">5. Disclaimer of Guarantees</h2>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            All trainings are provided for educational purposes only. The Company does not guarantee export approvals, profitability, regulatory clearance, or business success.
                         </p>
-                        <div className="space-y-2 text-slate-900 dark:text-white">
-                            <p><strong>Email:</strong> <a href={`mailto:${COMPANY_INFO.contact.general.email}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.email}</a></p>
-                            <p><strong>Phone:</strong> <a href={`tel:${COMPANY_INFO.contact.general.phone}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.phone}</a></p>
-                        </div>
+                    </section>
+
+                    <section>
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">6. Limitation of Liability</h2>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            To the maximum extent permitted by law, the Company shall not be liable for indirect, incidental, consequential, or financial losses arising from participation in our programs.
+                        </p>
+                    </section>
+
+                    <section>
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">7. Governing Law</h2>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            These Terms shall be governed by and interpreted in accordance with the laws of the Federal Republic of Nigeria.
+                        </p>
+                    </section>
+
+                    <section>
+                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">8. Dispute Resolution</h2>
+                        <p className="text-slate-600 dark:text-slate-400">
+                            Any disputes shall first be resolved amicably. Where unresolved, disputes shall be submitted to arbitration in Nigeria in accordance with applicable arbitration laws.
+                        </p>
                     </section>
                 </div>
 

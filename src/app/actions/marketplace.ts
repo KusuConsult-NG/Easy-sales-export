@@ -512,7 +512,14 @@ export async function createProductAction(
 /**
  * Get seller's products
  */
-export async function getSellerProductsAction() {
+export async function getSellerProductsAction(options: {
+    limit?: number;
+    lastId?: string;
+    status?: string;
+    search?: string;
+    sortBy?: "createdAt" | "title" | "price" | "orders" | "views" | "rating" | "availableQuantity";
+    sortDir?: "asc" | "desc";
+} = {}) {
     try {
         const session = await auth();
 
@@ -521,15 +528,74 @@ export async function getSellerProductsAction() {
         }
 
         const userId = session.user.id;
-        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("sellerId", "==", userId)
-            .get();
+        const {
+            limit = 50,
+            lastId,
+            status,
+            search,
+            sortBy = "createdAt",
+            sortDir = "desc"
+        } = options;
 
-        const products = snapshot.docs.map(doc => doc.data() as Product);
+        let query = db.collection(COLLECTIONS.PRODUCTS)
+            .where("sellerId", "==", userId);
 
-        return { success: true, products };
+        // Apply Status Filter
+        if (status && status !== "all" && status !== "low_stock") {
+            query = query.where("status", "==", status);
+        }
+
+        // Handle Low Stock Filter (virtual status)
+        if (status === "low_stock") {
+            query = query.where("availableQuantity", "<", 50)
+                .where("availableQuantity", ">", 0);
+        }
+
+        // Apply Sorting
+        // Note: Firestore requires an index for each combination of where+orderBy
+        try {
+            query = query.orderBy(sortBy, sortDir);
+        } catch (e) {
+            // Fallback if index missing or incompatible sort
+            logger.warn("Sorting failed, likely missing index. Falling back to default sort.", { error: e });
+        }
+
+        // Apply Pagination
+        if (lastId) {
+            const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(lastId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        query = query.limit(limit);
+
+        const snapshot = await query.get();
+        let products = snapshot.docs.map(doc => doc.data() as Product);
+
+        // Client-side Text Search (Temporary Fallback)
+        // Ideally use a dedicated search service for full-text search
+        if (search) {
+            const searchLower = search.toLowerCase();
+            products = products.filter(p =>
+                p.title.toLowerCase().includes(searchLower) ||
+                p.category.toLowerCase().includes(searchLower)
+            );
+        }
+
+        // Determine pagination info
+        let newLastId = undefined;
+        let hasMore = false;
+
+        const lastProduct = products[products.length - 1];
+        if (lastProduct && snapshot.docs.length === limit) {
+            hasMore = true; // Optimistic check
+            newLastId = lastProduct.id;
+        }
+
+        return { success: true, products, lastId: newLastId, hasMore };
     } catch (error: any) {
-        logger.error("Get seller products error:", error);
+        logger.error("Get seller products error:", { error });
         return { success: false, error: error.message };
     }
 }
@@ -537,7 +603,11 @@ export async function getSellerProductsAction() {
 /**
  * Get seller's orders
  */
-export async function getSellerOrdersAction() {
+export async function getSellerOrdersAction(options: {
+    limit?: number;
+    lastId?: string;
+    status?: string;
+} = {}) {
     try {
         const session = await auth();
 
@@ -546,15 +616,46 @@ export async function getSellerOrdersAction() {
         }
 
         const userId = session.user.id;
-        const snapshot = await db.collection(COLLECTIONS.ORDERS)
-            .where("sellerId", "==", userId)
-            .get();
+        const { limit = 20, lastId, status } = options;
 
+        // Query 'marketplaceOrders' collection using sellerIds array
+        let query = db.collection("marketplaceOrders")
+            .where("sellerIds", "array-contains", userId)
+            .orderBy("createdAt", "desc");
+
+        if (status && status !== "all") {
+            // Note: 'status' in marketplaceOrders is 'orderStatus' or 'paymentStatus'?
+            // marketplace-payment.ts saves 'orderStatus' ("pending_payment") 
+            // and 'paymentStatus' ("pending").
+            // Seller usually cares about "orderStatus" (processing, shipped, etc).
+            // But existing code checked "status". 
+            // I should map "status" query to "orderStatus".
+            query = query.where("orderStatus", "==", status);
+        }
+
+        if (lastId) {
+            const lastDoc = await db.collection("marketplaceOrders").doc(lastId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        query = query.limit(limit);
+
+        const snapshot = await query.get();
         const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
 
-        return { success: true, orders };
+        let newLastId = undefined;
+        let hasMore = false;
+
+        if (snapshot.docs.length === limit) {
+            hasMore = true;
+            newLastId = snapshot.docs[snapshot.docs.length - 1].id;
+        }
+
+        return { success: true, orders, lastId: newLastId, hasMore };
     } catch (error: any) {
-        logger.error("Get seller orders error:", error);
+        logger.error("Get seller orders error:", { error });
         return { success: false, error: error.message };
     }
 }
@@ -626,10 +727,16 @@ export async function getSellerAnalyticsAction() {
         return { success: false, error: error.message };
     }
 }
+
+
 /**
  * Get buyer's orders
  */
-export async function getBuyerOrdersAction() {
+export async function getBuyerOrdersAction(options: {
+    limit?: number;
+    lastId?: string;
+    status?: string;
+} = {}) {
     try {
         const session = await auth();
 
@@ -638,15 +745,39 @@ export async function getBuyerOrdersAction() {
         }
 
         const userId = session.user.id;
-        const snapshot = await db.collection(COLLECTIONS.ORDERS)
-            .where("userId", "==", userId)
-            .get();
+        const { limit = 20, lastId, status } = options;
 
+        let query = db.collection("marketplaceOrders")
+            .where("buyerId", "==", userId) // marketplace-payment.ts uses buyerId
+            .orderBy("createdAt", "desc");
+
+        if (status && status !== "all") {
+            query = query.where("orderStatus", "==", status);
+        }
+
+        if (lastId) {
+            const lastDoc = await db.collection("marketplaceOrders").doc(lastId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        query = query.limit(limit);
+
+        const snapshot = await query.get();
         const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
 
-        return { success: true, orders };
+        let newLastId = undefined;
+        let hasMore = false;
+
+        if (snapshot.docs.length === limit) {
+            hasMore = true;
+            newLastId = snapshot.docs[snapshot.docs.length - 1].id;
+        }
+
+        return { success: true, orders, lastId: newLastId, hasMore };
     } catch (error: any) {
-        logger.error("Get buyer orders error:", error);
+        logger.error("Get buyer orders error:", { error });
         return { success: false, error: error.message };
     }
 }
@@ -893,7 +1024,120 @@ const getCachedRelatedProducts = (productId: string, limit: number) => unstable_
 /**
  * Get related products based on category and location
  */
+/**
+ * Get related products based on category and location
+ */
 export async function getRelatedProductsAction(productId: string, limit: number = 4) {
     return getCachedRelatedProducts(productId, limit);
+}
+
+/**
+ * Search Products with Pagination and Filters
+ */
+export async function searchProductsAction(params: {
+    query?: string;
+    category?: string;
+    state?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    sortBy?: "newest" | "price_asc" | "price_desc" | "rating";
+    limit?: number;
+    lastId?: string; // Cursor for pagination
+}) {
+    try {
+        const limit = params.limit || 12;
+        let query = db.collection(COLLECTIONS.PRODUCTS)
+            .where("status", "==", "active")
+            .where("availableQuantity", ">", 0);
+
+        // Filters
+        if (params.category && params.category !== "All Categories") {
+            query = query.where("category", "==", params.category);
+        }
+
+        if (params.state && params.state !== "All Locations") {
+            query = query.where("location.state", "==", params.state);
+        }
+
+        // Note: Firestore limitation - cannot filter by range on multiple fields easily
+        // We will prioritize client-side price filtering if complex, or simple range here
+        // For now, let's keep price filtering client-side or separate index if needed.
+        // We'll focus on Category + Sort + Pagination which is the most common path.
+
+        // Sorting
+        if (params.sortBy === "price_asc") {
+            query = query.orderBy("pricingTiers.0.price", "asc");
+        } else if (params.sortBy === "price_desc") {
+            query = query.orderBy("pricingTiers.0.price", "desc");
+        } else if (params.sortBy === "rating") {
+            query = query.orderBy("rating", "desc");
+        } else {
+            // Default: Newest
+            query = query.orderBy("createdAt", "desc");
+        }
+
+        // Cursor Pagination
+        if (params.lastId) {
+            const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(params.lastId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        query = query.limit(limit);
+
+        const snapshot = await query.get();
+        const products = snapshot.docs.map(doc => doc.data() as Product);
+        const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+
+        // Fetch seller names (optimize this with a separate user index/cache later)
+        const productsWithSellers = await Promise.all(
+            products.map(async (product) => {
+                let sellerName = "Unknown Seller";
+                if (product.sellerId) {
+                    // Try to fetch from a simple cache or just db for now
+                    // In a real high-scale app, sellerName should be denormalized onto the product document
+                    // to avoid N+1 queries.
+                    // For the sake of this audit fix, let's assume we read it, but recommend denormalization.
+                    if (product.sellerName) {
+                        sellerName = product.sellerName; // If denormalized
+                    } else {
+                        const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
+                        const userSnap = await userRef.get();
+                        if (userSnap.exists) {
+                            const userData = userSnap.data();
+                            sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
+                        }
+                    }
+                }
+                return { ...product, sellerName };
+            })
+        );
+
+        // Simple Text Search (Firestore doesn't support full text)
+        // We filter the results in memory if a query is present
+        // This is NOT scalable for millions of records, but for initial filter + search, it works 
+        // if the database filter reduces the set significantly.
+        // Ideally, use Algolia/Typesense.
+        let finalProducts = productsWithSellers;
+        if (params.query) {
+            const lowerQuery = params.query.toLowerCase();
+            finalProducts = finalProducts.filter(p =>
+                p.title.toLowerCase().includes(lowerQuery) ||
+                p.description.toLowerCase().includes(lowerQuery)
+            );
+        }
+
+        return {
+            success: true,
+            products: finalProducts,
+            lastId: lastVisible ? lastVisible.id : undefined,
+            hasMore: snapshot.docs.length === limit
+        };
+
+    } catch (error: any) {
+        logger.error("Search products error:", error);
+        return { success: false, error: error.message, products: [] };
+    }
 }
 

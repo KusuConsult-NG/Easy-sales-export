@@ -301,9 +301,19 @@ function ModuleLoginContent({
                 </div>
 
                 {/* Footer */}
-                <p className={`mt-8 text-center text-sm ${isCustomBg ? 'text-emerald-200/40 uppercase tracking-widest font-semibold' : 'text-slate-500 dark:text-slate-400'} relative z-10`}>
-                    {isCustomBg ? 'Implemented by Easy Sales Export' : `© ${new Date().getFullYear()} Easy Sales Export • v1.0.1 (Fix)`}
-                </p>
+                <div className="mt-8 text-center relative z-10 space-y-4">
+                    <p className={`text-sm ${isCustomBg ? 'text-emerald-200/40 uppercase tracking-widest font-semibold' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {isCustomBg ? 'Implemented by Easy Sales Export' : `© ${new Date().getFullYear()} Easy Sales Export • v1.0.1 (Fix)`}
+                    </p>
+                    <div className={`flex items-center justify-center gap-6 text-sm ${isCustomBg ? 'text-emerald-200/60' : 'text-slate-500 dark:text-slate-400'}`}>
+                        <Link href="/privacy" className="hover:underline hover:text-primary transition-colors">
+                            Privacy Policy
+                        </Link>
+                        <Link href="/terms" className="hover:underline hover:text-primary transition-colors">
+                            Terms & Conditions
+                        </Link>
+                    </div>
+                </div>
             </div>
         </div>
     );

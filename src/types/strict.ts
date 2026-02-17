@@ -107,7 +107,7 @@ export interface LandListing {
         city: string;
         state: string;
     };
-    acreage: number;
+    size: number;
     soilQuality: SoilQuality;
     price: number;
     ownerId: string;

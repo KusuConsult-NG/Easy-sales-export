@@ -28,30 +28,59 @@ export default function AdminWaveApplicationsPage() {
     const { showToast } = useToast();
     const [applications, setApplications] = useState<WaveApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    const fetchApplications = async () => {
-        setIsLoading(true);
-        setError(null);
+    // Pagination
+    const [lastCreatedAt, setLastCreatedAt] = useState<Date | string | undefined>(undefined);
+    const [hasMore, setHasMore] = useState(false);
+
+    const fetchApplications = async (loadMore = false) => {
+        if (loadMore) {
+            setIsLoadingMore(true);
+        } else {
+            setIsLoading(true);
+            setError(null);
+        }
+
         try {
             const result = await getWaveApplicationsAction(
-                statusFilter !== "all" ? statusFilter : undefined
+                statusFilter !== "all" ? statusFilter : undefined,
+                20,
+                loadMore ? lastCreatedAt : undefined
             );
+
             if (result.success && result.data) {
-                setApplications(result.data);
+                if (loadMore) {
+                    setApplications(prev => [...prev, ...result.data!]);
+                } else {
+                    setApplications(result.data);
+                }
+
+                setHasMore(!!result.hasMore);
+
+                // Update cursor
+                if (result.data.length > 0) {
+                    const lastItem = result.data[result.data.length - 1];
+                    // The action returns createdAt as Date object (from toDate())
+                    setLastCreatedAt(lastItem.createdAt);
+                }
             } else {
                 setError(result.error || "Failed to load applications");
             }
         } catch (err) {
             setError("Failed to fetch applications");
+        } finally {
+            setIsLoading(false);
+            setIsLoadingMore(false);
         }
-        setIsLoading(false);
     };
 
     useEffect(() => {
-        fetchApplications();
+        setLastCreatedAt(undefined);
+        fetchApplications(false);
     }, [statusFilter]);
 
     const handleApprove = async (applicationId: string) => {
@@ -226,6 +255,28 @@ export default function AdminWaveApplicationsPage() {
                             </div>
                         </div>
                     ))}
+
+                    {/* Load More Button */}
+                    {hasMore && (
+                        <div className="mt-8 flex justify-center">
+                            <button
+                                onClick={() => fetchApplications(true)}
+                                disabled={isLoadingMore}
+                                className="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                            >
+                                {isLoadingMore ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                        Loading...
+                                    </>
+                                ) : (
+                                    <>
+                                        Load More Applications
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
 
                     {applications.length === 0 && (
                         <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center">

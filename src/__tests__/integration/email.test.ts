@@ -19,10 +19,10 @@ import {
 jest.mock('resend', () => ({
     Resend: jest.fn().mockImplementation(() => ({
         emails: {
-            send: jest.fn().mockResolvedValue({
+            send: jest.fn().mockImplementation(() => Promise.resolve({
                 data: { id: 'test-email-id-123' },
                 error: null
-            })
+            }))
         }
     }))
 }));
@@ -68,7 +68,7 @@ describe('Email Notifications', () => {
 
         it('should include metadata tags', async () => {
             const { Resend } = await import('resend');
-            const mockSend = jest.fn().mockResolvedValue({ data: { id: '123' } });
+            const mockSend = jest.fn<any>().mockResolvedValue({ data: { id: '123' } } as any);
 
             // @ts-ignore
             Resend.mockImplementation(() => ({

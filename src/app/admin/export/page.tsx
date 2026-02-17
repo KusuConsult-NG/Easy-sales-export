@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { logger } from '@/lib/logger';
-import { Truck, CheckCircle, XCircle, Loader2, AlertCircle, Eye, Package, Pencil } from "lucide-react";
+import { Truck, CheckCircle, XCircle, Loader2, AlertCircle, Eye, Package, Pencil, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 import { getAllExportRequestsAction } from "@/app/actions/admin";
@@ -11,31 +11,67 @@ import type { ExportWindow } from "@/lib/types/firestore";
 
 export default function AdminExportPage() {
     const { showToast } = useToast();
-    const [exports, setExports] = useState<ExportWindow[]>([]);
+    const [exports, setExports] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedExport, setSelectedExport] = useState<ExportWindow | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [selectedExport, setSelectedExport] = useState<any | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [filter, setFilter] = useState("all");
+    const [lastCreatedAt, setLastCreatedAt] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
 
     // Load exports with useCallback to prevent recreating on every render
-    const loadExports = useCallback(async () => {
-        setLoading(true);
+    const loadExports = useCallback(async (reset = true) => {
+        if (reset) {
+            setLoading(true);
+            setExports([]);
+            setLastCreatedAt(null);
+        } else {
+            setLoadingMore(true);
+        }
+
+        const currentLastCreatedAt = reset ? undefined : lastCreatedAt || undefined;
+
         const result = await getAllExportRequestsAction(
-            filter === "all" ? undefined : (filter as "pending" | "in_transit" | "delivered" | "completed")
+            filter === "all" ? undefined : (filter as "pending" | "in_transit" | "delivered" | "completed"),
+            50,
+            currentLastCreatedAt
         );
+
         if (result.success && result.exports) {
-            setExports(result.exports);
+            if (reset) {
+                setExports(result.exports);
+            } else {
+                setExports(prev => [...prev, ...result.exports!]);
+            }
+
+            setHasMore(result.hasMore || false);
+
+            // Set cursor for next page
+            if (result.exports.length > 0) {
+                const lastItem = result.exports[result.exports.length - 1];
+                setLastCreatedAt(lastItem.createdAt instanceof Date ? lastItem.createdAt.toISOString() : lastItem.createdAt);
+            }
         } else {
             logger.error(result.error ?? "Unknown error loading exports");
+            showToast(result.error || "Failed to load exports", "error");
         }
+
         setLoading(false);
+        setLoadingMore(false);
+    }, [filter, lastCreatedAt, showToast]);
+
+    // Data fetching on filter change
+    useEffect(() => {
+        loadExports(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filter]);
 
-    // Data fetching on filter change - legitimate use case for calling async function in effect
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => {
-        loadExports();
-    }, [loadExports]);
+    const handleLoadMore = () => {
+        if (!loadingMore && hasMore) {
+            loadExports(false);
+        }
+    };
 
     // Handle Status Update
     async function handleStatusUpdate(newStatus: "pending" | "in_transit" | "delivered" | "completed") {
@@ -48,7 +84,7 @@ export default function AdminExportPage() {
         if (result.success) {
             showToast("Status updated successfully!", "success");
             setSelectedExport(null);
-            await loadExports();
+            await loadExports(true);
         } else {
             showToast(result.error || "Failed to update status", "error");
         }
@@ -188,6 +224,28 @@ export default function AdminExportPage() {
                             </tbody>
                         </table>
                     </div>
+                    {/* Pagination */}
+                    {hasMore && (
+                        <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                            <button
+                                onClick={handleLoadMore}
+                                disabled={loadingMore}
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
+                            >
+                                {loadingMore ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Loading more...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="w-4 h-4" />
+                                        Load More
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Detail Modal */}

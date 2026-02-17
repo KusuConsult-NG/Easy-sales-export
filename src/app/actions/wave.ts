@@ -231,13 +231,17 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         }
 
         // 🔒 LOGIC FIX: Prevent Duplicate Applications
+        // 🔒 LOGIC FIX: Prevent Duplicate Applications
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.wave?.status;
 
         if (existingStatus === 'pending') {
+            // IDEMPOTENCY CHECK: If already pending, treat as success (likely double-submission)
+            // This prevents the "You already have a pending application" error when users double-click
+            // or when network latency causes retries.
             return {
-                success: false,
-                error: "You already have a pending application. Please wait for a decision."
+                success: true,
+                applicationId: userDoc.data()?.serviceRegistrations?.wave?.applicationId
             };
         }
         if (existingStatus === 'approved') {

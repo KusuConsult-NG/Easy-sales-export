@@ -53,7 +53,7 @@ export default function ExportDashboardPage() {
             try {
                 const [statsResult, investmentsResult] = await Promise.all([
                     getUserExportStatsAction(),
-                    getUserExportInvestmentsAction()
+                    getUserExportInvestmentsAction(5)
                 ]);
 
                 if (statsResult.success && statsResult.data) {

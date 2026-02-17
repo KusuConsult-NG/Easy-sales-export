@@ -79,7 +79,7 @@ test.describe('Academy Course Enrollment', () => {
 
         // Start first lesson
         await page.click('text=Start Learning');
-        await page.click('[data-testid="lesson-item"]').first();
+        await page.locator('[data-testid="lesson-item"]').first().click();
 
         // Complete lesson
         await page.evaluate(() => {

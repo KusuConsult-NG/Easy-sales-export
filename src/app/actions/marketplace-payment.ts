@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getPlatformFees } from "@/lib/system-settings";
 
@@ -127,9 +128,13 @@ export async function initializeOrderPaymentAction(
             }
         );
 
+        // Derive unique seller IDs for querying
+        const sellerIds = Array.from(new Set(validatedItems.map(item => item.sellerId)));
+
         // Create pending order record with VALIDATED items
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
         await db.collection("marketplaceOrders").doc(orderId).set({
+            sellerIds,
             orderId,
             buyerId: session.user.id,
             buyerEmail,
@@ -353,6 +358,9 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
             });
         });
 
+        revalidatePath("/dashboard");
+        revalidatePath("/marketplace/orders");
+
         return {
             success: true,
             message: `Payment secured in Escrow! Order #${orderData.orderId} is now processing.`,
@@ -413,10 +421,13 @@ export async function createBankTransferOrderAction(
             return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false };
         }
 
+        const sellerIds = Array.from(new Set(validatedItems.map(item => item.sellerId)));
+
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
         const orderReference = `BT-${Date.now()}`;
 
         await db.collection("marketplaceOrders").doc(orderId).set({
+            sellerIds,
             orderId,
             buyerId: session.user.id,
             buyerEmail,

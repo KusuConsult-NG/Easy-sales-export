@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, BookOpen, Edit, Trash2, Users } from "lucide-react";
+import { Plus, Search, BookOpen, Edit, Trash2, Users, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { getCoursesAction, type Course } from "@/app/actions/academy";
@@ -11,23 +11,53 @@ import { Timestamp } from "firebase/firestore";
 export default function AcademyAdminPage() {
     const [courses, setCourses] = useState<Course[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
+    const [lastDocId, setLastDocId] = useState<string | null>(null);
+    const [hasMore, setHasMore] = useState(false);
 
-    async function loadCourses() {
-        setIsLoading(true);
-        const result = await getCoursesAction();
-        if (result) {
-            setCourses(result);
+    async function loadCourses(reset = true) {
+        if (reset) {
+            setIsLoading(true);
+            setCourses([]);
         } else {
-            toast.error("Failed to load courses");
+            setIsLoadingMore(true);
         }
-        setIsLoading(false);
+
+        try {
+            const currentLastDoc = reset ? undefined : lastDocId || undefined;
+            const result = await getCoursesAction(12, currentLastDoc);
+
+            if (result) {
+                if (reset) {
+                    setCourses(result.courses);
+                } else {
+                    setCourses(prev => [...prev, ...result.courses]);
+                }
+                setLastDocId(result.lastDocId);
+                setHasMore(!!result.lastDocId);
+            } else {
+                toast.error("Failed to load courses");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Error loading courses");
+        } finally {
+            setIsLoading(false);
+            setIsLoadingMore(false);
+        }
     }
 
     useEffect(() => {
         loadCourses();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    const handleLoadMore = () => {
+        if (!isLoadingMore && hasMore) {
+            loadCourses(false);
+        }
+    };
 
     const filteredCourses = courses.filter(course =>
         course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -165,6 +195,29 @@ export default function AcademyAdminPage() {
                         <BookOpen className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-slate-900 dark:text-white">No courses found</h3>
                         <p className="text-slate-600 dark:text-slate-400 mt-2">Get started by creating your first course.</p>
+                    </div>
+                )}
+
+                {/* Load More Button */}
+                {hasMore && !isLoading && (
+                    <div className="mt-8 flex justify-center">
+                        <button
+                            onClick={handleLoadMore}
+                            disabled={isLoadingMore}
+                            className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-all"
+                        >
+                            {isLoadingMore ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Loading more...
+                                </>
+                            ) : (
+                                <>
+                                    <RefreshCw className="w-4 h-4" />
+                                    Load More Courses
+                                </>
+                            )}
+                        </button>
                     </div>
                 )}
             </div>

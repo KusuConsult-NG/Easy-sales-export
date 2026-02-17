@@ -47,13 +47,22 @@ export type ExportOpportunity = {
  */
 
 // Internal cached version
-const getCachedExportOpportunities = unstable_cache(
+const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => unstable_cache(
     async () => {
         try {
-            const snapshot = await db.collection(COLLECTIONS.EXPORT_WINDOWS)
+            let query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
                 .where("status", "in", ["open", "active"])
-                .orderBy("createdAt", "desc")
-                .get();
+                .orderBy("createdAt", "desc");
+
+            if (lastId) {
+                const lastDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(lastId).get();
+                if (lastDoc.exists) {
+                    query = query.startAfter(lastDoc);
+                }
+            }
+
+            query = query.limit(limit);
+            const snapshot = await query.get();
 
             const opportunities = snapshot.docs.map(doc => {
                 const data = doc.data() as ExportWindow;
@@ -83,21 +92,23 @@ const getCachedExportOpportunities = unstable_cache(
                 };
             });
 
-            return { success: true, data: opportunities };
+            const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+            return { success: true, data: opportunities, lastId: lastDocId };
         } catch (error: any) {
             logger.error("Error fetching export opportunities:", error);
-            return { success: false, error: error.message };
+            return { success: false, error: error.message, lastId: null };
         }
     },
-    ["export-opportunities"],
-    { revalidate: 3600, tags: ["export-opportunities"] }
-);
+    [`export-opportunities-${limit}-${lastId || 'start'}`],
+    { revalidate: 60, tags: ["export-opportunities"] }
+)();
 
 /**
  * Get all export investment opportunities
  */
-export async function getExportOpportunities() {
-    return getCachedExportOpportunities();
+export async function getExportOpportunities(limit: number = 12, lastId?: string) {
+    return getCachedExportOpportunities(limit, lastId);
 }
 
 /**

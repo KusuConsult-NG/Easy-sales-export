@@ -6,6 +6,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
+import { revalidatePath } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -109,17 +110,36 @@ export interface LiveSession {
 /**
  * Get all courses
  */
-export async function getCoursesAction(): Promise<Course[]> {
+export async function getCoursesAction(
+    limit: number = 12,
+    lastDocId?: string
+): Promise<{ courses: Course[]; lastDocId: string | null }> {
     try {
-        const snapshot = await db.collection("academy_courses").get();
+        let q = db.collection("academy_courses")
+            .orderBy("createdAt", "desc");
 
-        return snapshot.docs.map((doc) => ({
+        if (lastDocId) {
+            const lastDoc = await db.collection("academy_courses").doc(lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
+
+        q = q.limit(limit);
+
+        const snapshot = await q.get();
+
+        const courses = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
         })) as Course[];
+
+        const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+        return { courses, lastDocId: newLastDocId };
     } catch (error) {
         logger.error("Failed to fetch courses:", error);
-        return [];
+        return { courses: [], lastDocId: null };
     }
 }
 
@@ -264,6 +284,10 @@ export async function verifyCoursePaymentAction(reference: string): Promise<{ su
             details: `Enrolled via Paystack Ref: ${reference}`,
         });
 
+        revalidatePath("/academy");
+        revalidatePath("/dashboard/academy");
+        revalidatePath(`/academy/courses/${courseId}`);
+
         return { success: true };
     } catch (error: any) {
         logger.error("Course payment verification error:", error);
@@ -320,6 +344,10 @@ export async function enrollInCourseAction(
             targetId: courseId,
             targetType: "course_enrollment",
         });
+
+        revalidatePath("/academy");
+        revalidatePath("/dashboard/academy");
+        revalidatePath(`/academy/courses/${courseId}`);
 
         return { success: true };
     } catch (error) {

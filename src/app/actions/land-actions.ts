@@ -56,7 +56,7 @@ export async function createLandListing(
             targetType: 'land_listing',
             metadata: {
                 title: validated.title,
-                acreage: validated.acreage,
+                size: validated.size,
                 price: validated.price,
                 location: `${validated.location.city}, ${validated.location.state}`,
             },
@@ -124,8 +124,8 @@ export async function getLandListings(filters?: z.infer<typeof landSearchSchema>
             listings = listings.filter(listing => {
                 if (filters.minPrice && listing.price < filters.minPrice) return false;
                 if (filters.maxPrice && listing.price > filters.maxPrice) return false;
-                if (filters.minAcreage && listing.acreage < filters.minAcreage) return false;
-                if (filters.maxAcreage && listing.acreage > filters.maxAcreage) return false;
+                if (filters.minSize && listing.size < filters.minSize) return false;
+                if (filters.maxSize && listing.size > filters.maxSize) return false;
                 if (filters.soilQuality && listing.soilQuality !== filters.soilQuality) return false;
                 if (filters.state && listing.location.state !== filters.state) return false;
                 if (filters.city && listing.location.city !== filters.city) return false;
@@ -417,7 +417,7 @@ export async function getLandStatistics() {
             pending: 0,
             verified: 0,
             rejected: 0,
-            totalAcreage: 0,
+            totalSize: 0,
             totalValue: 0,
             averagePrice: 0,
             byState: {} as Record<string, number>,
@@ -431,7 +431,7 @@ export async function getLandStatistics() {
             if (data.status === 'deleted') return;
 
             stats.total++;
-            stats.totalAcreage += data.acreage || 0;
+            stats.totalSize += data.size || 0;
             stats.totalValue += data.price || 0;
 
             if (data.status === 'pending_verification') stats.pending++;
