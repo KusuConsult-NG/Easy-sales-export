@@ -119,7 +119,7 @@ export default function HubNavigation() {
                                         Log In
                                     </Link>
                                     <Link
-                                        href="/auth/get-started"
+                                        href="/auth/register"
                                         className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md hover:shadow-lg hover:scale-105"
                                     >
                                         Get Started
@@ -225,7 +225,7 @@ export default function HubNavigation() {
                                         Log In
                                     </Link>
                                     <Link
-                                        href="/auth/get-started"
+                                        href="/auth/register"
                                         onClick={() => setIsMobileMenuOpen(false)}
                                         className="block w-full text-center px-5 py-3 bg-primary text-white font-bold rounded-xl"
                                     >

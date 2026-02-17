@@ -131,8 +131,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // CRITICAL: Skip middleware for all auth pages to prevent redirect loops
-    // Exception: /auth/get-started is accessible to authenticated users (module selection)
-    const isAuthPage = pathname.startsWith('/auth/') && pathname !== '/auth/get-started';
+    const isAuthPage = pathname.startsWith('/auth/');
 
     if (isAuthPage) {
         // If user is already authenticated, redirect them to dashboard

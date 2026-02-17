@@ -51,7 +51,7 @@ export default function WebsiteNav() {
                     {/* Auth Buttons */}
                     <div className="hidden lg:flex items-center gap-4">
                         <button
-                            onClick={() => router.push("/auth/get-started")}
+                            onClick={() => router.push("/auth/register")}
                             className="px-6 py-2.5 text-slate-900 font-medium hover:text-orange-600 transition-colors"
                         >
                             Access Portal

@@ -14,7 +14,7 @@ export default function AboutPage() {
                         <span className="font-semibold">Back to Home</span>
                     </Link>
                     <Link
-                        href="/auth/get-started"
+                        href="/auth/register"
                         className="px-6 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all"
                     >
                         Get Started

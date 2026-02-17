@@ -161,7 +161,7 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         cooperative_member: "/cooperatives/dashboard",
         wave_participant: "/wave/dashboard",
         academy_participant: "/academy/dashboard",
-        general_user: "/auth/get-started", // Send to selection page so they can choose a module
+        general_user: "/dashboard", // General users go to dashboard
         field_officer: "/admin",
         admin: "/admin",
         super_admin: "/admin",
@@ -208,5 +208,5 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
     }
 
     // Absolute fallback to Get Started if no apps (ensure user lands on a selection page)
-    return "/auth/get-started";
+    return "/dashboard";
 }

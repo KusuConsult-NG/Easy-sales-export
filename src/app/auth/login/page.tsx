@@ -15,7 +15,7 @@ function UniversalLoginContent() {
         moduleName: "Easy Sales Export",
         logo: LayoutGrid,
         redirectDefault: "/dashboard",
-        registerLink: "/auth/get-started",
+        registerLink: "/auth/register",
         registerText: "New to the platform?",
         registerButtonText: "Get Started",
         theme: {
