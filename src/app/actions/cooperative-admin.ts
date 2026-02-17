@@ -410,3 +410,169 @@ export async function getRecentActivityAction(): Promise<{
         return { success: false, error: "Failed to fetch activity" };
     }
 }
+
+// ============================================================================
+// WITHDRAWAL MANAGEMENT (ADMIN)
+// ============================================================================
+
+/**
+ * Approve Withdrawal
+ * - Confirms the funds removal (already locked/debited)
+ * - Decrements lockedBalance
+ * - Updates status to approved
+ */
+export async function approveWithdrawalAction(
+    withdrawalId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        // Check admin role directly from session (Performance Optimization)
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const adminId = session.user.id;
+        const withdrawalRef = db.collection("withdrawals").doc(withdrawalId); // Hardcoded text or generic, using "withdrawals" from observation
+
+        await db.runTransaction(async (transaction) => {
+            const withdrawalDoc = await transaction.get(withdrawalRef);
+            if (!withdrawalDoc.exists) {
+                throw new Error("Withdrawal request not found");
+            }
+
+            const withdrawalData = withdrawalDoc.data();
+            if (withdrawalData?.status !== "pending") {
+                throw new Error(`Request is already ${withdrawalData?.status}`);
+            }
+
+            const userId = withdrawalData.userId;
+            const amount = withdrawalData.amount;
+
+            // Determine which member collection to use.
+            // If internal `withdrawal.ts` logic was used, it's `cooperative_members`.
+            // If `platform.ts` logic was used, it's nested `members`.
+            // We check `cooperative_members` first as it's the newer pattern.
+
+            const coopMemberRef = db.collection("cooperative_members").doc(userId);
+            const coopMemberDoc = await transaction.get(coopMemberRef);
+
+            if (coopMemberDoc.exists) {
+                // Happy path: Update locked balance
+                transaction.update(coopMemberRef, {
+                    lockedBalance: FieldValue.increment(-amount), // Remove from lock (it's spent)
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } else {
+                // Fallback: Check nested structure if cooperativeId exists
+                if (withdrawalData.cooperativeId) {
+                    const nestedMemberRef = db
+                        .collection("cooperatives")
+                        .doc(withdrawalData.cooperativeId)
+                        .collection("members")
+                        .doc(userId);
+
+                    const nestedDoc = await transaction.get(nestedMemberRef);
+                    if (nestedDoc.exists) {
+                        transaction.update(nestedMemberRef, {
+                            lockedBalance: FieldValue.increment(-amount),
+                            updatedAt: FieldValue.serverTimestamp(),
+                        });
+                    }
+                }
+            }
+
+            // Update Withdrawal Status
+            transaction.update(withdrawalRef, {
+                status: "approved",
+                approvedBy: adminId,
+                approvedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
+
+        return { success: true };
+
+    } catch (error: any) {
+        logger.error("Approve withdrawal error:", error);
+        return { success: false, error: error.message || "Failed to approve withdrawal" };
+    }
+}
+
+/**
+ * Reject Withdrawal
+ * - REFUNDS the funds: Increment savingsBalance, Decrement lockedBalance
+ * - Updates status to rejected
+ */
+export async function rejectWithdrawalAction(
+    withdrawalId: string,
+    reason: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const adminId = session.user.id;
+        const withdrawalRef = db.collection("withdrawals").doc(withdrawalId);
+
+        await db.runTransaction(async (transaction) => {
+            const withdrawalDoc = await transaction.get(withdrawalRef);
+            if (!withdrawalDoc.exists) {
+                throw new Error("Withdrawal request not found");
+            }
+
+            const withdrawalData = withdrawalDoc.data();
+            if (withdrawalData?.status !== "pending") {
+                throw new Error(`Request is already ${withdrawalData?.status}`);
+            }
+
+            const userId = withdrawalData.userId;
+            const amount = withdrawalData.amount;
+
+            // Refund Logic
+            const coopMemberRef = db.collection("cooperative_members").doc(userId);
+            const coopMemberDoc = await transaction.get(coopMemberRef);
+
+            if (coopMemberDoc.exists) {
+                transaction.update(coopMemberRef, {
+                    savingsBalance: FieldValue.increment(amount), // Refund!
+                    lockedBalance: FieldValue.increment(-amount), // Unlock
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } else {
+                if (withdrawalData.cooperativeId) {
+                    const nestedMemberRef = db
+                        .collection("cooperatives")
+                        .doc(withdrawalData.cooperativeId)
+                        .collection("members")
+                        .doc(userId);
+
+                    const nestedDoc = await transaction.get(nestedMemberRef);
+                    if (nestedDoc.exists) {
+                        transaction.update(nestedMemberRef, {
+                            balance: FieldValue.increment(amount), // Note: platform.ts used 'balance' not 'savingsBalance'
+                            lockedBalance: FieldValue.increment(-amount),
+                            updatedAt: FieldValue.serverTimestamp(),
+                        });
+                    }
+                }
+            }
+
+            // Update Withdrawal Status
+            transaction.update(withdrawalRef, {
+                status: "rejected",
+                rejectionReason: reason,
+                rejectedBy: adminId,
+                rejectedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
+
+        return { success: true };
+
+    } catch (error: any) {
+        logger.error("Reject withdrawal error:", error);
+        return { success: false, error: error.message || "Failed to reject withdrawal" };
+    }
+}

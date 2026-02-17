@@ -224,53 +224,60 @@ export async function submitWithdrawalAction(
         // Validate with Zod
         const validatedData = withdrawalSchema.parse(withdrawalData);
 
-        // Verify user is a member of the cooperative
-        const memberRef = db
-            .collection(COLLECTIONS.COOPERATIVES)
-            .doc(validatedData.cooperativeId)
-            .collection("members")
-            .doc(session.user.id);
-
-        const memberDoc = await memberRef.get();
-
-        if (!memberDoc.exists) {
-            return { error: "You are not a member of this cooperative", success: false };
-        }
-
-        const memberData = memberDoc.data();
-
-        // Check if user has sufficient balance
-        if ((memberData?.balance || 0) < validatedData.amount) {
-            return {
-                error: `Insufficient balance. Available: ₦${(memberData?.balance || 0).toLocaleString()}`,
-                success: false,
-            };
-        }
-
-        // Check minimum balance requirement (e.g., must keep ₦5,000)
-        const MIN_BALANCE = 5000;
-        if ((memberData?.balance || 0) - validatedData.amount < MIN_BALANCE) {
-            return {
-                error: `You must maintain a minimum balance of ₦${MIN_BALANCE.toLocaleString()}`,
-                success: false,
-            };
-        }
-
         // Generate withdrawal request ID
         const withdrawalId = `WD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
-        // Save withdrawal request to Firestore
-        await db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId).set({
-            userId: session.user.id,
-            cooperativeId: validatedData.cooperativeId,
-            amount: validatedData.amount,
-            accountNumber: validatedData.accountNumber,
-            accountName: validatedData.accountName,
-            bankName: validatedData.bankName,
-            reason: validatedData.reason,
-            status: "pending", // pending | approved | rejected | completed
-            requestDate: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+        // Transactional execution for Financial Integrity
+        await db.runTransaction(async (transaction) => {
+            const memberRef = db
+                .collection(COLLECTIONS.COOPERATIVES)
+                .doc(validatedData.cooperativeId)
+                .collection("members")
+                .doc(session.user.id);
+
+            const memberDoc = await transaction.get(memberRef);
+
+            if (!memberDoc.exists) {
+                throw new Error("You are not a member of this cooperative");
+            }
+
+            const memberData = memberDoc.data();
+            const currentBalance = memberData?.balance || 0;
+
+            // Check if user has sufficient balance
+            if (currentBalance < validatedData.amount) {
+                throw new Error(`Insufficient balance. Available: ₦${currentBalance.toLocaleString()}`);
+            }
+
+            // Check minimum balance requirement
+            const MIN_BALANCE = 5000;
+            if (currentBalance - validatedData.amount < MIN_BALANCE) {
+                throw new Error(`You must maintain a minimum balance of ₦${MIN_BALANCE.toLocaleString()}`);
+            }
+
+            // 1. Lock Funds (Decrement Balance immediately)
+            transaction.update(memberRef, {
+                balance: FieldValue.increment(-validatedData.amount),
+                lockedBalance: FieldValue.increment(validatedData.amount),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // 2. Create Withdrawal Request
+            // Use same collection as other action? Valid question. 
+            // platform.ts uses COLLECTIONS.WITHDRAWALS. 
+            const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
+            transaction.set(withdrawalRef, {
+                userId: session.user.id,
+                cooperativeId: validatedData.cooperativeId,
+                amount: validatedData.amount,
+                accountNumber: validatedData.accountNumber,
+                accountName: validatedData.accountName,
+                bankName: validatedData.bankName,
+                reason: validatedData.reason,
+                status: "pending", // pending | approved | rejected | completed
+                requestDate: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         return {
