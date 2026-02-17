@@ -98,7 +98,10 @@ export async function initializeOrderPaymentAction(
 
         // 🔒 SECURITY FIX: Server-side Price Validation
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
-        const totalAmount = subtotal + deliveryFee;
+
+        // 🔒 SECURITY FIX: Server-Side Fee Calculation (Ignore client fee)
+        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}); // Pass location if available
+        const totalAmount = subtotal + calculatedDeliveryFee;
 
         // Validate amount
         if (totalAmount < 500) {
@@ -115,7 +118,7 @@ export async function initializeOrderPaymentAction(
                 buyerPhone,
                 itemCount: cartItems.length,
                 subtotal,
-                deliveryFee,
+                deliveryFee: calculatedDeliveryFee,
                 totalAmount,
                 type: "marketplace_order",
                 callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/marketplace/payment/callback`,
@@ -131,7 +134,7 @@ export async function initializeOrderPaymentAction(
             buyerPhone,
             items: validatedItems, // Use validated items
             subtotal,
-            deliveryFee,
+            deliveryFee: calculatedDeliveryFee, // Use server calculated fee
             totalAmount,
             paymentReference: reference,
             paymentStatus: "pending",
@@ -155,6 +158,31 @@ export async function initializeOrderPaymentAction(
         };
     }
 }
+
+/**
+ * Verify Marketplace Order Payment
+ * Updates order status after successful payment
+ */
+// Helper to calculate delivery fee server-side
+function calculateDeliveryFee(items: any[], location: any): number {
+    // 🔒 SECURITY FIX: Server-Side Fee Calculation
+    // For now, we assume a flat fees or based on item count as a placeholder for real logistics API.
+    // In a real app, this would query a logistics provider (e.g., GIGL, Kwik).
+
+    // Simple logic: Base fee 1500 + 500 per additional item type > 1
+    const baseFee = 2500;
+    const additionalItemFee = 500;
+
+    // Filter distinct sellers (split delivery?) - For now assume consolidated or per-order fee
+    // Let's stick to a robust default standard for the MVP to prevent "0" fee exploits.
+
+    return baseFee + (Math.max(0, items.length - 1) * additionalItemFee);
+}
+
+/**
+ * Platform Fee Percentage (5%)
+ */
+const PLATFORM_FEE_PERCENTAGE = 0.05;
 
 /**
  * Verify Marketplace Order Payment
@@ -229,6 +257,10 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         const orderData = orderDoc.data();
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
+        // This transaction now handles:
+        // 1. Order Status Update
+        // 2. Inventory Decrement (Prevent double-sell)
+        // 3. Escrow Ledger Creation (Revenue Split)
         await db.runTransaction(async (transaction) => {
             // 1. Update order status -> escrow_held
             const orderRef = db.collection("marketplaceOrders").doc(orderDoc.id);
@@ -249,32 +281,69 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
                 reference,
             });
 
-            // 3. Create Escrow Transactions (Split by Seller)
             const items = orderData.items || [];
+
+            // 3. Decrement Inventory (CRITICAL FIX)
+            for (const item of items) {
+                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const productDoc = await transaction.get(productRef);
+
+                if (productDoc.exists) {
+                    const currentQty = productDoc.data()?.availableQuantity || 0;
+                    if (currentQty >= item.quantity) {
+                        transaction.update(productRef, {
+                            availableQuantity: FieldValue.increment(-item.quantity),
+                            orders: FieldValue.increment(1)
+                        });
+                    } else {
+                        throw new Error(`Insufficient stock for product: ${item.productTitle}`);
+                    }
+                }
+            }
+
+            // 4. Calculate Financial Split (CRITICAL FIX)
+            // Goal: Split items to sellers, add delivery fee to seller(s), deduct platform fee.
+
             const sellerTotals: Record<string, number> = {};
+            const sellerDeliveryShare: Record<string, number> = {}; // If we split delivery
+
+            // Identify unique sellers
+            const uniqueSellers = Array.from(new Set(items.map((i: any) => i.sellerId))) as string[];
+            const deliveryFeePerSeller = orderData.deliveryFee / uniqueSellers.length; // Simply split delivery fee among sellers for now
 
             // Calculate total per seller
             items.forEach((item: any) => {
                 const sellerId = item.sellerId;
                 const itemTotal = item.pricePerUnit * item.quantity;
-                if (!sellerTotals[sellerId]) {
-                    sellerTotals[sellerId] = 0;
-                }
+
+                if (!sellerTotals[sellerId]) sellerTotals[sellerId] = 0;
                 sellerTotals[sellerId] += itemTotal;
+
+                if (!sellerDeliveryShare[sellerId]) sellerDeliveryShare[sellerId] = 0;
+            });
+
+            // Add Delivery Share
+            uniqueSellers.forEach(sellerId => {
+                sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + deliveryFeePerSeller;
             });
 
             // Create Escrow Record for each seller
-            Object.entries(sellerTotals).forEach(([sellerId, totalAmount]) => {
+            Object.entries(sellerTotals).forEach(([sellerId, grossAmount]) => {
                 const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
                 const escrowRef = db.collection("escrow_transactions").doc(escrowId);
+
+                const platformFee = Math.round(grossAmount * PLATFORM_FEE_PERCENTAGE);
+                const netAmount = grossAmount - platformFee;
 
                 transaction.set(escrowRef, {
                     id: escrowId,
                     orderId: orderData.orderId,
                     buyerId: session.user.id,
                     sellerId: sellerId,
-                    amount: totalAmount,
-                    status: "funded", // Funds are secured
+                    grossAmount: grossAmount,     // Total items + delivery
+                    platformFee: platformFee,     // 5% Commission
+                    netAmount: netAmount,         // What seller actually gets
+                    status: "funded",             // Funds are secured
                     createdAt: FieldValue.serverTimestamp(),
                 });
             });
@@ -296,7 +365,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
 
         return {
             success: false,
-            error: "Failed to verify payment. Please contact support with your payment reference.",
+            error: "Failed to verify payment: " + error.message, // Ensure user sees logical errors (like stock)
         };
     }
 }
@@ -330,7 +399,10 @@ export async function createBankTransferOrderAction(
 
         // 🔒 SECURITY FIX: Server-side Price Validation
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
-        const totalAmount = subtotal + deliveryFee;
+
+        // 🔒 SECURITY FIX: Server-Side Fee Calculation (Ignore client fee)
+        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {});
+        const totalAmount = subtotal + calculatedDeliveryFee;
 
         if (totalAmount < 500) {
             return { error: "Minimum order amount is ₦500", success: false };
@@ -346,7 +418,7 @@ export async function createBankTransferOrderAction(
             buyerPhone,
             items: validatedItems, // Use validated items
             subtotal,
-            deliveryFee,
+            deliveryFee: calculatedDeliveryFee, // Use server calculated fee
             totalAmount,
             paymentMethod: "bank_transfer",
             paymentReference: orderReference,
