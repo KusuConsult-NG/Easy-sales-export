@@ -1,9 +1,10 @@
 import { formatDistance } from "date-fns";
+import { CURRENCY_CONFIG } from "./constants";
 
 export function formatCurrency(amount: number): string {
-    return new Intl.NumberFormat("en-NG", {
+    return new Intl.NumberFormat(CURRENCY_CONFIG.locale, {
         style: "currency",
-        currency: "NGN",
+        currency: CURRENCY_CONFIG.code,
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
     }).format(amount);

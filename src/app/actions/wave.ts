@@ -193,6 +193,23 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             };
         }
 
+        // 🔒 LOGIC FIX: Prevent Duplicate Applications
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.wave?.status;
+
+        if (existingStatus === 'pending') {
+            return {
+                success: false,
+                error: "You already have a pending application. Please wait for a decision."
+            };
+        }
+        if (existingStatus === 'approved') {
+            return {
+                success: false,
+                error: "You are already enrolled in the WAVE program."
+            };
+        }
+
         const validatedData = validation.data;
 
         // Generate application ID

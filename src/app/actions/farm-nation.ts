@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 
 /**
  * Farm Nation Property Management Actions
@@ -231,13 +232,27 @@ export async function listPropertyAction(input: PropertyListingInput) {
             };
         }
 
+        // Validate Location (Strict)
+        if (!isValidState(input.state)) {
+            return {
+                success: false,
+                error: `Invalid State: "${input.state}". Please select a valid Nigerian state.`,
+            };
+        }
+        if (!isValidLGA(input.state, input.lga)) {
+            return {
+                success: false,
+                error: `Invalid LGA: "${input.lga}" is not in ${input.state}.`,
+            };
+        }
+
         // Create property
         const property = {
             name: input.name,
             description: input.description,
             location: input.location,
-            state: input.state.toLowerCase(),
-            lga: input.lga,
+            state: normalizeLocation(input.state),
+            lga: normalizeLocation(input.lga),
             price: input.price,
             size: input.size,
             type: input.type,
@@ -563,8 +578,24 @@ export async function updatePropertyAction(propertyId: string, updates: Partial<
         if (updates.name) updateData.name = updates.name;
         if (updates.description) updateData.description = updates.description;
         if (updates.location) updateData.location = updates.location;
-        if (updates.state) updateData.state = updates.state.toLowerCase();
-        if (updates.lga) updateData.lga = updates.lga;
+
+        // Validate State/LGA updates
+        if (updates.state || updates.lga) {
+            const newState = updates.state ? normalizeLocation(updates.state) : property?.state;
+            const newLGA = updates.lga ? normalizeLocation(updates.lga) : property?.lga;
+
+            if (updates.state && !isValidState(newState)) {
+                return { success: false, error: `Invalid State: ${updates.state}` };
+            }
+            // If both present or one changing, re-validate pair
+            if (!isValidLGA(newState, newLGA)) {
+                return { success: false, error: `Invalid LGA: ${newLGA} in ${newState}` };
+            }
+
+            if (updates.state) updateData.state = newState;
+            if (updates.lga) updateData.lga = newLGA;
+        }
+
         if (updates.price !== undefined) updateData.price = updates.price;
         if (updates.size !== undefined) updateData.size = updates.size;
         if (updates.type) updateData.type = updates.type;

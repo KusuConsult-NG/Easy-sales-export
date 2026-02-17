@@ -4,6 +4,13 @@ export const COLORS = {
     accent: "#E31E24",
 } as const;
 
+// Currency Configuration (Centralized)
+export const CURRENCY_CONFIG = {
+    code: "NGN",
+    symbol: "₦",
+    locale: "en-NG",
+} as const;
+
 // Approved Commodities
 export const COMMODITIES = [
     "Yam Tubers",
