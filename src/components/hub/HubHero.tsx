@@ -26,7 +26,7 @@ export default function HubHero() {
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrentHeroImage((prev) => (prev + 1) % heroImages.length);
-        }, 6000);
+        }, 8000);
         return () => clearInterval(timer);
     }, [heroImages.length]);
 
@@ -70,9 +70,9 @@ export default function HubHero() {
                         </div>
                     );
                 })}
-                {/* Animated overlay elements */}
-                <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000" />
+                {/* Animated overlay elements - Removed animate-pulse for performance */}
+                <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-50" />
+                <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-50" />
             </div>
 
             {/* Content */}

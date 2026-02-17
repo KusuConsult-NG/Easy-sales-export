@@ -13,7 +13,7 @@ export default function HubNavigation() {
     const { data: session } = useSession();
 
     const navItems = [
-        { label: "Home", href: "/" },
+        // Home removed per user request
         { label: "About Easy Sales Export", href: "/about" },
         {
             label: "Ecosystem",
