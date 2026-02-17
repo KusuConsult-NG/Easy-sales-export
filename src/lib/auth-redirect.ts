@@ -50,7 +50,7 @@ export function getModuleAuthUrl(pathname: string, type: 'login' | 'register'): 
 
     // Default to Auth Portal for all other routes
     // (e.g., /dashboard, /settings, /admin, etc.)
-    return '/dashboard';
+    return '/auth/login';
 }
 
 /**

@@ -158,22 +158,34 @@ export default function WaveLandingPage() {
 
                     <div className="relative">
                         <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-slate-900">
-                            {/* Images */}
-                            {images.map((img, index) => (
-                                <div
-                                    key={index}
-                                    className={`absolute inset-0 transition-opacity duration-1000 ${index === currentImage ? 'opacity-100' : 'opacity-0'
-                                        }`}
-                                >
-                                    <Image
-                                        src={img}
-                                        alt={`RH-WAVE 774 Program - Women in Agriculture Training and Development ${index + 1}`}
-                                        fill
-                                        className="object-contain"
-                                        priority={index === 0}
-                                    />
-                                </div>
-                            ))}
+                            {/* Images - Only load current, next, and previous for performance */}
+                            {images.map((img, index) => {
+                                // Only render current, next, and previous images
+                                const isNext = index === (currentImage + 1) % images.length;
+                                const isPrev = index === (currentImage - 1 + images.length) % images.length;
+                                const isCurrent = index === currentImage;
+                                const shouldLoad = isCurrent || isNext || isPrev;
+
+                                if (!shouldLoad) return null;
+
+                                return (
+                                    <div
+                                        key={index}
+                                        className={`absolute inset-0 transition-opacity duration-1000 ${index === currentImage ? 'opacity-100' : 'opacity-0'
+                                            }`}
+                                    >
+                                        <Image
+                                            src={img}
+                                            alt={`RH-WAVE 774 Program - Women in Agriculture Training and Development ${index + 1}`}
+                                            fill
+                                            className="object-contain"
+                                            priority={index === 0}
+                                            loading={index === 0 ? 'eager' : 'lazy'}
+                                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                                        />
+                                    </div>
+                                );
+                            })}
 
                             {/* Navigation Buttons */}
                             <button

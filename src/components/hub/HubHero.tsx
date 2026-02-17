@@ -42,18 +42,34 @@ export default function HubHero() {
         <div className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-linear-to-br from-primary via-primary/80 to-blue-600 dark:from-primary/90 dark:via-primary/70 dark:to-blue-700">
             {/* Background Image Slider */}
             <div className="absolute inset-0 overflow-hidden">
-                {heroImages.slice(0, loadedImages).map((img, index) => (
-                    <div
-                        key={index}
-                        className={`absolute inset-0 transition-opacity duration-2000 ${index === currentHeroImage ? "opacity-20" : "opacity-0"
-                            }`}
-                        style={{
-                            backgroundImage: `url('${img}')`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                        }}
-                    />
-                ))}
+                {heroImages.map((img, index) => {
+                    // Smart Lazy Loading: Only render current, next, and previous images
+                    const isNext = index === (currentHeroImage + 1) % heroImages.length;
+                    const isPrev = index === (currentHeroImage - 1 + heroImages.length) % heroImages.length;
+                    const isCurrent = index === currentHeroImage;
+                    const shouldLoad = isCurrent || isNext || isPrev;
+
+                    if (!shouldLoad) return null;
+
+                    return (
+                        <div
+                            key={index}
+                            className={`absolute inset-0 transition-opacity duration-2000 ${index === currentHeroImage ? "opacity-20" : "opacity-0"
+                                }`}
+                        >
+                            <Image
+                                src={img}
+                                alt="Hub Background"
+                                fill
+                                className="object-cover"
+                                priority={index === 0}
+                                loading={index === 0 ? "eager" : "lazy"}
+                                sizes="100vw"
+                                quality={75}
+                            />
+                        </div>
+                    );
+                })}
                 {/* Animated overlay elements */}
                 <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse" />
                 <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000" />
