@@ -110,13 +110,23 @@ export async function middleware(request: NextRequest) {
         }
     }
 
+    // CRITICAL: Global Auth Enforcement
+    // Redirect module-specific auth pages to global auth
+    // e.g. /marketplace/login -> /auth/login?module=marketplace
+    const isModuleAuthPage = pathname.match(/^\/([^/]+)\/(login|register)$/);
+    if (isModuleAuthPage) {
+        const [, module, type] = isModuleAuthPage;
+        // Skip for 'auth' module itself (infinite loop prevention)
+        if (module !== 'auth') {
+            const globalAuthUrl = new URL(`/auth/${type === 'register' ? 'signup' : 'signin'}`, request.url);
+            globalAuthUrl.searchParams.set('module', module);
+            return NextResponse.redirect(globalAuthUrl);
+        }
+    }
+
     // CRITICAL: Skip middleware for all auth pages to prevent redirect loops
-    // This includes: /auth/login, /auth/register, /marketplace/login, /export/login, etc.
-    const isAuthPage = pathname.includes('/login') || // Allows /wave/login, /export/login, etc.
-        pathname.includes('/register') ||
-        pathname === '/auth/signin' ||
-        pathname === '/auth/signup' ||
-        pathname === '/auth/get-started';
+    // This includes: /auth/login, /auth/register, /auth/signin, /auth/signup
+    const isAuthPage = pathname.startsWith('/auth/');
 
     if (isAuthPage) {
         // If user is already authenticated, redirect them to dashboard

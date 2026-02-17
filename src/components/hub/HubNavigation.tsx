@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, Menu, X, LayoutDashboard, LogIn } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 export default function HubNavigation() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isEcosystemOpen, setIsEcosystemOpen] = useState(false);
     const pathname = usePathname();
+    const { data: session } = useSession();
 
     const navItems = [
         { label: "Home", href: "/" },
@@ -58,7 +60,6 @@ export default function HubNavigation() {
                                             {item.label}
                                             <ChevronDown className="w-4 h-4" />
                                         </button>
-                                        {/* Dropdown Menu */}
                                         <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                                             <div className="py-2">
                                                 {item.dropdown.map((subItem, subIndex) => (
@@ -89,6 +90,34 @@ export default function HubNavigation() {
                                 )}
                             </div>
                         ))}
+
+                        {/* Auth Buttons (Desktop) */}
+                        <div className="ml-4 flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
+                            {session?.user ? (
+                                <Link
+                                    href="/dashboard"
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md hover:shadow-lg hover:scale-105"
+                                >
+                                    <LayoutDashboard className="w-4 h-4" />
+                                    Dashboard
+                                </Link>
+                            ) : (
+                                <>
+                                    <Link
+                                        href="/auth/login"
+                                        className="px-5 py-2.5 font-bold text-slate-700 dark:text-slate-200 hover:text-primary dark:hover:text-primary transition-colors"
+                                    >
+                                        Log In
+                                    </Link>
+                                    <Link
+                                        href="/auth/get-started"
+                                        className="px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md hover:shadow-lg hover:scale-105"
+                                    >
+                                        Get Started
+                                    </Link>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     {/* Mobile Menu Button */}
@@ -153,6 +182,37 @@ export default function HubNavigation() {
                                 )}
                             </div>
                         ))}
+
+                        {/* Auth Buttons (Mobile) */}
+                        <div className="mt-6 px-4 space-y-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+                            {session?.user ? (
+                                <Link
+                                    href="/dashboard"
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-primary text-white font-bold rounded-xl"
+                                >
+                                    <LayoutDashboard className="w-5 h-5" />
+                                    Go to Dashboard
+                                </Link>
+                            ) : (
+                                <>
+                                    <Link
+                                        href="/auth/login"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="block w-full text-center px-5 py-3 font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800"
+                                    >
+                                        Log In
+                                    </Link>
+                                    <Link
+                                        href="/auth/get-started"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="block w-full text-center px-5 py-3 bg-primary text-white font-bold rounded-xl"
+                                    >
+                                        Get Started
+                                    </Link>
+                                </>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

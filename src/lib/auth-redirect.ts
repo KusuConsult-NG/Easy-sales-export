@@ -20,32 +20,32 @@
 export function getModuleAuthUrl(pathname: string, type: 'login' | 'register'): string {
     // Marketplace module - violet theme
     if (pathname.startsWith('/marketplace')) {
-        return type === 'login' ? `/auth/login?module=marketplace` : `/marketplace/${type}`;
+        return type === 'login' ? `/auth/login?module=marketplace` : `/auth/register?module=marketplace`;
     }
 
     // Cooperatives module - purple theme
     if (pathname.startsWith('/cooperatives')) {
-        return type === 'login' ? `/auth/login?module=cooperatives` : `/cooperatives/${type}`;
+        return type === 'login' ? `/auth/login?module=cooperatives` : `/auth/register?module=cooperatives`;
     }
 
     // Export module - slate theme
     if (pathname.startsWith('/export')) {
-        return type === 'login' ? `/auth/login?module=export` : `/export/${type}`;
+        return type === 'login' ? `/auth/login?module=export` : `/auth/register?module=export`;
     }
 
     // Farm Nation module - emerald theme
     if (pathname.startsWith('/farm-nation')) {
-        return type === 'login' ? `/auth/login?module=farm-nation` : `/farm-nation/${type}`;
+        return type === 'login' ? `/auth/login?module=farm-nation` : `/auth/register?module=farm-nation`;
     }
 
     // WAVE module - default theme
     if (pathname.startsWith('/wave')) {
-        return type === 'login' ? `/auth/login?module=wave` : `/wave/${type}`;
+        return type === 'login' ? `/auth/login?module=wave` : `/auth/register?module=wave`;
     }
 
     // Academy module - if it has custom auth pages
     if (pathname.startsWith('/academy')) {
-        return type === 'login' ? `/auth/login?module=academy` : `/academy/${type}`;
+        return type === 'login' ? `/auth/login?module=academy` : `/auth/register?module=academy`;
     }
 
     // Default to Auth Portal for all other routes

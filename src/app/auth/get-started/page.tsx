@@ -21,7 +21,7 @@ const REGISTRATION_PATHS = [
         description: "Join a cooperative to access loans, savings, and community support.",
         iconImage: "/images/modules/cooperative.png",
         color: "bg-purple-600",
-        href: "/cooperatives/register",
+        href: "/cooperatives/onboarding",
         benefits: ["Access low-interest loans", "High-yield savings", "Community network"],
     },
     {
@@ -30,7 +30,7 @@ const REGISTRATION_PATHS = [
         description: "Buy and sell agricultural products in our verified marketplace.",
         iconImage: "/images/modules/marketplace.png",
         color: "bg-violet-600",
-        href: "/marketplace/register",
+        href: "/marketplace/onboarding",
         benefits: ["Verified buyers & sellers", "Secure payments", "Nationwide delivery"],
     },
     {
@@ -39,7 +39,7 @@ const REGISTRATION_PATHS = [
         description: "Join bulk export opportunities and access international markets.",
         iconImage: "/images/modules/export.png",
         color: "bg-blue-600",
-        href: "/export/register",
+        href: "/export/onboarding",
         benefits: ["International buyers", "Volume aggregation", "Premium pricing"],
     },
     {
@@ -48,7 +48,7 @@ const REGISTRATION_PATHS = [
         description: "Invest in agricultural land and verified farm projects.",
         iconImage: "/images/modules/farm-nation.png",
         color: "bg-emerald-600",
-        href: "/farm-nation/register",
+        href: "/farm-nation/onboarding",
         benefits: ["Land ownership", "Passive income", "Managed farming"],
     },
     {
@@ -57,7 +57,7 @@ const REGISTRATION_PATHS = [
         description: "Learn modern farming techniques and business skills.",
         iconImage: "/images/modules/academy.png",
         color: "bg-orange-600",
-        href: "/academy/register",
+        href: "/academy/application",
         benefits: ["Certified courses", "Expert instructors", "Practical training"],
     },
 ];
