@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth as firebaseAuth } from "./firebase";
+import { logger } from "@/lib/logger";
 import { loginSchema } from "./schemas";
 import { COLLECTIONS, type UserRole } from "./types/firestore";
 import type { User as FirestoreUser } from "./types/firestore";
@@ -74,6 +75,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     }
 
                     const userData = userDoc.data() as FirestoreUser;
+
+                    // 🔒 SECURITY FIX: Check for banned status
+                    if ((userData as any).isBanned === true || (userData as any).status === 'banned') {
+                        logger.warn(`Blocked login attempt for banned user: ${email}`);
+                        throw new Error("Your account has been suspended. Please contact support.");
+                    }
 
                     // Cache the profile for next time
                     const { setCache, CacheKeys, CACHE_TTL } = await import("@/lib/redis");

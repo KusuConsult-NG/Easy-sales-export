@@ -215,21 +215,51 @@ export async function approveLoanAction(
         }
 
         const effectiveAdminId = session.user.id;
-
         const appRef = db.collection("loan_applications").doc(applicationId);
-        const appDoc = await appRef.get();
 
-        if (!appDoc.exists) {
-            return { success: false, error: "Application not found" };
-        }
+        // Transactional Locking to prevent Double Lending
+        await db.runTransaction(async (transaction) => {
+            const appDoc = await transaction.get(appRef);
 
-        await appRef.update({
-            status: "approved",
-            reviewedAt: FieldValue.serverTimestamp(),
-            reviewedBy: effectiveAdminId,
+            if (!appDoc.exists) {
+                throw new Error("Application not found");
+            }
+
+            const appData = appDoc.data() as LoanApplication;
+
+            if (appData.status !== "pending") {
+                throw new Error("Application is not pending");
+            }
+
+            // CRITICAL CHECK: Does this user already have an active loan?
+            // We must query INSIDE the transaction or use a locking document.
+            // Since we can't easily query across common fields in a transaction query unless indexed and specific,
+            // we will check the 'loan_applications' for this user.
+            // However, Firestore transactions require reads to come before writes.
+            // We will query for "approved" or "disbursed" loans for this user.
+
+            const activeLoansQuery = db.collection("loan_applications")
+                .where("userId", "==", appData.userId)
+                .where("status", "in", ["approved", "disbursed"]);
+
+            const activeLoansSnapshot = await transaction.get(activeLoansQuery);
+
+            if (!activeLoansSnapshot.empty) {
+                throw new Error("User already has an active loan. Cannot approve new loan.");
+            }
+
+            // Approve the loan
+            transaction.update(appRef, {
+                status: "approved",
+                reviewedAt: FieldValue.serverTimestamp(),
+                reviewedBy: effectiveAdminId,
+                updatedAt: FieldValue.serverTimestamp()
+            });
         });
 
-        const appData = appDoc.data() as LoanApplication;
+        // Fetch fresh data for audit log
+        const updatedAppDoc = await appRef.get();
+        const appData = updatedAppDoc.data() as LoanApplication;
 
         await createAdminAuditLog({
             action: "loan_approved",

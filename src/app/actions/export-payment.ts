@@ -210,8 +210,22 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             // Update export window funding
             const windowRef = db.collection("exportWindows").doc(windowId);
             const windowSnap = await transaction.get(windowRef);
-            const currentFunding = windowSnap.data()?.currentFunding || 0;
-            const investorCount = windowSnap.data()?.investorCount || 0;
+
+            if (!windowSnap.exists) {
+                throw new Error("Export window not found");
+            }
+
+            const windowData = windowSnap.data();
+            const currentFunding = windowData?.currentFunding || 0;
+            const fundingGoal = windowData?.fundingGoal || 0; // Assuming fundingGoal exists
+            const investorCount = windowData?.investorCount || 0;
+
+            // 🔒 SECURITY FIX: Prevent Over-funding
+            // If fundingGoal is set (greater than 0), ensure we don't exceed it.
+            if (fundingGoal > 0 && (currentFunding + amountInNaira > fundingGoal)) {
+                throw new Error(`Investment rejected: Funding goal exceeded. Current: ₦${currentFunding.toLocaleString()}, Goal: ₦${fundingGoal.toLocaleString()}. Amount: ₦${amountInNaira.toLocaleString()}`);
+                // In a real system, we might auto-refund here or mark as "overpaid_pending_refund"
+            }
 
             transaction.update(windowRef, {
                 currentFunding: currentFunding + amountInNaira,
