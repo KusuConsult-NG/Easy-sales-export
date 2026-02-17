@@ -111,15 +111,16 @@ function ModuleLoginContent({
     const [showPassword, setShowPassword] = useState(false);
     const [state, formAction, isPending] = useActionState(loginAction, initialState);
 
-    // Handle successful login but stuck on page (server redirect failed)
+    // Handle successful login navigation
     useEffect(() => {
-        if (state.success && !isPending) {
-            // Server action completed successfully but didn't redirect (Edge Runtime issue)
-            // Force client-side redirect as fallback
-            console.log('[Login] Server action succeeded but no redirect - forcing client navigation');
+        if (state.success && (state as any).redirectUrl) {
+            console.log('[Login] Authentication successful - redirecting to:', (state as any).redirectUrl);
+            router.replace((state as any).redirectUrl);
+        } else if (state.success && !isPending) {
+            // Fallback if no specific URL returned (legacy/defensive)
             router.replace(callbackUrl);
         }
-    }, [state.success, isPending, router, callbackUrl]);
+    }, [state.success, isPending, router, callbackUrl, state]);
 
     useEffect(() => {
         if (state.error && !isPending) {

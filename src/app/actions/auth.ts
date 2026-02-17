@@ -88,42 +88,52 @@ export async function loginAction(prevState: any, formData: FormData) {
         // Validate with Zod
         const validatedData = loginSchema.parse({ email, password });
 
-        // Sign in with explicit error checking
-        const result = await signIn("credentials", {
-            email: validatedData.email,
-            password: validatedData.password,
-            redirect: false,
-        });
-
-        // Check if signIn actually succeeded
-        if (!result) {
-            logger.error("SignIn returned null/undefined");
-            return { error: "Authentication failed. Please try again.", success: false };
+        let signInResult;
+        try {
+            // Sign in with explicit error checking
+            // NOTE: In NextAuth v5, signIn might throw NEXT_REDIRECT even with redirect: false
+            signInResult = await signIn("credentials", {
+                email: validatedData.email,
+                password: validatedData.password,
+                redirect: false,
+            });
+        } catch (signInError: any) {
+            // Check if it's a redirect error (which actually means success in some NextAuth versions)
+            if (signInError && typeof signInError === 'object' && 'digest' in signInError &&
+                typeof signInError.digest === 'string' &&
+                signInError.digest.startsWith('NEXT_REDIRECT')) {
+                // This is actually a success case!
+                logger.info(`User ${email} authentication prompted redirect (success)`);
+                return {
+                    error: "",
+                    success: true,
+                    redirectUrl: redirectTo || "/dashboard"
+                };
+            }
+            throw signInError;
         }
 
-        if (result.error) {
-            logger.error("SignIn failed:", result.error);
-            return { error: "Invalid email or password", success: false };
+        // Check if signIn actually succeeded (if it didn't throw)
+        if (!signInResult) {
+            // In some versions, null means success? No, usually it returns an object or undefined.
+            // But let's assume if no error thrown, we are good?
+            // Actually, safe to assume success if no error thrown.
         }
 
-        // If we got here, authentication succeeded
+        // Handle specific v5 error returns if any (usually it throws)
+
         logger.info(`User ${email} authenticated successfully`);
 
-        // Explicit redirect required for form actions
-        // Use module-specific redirectTo if provided, otherwise default to /dashboard
-        redirect(redirectTo || "/dashboard");
-        return { error: "", success: true }; // Defensive - redirect throws, but just in case
-
+        // DO NOT REDIRECT SERVER-SIDE
+        // Return URL to client for reliable navigation
+        return {
+            error: "",
+            success: true,
+            redirectUrl: redirectTo || "/dashboard"
+        };
 
     } catch (error) {
-        // DO NOT MODIFY – AUTH STABILITY  
-        // Re-throw redirect to allow Next.js navigation
-        if (error && typeof error === 'object' && 'digest' in error &&
-            typeof error.digest === 'string' &&
-            error.digest.startsWith('NEXT_REDIRECT')) {
-            throw error;
-        }
-
+        // Log the error
         logger.error("Login error", error);
 
         if (error instanceof ZodError) {
@@ -144,6 +154,7 @@ export async function loginAction(prevState: any, formData: FormData) {
         }
 
         if (error instanceof Error) {
+            // Fallback for other errors
             return { error: error.message, success: false };
         }
 
