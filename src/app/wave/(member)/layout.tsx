@@ -7,7 +7,7 @@
 import { cookies } from "next/headers";
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
-import { checkServiceAccess } from "@/lib/auth/service-access";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 // import WaveSidebar from "./WaveSidebar"; // Removed in favor of global Sidebar
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -27,11 +27,11 @@ export default async function WaveMemberLayout({
 
     // Verify session and check access
     try {
-        const userId = session.user.id;
-        const accessResult = await checkServiceAccess(userId, "wave");
+        // Check service access using roles
+        const hasAccess = hasAppAccess(session.user.roles || [], "wave");
 
-        if (!accessResult.hasAccess) {
-            redirect(accessResult.redirectTo || "/wave/application");
+        if (!hasAccess) {
+            redirect("/wave/application");
         }
     } catch (error) {
         logger.error("Session verification failed:", error);

@@ -5,7 +5,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { checkServiceAccess } from "@/lib/auth/service-access";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { logger } from '@/lib/logger';
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -27,12 +27,11 @@ export default async function AcademyLearnerLayout({
 
     // Verify session and check access
     try {
-        const userId = session.user.id;
+        // Check service access
+        const hasAccess = hasAppAccess(session.user.roles || [], "academy");
 
-        const accessResult = await checkServiceAccess(userId, "academy");
-
-        if (!accessResult.hasAccess) {
-            redirect(accessResult.redirectTo || "/academy/application");
+        if (!hasAccess) {
+            redirect("/academy/setup");
         }
     } catch (error) {
         logger.error("Session verification failed:", error);

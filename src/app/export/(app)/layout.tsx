@@ -7,7 +7,7 @@
 
 import { redirect } from "next/navigation";
 import { logger } from '@/lib/logger';
-import { checkServiceAccess } from "@/lib/auth/service-access";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -28,15 +28,11 @@ export default async function ExportAppLayout({
     try {
         const userId = session.user.id;
 
-        // Check service access
-        const accessResult = await checkServiceAccess(userId, "export");
+        // Check service access using roles
+        const hasAccess = hasAppAccess(session.user.roles || [], "export");
 
-        if (!accessResult.hasAccess) {
-            // Redirect to appropriate page based on status
-            if (accessResult.redirectTo) {
-                redirect(accessResult.redirectTo);
-            }
-            redirect("/export");
+        if (!hasAccess) {
+            redirect("/export/onboarding");
         }
 
         // User has access, render the app

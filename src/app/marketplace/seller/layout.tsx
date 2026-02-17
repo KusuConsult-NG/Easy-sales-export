@@ -6,7 +6,7 @@
 
 import { redirect } from "next/navigation";
 import { logger } from '@/lib/logger';
-import { checkServiceAccess } from "@/lib/auth/service-access";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import MarketplaceSidebar from "./MarketplaceSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -39,13 +39,10 @@ export default async function SellerLayout({ children }: { children: React.React
     try {
         const userId = session.user.id;
 
-        // Check marketplace access (seller - requires verification)
-        const accessResult = await checkServiceAccess(userId, "marketplace");
+        // Check marketplace access (seller        // Check service access
+        const hasAccess = hasAppAccess(session.user.roles || [], "marketplace");
 
-        if (!accessResult.hasAccess) {
-            if (accessResult.redirectTo) {
-                redirect(accessResult.redirectTo);
-            }
+        if (!hasAccess) {
             redirect("/marketplace/onboarding");
         }
 

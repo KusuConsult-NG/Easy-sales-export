@@ -106,7 +106,7 @@ export default function ApplicationSuccessPage() {
                 </div>
 
                 {/* 5. Urgency Window */}
-                <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30 rounded-2xl shadow-xl p-8 border border-orange-200 dark:border-orange-800/50">
+                <div className="bg-linear-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30 rounded-2xl shadow-xl p-8 border border-orange-200 dark:border-orange-800/50">
                     <div className="flex items-center gap-3 mb-6">
                         <Flame className="w-8 h-8 text-orange-600 animate-pulse" />
                         <h2 className="text-2xl font-bold text-orange-900 dark:text-orange-100">
@@ -143,7 +143,7 @@ export default function ApplicationSuccessPage() {
                 {/* 6. Final Warning & CTA */}
                 <div className="bg-slate-900 text-white rounded-3xl shadow-2xl overflow-hidden relative">
                     {/* Background Pattern */}
-                    <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500 via-blue-500 to-slate-900"></div>
+                    <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,var(--tw-gradient-stops))] from-emerald-500 via-blue-500 to-slate-900"></div>
 
                     <div className="relative p-8 md:p-12 text-center space-y-8">
                         <div className="inline-block bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest mb-2">

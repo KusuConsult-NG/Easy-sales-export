@@ -6,7 +6,7 @@
 
 import { redirect } from "next/navigation";
 import { logger } from '@/lib/logger';
-import { checkServiceAccess } from "@/lib/auth/service-access";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -34,13 +34,10 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
     try {
         const userId = session.user.id;
 
-        // Check marketplace access (buyer)
-        const accessResult = await checkServiceAccess(userId, "marketplace");
+        // Check service access
+        const hasAccess = hasAppAccess(session.user.roles || [], "marketplace");
 
-        if (!accessResult.hasAccess) {
-            if (accessResult.redirectTo) {
-                redirect(accessResult.redirectTo);
-            }
+        if (!hasAccess) {
             redirect("/marketplace/onboarding");
         }
 

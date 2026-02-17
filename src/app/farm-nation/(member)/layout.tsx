@@ -6,7 +6,7 @@
 
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
-import { checkServiceAccess } from "@/lib/auth/service-access";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import FarmNationSidebar from "./FarmNationSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -26,12 +26,11 @@ export default async function FarmNationMemberLayout({
 
     // Verify session and check access
     try {
-        const userId = session.user.id;
+        // Check service access
+        const hasAccess = hasAppAccess(session.user.roles || [], "farm-nation");
 
-        const accessResult = await checkServiceAccess(userId, "farmNation");
-
-        if (!accessResult.hasAccess) {
-            redirect(accessResult.redirectTo || "/farm-nation");
+        if (!hasAccess) {
+            redirect("/farm-nation/onboarding");
         }
     } catch (error) {
         logger.error("Session verification failed:", error);

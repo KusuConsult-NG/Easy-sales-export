@@ -90,17 +90,18 @@ export default function RegisterForm() {
             </div>
 
             <div className="relative w-full max-w-md">
-                {/* Logo & Header */}
-                <div className="text-center mb-8 relative z-10">
-                    <Link href="/" className="inline-flex items-center justify-center mb-6 hover:opacity-90 transition-opacity">
-                        <div className="w-16 h-16 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center shadow-xl shadow-slate-500/20 text-white transition-transform hover:scale-105">
-                            <User className="w-8 h-8" />
-                        </div>
-                    </Link>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Create Account</h1>
-                    <p className="text-base text-slate-500 dark:text-slate-400">Join Easy Sales Export Platform</p>
+                {/* Welcome Section */}
+                <div className="mb-8">
+                    <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl mb-4 flex items-center justify-center shadow-lg transform -rotate-3">
+                        <User className="w-6 h-6 text-white" />
+                    </div>
+                    <h2 className="text-3xl font-bold bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300">
+                        Create Account
+                    </h2>
+                    <p className="text-slate-600 dark:text-slate-400 mt-2">
+                        Join thousands of successful agri-exporters today.
+                    </p>
                 </div>
-
                 {/* Registration Card */}
                 <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-2xl backdrop-blur-sm rounded-3xl p-8 relative z-10">
                     <form action={formAction} className="space-y-6">
@@ -241,7 +242,7 @@ export default function RegisterForm() {
                             variant="secondary"
                             loading={isPending}
                             loadingText="Creating account..."
-                            className="w-full py-3.5 bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-900 hover:to-slate-950 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all border-0 flex items-center justify-center gap-2"
+                            className="w-full py-3.5 bg-linear-to-r from-slate-800 to-slate-900 hover:from-slate-900 hover:to-slate-950 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all border-0 flex items-center justify-center gap-2"
                         >
                             Create Account
                             <ArrowRight className="w-5 h-5" />

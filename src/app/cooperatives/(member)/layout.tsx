@@ -7,7 +7,7 @@
 import { cookies } from "next/headers";
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
-import { checkServiceAccess } from "@/lib/auth/service-access";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { getAdminDb } from "@/lib/firebase-admin";
 // import CooperativeSidebar from "./CooperativeSidebar"; // Removed in favor of global Sidebar
@@ -35,10 +35,11 @@ export default async function CooperativeMemberLayout({
     // Verify session and check access
     try {
         const userId = session.user.id;
-        const accessResult = await checkServiceAccess(userId, "cooperative");
+        // Check service access
+        const hasAccess = hasAppAccess(session.user.roles || [], "cooperatives");
 
-        if (!accessResult.hasAccess) {
-            redirect(accessResult.redirectTo || "/cooperatives/onboarding");
+        if (!hasAccess) {
+            redirect("/cooperatives/onboarding");
         }
 
         // Fetch membership details for Sidebar - CHECK CACHE FIRST

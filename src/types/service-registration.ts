@@ -202,115 +202,13 @@ export interface ServiceRegistrations {
 }
 
 /**
- * SERVICE ACCESS CONTROL SYSTEM - DUAL-TRACK DESIGN
- * ===================================================
- * 
- * The platform uses TWO parallel systems for access control:
- * 
- * ## Track 1: `roles` Array (Route-Level Access)
- * 
- * **Assigned**: During user registration (auth.ts:registerAction)
- * **Purpose**: 
- *   - NextAuth JWT token (client-side session)
- *   - Middleware route protection (middleware.ts)
- *   - Role-based app access (role-app-mapping.ts)
- * 
- * **Updated**: Admin approval actions
- * **Staleness**: Until re-login (30-day JWT expiry)
- * 
- * **Flow**:
- * 1. User registers → roles assigned immediately (e.g., `["general_user", "buyer"]`)
- * 2. Middleware checks `roles` to allow/deny route access
- * 3. JWT contains roles → used for client-side checks
- * 4. Roles change in Firestore → JWT remains stale until re-login
- * 
- * **Example Roles**:
- * - `general_user` - All registered users
- * - `buyer`, `seller` - Marketplace access
- * - `wave_participant` - WAVE program access
- * - `cooperative_member` - Cooperative features
- * 
- * ---
- * 
- * ## Track 2: `serviceRegistrations` Object (Feature-Level Access)
- * 
- * **Created**: During module-specific onboarding (e.g., /wave/application)
- * **Purpose**:
- *   - Approval workflow tracking
- *   - Granular feature access control
- *   - Status-based UI rendering
- * 
- * **Updated**: 
- *   - Admin approval actions
- *   - Redis cache invalidation (real-time)
- * 
- * **Staleness**: Cached with TTL, invalidated on updates
- * 
- * **Flow**:
- * 1. User completes onboarding → serviceRegistrations.wave created
- * 2. Admin approves → status changes from "pending" to "approved"
- * 3. Cache invalidated → next request fetches fresh data
- * 4. Middleware already allowed access (via roles), layout checks status
- * 
- * **Example Status Values**:
- * - `pending` - Awaiting admin review
- * - `approved` - Full access granted
- * - `rejected` - Access denied
- * - `under_review` - Admin actively reviewing
- * 
- * ---
- * 
- * ## IMPORTANT: Both Tracks Must Be Checked!
- * 
- * ✅ **Correct Pattern** (Module Layout):
- * ```typescript
- * const session = await auth();
- * if (!session?.user) redirect("/auth/login");
- * 
- * const access = await checkServiceAccess(session.user.id, "wave");
- * if (!access.hasAccess) redirect(access.redirectTo);
- * ```
- * 
- * ❌ **Incorrect** (Middleware Only):
- * ```typescript
- * // Only checks roles - allows access even if pending approval!
- * if (userRoles.includes("wave_participant")) return NextResponse.next();
- * ```
- * 
- * ---
- * 
- * ## Data Flow Diagram
- * 
- * ```
- * Registration → roles assigned → JWT created
- *      ↓              ↓              ↓
- *  Firestore     Middleware     Client Session
- * 
- * Onboarding → serviceRegistrations created → Cache
- *      ↓              ↓                         ↓
- *  Admin      service-access.ts          Redis TTL
- *  Approval        checks
- * ```
- * 
- * @see src/lib/auth/service-access.ts - Feature-level access checks
- * @see src/middleware.ts - Route-level protection
- * @see src/lib/role-app-mapping.ts - Role-to-app mapping
+ * User with Services Interface
  */
 export interface UserWithServices {
     uid: string;
     email: string;
     name: string;
-
-    /**
-     * Roles array - Assigned at registration, checked by middleware
-     * Updated by admin actions, but JWT remains stale until re-login
-     */
     roles: ServiceRole[];
-
-    /**
-     * Service registrations - Created during onboarding, tracks approval status
-     * Updated by admin actions with cache invalidation (real-time)
-     */
     serviceRegistrations?: ServiceRegistrations;
 }
 
@@ -324,9 +222,4 @@ export interface OnboardingStep {
 }
 
 // Service Access Check Result
-export interface ServiceAccessResult {
-    hasAccess: boolean;
-    redirectTo?: string;
-    message?: string;
-    registrationStatus?: VerificationStatus;
-}
+

@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
     GraduationCap, BookOpen, Target, CheckCircle,
-    ArrowRight, ArrowLeft, Rocket
+    ArrowRight, ArrowLeft, Rocket, Loader2, Clock, XCircle
 } from "lucide-react";
+import { checkAcademyStatusAction, submitAcademyApplicationAction, AcademyApplicationData } from "@/app/actions/academy";
+import { useToast } from "@/contexts/ToastContext";
+import { logger } from "@/lib/logger";
 
 type SkillLevel = "beginner" | "intermediate" | "advanced";
 type LearningPreference = "video" | "text" | "interactive" | "mixed";
@@ -15,14 +18,49 @@ type InterestArea = "export" | "farming" | "cooperative" | "business" | "general
 
 export default function AcademyOnboardingPage() {
     const router = useRouter();
-    const { data: session } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
+    const { showToast } = useToast();
     const [step, setStep] = useState(1);
     const totalSteps = 3;
+
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [applicationStatus, setApplicationStatus] = useState<string | null>(null);
 
     // Form state
     const [skillLevel, setSkillLevel] = useState<SkillLevel | "">("");
     const [learningPreference, setLearningPreference] = useState<LearningPreference | "">("");
     const [interests, setInterests] = useState<InterestArea[]>([]);
+
+    useEffect(() => {
+        if (sessionStatus === "loading") return;
+
+        if (sessionStatus === "unauthenticated") {
+            router.replace("/auth/login?module=academy");
+            return;
+        }
+
+        const checkStatus = async () => {
+            try {
+                const status = await checkAcademyStatusAction();
+                setApplicationStatus(status);
+
+                if (status === "approved") {
+                    router.replace("/academy/dashboard");
+                } else if (status === "pending" || status === "rejected") {
+                    setIsLoading(false);
+                } else {
+                    // No application yet
+                    setIsLoading(false);
+                }
+            } catch (error) {
+                logger.error("Failed to check Academy status:", error);
+                setIsLoading(false);
+            }
+        };
+
+        checkStatus();
+    }, [sessionStatus, router]);
 
     const handleInterestToggle = (interest: InterestArea) => {
         setInterests(prev =>
@@ -33,9 +71,53 @@ export default function AcademyOnboardingPage() {
     };
 
     const handleComplete = async () => {
-        // In a real app, save preferences to user profile
-        // For now, just redirect to dashboard
-        router.push("/academy/dashboard");
+        if (!session?.user) return;
+        setIsSubmitting(true);
+
+        try {
+            // Construct application data
+            // Note: In a real app we'd collect more details. Here we infer/mock some for the MVP flow
+            // or we could expand the form steps to collect them proper.
+            // For now, we'll use placeholder values for the required fields in AcademyApplicationData
+            // that aren't collected in this wizard, to satisfy the schema/action.
+            // Ideally, the wizard should collect these. Assuming this is a profile setup.
+
+            const applicationData: AcademyApplicationData = {
+                personalInfo: {
+                    fullName: session.user.name || "",
+                    email: session.user.email || "",
+                    phone: "", // TODO: Should collect phone
+                    dateOfBirth: "", // TODO: Should collect DOB
+                    state: "", // TODO: Should collect state
+                    occupation: "", // TODO: Should collect occupation
+                },
+                education: {
+                    educationLevel: "",
+                    fieldOfStudy: "",
+                    yearsExperience: skillLevel === "beginner" ? 0 : skillLevel === "intermediate" ? 2 : 5,
+                    currentRole: ""
+                },
+                interests: {
+                    learningPaths: interests,
+                    topics: learningPreference,
+                    goals: "To learn and grow in agricultural export"
+                }
+            };
+
+            const result = await submitAcademyApplicationAction(applicationData);
+
+            if (result.success) {
+                showToast("Application submitted successfully!", "success");
+                setApplicationStatus("pending");
+            } else {
+                showToast(result.error || "Failed to submit application", "error");
+            }
+        } catch (error) {
+            logger.error("Error submitting Academy application:", error);
+            showToast("An unexpected error occurred", "error");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const isStepValid = () => {
@@ -46,6 +128,72 @@ export default function AcademyOnboardingPage() {
             default: return false;
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+        );
+    }
+
+    // PENDING STATE
+    if (applicationStatus === "pending") {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        Application Pending
+                    </h2>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        Your application to join the Academy is currently under review. We will notify you once it has been approved.
+                    </p>
+                    <Link
+                        href="/dashboard"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                    >
+                        Return to Hub
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
+    // REJECTED STATE
+    if (applicationStatus === "rejected") {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <XCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        Application Rejected
+                    </h2>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        Unfortunately, your application to the Academy was not approved. Please contact support for more information.
+                    </p>
+                    <div className="flex flex-col gap-3">
+                        <button
+                            onClick={() => setApplicationStatus(null)}
+                            className="w-full px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                        >
+                            Try Again
+                        </button>
+                        <Link
+                            href="/dashboard"
+                            className="w-full px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        >
+                            Return to Hub
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 dark:from-slate-950 dark:to-indigo-950 py-8">
@@ -218,6 +366,7 @@ export default function AcademyOnboardingPage() {
                         {step > 1 ? (
                             <button
                                 onClick={() => setStep(s => s - 1)}
+                                disabled={isSubmitting}
                                 className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                             >
                                 <ArrowLeft className="w-5 h-5" />
@@ -225,18 +374,18 @@ export default function AcademyOnboardingPage() {
                             </button>
                         ) : (
                             <Link
-                                href="/academy"
+                                href="/dashboard"
                                 className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                             >
                                 <ArrowLeft className="w-5 h-5" />
-                                Back to Academy
+                                Back to Hub
                             </Link>
                         )}
 
                         {step < totalSteps ? (
                             <button
                                 onClick={() => setStep(s => s + 1)}
-                                disabled={!isStepValid()}
+                                disabled={!isStepValid() || isSubmitting}
                                 className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                             >
                                 Next
@@ -245,11 +394,11 @@ export default function AcademyOnboardingPage() {
                         ) : (
                             <button
                                 onClick={handleComplete}
-                                disabled={!isStepValid()}
-                                className="px-8 py-4 bg-linear-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={!isStepValid() || isSubmitting}
+                                className="px-8 py-4 bg-linear-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
-                                <Rocket className="w-5 h-5" />
-                                Start Learning
+                                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Rocket className="w-5 h-5" />}
+                                {isSubmitting ? "Submitting..." : "Start Learning"}
                             </button>
                         )}
                     </div>
@@ -259,6 +408,7 @@ export default function AcademyOnboardingPage() {
                 <div className="text-center mt-6">
                     <button
                         onClick={() => router.push("/academy/dashboard")}
+                        disabled={isSubmitting}
                         className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors underline"
                     >
                         Skip onboarding - I'll explore on my own
