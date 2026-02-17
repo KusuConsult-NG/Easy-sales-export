@@ -130,14 +130,12 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    // CRITICAL: Skip middleware for all auth pages to prevent redirect loops
+    // CRITICAL: Allow access to all auth pages
+    // Client-side session checks in LoginForm and RegisterForm will handle authenticated users
+    // This prevents redirect loops and stale session issues
     const isAuthPage = pathname.startsWith('/auth/');
 
     if (isAuthPage) {
-        // If user is already authenticated, redirect them to dashboard
-        if (session) {
-            return NextResponse.redirect(new URL("/dashboard", request.url));
-        }
         return NextResponse.next();
     }
 
