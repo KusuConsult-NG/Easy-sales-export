@@ -102,8 +102,8 @@ function PaymentCallbackContent() {
                         </p>
                         <div className="flex gap-3">
                             <Link
-                                href="/cooperatives/register"
-                                className="flex-1 px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors"
+                                href="/auth/register?callbackUrl=/cooperatives/onboarding"
+                                className="inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-purple-700 transition"
                             >
                                 Try Again
                             </Link>

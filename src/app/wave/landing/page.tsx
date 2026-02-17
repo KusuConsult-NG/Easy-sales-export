@@ -69,7 +69,7 @@ export default function WaveLandingPage() {
 
             {/* Login Button (Fixed Top-Right) */}
             <Link
-                href="/wave/login"
+                href="/auth/login?callbackUrl=/wave/dashboard"
                 className="fixed top-6 right-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-green-700 dark:text-green-400 px-6 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-green-200 dark:border-green-800 font-bold"
             >
                 <span>Login</span>

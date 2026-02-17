@@ -33,7 +33,6 @@ const protectedRoutes = [
     "/wave/dashboard",
     "/wave/resources",
     "/wave/application",
-    "/wave/application",
     "/cooperatives/dashboard",
     "/cooperatives/loans",
     "/cooperatives/savings",
@@ -132,8 +131,8 @@ export async function middleware(request: NextRequest) {
     }
 
     // CRITICAL: Skip middleware for all auth pages to prevent redirect loops
-    // This includes: /auth/login, /auth/register, /auth/signin, /auth/signup
-    const isAuthPage = pathname.startsWith('/auth/');
+    // Exception: /auth/get-started is accessible to authenticated users (module selection)
+    const isAuthPage = pathname.startsWith('/auth/') && pathname !== '/auth/get-started';
 
     if (isAuthPage) {
         // If user is already authenticated, redirect them to dashboard
@@ -230,16 +229,10 @@ export async function middleware(request: NextRequest) {
 
         // Check if user has permission to access this route
         if (!hasErrorParam && !canAccessRoute(userRoles, pathname)) {
-            // EXCEPTION: Allow access to onboarding/application pages regardless of role
-            // This is critical so General Users can apply to become Sellers/Exporters/etc.
-            const isOnboardingPage = pathname.includes("/onboarding") ||
-                pathname.includes("/application") ||
-                pathname.includes("/register") ||
-                pathname.includes("/join");
+            // REMOVED: Wildcard exemption for onboarding pages (security risk)
+            // Protection is handled by explicit entries in protectedRoutes array
 
-            if (isOnboardingPage) {
-                // Allow access
-            } else if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+            if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
                 // User is authenticated but lacks specific roles - allow dashboard access
                 // Dashboard will show appropriate UI based on roles
             } else if (pathname.startsWith('/messages')) {

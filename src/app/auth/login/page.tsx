@@ -37,7 +37,7 @@ function UniversalLoginContent() {
                 moduleName: "Marketplace",
                 logo: ShoppingBag,
                 redirectDefault: "/marketplace/buyer",
-                registerLink: "/marketplace/register",
+                registerLink: "/auth/register?module=marketplace",
                 registerText: "Want to buy or sell?",
                 registerButtonText: "Join Marketplace",
                 theme: {
@@ -57,7 +57,7 @@ function UniversalLoginContent() {
                 moduleName: "Cooperative",
                 logo: Users,
                 redirectDefault: "/cooperatives/dashboard",
-                registerLink: "/cooperatives/register",
+                registerLink: "/auth/register?module=cooperatives",
                 registerText: "Start a cooperative?",
                 registerButtonText: "Register Cooperative",
                 theme: {
@@ -77,7 +77,7 @@ function UniversalLoginContent() {
                 moduleName: "Export Portal",
                 logo: Globe,
                 redirectDefault: "/export/dashboard",
-                registerLink: "/export/register",
+                registerLink: "/auth/register?module=export",
                 registerText: "Become an exporter?",
                 registerButtonText: "Apply Now",
                 theme: {
@@ -97,7 +97,7 @@ function UniversalLoginContent() {
                 moduleName: "Farm Nation",
                 logo: Sprout,
                 redirectDefault: "/farm-nation/dashboard",
-                registerLink: "/farm-nation/register",
+                registerLink: "/auth/register?module=farm-nation",
                 registerText: "Join the revolution?",
                 registerButtonText: "Join Farm Nation",
                 theme: {
@@ -117,7 +117,7 @@ function UniversalLoginContent() {
                 moduleName: "WAVE",
                 logo: Waves,
                 redirectDefault: "/wave/dashboard",
-                registerLink: "/wave/register",
+                registerLink: "/auth/register?module=wave",
                 registerText: "Empowering women?",
                 registerButtonText: "Join WAVE",
                 theme: {
@@ -137,7 +137,7 @@ function UniversalLoginContent() {
                 moduleName: "Academy",
                 logo: GraduationCap,
                 redirectDefault: "/academy/dashboard",
-                registerLink: "/academy/register",
+                registerLink: "/auth/register?module=academy",
                 registerText: "Ready to learn?",
                 registerButtonText: "Start Learning",
                 theme: {

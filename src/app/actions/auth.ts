@@ -144,8 +144,6 @@ export async function registerAction(prevState: any, formData: FormData) {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
-    const gender = formData.get("gender") as "male" | "female";
-    const platforms = formData.getAll("platforms[]") as string[]; // Multi-platform selection
 
     try {
         // Validate with Zod
@@ -155,25 +153,7 @@ export async function registerAction(prevState: any, formData: FormData) {
             password,
             confirmPassword,
             phone: formData.get("phone") as string,
-            gender: gender,
         });
-
-        // Ensure gender is provided if required by specific modules (like WAVE)
-        if (platforms.includes("wave") && !validatedData.gender) {
-            return { error: "Gender is required for WAVE program", success: false, redirectUrl: "" };
-        }
-
-        // Validate platforms (at least one required)
-        const allowedPlatforms = ["marketplace", "export", "cooperatives", "farm-nation", "academy", "wave"];
-        if (!platforms || platforms.length === 0) {
-            return { error: "Please select at least one platform", success: false, redirectUrl: "" };
-        }
-
-        // Validate all platforms are allowed
-        const invalidPlatforms = platforms.filter(p => !allowedPlatforms.includes(p));
-        if (invalidPlatforms.length > 0) {
-            return { error: "Invalid platform selection", success: false, redirectUrl: "" };
-        }
 
         // Create Firebase Auth user via Admin SDK
         const userRecord = await adminAuth.createUser({
@@ -183,33 +163,9 @@ export async function registerAction(prevState: any, formData: FormData) {
             emailVerified: true, // Auto-verify for now
         });
 
-        // Build role set based on platform selections + gender
-        const roles: Set<UserRole> = new Set(["general_user"]); // Everyone gets general_user
-
-        // Map platform selections to roles
-        if (platforms.includes("marketplace")) {
-            roles.add("buyer");
-            roles.add("seller");
-        }
-        if (platforms.includes("export")) {
-            roles.add("export_participant");
-        }
-        if (platforms.includes("cooperatives")) {
-            roles.add("cooperative_member");
-        }
-        if (platforms.includes("farm-nation")) {
-            roles.add("investor"); // Default Farm Nation role (can upgrade to farmer/land_owner later)
-        }
-        if (platforms.includes("academy")) {
-            roles.add("academy_participant"); // Explicit Academy access
-        }
-
-        // AUTO-GRANT WAVE for females
-        if (gender === "female") {
-            roles.add("wave_participant");
-        }
-
-        const userRoles = Array.from(roles);
+        // SIMPLIFIED: Everyone gets only general_user role on registration
+        // Additional roles are granted after application approval
+        const userRoles: UserRole[] = ["general_user"];
 
         // Create Firestore user profile
         const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = {
@@ -218,7 +174,6 @@ export async function registerAction(prevState: any, formData: FormData) {
             email: validatedData.email,
             roles: userRoles,
             verified: true, // Auto-verify on registration (account-level verification)
-            gender: gender,
         };
 
         try {
@@ -239,18 +194,13 @@ export async function registerAction(prevState: any, formData: FormData) {
             throw new Error("Failed to create user profile. Please try again.");
         }
 
-        // REGISTRATION MUST ESTABLISH SESSION — DO NOT MODIFY
-        // Redirect to module-specific onboarding after registration
-        // Users must complete onboarding before accessing dashboards
+        // SIMPLIFIED: Use callbackUrl for deep linking, default to dashboard
         const callbackUrl = formData.get("callbackUrl") as string;
-        const redirectUrl = callbackUrl || determinePostRegistrationRedirect(platforms, userRoles);
+        const redirectUrl = callbackUrl || "/dashboard";
 
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
         // Server-side signIn in Server Actions causes race conditions with cookies.
         // We return success, and the client component calls signIn() via NextAuth client SDK.
-
-        // This validates the user is created and roles are assigned.
-        // Client will use these credentials to establish the session.
         return { success: true, redirectUrl, error: "" };
     } catch (error: any) {
         // Re-throw redirect errors to allow Next.js to handle navigation

@@ -40,7 +40,7 @@ export default function AcademySidebar() {
 
     const handleLogout = async () => {
         await signOut({ redirect: false });
-        router.push('/academy/login');
+        router.push('/auth/login?callbackUrl=' + encodeURIComponent(window.location.pathname));
     };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");

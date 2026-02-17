@@ -76,9 +76,9 @@ export default function PropertyDetailsPage() {
     }, [status, session]);
 
     const handleContactSeller = () => {
-        if (status !== "authenticated") {
-            showToast("Please login to contact the seller.", "error");
-            router.push("/login");
+        if (status === "unauthenticated") {
+            localStorage.setItem("pendingPropertyInquiry", params.id as string);
+            router.push("/auth/login?callbackUrl=/farm-nation");
             return;
         }
         setShowInquiryModal(true);

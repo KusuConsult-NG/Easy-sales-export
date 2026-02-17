@@ -22,7 +22,7 @@ export default async function AcademyLearnerLayout({
 
     // Check if user is authenticated
     if (!session?.user?.id) {
-        redirect("/academy/login");
+        redirect("/auth/login?module=academy");
     }
 
     // Verify session and check access
@@ -36,7 +36,7 @@ export default async function AcademyLearnerLayout({
         }
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirect("/academy/login");
+        redirect("/auth/login?module=academy");
     }
 
     return (

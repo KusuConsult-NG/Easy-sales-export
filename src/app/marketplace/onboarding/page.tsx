@@ -78,8 +78,8 @@ export default function MarketplaceOnboarding() {
         if (status === "loading") return; // Wait for session check
 
         if (status === "unauthenticated" || !session) {
-            // Redirect to marketplace-specific registration
-            router.replace("/marketplace/register?returnUrl=/marketplace/onboarding");
+            // Redirect to global registration
+            router.replace("/auth/register?callbackUrl=/marketplace/onboarding");
             return;
         }
 

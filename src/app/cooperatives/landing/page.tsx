@@ -209,18 +209,19 @@ export default function CooperativeLandingPage() {
                         </div>
 
                         {/* Desktop CTAs */}
-                        <div className="hidden lg:flex items-center gap-4">
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <Link
-                                href="/cooperatives/login"
-                                className="text-sm font-medium text-slate-600 hover:text-purple-600 transition"
+                                href="/auth/register?callbackUrl=/cooperatives/onboarding"
+                                className="inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-purple-700 transition shadow-lg shadow-purple-200"
                             >
-                                Login
+                                Register Cooperative
+                                <ArrowRight className="w-5 h-5" />
                             </Link>
                             <Link
-                                href="/cooperatives/register"
-                                className="bg-linear-to-r from-purple-600 to-indigo-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl transition"
+                                href="/auth/login?callbackUrl=/cooperatives/dashboard"
+                                className="inline-flex items-center justify-center gap-2 bg-white text-slate-700 px-8 py-4 rounded-xl font-bold hover:bg-slate-50 transition border border-slate-200 shadow-sm"
                             >
-                                Become a Member
+                                Member Login
                             </Link>
                         </div>
 

@@ -93,7 +93,7 @@ export default function ListLandPage() {
 
         if (!session?.user) {
             showToast("Authentication Required: Please login to list your land.", "error");
-            router.push("/login");
+            router.push("/auth/login?callbackUrl=/farm-nation/list-land");
             return;
         }
 

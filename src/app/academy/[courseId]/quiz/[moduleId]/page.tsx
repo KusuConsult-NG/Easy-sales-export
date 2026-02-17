@@ -41,7 +41,8 @@ export default function QuizPage(props: QuizPageProps) {
 
     useEffect(() => {
         if (status === "unauthenticated") {
-            router.push("/academy/login");
+            router.push("/auth/login?callbackUrl=/academy");
+            return;
         }
     }, [status, router]);
 

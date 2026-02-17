@@ -22,7 +22,7 @@ export default async function ExportAppLayout({
     const session = await auth();
 
     if (!session?.user?.id) {
-        redirect("/export/login");
+        redirect("/auth/login?module=export");
     }
 
     try {
@@ -54,6 +54,6 @@ export default async function ExportAppLayout({
         );
     } catch (error) {
         logger.error("Export access check error:", error);
-        redirect("/export/login");
+        redirect("/auth/login?module=export");
     }
 }

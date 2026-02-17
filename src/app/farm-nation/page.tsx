@@ -184,10 +184,9 @@ export default function FarmNationLandingPage() {
 
                 <div className="text-center">
                     <Link
-                        href="/farm-nation/properties"
-                        className="inline-flex items-center gap-2 px-8 py-3 bg-teal-600 text-white font-bold rounded-xl hover:bg-teal-700 transition"
-                    >
-                        View All Farms
+                        href="/auth/register?callbackUrl=/farm-nation/onboarding"
+                        className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition shadow-lg shadow-emerald-200 group"
+                    >                  View All Farms
                         <ArrowRight className="w-5 h-5" />
                     </Link>
                 </div>

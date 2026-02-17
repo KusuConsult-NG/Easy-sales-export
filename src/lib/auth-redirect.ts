@@ -63,7 +63,10 @@ export function getModuleAuthUrl(pathname: string, type: 'login' | 'register'): 
 export function getLoginUrl(pathname: string, callbackUrl?: string): string {
     const loginPath = getModuleAuthUrl(pathname, 'login');
     if (callbackUrl) {
-        return `${loginPath}?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+        // Use URL API to properly append query params
+        const url = new URL(loginPath, 'http://localhost');
+        url.searchParams.set('callbackUrl', callbackUrl);
+        return url.pathname + url.search;
     }
     return loginPath;
 }

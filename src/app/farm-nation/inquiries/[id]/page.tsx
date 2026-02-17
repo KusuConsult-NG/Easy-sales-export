@@ -21,7 +21,7 @@ export default function InquiryDetailsPage() {
 
     useEffect(() => {
         if (status === "unauthenticated") {
-            router.push("/login");
+            router.push("/auth/login?callbackUrl=/farm-nation");
             return;
         }
 

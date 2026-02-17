@@ -21,7 +21,7 @@ export default async function FarmNationMemberLayout({
 
     // Check if user is authenticated
     if (!session?.user?.id) {
-        redirect("/farm-nation/login");
+        redirect("/auth/login?module=farm-nation");
     }
 
     // Verify session and check access
@@ -35,7 +35,7 @@ export default async function FarmNationMemberLayout({
         }
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirect("/farm-nation/login");
+        redirect("/auth/login?module=farm-nation");
     }
 
     return (

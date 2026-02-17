@@ -23,7 +23,7 @@ export default async function CooperativeMemberLayout({
 
     // Check if user is authenticated
     if (!session?.user?.id) {
-        redirect("/cooperatives/login?redirect=/cooperatives");
+        redirect("/auth/login?module=cooperatives&redirect=/cooperatives");
     }
 
     let userProfile = {
@@ -67,7 +67,7 @@ export default async function CooperativeMemberLayout({
         }
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirect("/cooperatives/login?redirect=/cooperatives");
+        redirect("/auth/login?module=cooperatives&redirect=/cooperatives");
     }
 
     return (

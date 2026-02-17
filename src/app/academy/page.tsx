@@ -175,10 +175,10 @@ export default function AcademyLandingPage() {
                                     </ul>
                                     <div className="text-center">
                                         <Link
-                                            href={`/academy/register?plan=${tier.title.toLowerCase().replace(' ', '-')}`}
-                                            className={`inline-block w-full py-3 rounded-xl font-bold transition-colors ${tier.highlight
-                                                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                                : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600'
+                                            href={`/auth/register?callbackUrl=/academy/application&plan=${tier.title.toLowerCase().replace(' ', '-')}`}
+                                            className={`block w-full py-3 rounded-xl font-bold text-center transition ${tier.highlight
+                                                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200'
+                                                : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
                                                 }`}
                                         >
                                             Choose {tier.title}

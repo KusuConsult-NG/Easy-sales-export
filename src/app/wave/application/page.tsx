@@ -182,7 +182,7 @@ export default function WaveApplicationPage() {
     useEffect(() => {
         if (status === "unauthenticated") {
             showToast("You must be logged in to apply for WAVE", "error");
-            router.push("/login?callbackUrl=/wave/application");
+            router.push("/auth/login?callbackUrl=/wave/application");
             return;
         }
 

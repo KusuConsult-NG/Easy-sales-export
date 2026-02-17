@@ -24,8 +24,8 @@ export default function CertificatePage() {
         let mounted = true;
 
         async function fetchCertificateData() {
-            if (status === "unauthenticated") {
-                router.push("/academy/login");
+            if (!session) {
+                router.push("/auth/login?callbackUrl=/academy");
                 return;
             }
 

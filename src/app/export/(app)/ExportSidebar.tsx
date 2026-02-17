@@ -40,7 +40,7 @@ export default function ExportSidebar() {
 
     const handleLogout = async () => {
         await signOut({ redirect: false });
-        router.push('/export/login');
+        router.push('/auth/login?callbackUrl=/export/dashboard');
     };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");

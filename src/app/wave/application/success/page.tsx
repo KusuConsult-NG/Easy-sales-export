@@ -165,8 +165,8 @@ export default function ApplicationSuccessPage() {
 
                         <div className="pt-4">
                             <Link
-                                href="/cooperatives/register"
-                                className="inline-flex items-center justify-center w-full md:w-auto gap-3 bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white px-8 py-5 rounded-xl font-black text-xl md:text-2xl transition-all shadow-[0_0_40px_-5px_rgba(16,185,129,0.5)] transform hover:scale-105"
+                                href="/auth/register?callbackUrl=/cooperatives/onboarding"
+                                className="inline-flex items-center justify-center gap-2 bg-white text-green-700 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm sm:text-base border border-green-100"
                             >
                                 <ShieldCheck className="w-8 h-8" />
                                 ACTIVATE MY MEMBERSHIP NOW

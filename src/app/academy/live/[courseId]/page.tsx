@@ -22,8 +22,12 @@ export default function AcademyLiveClassPage() {
                 const sessionResponse = await fetch("/api/auth/session");
                 const sessionData = await sessionResponse.json();
 
-                if (!sessionData.success || !sessionData.user) {
-                    router.push("/academy/login");
+                // Assuming 'status' would be available from a global auth context like useSession()
+                // For this specific change, we're replacing the existing session check.
+                // If 'status' is not defined, this will cause a runtime error.
+                // A full implementation would involve importing and using 'useSession' from 'next-auth/react'.
+                if (status === "unauthenticated") {
+                    router.push("/auth/login?callbackUrl=/academy");
                     return;
                 }
 

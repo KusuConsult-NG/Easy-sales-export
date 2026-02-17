@@ -28,7 +28,7 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
     const session = await auth();
 
     if (!session?.user?.id) {
-        redirect("/marketplace/login");
+        redirect("/auth/login?module=marketplace");
     }
 
     try {
@@ -48,6 +48,6 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
         return <BuyerLayoutContent>{children}</BuyerLayoutContent>;
     } catch (error) {
         logger.error("Buyer access check error:", error);
-        redirect("/marketplace/login");
+        redirect("/auth/login?module=marketplace");
     }
 }

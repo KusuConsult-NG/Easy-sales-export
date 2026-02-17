@@ -9,7 +9,7 @@ export default async function CooperativeOnboardingPage() {
     const session = await auth();
 
     if (!session?.user) {
-        redirect("/cooperatives/login");
+        redirect("/auth/login?module=cooperatives");
     }
 
     const userId = session.user.id;

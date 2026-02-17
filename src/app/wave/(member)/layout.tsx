@@ -22,7 +22,7 @@ export default async function WaveMemberLayout({
 
     // Check if user is authenticated
     if (!session?.user?.id) {
-        redirect("/wave/login");
+        redirect("/auth/login?module=wave");
     }
 
     // Verify session and check access
@@ -35,7 +35,7 @@ export default async function WaveMemberLayout({
         }
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirect("/wave/login");
+        redirect("/auth/login?module=wave");
     }
 
     return (

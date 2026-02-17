@@ -147,7 +147,7 @@ export default function SubmitLandListingPage() {
                         Please log in to submit a land listing
                     </p>
                     <button
-                        onClick={() => router.push("/login")}
+                        onClick={() => router.push("/auth/login?callbackUrl=/land/submit")}
                         className="px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition"
                     >
                         Go to Login

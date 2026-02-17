@@ -67,17 +67,17 @@ export default function ExportWindowsLandingPage() {
                         </p>
                         <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4">
                             <Link
-                                href="/export/register"
-                                className="group inline-flex items-center justify-center gap-2 md:gap-3 bg-white text-orange-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-orange-500/50 transition-all hover:scale-105"
+                                href="/auth/register?callbackUrl=/export/application"
+                                className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition shadow-lg hover:shadow-slate-900/20"
                             >
-                                Get Started
-                                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
+                                Start Exporting
+                                <ArrowRight className="ml-2 w-5 h-5" />
                             </Link>
                             <Link
-                                href="/export/login"
-                                className="inline-flex items-center justify-center gap-2 md:gap-3 bg-orange-700/50 text-white border border-orange-400/30 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg backdrop-blur-sm hover:bg-orange-700/70 transition-all hover:scale-105"
+                                href="/auth/login?callbackUrl=/export/dashboard"
+                                className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-white text-slate-900 border-2 border-slate-200 rounded-xl font-bold hover:border-slate-900 hover:bg-slate-50 transition"
                             >
-                                Sign In
+                                Login
                             </Link>
                         </div>
                     </div>

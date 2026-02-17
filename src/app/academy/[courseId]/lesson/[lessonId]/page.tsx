@@ -50,7 +50,8 @@ export default function LessonPage(props: LessonPageProps) {
 
     useEffect(() => {
         if (status === "unauthenticated") {
-            router.push("/academy/login");
+            router.push("/auth/login?callbackUrl=/academy");
+            return;
         }
     }, [status, router]);
 

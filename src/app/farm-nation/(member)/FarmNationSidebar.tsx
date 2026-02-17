@@ -42,7 +42,7 @@ export default function FarmNationSidebar() {
 
     const handleLogout = async () => {
         await signOut({ redirect: false });
-        router.push('/farm-nation/login');
+        router.push('/auth/login?callbackUrl=/farm-nation/dashboard');
     };
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
