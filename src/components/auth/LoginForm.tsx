@@ -18,7 +18,7 @@ import { useSession } from "next-auth/react";
  * Replaces complex ModuleLoginPage with a standard design.
  */
 export default function LoginForm() {
-    const { data: session, status } = useSession();
+    const { data: session, status, update } = useSession();
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -39,14 +39,27 @@ export default function LoginForm() {
 
     // Handle successful login navigation
     useEffect(() => {
-        if (state.success && (state as any).redirectUrl) {
-            console.log('[Login] Authentication successful - redirecting to:', (state as any).redirectUrl);
-            router.replace((state as any).redirectUrl);
-        } else if (state.success && !isPending) {
-            // Fallback if no specific URL returned
-            router.replace(callbackUrl);
+        const handleLoginSuccess = async () => {
+            if (state.success) {
+                // CRITICAL: Wait for session to update before redirecting
+                // This prevents the "stuck on login" race condition where middleware
+                // redirects back because it doesn't see the new session yet.
+                await update();
+
+                if ((state as any).redirectUrl) {
+                    console.log('[Login] Authentication successful - redirecting to:', (state as any).redirectUrl);
+                    router.replace((state as any).redirectUrl);
+                } else {
+                    // Fallback if no specific URL returned
+                    router.replace(callbackUrl);
+                }
+            }
+        };
+
+        if (state.success && !isPending) {
+            handleLoginSuccess();
         }
-    }, [state.success, isPending, router, callbackUrl, state]);
+    }, [state.success, isPending, router, callbackUrl, state, update]);
 
     // Client-side session check (Safety Net)
     useEffect(() => {
