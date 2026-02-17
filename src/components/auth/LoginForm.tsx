@@ -1,21 +1,22 @@
 "use client";
 
-import { useState, useEffect, useActionState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2, Home, User } from "lucide-react";
-import { loginAction } from "@/app/actions/auth";
+import { getPostLoginRedirect } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
-import { useSession } from "next-auth/react";
 
 /**
  * Universal Login Form
  * 
  * Simplified, single login interface for the entire platform.
  * Replaces complex ModuleLoginPage with a standard design.
+ * 
+ * FIX: Uses client-side signIn() to guarantee session cookies are set before redirecting.
  */
 export default function LoginForm() {
     const { data: session, status, update } = useSession();
@@ -29,69 +30,9 @@ export default function LoginForm() {
 
     const { showToast } = useToast();
 
-    // Initial State for Server Action
-    const initialState = {
-        error: "",
-        success: false,
-    };
-
-    const [state, formAction, isPending] = useActionState(loginAction, initialState);
-
-    // Handle successful login navigation
-    useEffect(() => {
-        const handleLoginSuccess = async () => {
-            if (state.success) {
-                // CRITICAL: Wait for session to update before redirecting
-                // This prevents the "stuck on login" race condition where middleware
-                // redirects back because it doesn't see the new session yet.
-                await update();
-
-                if ((state as any).redirectUrl) {
-                    console.log('[Login] Authentication successful - redirecting to:', (state as any).redirectUrl);
-                    router.replace((state as any).redirectUrl);
-                } else {
-                    // Fallback if no specific URL returned
-                    router.replace(callbackUrl);
-                }
-            }
-        };
-
-        if (state.success && !isPending) {
-            handleLoginSuccess();
-        }
-    }, [state.success, isPending, router, callbackUrl, state, update]);
-
-    // Client-side session check (Safety Net)
-    useEffect(() => {
-        if (status === "authenticated" && session?.user) {
-            router.replace(callbackUrl);
-        }
-    }, [status, session, router, callbackUrl]);
-
-    // Error handling
-    useEffect(() => {
-        // Handle Action State Errors
-        if (state.error && !isPending) {
-            showToast(state.error, "error");
-        }
-
-        // Handle URL error parameters (e.g. from middleware redirect)
-        if (errorParam) {
-            const errorMap: Record<string, string> = {
-                "session_expired": "Your session has expired. Please log in again.",
-                "access_denied": "You do not have permission to access that resource.",
-                "admin_access_denied": "You do not have administrator privileges.",
-                "feature_disabled": "That feature is currently disabled.",
-                "unauthorized": "Please log in to access this page.",
-                "Configuration": "Server configuration error.",
-                "Default": "Authentication failed."
-            };
-            const message = errorMap[errorParam] || "An authentication error occurred.";
-            // Delay slightly to prevent toast spam ensuring component is mounted
-            setTimeout(() => showToast(message, "error"), 500);
-        }
-    }, [state.error, isPending, showToast, errorParam]);
-
+    // Client-side state
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState("");
     const [formData, setFormData] = useState({
         email: "",
         password: "",
@@ -100,16 +41,78 @@ export default function LoginForm() {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showPassword, setShowPassword] = useState(false);
 
+    // Handle form submission
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError("");
+
+        try {
+            // 1. Client-side Sign In (Guarantees Cookie Set)
+            // redirect: false prevents NextAuth from automatically redirecting,
+            // allowing us to control the flow and wait for the cookie.
+            const result = await signIn("credentials", {
+                email: formData.email,
+                password: formData.password,
+                redirect: false,
+            });
+
+            if (result?.error) {
+                setError("Invalid email or password");
+                setIsLoading(false);
+                return;
+            }
+
+            // 2. Success! Cookie is set. Now get redirect URL from server.
+            console.log("Client-side login success, fetching redirect...");
+
+            // Force session update to be absolutely sure client state matches server
+            await update();
+
+            // Calculate where to go next based on user roles
+            const redirectResult = await getPostLoginRedirect(formData.email);
+            const targetUrl = redirectResult.redirectUrl || callbackUrl;
+
+            console.log("Redirecting to:", targetUrl);
+
+            // 3. Force a HARD RELOAD to ensure session cookies are fully recognized
+            // by the middleware on the new page request.
+            window.location.href = targetUrl;
+
+        } catch (err: any) {
+            console.error("Login error:", err);
+            setError("An unexpected error occurred");
+            setIsLoading(false);
+        }
+    };
+
+    // Handle error params from redirects
+    useEffect(() => {
+        if (errorParam) {
+            const errorMap: Record<string, string> = {
+                "CredentialsSignin": "Invalid email or password",
+                "session_expired": "Your session has expired. Please log in again.",
+                "access_denied": "You do not have permission to access that resource.",
+                "Default": "Authentication failed."
+            };
+            const message = errorMap[errorParam] || errorMap["Default"];
+            if (errorParam !== "CredentialsSignin") {
+                setTimeout(() => showToast(message, "error"), 500);
+            } else {
+                setError(message);
+            }
+        }
+    }, [errorParam, showToast]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setFormData({
-            ...formData,
-            [name]: value,
-        });
+        setFormData(prev => ({ ...prev, [name]: value }));
         if (errors[name]) {
-            const newErrors = { ...errors };
-            delete newErrors[name];
-            setErrors(newErrors);
+            setErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[name];
+                return newErrors;
+            });
         }
     };
 
@@ -122,13 +125,13 @@ export default function LoginForm() {
                 <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.03]" />
             </div>
 
-            {/* Back to Hub Navigation (Top Left) */}
+            {/* Back to Hub Navigation */}
             <div className="absolute top-4 left-4 z-50 md:top-8 md:left-8">
                 <Link
                     href="/"
                     className="flex items-center gap-2 p-2 px-4 text-sm font-medium text-slate-600 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-full hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 transition-all shadow-sm group"
                 >
-                    <Home className="w-4 h-4Group-hover:scale-110 transition-transform" />
+                    <Home className="w-4 h-4 group-hover:scale-110 transition-transform" />
                     <span>Back to Hub</span>
                 </Link>
             </div>
@@ -138,7 +141,6 @@ export default function LoginForm() {
                 <div className="text-center mb-6 md:mb-8 relative z-10">
                     <Link href="/" className="inline-flex items-center justify-center mb-4 md:mb-6 hover:opacity-90 transition-opacity">
                         <div className="w-12 h-12 md:w-16 md:h-16 bg-linear-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/20 text-white transition-transform hover:scale-105">
-                            {/* Standardized 'User' icon for consistency across auth pages */}
                             <User className="w-6 h-6 md:w-8 md:h-8" />
                         </div>
                     </Link>
@@ -148,13 +150,13 @@ export default function LoginForm() {
 
                 {/* Login Card */}
                 <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-2xl backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-8 relative z-10">
-                    <form action={formAction} className="space-y-5 md:space-y-6">
+                    <form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
                         <input type="hidden" name="redirectTo" value={callbackUrl} />
 
-                        {state.error && (
+                        {error && (
                             <div className="bg-red-50 border-red-200 border rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                                 <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                                <p className="text-sm text-red-600">{state.error}</p>
+                                <p className="text-sm text-red-600">{error}</p>
                             </div>
                         )}
 
@@ -175,7 +177,7 @@ export default function LoginForm() {
                                     className={`w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-900 border ${errors.email ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all`}
                                     placeholder="your.email@example.com"
                                     required
-                                    disabled={isPending}
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
@@ -205,13 +207,14 @@ export default function LoginForm() {
                                     className={`w-full pl-11 pr-12 py-3.5 bg-slate-50 dark:bg-slate-900 border ${errors.password ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all`}
                                     placeholder="••••••••"
                                     required
-                                    disabled={isPending}
+                                    disabled={isLoading}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                                    disabled={isPending}
+                                    disabled={isLoading}
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
                                 >
                                     {showPassword ? (
                                         <EyeOff className="w-5 h-5" />
@@ -230,7 +233,7 @@ export default function LoginForm() {
                                         checked={rememberMe}
                                         onChange={(e) => setRememberMe(e.target.checked)}
                                         className="peer w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500/50 transition-all active:scale-95"
-                                        disabled={isPending}
+                                        disabled={isLoading}
                                     />
                                     <CheckCircle className="absolute w-3.5 h-3.5 text-white pointer-events-none opacity-0 peer-checked:opacity-100 left-0.5 top-0.5 transition-opacity" />
                                 </div>
@@ -242,11 +245,11 @@ export default function LoginForm() {
                         <LoadingButton
                             type="submit"
                             variant="primary"
-                            loading={isPending}
+                            isLoading={isLoading}
                             loadingText="Signing in..."
                             className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all border-0 flex items-center justify-center gap-2"
                         >
-                            Sign In
+                            <span>Sign In</span>
                             <ArrowRight className="w-5 h-5" />
                         </LoadingButton>
                     </form>
@@ -271,12 +274,8 @@ export default function LoginForm() {
                         {`© ${new Date().getFullYear()} Easy Sales Export`}
                     </p>
                     <div className="flex items-center justify-center gap-6 text-sm text-slate-500 dark:text-slate-400">
-                        <Link href="/privacy" className="hover:underline hover:text-blue-600 transition-colors">
-                            Privacy Policy
-                        </Link>
-                        <Link href="/terms" className="hover:underline hover:text-blue-600 transition-colors">
-                            Terms & Conditions
-                        </Link>
+                        <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white transition-colors">Privacy Policy</Link>
+                        <Link href="/terms" className="hover:text-slate-900 dark:hover:text-white transition-colors">Terms of Service</Link>
                     </div>
                 </div>
             </div>
