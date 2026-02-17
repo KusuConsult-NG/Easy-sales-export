@@ -79,126 +79,43 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
 }
 
 
-export async function loginAction(prevState: any, formData: FormData) {
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-    const redirectTo = formData.get("redirectTo") as string; // Module-specific redirect
-
+/**
+ * Calculate where to redirect the user AFTER they have successfully logged in.
+ * This is called by the client component after client-side signIn() succeeds.
+ */
+export async function getPostLoginRedirect(email: string) {
     try {
-        // Validate with Zod
-        const validatedData = loginSchema.parse({ email, password });
+        // Fetch user profile to determine their primary app
+        const userSnapshot = await db.collection(COLLECTIONS.USERS)
+            .where('email', '==', email)
+            .limit(1)
+            .get();
 
-        let signInResult;
-        try {
-            // Sign in with explicit error checking
-            // NOTE: In NextAuth v5, signIn might throw NEXT_REDIRECT even with redirect: false
-            signInResult = await signIn("credentials", {
-                email: validatedData.email,
-                password: validatedData.password,
-                redirect: false,
-            });
-        } catch (signInError: any) {
-            // Check if it's a redirect error (which actually means success in some NextAuth versions)
-            if (signInError && typeof signInError === 'object' && 'digest' in signInError &&
-                typeof signInError.digest === 'string' &&
-                signInError.digest.startsWith('NEXT_REDIRECT')) {
-                // This is actually a success case!
-                logger.info(`User ${email} authentication prompted redirect (success)`);
+        if (!userSnapshot.empty) {
+            const userData = userSnapshot.docs[0].data() as FirestoreUser;
+            const userRoles = userData.roles || ['general_user'];
 
-                // If specific redirectTo provided, use it
-                if (redirectTo) {
-                    return { error: "", success: true, redirectUrl: redirectTo };
-                }
+            // Determine primary app based on roles
+            const primaryApp = getPrimaryApp(userRoles);
+            logger.info(`User ${email} redirecting to primary app: ${primaryApp}`);
 
-                // Otherwise, fetch profile and calculate primary app
-                try {
-                    const userSnapshot = await db.collection(COLLECTIONS.USERS)
-                        .where('email', '==', validatedData.email)
-                        .limit(1)
-                        .get();
-
-                    if (!userSnapshot.empty) {
-                        const userData = userSnapshot.docs[0].data() as FirestoreUser;
-                        const userRoles = userData.roles || ['general_user'];
-                        const primaryApp = getPrimaryApp(userRoles);
-                        return { error: "", success: true, redirectUrl: primaryApp };
-                    }
-                } catch (profileError) {
-                    logger.error("Profile fetch failed:", profileError);
-                }
-
-                return { error: "", success: true, redirectUrl: "/dashboard" };
-            }
-            throw signInError;
+            return {
+                success: true,
+                redirectUrl: primaryApp
+            };
         }
 
-        // Check if signIn actually succeeded (if it didn't throw)
-        if (!signInResult) {
-            // In some versions, null means success? No, usually it returns an object or undefined.
-            // But let's assume if no error thrown, we are good?
-            // Actually, safe to assume success if no error thrown.
-        }
-
-        // Handle specific v5 error returns if any (usually it throws)
-
-        logger.info(`User ${email} authenticated successfully`);
-
-        // Fetch user profile to determine primary app redirect
-        try {
-            const userSnapshot = await db.collection(COLLECTIONS.USERS)
-                .where('email', '==', validatedData.email)
-                .limit(1)
-                .get();
-
-            if (!userSnapshot.empty) {
-                const userData = userSnapshot.docs[0].data() as FirestoreUser;
-                const userRoles = userData.roles || ['general_user'];
-
-                // If specific redirectTo provided, use it
-                if (redirectTo) {
-                    return { error: "", success: true, redirectUrl: redirectTo };
-                }
-
-                // Calculate primary app based on roles
-                const primaryApp = getPrimaryApp(userRoles);
-                logger.info(`Redirecting to primary app: ${primaryApp}`);
-                return { error: "", success: true, redirectUrl: primaryApp };
-            }
-        } catch (profileError) {
-            logger.error("Failed to fetch user profile:", profileError);
-        }
-
-        // Fallback to /dashboard if profile fetch fails
-        return { error: "", success: true, redirectUrl: redirectTo || "/dashboard" };
-
+        return { success: true, redirectUrl: "/dashboard" };
     } catch (error) {
-        // Log the error
-        logger.error("Login error", error);
-
-        if (error instanceof ZodError) {
-            const zodError = error as any;
-            const errorMessage = zodError.errors?.map((e: any) => e.message).join(", ") || "Validation error";
-            return { error: errorMessage, success: false };
-        }
-
-        if (error instanceof AuthError) {
-            switch (error.type) {
-                case "CredentialsSignin":
-                    return { error: "Invalid email or password", success: false };
-                case "CallbackRouteError":
-                    return { error: "Authentication failed. Please try again", success: false };
-                default:
-                    return { error: "An error occurred during login", success: false };
-            }
-        }
-
-        if (error instanceof Error) {
-            // Fallback for other errors
-            return { error: error.message, success: false };
-        }
-
-        return { error: "An unexpected error occurred", success: false };
+        logger.error("Failed to determine redirect:", error);
+        return { success: true, redirectUrl: "/dashboard" }; // Fail safe
     }
+}
+
+// DEPRECATED: Old Server Action Login
+// Keeping a stub for type safety if needed, but logic moved to client
+export async function loginAction(prevState: any, formData: FormData) {
+    return { error: "Please use client-side login", success: false };
 }
 
 export async function registerAction(prevState: any, formData: FormData) {
