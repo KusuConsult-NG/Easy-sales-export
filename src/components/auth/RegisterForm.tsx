@@ -91,16 +91,17 @@ export default function RegisterForm() {
 
             <div className="relative w-full max-w-md">
                 {/* Welcome Section */}
-                <div className="mb-8 flex flex-col items-center text-center">
-                    <Link href="/" className="group">
-                        <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl mb-4 flex items-center justify-center shadow-lg transform -rotate-3 group-hover:rotate-0 transition-transform">
-                            <User className="w-6 h-6 text-white" />
+                {/* Logo & Header */}
+                <div className="text-center mb-6 md:mb-8 relative z-10">
+                    <Link href="/" className="inline-flex items-center justify-center mb-4 md:mb-6 hover:opacity-90 transition-opacity">
+                        <div className="w-12 h-12 md:w-16 md:h-16 bg-linear-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/20 text-white transition-transform hover:scale-105">
+                            <User className="w-6 h-6 md:w-8 md:h-8" />
                         </div>
                     </Link>
-                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300">
+                    <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
                         Create Account
                     </h2>
-                    <p className="text-slate-600 dark:text-slate-400 mt-2">
+                    <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
                         Join thousands of successful agri-exporters today.
                     </p>
                 </div>
