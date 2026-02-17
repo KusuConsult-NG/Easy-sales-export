@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2, Home, type LucideIcon } from "lucide-react";
+import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2, Home, User, type LucideIcon } from "lucide-react";
 import { loginAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
@@ -170,30 +170,20 @@ function ModuleLoginContent({
             )}
 
             <div className="relative w-full max-w-md">
-                {/* Logo & Header */}
-                <div className="text-center mb-6 md:mb-8 relative z-10">
-                    <Link href={`/${redirectDefault.split('/')[1]}`} className="inline-flex items-center justify-center mb-4 md:mb-6 hover:opacity-90 transition-opacity">
-                        <div className={`w-12 h-12 md:w-16 md:h-16 bg-linear-to-br ${theme.logoGradient} rounded-2xl flex items-center justify-center shadow-xl ${theme.logoShadow} text-white transition-transform hover:scale-105`}>
-                            {logoImage ? (
-                                <div className="w-full h-full p-2">
-                                    <Image
-                                        src={logoImage}
-                                        alt={moduleName}
-                                        width={64}
-                                        height={64}
-                                        className="w-full h-full object-contain"
-                                    />
-                                </div>
-                            ) : (
-                                <Logo className="w-6 h-6 md:w-8 md:h-8" />
-                            )}
+                {/* Welcome Section */}
+                <div className="mb-8 flex flex-col items-center text-center">
+                    <Link href="/" className="group">
+                        <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl mb-4 flex items-center justify-center shadow-lg transform -rotate-3 group-hover:rotate-0 transition-transform">
+                            <User className="w-6 h-6 text-white" />
                         </div>
                     </Link>
-                    <h1 className={`text-2xl md:text-3xl font-bold ${theme.textClass || "text-slate-900 dark:text-white"} mb-2`}>Welcome Back</h1>
-                    <p className={`text-sm md:text-base ${theme.subTextClass || "text-slate-500 dark:text-slate-400"}`}>Sign in to your {moduleName} account</p>
-                </div>
-
-                {/* Login Card */}
+                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300">
+                        Welcome Back
+                    </h2>
+                    <p className="text-slate-600 dark:text-slate-400 mt-2">
+                        Sign in to access your dashboard
+                    </p>
+                </div>{/* Login Card */}
                 <div className={`${theme.cardClass || "bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-2xl backdrop-blur-sm"} rounded-2xl md:rounded-3xl p-6 md:p-8 relative z-10`}>
                     <form action={formAction} className="space-y-5 md:space-y-6">
                         <input type="hidden" name="redirectTo" value={callbackUrl} />
