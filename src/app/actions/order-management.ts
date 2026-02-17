@@ -90,6 +90,18 @@ export async function updateOrderStatusAction(
             return { success: false, error: "Not authorized to update this order" };
         }
 
+        // 🔒 SECURITY FIX: Restrict Allowed Statuses for Sellers
+        // Sellers cannot mark order as 'completed' (Buyer only) or 'disputed' (System)
+        const allowedStatuses: OrderStatus[] = ["processing", "shipped", "delivered", "cancelled"];
+        if (!allowedStatuses.includes(newStatus)) {
+            return { success: false, error: `Sellers cannot set status to '${newStatus}'. Authorized statuses: ${allowedStatuses.join(", ")}` };
+        }
+
+        // 🔒 SECURITY FIX: Enforce Tracking Number for Shipments
+        if (newStatus === "shipped" && !trackingNumber) {
+            return { success: false, error: "Tracking number is required when marking order as shipped." };
+        }
+
         // Update order
         const updateData: any = {
             status: newStatus,

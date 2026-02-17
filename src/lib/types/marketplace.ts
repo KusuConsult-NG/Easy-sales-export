@@ -176,6 +176,7 @@ export interface Order {
     sellerId: string;
 
     // Items
+    productIds: string[]; // For efficient querying
     items: {
         productId: string;
         productTitle: string;
@@ -233,31 +234,74 @@ export type EscrowStatus =
 
 export interface EscrowTransaction {
     id: string;
-    orderId: string;
-
-    // Parties
+    orderId?: string; // Optional: Link to the master order (Marketplace)
+    // Standalone Escrow fields
     buyerId: string;
+    buyerEmail?: string;
     sellerId: string;
+    sellerEmail?: string;
+    productName?: string;
+    productDescription?: string;
 
     // Amount
     amount: number;
-    platformFee: number;
-    sellerAmount: number;
+    platformFee?: number;
+    sellerAmount?: number;
 
     // Status
     status: EscrowStatus;
 
     // Payments
-    paymentReference: string;
-    paidAt?: Date;
-    releasedAt?: Date;
-    refundedAt?: Date;
+    paymentReference?: string;
+    paidAt?: Date | FieldValue | Timestamp;
+    releasedAt?: Date | FieldValue | Timestamp;
+    refundedAt?: Date | FieldValue | Timestamp;
+    releaseRequestedAt?: Date | FieldValue | Timestamp;
+    releaseRequestedBy?: string;
+    releasedBy?: string;
 
     // Dispute
     disputeId?: string;
 
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: Date | FieldValue | Timestamp;
+    updatedAt?: Date | FieldValue | Timestamp;
+}
+
+// ... existing code ...
+
+export interface Dispute {
+    id: string;
+    orderId?: string; // Marketplace
+    escrowId?: string; // Standalone Escrow
+
+    // Parties (Marketplace)
+    buyerId?: string;
+    sellerId?: string;
+
+    // Parties (Standalone Escrow - Generic)
+    initiatorId?: string;
+    respondentId?: string;
+    initiatedBy?: "buyer" | "seller";
+
+    // Details
+    reason: DisputeReason | string; // String for generic
+    description?: string; // Marketplace uses this
+    evidenceUrls?: string[]; // URLs to uploaded evidence
+    evidence?: string[]; // Standalone uses this (alias?)
+
+    // Status
+    status: DisputeStatus;
+
+    // Admin Review
+    adminId?: string;
+    adminNotes?: string;
+    resolution?: DisputeResolution | string;
+    refundAmount?: number; // For partial refunds
+    resolvedAt?: Date | FieldValue | Timestamp;
+    resolvedBy?: string;
+
+    createdAt: Date | FieldValue | Timestamp;
+    updatedAt?: Date | FieldValue | Timestamp;
 }
 
 // ============================================================================
@@ -317,30 +361,7 @@ export type DisputeResolution =
     | "partial_refund"
     | "no_action";
 
-export interface Dispute {
-    id: string;
-    orderId: string;
-    buyerId: string;
-    sellerId: string;
 
-    // Details
-    reason: DisputeReason;
-    description: string;
-    evidenceUrls: string[]; // URLs to uploaded evidence
-
-    // Status
-    status: DisputeStatus;
-
-    // Admin Review
-    adminId?: string;
-    adminNotes?: string;
-    resolution?: DisputeResolution;
-    refundAmount?: number; // For partial refunds
-    resolvedAt?: Date;
-
-    createdAt: Date;
-    updatedAt: Date;
-}
 
 // ============================================================================
 // REVIEWS

@@ -67,10 +67,12 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
             setDispute(disputeResult.dispute);
 
             // Load order
-            const orderResult = await getOrderByIdAction(disputeResult.dispute.orderId);
-            if (orderResult.success && orderResult.order) {
-                setOrder(orderResult.order);
-                setRefundAmount(orderResult.order.totalAmount.toString());
+            if (disputeResult.dispute.orderId) {
+                const orderResult = await getOrderByIdAction(disputeResult.dispute.orderId);
+                if (orderResult.success && orderResult.order) {
+                    setOrder(orderResult.order);
+                    setRefundAmount(orderResult.order.totalAmount.toString());
+                }
             }
         } catch (error) {
             showToast("Failed to load dispute", "error");
@@ -119,7 +121,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     if (!dispute || !order) return null;
 
     const daysAgo = Math.floor(
-        (Date.now() - new Date(dispute.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - new Date(dispute.createdAt as any).getTime()) / (1000 * 60 * 60 * 24)
     );
 
     return (
@@ -154,7 +156,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                     </div>
                     <p className="text-gray-600 dark:text-gray-400">
                         Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago •{" "}
-                        {new Date(dispute.createdAt).toLocaleString()}
+                        {new Date(dispute.createdAt as any).toLocaleString()}
                     </p>
                 </div>
 

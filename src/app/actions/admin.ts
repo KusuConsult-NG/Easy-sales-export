@@ -714,7 +714,58 @@ export async function approveLoanApplication(
             };
         }
 
-        // Update loan status
+        // 🔒 SECURITY FIX: Maker-Checker for High Value Loans (> 1M)
+        const MAKER_CHECKER_THRESHOLD = 1000000;
+
+        if (loanData.amount >= MAKER_CHECKER_THRESHOLD) {
+            const approvalChain = loanData.approvalChain || {};
+
+            // Check if this is the First or Second approval
+            if (!approvalChain.firstApprover) {
+                // First Approval (Maker)
+                await loanRef.update({
+                    approvalChain: {
+                        firstApprover: session.user.id,
+                        firstApprovalAt: FieldValue.serverTimestamp(),
+                        firstApproverName: session.user.name || session.user.email
+                    },
+                    status: "partially_approved", // Intermediate status
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+
+                await logAuditAction(
+                    "loan_partially_approved",
+                    applicationId,
+                    "application",
+                    { adminId: session.user.id, amount: loanData.amount, role: "Maker" }
+                );
+
+                return {
+                    success: true,
+                    message: "First approval recorded. A second admin is required to finalize.",
+                    error: null
+                };
+            } else {
+                // Second Approval (Checker)
+                if (approvalChain.firstApprover === session.user.id) {
+                    return {
+                        error: "Security Violation: You cannot verify your own approval. Another admin is required.",
+                        success: false
+                    };
+                }
+
+                // Record Second Approver and Proceed to Final Approval
+                await loanRef.update({
+                    "approvalChain.secondApprover": session.user.id,
+                    "approvalChain.secondApprovalAt": FieldValue.serverTimestamp(),
+                    "approvalChain.secondApproverName": session.user.name || session.user.email,
+                });
+
+                // Fall through to standard approval logic below...
+            }
+        }
+
+        // Standard Approval Logic (Final)
         await loanRef.update({
             status: "approved",
             reviewedBy: session.user.id,
@@ -787,7 +838,7 @@ export async function approveLoanApplication(
             "loan_approved",
             applicationId,
             "application",
-            { adminId: session.user.id, amount: loanData.amount }
+            { adminId: session.user.id, amount: loanData.amount, role: "Checker/Final" }
         );
 
         return {
@@ -978,24 +1029,40 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
 
         // Apply filters
-        // Note: Firestore requires composite indexes for complex queries.
-        // We'll prioritize role/status filtering over search for now, 
-        // or do simple client-side search if db size is small.
-        // For production scale, use Algolia/Elasticsearch.
-
-        // Basic filtering
-        if (options.role && options.role !== "all") {
-            query = query.where("roles", "array-contains", options.role);
+        // Prioritize exact match for Search if it looks like an email or phone
+        if (options.search) {
+            const search = options.search.trim();
+            // Email exact match
+            if (search.includes("@")) {
+                query = query.where("email", "==", search);
+            }
+            // Phone exact match (if it looks like a phone number, e.g. starts with + or 0 and has digits)
+            else if (/^[\d+]+$/.test(search) && search.length > 5) {
+                query = query.where("phone", "==", search);
+            }
+            // For names, we still have to rely on the fallback filtering for now, 
+            // but we can at least try to search by 'fullName' if we had a dedicated index, 
+            // or just let the client-side filter handle the 'fuzzy' name part on the fetched page (limited).
+            // NOTE: This limits 'Name' search to the first pageSize results if we don't have an external search engine.
         }
 
-        if (options.status === "verified") {
-            query = query.where("verified", "==", true);
-        } else if (options.status === "unverified") {
-            query = query.where("verified", "==", false);
-        }
+        // Basic filtering (Role/Status) - Only apply if NOT doing a direct search (to avoid index issues)
+        // OR apply them if possible. verifying indexes might be tricky.
+        // Let's keep it simple: unique search wins.
+        if (!options.search) {
+            if (options.role && options.role !== "all") {
+                query = query.where("roles", "array-contains", options.role);
+            }
 
-        // Sorting
-        query = query.orderBy("createdAt", "desc");
+            if (options.status === "verified") {
+                query = query.where("verified", "==", true);
+            } else if (options.status === "unverified") {
+                query = query.where("verified", "==", false);
+            }
+
+            // Sorting only if not searching (Firestore limitation on mixing inequality/sort with different fields sometimes)
+            query = query.orderBy("createdAt", "desc");
+        }
 
         // Pagination
         if (options.lastDocId) {

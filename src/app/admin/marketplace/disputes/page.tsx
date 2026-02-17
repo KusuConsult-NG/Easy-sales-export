@@ -72,9 +72,9 @@ export default function AdminDisputesPage() {
             const query = searchQuery.toLowerCase().trim();
             filtered = filtered.filter(
                 (d) =>
-                    d.orderId.toLowerCase().includes(query) ||
+                    d.orderId?.toLowerCase().includes(query) ||
                     d.id.toLowerCase().includes(query) ||
-                    d.description.toLowerCase().includes(query)
+                    d.description?.toLowerCase().includes(query)
             );
         }
 
@@ -221,7 +221,7 @@ export default function AdminDisputesPage() {
                             const statusColor = getStatusColor(dispute.status);
                             const StatusIcon = getStatusIcon(dispute.status);
                             const daysAgo = Math.floor(
-                                (Date.now() - new Date(dispute.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+                                (Date.now() - new Date(dispute.createdAt as any).getTime()) / (1000 * 60 * 60 * 24)
                             );
 
                             return (
@@ -245,7 +245,7 @@ export default function AdminDisputesPage() {
                                                 </span>
                                             </div>
                                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                                                Order: {dispute.orderId} • Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago
+                                                Order: {dispute.orderId || "N/A"} • Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago
                                             </p>
                                         </div>
                                     </div>
@@ -266,13 +266,13 @@ export default function AdminDisputesPage() {
                                             <div>
                                                 <span className="text-gray-500 dark:text-gray-400">Buyer:</span>
                                                 <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                                                    {dispute.buyerId.slice(0, 8)}
+                                                    {dispute.buyerId?.slice(0, 8) || "Unknown"}
                                                 </span>
                                             </div>
                                             <div>
                                                 <span className="text-gray-500 dark:text-gray-400">Seller:</span>
                                                 <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                                                    {dispute.sellerId.slice(0, 8)}
+                                                    {dispute.sellerId?.slice(0, 8) || "Unknown"}
                                                 </span>
                                             </div>
                                         </div>

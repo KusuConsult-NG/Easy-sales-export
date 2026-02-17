@@ -6,6 +6,7 @@ import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { getPlatformFees } from "@/lib/system-settings";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number {
@@ -100,12 +101,13 @@ export async function initializeOrderPaymentAction(
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
 
         // 🔒 SECURITY FIX: Server-Side Fee Calculation (Ignore client fee)
-        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}); // Pass location if available
+        const fees = await getPlatformFees();
+        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}, fees); // Pass location if available
         const totalAmount = subtotal + calculatedDeliveryFee;
 
         // Validate amount
-        if (totalAmount < 500) {
-            return { error: "Minimum order amount is ₦500", success: false };
+        if (totalAmount < fees.minOrderAmount) {
+            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false };
         }
 
         // Initialize payment with Paystack
@@ -133,6 +135,7 @@ export async function initializeOrderPaymentAction(
             buyerEmail,
             buyerPhone,
             items: validatedItems, // Use validated items
+            productIds: validatedItems.map(i => i.productId), // For querying
             subtotal,
             deliveryFee: calculatedDeliveryFee, // Use server calculated fee
             totalAmount,
@@ -164,14 +167,14 @@ export async function initializeOrderPaymentAction(
  * Updates order status after successful payment
  */
 // Helper to calculate delivery fee server-side
-function calculateDeliveryFee(items: any[], location: any): number {
+function calculateDeliveryFee(items: any[], location: any, fees: any): number {
     // 🔒 SECURITY FIX: Server-Side Fee Calculation
     // For now, we assume a flat fees or based on item count as a placeholder for real logistics API.
     // In a real app, this would query a logistics provider (e.g., GIGL, Kwik).
 
-    // Simple logic: Base fee 1500 + 500 per additional item type > 1
-    const baseFee = 2500;
-    const additionalItemFee = 500;
+    // Simple logic: Base fee + additional item fee
+    const baseFee = fees.baseDeliveryFee;
+    const additionalItemFee = fees.additionalItemFee;
 
     // Filter distinct sellers (split delivery?) - For now assume consolidated or per-order fee
     // Let's stick to a robust default standard for the MVP to prevent "0" fee exploits.
@@ -180,9 +183,9 @@ function calculateDeliveryFee(items: any[], location: any): number {
 }
 
 /**
- * Platform Fee Percentage (5%)
+ * Platform Fee Percentage (Dynamic)
  */
-const PLATFORM_FEE_PERCENTAGE = 0.05;
+// Removed hardcoded PLATFORM_FEE_PERCENTAGE constant
 
 /**
  * Verify Marketplace Order Payment
@@ -234,7 +237,8 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
-        if (amountInNaira < 500 || amountInNaira > 10000000) {
+        const fees = await getPlatformFees();
+        if (amountInNaira < fees.minOrderAmount || amountInNaira > fees.maxOrderAmount) {
             return { error: "Invalid payment amount", success: false };
         }
 
@@ -332,7 +336,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
                 const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
                 const escrowRef = db.collection("escrow_transactions").doc(escrowId);
 
-                const platformFee = Math.round(grossAmount * PLATFORM_FEE_PERCENTAGE);
+                const platformFee = Math.round(grossAmount * fees.platformFeePercentage);
                 const netAmount = grossAmount - platformFee;
 
                 transaction.set(escrowRef, {
@@ -341,7 +345,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
                     buyerId: session.user.id,
                     sellerId: sellerId,
                     grossAmount: grossAmount,     // Total items + delivery
-                    platformFee: platformFee,     // 5% Commission
+                    platformFee: platformFee,     // Dynamic Commission
                     netAmount: netAmount,         // What seller actually gets
                     status: "funded",             // Funds are secured
                     createdAt: FieldValue.serverTimestamp(),
@@ -401,11 +405,12 @@ export async function createBankTransferOrderAction(
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
 
         // 🔒 SECURITY FIX: Server-Side Fee Calculation (Ignore client fee)
-        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {});
+        const fees = await getPlatformFees();
+        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}, fees);
         const totalAmount = subtotal + calculatedDeliveryFee;
 
-        if (totalAmount < 500) {
-            return { error: "Minimum order amount is ₦500", success: false };
+        if (totalAmount < fees.minOrderAmount) {
+            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false };
         }
 
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
@@ -417,6 +422,7 @@ export async function createBankTransferOrderAction(
             buyerEmail,
             buyerPhone,
             items: validatedItems, // Use validated items
+            productIds: validatedItems.map(i => i.productId), // For querying
             subtotal,
             deliveryFee: calculatedDeliveryFee, // Use server calculated fee
             totalAmount,
@@ -439,5 +445,19 @@ export async function createBankTransferOrderAction(
             success: false,
             error: error.message || "Failed to create order. Please try again.",
         };
+    }
+}
+
+/**
+ * Calculate Delivery Fee (Server-Side)
+ * Exposed for UI to display accurate fees before payment
+ */
+export async function calculateDeliveryAction(items: CartItem[], location?: any): Promise<{ success: boolean; fee: number; error?: string }> {
+    try {
+        const fees = await getPlatformFees();
+        const fee = calculateDeliveryFee(items, location, fees);
+        return { success: true, fee };
+    } catch (error: any) {
+        return { success: false, fee: 0, error: error.message };
     }
 }

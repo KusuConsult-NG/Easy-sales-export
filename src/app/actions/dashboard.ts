@@ -64,6 +64,10 @@ type EscrowActionState = {
 // Dashboard Stats Action
 // ============================================
 
+// ============================================
+// Dashboard Stats Action
+// ============================================
+
 export async function getDashboardStatsAction(): Promise<DashboardActionState> {
     try {
         const session = await auth();
@@ -73,28 +77,64 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
 
         const userId = session.user.id;
 
-        // Fetch total exports
-        const exportsSnapshot = await db
-            .collection(COLLECTIONS.EXPORT_WINDOWS)
+        // ⚡️ PERFORMANCE FIX: Parallel Fetching & Count Aggregations
+        // 1. Total Exports (Use Count)
+        const totalExportsPromise = db.collection(COLLECTIONS.EXPORT_WINDOWS)
             .where("userId", "==", userId)
+            .count()
             .get();
 
-        const totalExports = exportsSnapshot.size;
+        // 2. Active Orders (Pending/In_Transit) (Use Count)
+        const activeOrdersPromise = db.collection(COLLECTIONS.EXPORT_WINDOWS)
+            .where("userId", "==", userId)
+            .where("status", "in", ["pending", "in_transit"])
+            .count()
+            .get();
 
-        // Count active orders (pending or in_transit)
-        const activeOrders = exportsSnapshot.docs.filter(
-            doc => ["pending", "in_transit"].includes(doc.data().status)
-        ).length;
+        // 3. Academy Enrollments (Use Count)
+        const enrollmentsPromise = db.collection(COLLECTIONS.ENROLLMENTS)
+            .where("userId", "==", userId)
+            .count()
+            .get();
 
-        // Calculate total escrow (orders in transit or delivered but not released)
-        const totalEscrow = exportsSnapshot.docs
-            .filter(doc => ["in_transit", "delivered"].includes(doc.data().status))
+        // 4. Cooperative Savings (Direct Doc Fetch)
+        const userDocPromise = db.collection(COLLECTIONS.USERS).doc(userId).get();
+
+        // 5. Total Escrow (Must fetch docs to sum amount, but filter strictly)
+        // We only fetch minimal fields if possible, but Firestore Admin doesn't support select() well in Node client 
+        // without check (it does, but let's just fetch).
+        // Optimization: Only fetch 'in_transit' or 'delivered' which should be smaller subset than 'all'
+        const escrowDocsPromise = db.collection(COLLECTIONS.EXPORT_WINDOWS)
+            .where("userId", "==", userId)
+            .where("status", "in", ["in_transit", "delivered"])
+            .get();
+
+        // EXECUTE PARALLEL
+        const [
+            totalExportsSnap,
+            activeOrdersSnap,
+            enrollmentsSnap,
+            userDoc,
+            escrowDocsSnap
+        ] = await Promise.all([
+            totalExportsPromise,
+            activeOrdersPromise,
+            enrollmentsPromise,
+            userDocPromise,
+            escrowDocsPromise
+        ]);
+
+        // Process Restults
+        const totalExports = totalExportsSnap.data().count;
+        const activeOrders = activeOrdersSnap.data().count;
+        const academyEnrollments = enrollmentsSnap.data().count;
+
+        const totalEscrow = escrowDocsSnap.docs
             .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
 
-        // Fetch cooperative savings (if user is a member)
         let cooperativeSavings = 0;
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const cooperativeId = userDoc.data()?.cooperativeId;
+        const userData = userDoc.data();
+        const cooperativeId = userData?.cooperativeId;
 
         if (cooperativeId) {
             const memberDoc = await db
@@ -109,14 +149,6 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
             }
         }
 
-        // Count academy enrollments
-        const enrollmentsSnapshot = await db
-            .collection(COLLECTIONS.ENROLLMENTS)
-            .where("userId", "==", userId)
-            .get();
-
-        const academyEnrollments = enrollmentsSnapshot.size;
-
         return {
             error: null,
             success: true,
@@ -126,7 +158,7 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
                 totalEscrow,
                 cooperativeSavings,
                 academyEnrollments,
-                onboardingCompleted: userDoc.data()?.onboardingCompleted ?? false,
+                onboardingCompleted: userData?.onboardingCompleted ?? false,
             },
         };
     } catch (error: any) {

@@ -48,9 +48,10 @@ export async function POST(req: NextRequest) {
 
             // Route based on Payment Type
             if (type === "marketplace_order") {
-                await processMarketplaceOrder(reference, amountPaidv, userId);
+                processMarketplaceOrder(reference, amountPaidv, userId);
             } else if (type === "export_investment") {
-                // Placeholder for future export investment logic
+                const exportId = metadata.exportId;
+                processExportInvestment(reference, amountPaidv, userId, exportId);
             } else if (type === "cooperative_contribution") {
                 // Placeholder for cooperative logic
             }
@@ -152,4 +153,53 @@ async function processMarketplaceOrder(reference: string, amount: number, userId
     });
 
     logger.info(`[Paystack Webhook] Successfully processed Marketplace Order ${orderData.orderId}`);
+}
+
+/**
+ * Handle Export Investment Fulfillment
+ */
+async function processExportInvestment(reference: string, amount: number, userId: string, exportId: string) {
+    if (!exportId) throw new Error("Missing exportId in metadata");
+
+    await db.runTransaction(async (t) => {
+        // 1. Create Investment Record (Slot)
+        const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
+        // Check if already exists (idempotency check done at controller level, but double check?)
+        // Since we generate a new ID, we can't check by ID. But controller checked processedPayments.
+
+        t.set(slotRef, {
+            userId,
+            exportId,
+            amount,
+            status: "active",
+            paymentReference: reference,
+            purchaseDate: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            roi: "15-20%", // Should fetch from window
+            expectedReturn: amount * 1.20, // Simplified logic
+            source: "webhook"
+        });
+
+        // 2. Update Export Window Stats
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        t.update(exportRef, {
+            spotsFilled: FieldValue.increment(1),
+            fundedAmount: FieldValue.increment(amount),
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        // 3. Mark Payment Processed
+        const processedRef = db.collection("processedPayments").doc(reference);
+        t.set(processedRef, {
+            reference,
+            type: "export_investment",
+            userId,
+            exportId,
+            amount,
+            processedAt: FieldValue.serverTimestamp(),
+            source: "webhook"
+        });
+    });
+
+    logger.info(`[Paystack Webhook] Successfully processed Export Investment for ${exportId} by ${userId}`);
 }

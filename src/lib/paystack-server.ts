@@ -122,7 +122,8 @@ export function verifyPaystackWebhook(
 export async function initializePaystackPayment(
     email: string,
     amount: number,
-    metadata: Record<string, any> = {}
+    metadata: Record<string, any> = {},
+    callbackUrl?: string
 ): Promise<{
     authorizationUrl: string;
     accessCode: string;
@@ -139,7 +140,7 @@ export async function initializePaystackPayment(
                 email,
                 amount,
                 metadata,
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
+                callback_url: callbackUrl || `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
             }),
         });
 

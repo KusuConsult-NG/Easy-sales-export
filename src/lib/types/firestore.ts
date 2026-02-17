@@ -70,6 +70,7 @@ export interface ExportWindow {
     duration: string; // e.g. "6 months"
     totalSpots?: number;
     spotsFilled?: number;
+    fundedAmount?: number; // Total amount raised
     image?: string;
     status: "pending" | "open" | "active" | "completed" | "closed" | "in_transit" | "delivered";
 
@@ -220,25 +221,15 @@ export interface LandListing {
     createdAt: Date;
 }
 
-export interface EscrowTransaction {
-    id: string;
-    orderId: string; // Link to the master order
-    buyerId: string;
-    sellerId: string;
-    amount: number;
-    status: "pending" | "funded" | "released" | "disputed" | "refunded";
-    createdAt: Date;
-    releasedAt?: Date;
-}
+// Import detailed types from marketplace module
+import type {
+    EscrowTransaction,
+    Dispute
+} from "./marketplace";
+export type { EscrowTransaction, Dispute };
 
-export interface Dispute {
-    id: string;
-    escrowId: string;
-    raisedBy: string;
-    reason: string;
-    status: "open" | "resolved" | "closed";
-    createdAt: Date;
-}
+// Note: Notification, WaveApplication etc. are still defined here as they might not have a dedicated module type file yet.
+
 
 export interface WaveApplication {
     id: string;
@@ -341,4 +332,7 @@ export const COLLECTIONS = {
 
     // AI & Chat
     AI_CHAT_HISTORY: "ai_chat_history",
+
+    // System
+    SYSTEM_SETTINGS: "system_settings",
 } as const;

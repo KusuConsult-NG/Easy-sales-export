@@ -13,6 +13,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
 import { logAuditAction } from "@/lib/admin-audit-log";
+import { redis } from "@/lib/redis";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 
 /**
  * Bulk suspend users (Admin only)
@@ -92,6 +94,14 @@ export async function bulkSuspendUsersAction(
                     suspensionReason: reason,
                     suspendedUntil: suspendedUntil,
                 });
+
+                // 🛡️ SECURITY: Set Redis Key for Immediate Session Revocation
+                // TTL: Duration or 30 days (max session length)
+                const ttlSeconds = duration ? duration * 24 * 60 * 60 : 30 * 24 * 60 * 60;
+                await redis.setex(`user:suspended:${userId}`, ttlSeconds, "true");
+
+                // Clear other caches
+                await invalidateUserCache(userId);
 
                 suspendedCount++;
             } catch (error) {
@@ -190,6 +200,10 @@ export async function bulkActivateUsersAction(
                     reactivatedBy: session.user.id,
                     reactivatedAt: FieldValue.serverTimestamp(),
                 });
+
+                // 🛡️ SECURITY: Remove Redis Suspension Key
+                await redis.del(`user:suspended:${userId}`);
+                await invalidateUserCache(userId);
 
                 activatedCount++;
             } catch (error) {
@@ -425,6 +439,11 @@ export async function bulkDeleteUsersAction(
                     deletionReason: reason,
                     suspended: true,
                 });
+
+                // 🛡️ SECURITY: Ban user in Redis to kill session immediately
+                // Set for 30 days (max session)
+                await redis.setex(`user:suspended:${userId}`, 30 * 24 * 60 * 60, "true");
+                await invalidateUserCache(userId);
 
                 deletedCount++;
             } catch (error) {

@@ -1,80 +1,76 @@
-# Database & Storage Backup Strategy
+# Database Backup Strategy 💾
 
 ## Overview
-This document outlines the disaster recovery and data safety strategy for the **Easy Sales Export** platform.
-
-**Critical Data Sources:**
-1. **Firestore Database**: User profiles, orders, product listings, etc.
-2. **Firebase Storage**: User uploads, product images, verification documents.
+To ensure business continuity and data safety for the **Easy Sales Export** platform (100k+ users), we implement a multi-tiered backup strategy for Firestore and Cloud Storage.
 
 ---
 
-## 1. Firestore Backup (Automated)
+## 1. Automated Firestore Backups (GCP)
+We utilize Google Cloud Scheduler to trigger daily export operations.
 
-### Prerequisites
-- Google Cloud Project linked to Firebase.
-- Billing enabled (required for Cloud Scheduler/Cloud Functions).
-- A Google Cloud Storage Bucket for backups (e.g., `gs://easy-sales-backups`).
+### Configuration
+- **Frequency:** Daily at 02:00 UTC
+- **Retention:** 30 Days (Lifecycle Rule on GCS Bucket)
+- **Destination:** `gs://easy-sales-export-backups/{date}`
 
-### Setup Instructions
-
-1. **Create Storage Bucket**:
-   ```bash
-   gsutil mb -p [PROJECT_ID] -l [LOCATION] gs://easy-sales-backups
-   ```
-
-2. **Configure IAM Permissions**:
-   The default service account needs permission to export to storage.
-   - Role: `Storage Admin` (or `Storage Object Creator`)
-
-3. **Schedule Export (Cloud Scheduler)**:
-   Create a job to run daily at 3 AM WAT.
-   - **Method**: HTTP POST
-   - **URL**: `https://firestore.googleapis.com/v1/projects/[PROJECT_ID]/databases/(default):exportDocuments`
-   - **Body**:
-     ```json
-     { "outputUriPrefix": "gs://easy-sales-backups/daily" }
-     ```
-   - **Auth**: OIDC Token (Select Default App Engine Service Account)
-
----
-
-## 2. Firestore Backup (Manual)
-
-Run this command from your local terminal (requires `gcloud` CLI):
-
+### setup Command (One-Time)
 ```bash
-gcloud firestore export gs://easy-sales-backups/manual_$(date +%Y%m%d_%H%M%S) --async
-```
+# 1. Create a Storage Bucket
+gcloud storage buckets create gs://easy-sales-export-backups --location=europe-west1
 
-To import/restore:
-```bash
-gcloud firestore import gs://easy-sales-backups/[BACKUP_FOLDER_NAME] --async
+# 2. Configure Lifecycle Rule (Delete after 30 days)
+gcloud storage buckets update gs://easy-sales-export-backups --lifecycle-file=lifecycle.json
+
+# 3. Create Cloud Scheduler Job
+gcloud scheduler jobs create http firestore-backup-daily \
+    --schedule="0 2 * * *" \
+    --uri="https://firestore.googleapis.com/v1/projects/YOUR_PROJECT_ID/databases/(default):exportDocuments" \
+    --message-body='{"outputUriPrefix":"gs://easy-sales-export-backups/daily"}' \
+    --oauth-service-account-email="YOUR_SERVICE_ACCOUNT@YOUR_PROJECT_ID.iam.gserviceaccount.com"
 ```
 
 ---
 
-## 3. Firebase Storage Backup
+## 2. Manual Backup (Emergency)
+Run this command before any major migration or risky deployment.
 
-Storage buckets are durable, but accidental deletion by admins or malicious scripts can happen.
-
-### Strategy
-1. **Enable Object Versioning**:
-   Allows you to recover deleted or overwritten objects.
-   ```bash
-   gsutil versioning set on gs://[YOUR_STORAGE_BUCKET]
-   ```
-
-2. **Cross-Region Replication (Optional)**:
-   For high availability, configure your bucket to be multi-region.
+```bash
+gcloud firestore export gs://easy-sales-export-backups/manual_$(date +%Y%m%d_%H%M%S) --async
+```
 
 ---
 
-## 4. Disaster Recovery Drill
+## 3. Local Emulator Backup
+For development state preservation.
 
-**Frequency**: Once per quarter.
+```bash
+# Export local data
+firebase emulators:export ./emulator-data
 
-**Steps**:
-1. Create a fresh Firebase project (staging).
-2. Run the restore command using the latest production backup.
-3. Verify that the app functionality (listing products, viewing orders) works on the restored data.
+# Start with saved data
+firebase emulators:start --import=./emulator-data
+```
+
+---
+
+## 4. Disaster Recovery (Restore)
+**restore Time Objective (RTO):** < 4 Hours
+**restore Point Objective (RPO):** < 24 Hours
+
+### Restoration Steps
+1.  **Identify Backup:** Locate the correct folder in GCS bucket (e.g., `daily/2026-02-17T02:00:00`).
+2.  **Import Command:**
+    ```bash
+    gcloud firestore import gs://easy-sales-export-backups/daily/2026-02-17T02:00:00 --async
+    ```
+3.  **Verify Data:** Check key collections (`users`, `orders`, `wallet_transactions`).
+
+---
+
+## 5. Storage (Files) Backup
+Cloud Storage has built-in redundancy, but for protection against accidental deletion:
+- **Enable Object Versioning:**
+    ```bash
+    gsutil versioning set on gs://your-firebase-storage-bucket
+    ```
+- **Lifecycle:** Delete noncurrent versions after 7 days to save costs.

@@ -138,20 +138,16 @@ export async function consumeLoginAttempt(
  * Reset login attempts (call on successful login)
  */
 export async function resetLoginAttempts(email: string): Promise<void> {
-    // Manually delete the key from Redis to reset the limit
-    const key = `@upstash/login_limit:login_${email.toLowerCase()}`;
-    // We need to delete all sliding window keys, but standard Ratelimit doesn't expose clean delete.
-    // Ideally we rely on expiration. 
-    // However, for immediate unlock, we can try to rely on the fact that successful login
-    // usually means we don't *need* to reset, users just keep going.
-    // But to match interface:
     try {
-        // Best effort cleanup - this might vary based on Ratelimit implementation details
-        // For sliding window it uses sorted sets. Hard to clear perfectly without scanning.
-        // A simpler approach for login might be fixed window if strict reset is needed.
-        // Current: No-op or log
-        console.log("Login successful for", email);
-    } catch (e) {
-        // ignore
+        const key = `@upstash/login_limit:login_${email.toLowerCase()}`;
+
+        // 🗑️ HARD RESET: Delete the sliding window key directly
+        // This effectively resets the counter to 0 for this user
+        await redis.del(key);
+
+        console.log(`[Auth] Login attempt counter reset for ${email}`);
+    } catch (error) {
+        console.error("Failed to reset login attempts:", error);
+        // Non-blocking error
     }
 }

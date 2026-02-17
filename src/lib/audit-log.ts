@@ -24,6 +24,7 @@ export type AuditAction =
     | 'escrow_refunded'
     | 'loan_applied'
     | 'loan_approved'
+    | 'loan_partially_approved'
     | 'loan_rejected'
     | 'loan_disbursed'
     | 'loan_repaid'
@@ -69,7 +70,8 @@ export type AuditAction =
     | 'data_export'
     // Academy Actions
     | 'academy_approve'
-    | 'academy_reject';
+    | 'academy_reject'
+    | 'export_investment';
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 

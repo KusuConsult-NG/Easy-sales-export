@@ -51,6 +51,10 @@ export async function createDisputeAction(params: {
             return { success: false, error: "Cannot dispute completed or cancelled orders" };
         }
 
+        if (order.status === "pending_payment") {
+            return { success: false, error: "Cannot dispute an unpaid order" };
+        }
+
         if (order.status === "disputed") {
             return { success: false, error: "Order already has an active dispute" };
         }
@@ -300,23 +304,25 @@ export async function updateDisputeStatusAction(
 
         await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).update(updateData);
 
-        // Update order status based on resolution
-        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(dispute.orderId).get();
-        if (orderDoc.exists) {
-            let newOrderStatus: string;
+        // Update order status based on resolution if linked to an order
+        if (dispute.orderId) {
+            const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(dispute.orderId).get();
+            if (orderDoc.exists) {
+                let newOrderStatus: string;
 
-            if (resolution === "refund_buyer") {
-                newOrderStatus = "cancelled";
-            } else if (resolution === "release_seller") {
-                newOrderStatus = "completed";
-            } else {
-                newOrderStatus = "completed"; // partial refund still completes order
+                if (resolution === "refund_buyer") {
+                    newOrderStatus = "cancelled";
+                } else if (resolution === "release_seller") {
+                    newOrderStatus = "completed";
+                } else {
+                    newOrderStatus = "completed"; // partial refund still completes order
+                }
+
+                await db.collection(COLLECTIONS.ORDERS).doc(dispute.orderId).update({
+                    status: newOrderStatus,
+                    updatedAt: new Date(),
+                });
             }
-
-            await db.collection(COLLECTIONS.ORDERS).doc(dispute.orderId).update({
-                status: newOrderStatus,
-                updatedAt: new Date(),
-            });
         }
 
         // In production, trigger escrow freeze/hold when dispute is created

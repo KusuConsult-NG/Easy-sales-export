@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
+import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -40,6 +41,7 @@ export interface Course {
     instructor: string;
     duration: string; // e.g., "4 weeks"
     level: "beginner" | "intermediate" | "advanced";
+    price: number; // 0 for free
     modules: CourseModule[];
     thumbnail?: string;
     createdAt: FieldValue | Timestamp;
@@ -143,7 +145,134 @@ export async function getCourseByIdAction(courseId: string): Promise<Course | nu
 }
 
 /**
- * Enroll in course
+ * Initialize Payment for a Course
+ */
+export async function initializeCoursePaymentAction(courseId: string): Promise<{
+    success: boolean;
+    error?: string;
+    data?: { authorizationUrl: string; reference: string };
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "Authentication required" };
+
+        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        if (!courseDoc.exists) return { success: false, error: "Course not found" };
+
+        const course = courseDoc.data() as Course;
+        if (!course.price || course.price <= 0) {
+            return { success: false, error: "This course is free. Please enroll directly." };
+        }
+
+        // Initialize Paystack
+        const result = await initializePaystackPayment(
+            session.user.email!,
+            Math.round(course.price * 100), // Kobo
+            {
+                type: "academy_enrollment",
+                courseId,
+                userId: session.user.id,
+                email: session.user.email,
+            },
+            `${process.env.NEXT_PUBLIC_APP_URL}/academy/verify` // Redirect to Academy verification page
+        );
+
+        return { success: true, data: result };
+    } catch (error: any) {
+        logger.error("Course payment init error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Verify Course Payment and Enroll
+ */
+export async function verifyCoursePaymentAction(reference: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "Authentication required" };
+
+        // Verify with Paystack
+        const verify = await verifyPaystackPayment(reference);
+        if (!verify.status || verify.data.status !== "success") {
+            return { success: false, error: "Payment verification failed" };
+        }
+
+        const metadata = verify.data.metadata;
+        if (metadata.type !== "academy_enrollment") {
+            return { success: false, error: "Invalid payment type" };
+        }
+
+        // Check if already processed
+        const existingRef = db.collection("processedPayments").doc(reference);
+        const existingDoc = await existingRef.get();
+        if (existingDoc.exists) return { success: false, error: "Payment already processed" };
+
+        // Process enrollment
+        const userId = metadata.userId;
+        const courseId = metadata.courseId;
+        const amountPaid = verify.data.amount / 100;
+
+        // 🔒 SECURITY FIX: Amount re-validation against REAL course price
+        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        if (!courseDoc.exists) return { success: false, error: "Course not found" };
+
+        const course = courseDoc.data() as Course;
+        if (course.price && course.price > 0) {
+            // Check if amount paid is less than course price
+            // Allow small margin? No, be strict but handle float.
+            if (amountPaid < course.price) {
+                logger.warn(`Price drift detected for course ${courseId}. Expected ${course.price}, Paid ${amountPaid}`);
+                return { success: false, error: "Payment verification failed: Amount paid is less than current course price." };
+            }
+        }
+
+        await db.runTransaction(async (t) => {
+            // 1. Enroll User
+            const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
+            const progress: UserProgress = {
+                userId,
+                courseId,
+                completedLessons: [],
+                completedModules: [],
+                quizScores: {},
+                overallProgress: 0,
+                startedAt: FieldValue.serverTimestamp(),
+                lastAccessedAt: FieldValue.serverTimestamp(),
+            };
+            t.set(progressRef, progress);
+
+            // 2. Mark Payment Processed
+            t.set(existingRef, {
+                reference,
+                type: "academy_enrollment",
+                courseId,
+                userId,
+                amount: verify.data.amount / 100,
+                processedAt: FieldValue.serverTimestamp(),
+            });
+
+            // 3. Update Course Analytics (optional)
+        });
+
+        // Audit
+        await createAdminAuditLog({
+            action: "course_enrolled",
+            userId,
+            targetId: courseId,
+            targetType: "course",
+            details: `Enrolled via Paystack Ref: ${reference}`,
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Course payment verification error:", error);
+        return { success: false, error: "Failed to verify payment" };
+    }
+}
+
+/**
+ * Enroll in course (Free courses ONLY)
  */
 export async function enrollInCourseAction(
     userId: string,
@@ -161,6 +290,15 @@ export async function enrollInCourseAction(
 
         if (progressDoc.exists) {
             return { success: false, error: "Already enrolled in this course" };
+        }
+
+        // 🔒 SECURITY FIX: Check if course is paid
+        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        if (!courseDoc.exists) return { success: false, error: "Course not found" };
+
+        const course = courseDoc.data() as Course;
+        if (course.price && course.price > 0) {
+            return { success: false, error: "This is a paid course. Payment required." };
         }
 
         const progress: UserProgress = {
@@ -211,6 +349,48 @@ export async function completeLessonAction(
             return { success: false, error: "Not enrolled in this course" };
         }
 
+        // 🔒 SECURITY FIX: Enforce "Watch to Complete" logic
+        // 1. Get the course/lesson details to see if it has a video
+        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        if (!courseDoc.exists) return { success: false, error: "Course not found" };
+
+        const course = courseDoc.data() as Course;
+        let targetLesson: Lesson | null = null;
+
+        // Find the lesson
+        for (const mod of course.modules) {
+            const found = mod.lessons.find(l => l.id === lessonId);
+            if (found) {
+                targetLesson = found;
+                break;
+            }
+        }
+
+        if (!targetLesson) return { success: false, error: "Lesson not found" };
+
+        // 2. If it has a video, verify progress
+        if (targetLesson.videoUrl) {
+            const progressId = `${userId}_${lessonId}`;
+            const videoProgressDoc = await db.collection('lesson_video_progress').doc(progressId).get();
+
+            // Allow if admin (for testing) ?? No, enforce for everyone for now.
+            // Maybe allow if no progress doc exists BUT require it?
+            // "The Honor System" fix means we MUST require it.
+
+            if (!videoProgressDoc.exists) {
+                return { success: false, error: "Please start watching the video to track your progress." };
+            }
+
+            const videoData = videoProgressDoc.data();
+            if (!videoData || videoData.progressPercent < 90) { // 90% Threshold
+                const current = Math.round(videoData?.progressPercent || 0);
+                return {
+                    success: false,
+                    error: `You have only watched ${current}% of the video. Please watch at least 90% to complete.`
+                };
+            }
+        }
+
         const progress = progressDoc.data() as UserProgress;
 
         if (!progress.completedLessons.includes(lessonId)) {
@@ -218,16 +398,12 @@ export async function completeLessonAction(
             progress.lastAccessedAt = FieldValue.serverTimestamp();
 
             // Calculate overall progress
-            const courseDoc = await db.collection("academy_courses").doc(courseId).get();
-            if (courseDoc.exists) {
-                const course = courseDoc.data() as Course;
-                const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
-                progress.overallProgress = Math.round((progress.completedLessons.length / totalLessons) * 100);
+            const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
+            progress.overallProgress = Math.round((progress.completedLessons.length / totalLessons) * 100);
 
-                // Check if course is complete
-                if (progress.completedLessons.length === totalLessons) {
-                    progress.completedAt = FieldValue.serverTimestamp();
-                }
+            // Check if course is complete
+            if (progress.completedLessons.length === totalLessons) {
+                progress.completedAt = FieldValue.serverTimestamp();
             }
 
             await progressRef.set(progress);

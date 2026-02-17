@@ -6,6 +6,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
 /**
  * Server Actions for Export Window Management
@@ -595,5 +596,234 @@ export async function checkExportStatusAction(): Promise<string | null> {
     } catch (error) {
         logger.error("Error checking export status:", error);
         return null;
+    }
+}
+
+// ============================================
+// Invest in Export Window
+// ============================================
+
+export async function investInExportAction(
+    exportId: string,
+    amount: number
+): Promise<{ success: boolean; error?: string; data?: { authorizationUrl: string; reference: string } }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Authentication required" };
+        }
+
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        const exportDoc = await exportRef.get();
+
+        if (!exportDoc.exists) {
+            return { success: false, error: "Export window not found" };
+        }
+
+        const exportData = exportDoc.data();
+        if (exportData?.status !== "open" && exportData?.status !== "active") {
+            return { success: false, error: "This export window is not open for investment" };
+        }
+
+        // Validate Minimum Investment (assuming 'amount' in window is unit price or min investment)
+        const minInvestment = exportData?.amount || 50000; // Default fallback
+        if (amount < minInvestment) {
+            return { success: false, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
+        }
+
+        // Check Funding Limit (Optional - if totalSpots defined)
+        if (exportData?.totalSpots && exportData?.spotsFilled >= exportData?.totalSpots) {
+            return { success: false, error: "Investment slots are full" };
+        }
+
+        // Initialize Paystack
+        const { initializePaystackPayment } = await import("@/lib/paystack-server");
+        const initResult = await initializePaystackPayment(
+            session.user.email!,
+            Math.round(amount * 100), // Kobo
+            {
+                type: "export_investment",
+                exportId,
+                userId: session.user.id,
+                amount,
+                email: session.user.email
+            },
+            `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/export/verify`
+        );
+
+        return { success: true, data: initResult };
+
+    } catch (error: any) {
+        logger.error("Invest in export error:", error);
+        return { success: false, error: error.message || "Investment initialization failed" };
+    }
+}
+
+// ============================================
+// Verify Export Investment
+// ============================================
+
+export async function verifyExportInvestmentAction(reference: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+        const { verifyPaystackPayment } = await import("@/lib/paystack-server");
+        const verify = await verifyPaystackPayment(reference);
+
+        if (!verify.status || verify.data.status !== "success") {
+            return { success: false, error: "Payment verification failed" };
+        }
+
+        const metadata = verify.data.metadata;
+        if (metadata.type !== "export_investment") {
+            return { success: false, error: "Invalid payment type" };
+        }
+
+        const userId = metadata.userId;
+        const exportId = metadata.exportId;
+        const amount = metadata.amount;
+
+        if (userId !== session.user.id) return { success: false, error: "User mismatch" };
+
+        // Check already processed
+        const processedRef = db.collection("processedPayments").doc(reference);
+        const processedDoc = await processedRef.get();
+        if (processedDoc.exists) return { success: false, error: "Payment already processed" };
+
+        await db.runTransaction(async (t) => {
+            // 1. Create Investment Record (Slot)
+            const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
+            t.set(slotRef, {
+                userId,
+                exportId,
+                amount,
+                status: "active",
+                paymentReference: reference,
+                purchaseDate: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                roi: "15-20%", // Should fetch from window
+                expectedReturn: amount * 1.20, // Simplified logic
+            });
+
+            // 2. Update Export Window Stats
+            const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+            t.update(exportRef, {
+                spotsFilled: FieldValue.increment(1),
+                fundedAmount: FieldValue.increment(amount),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // 3. Mark Payment Processed
+            t.set(processedRef, {
+                reference,
+                type: "export_investment",
+                userId,
+                exportId,
+                amount,
+                processedAt: FieldValue.serverTimestamp()
+            });
+
+            // 4. Create Audit Log (Manual since inside transaction we need to be careful with side effects, 
+            // but audit log helper is outside tx usually. Let's do it after.)
+        });
+
+        await createAdminAuditLog({
+            action: "export_investment",
+            userId,
+            targetId: exportId,
+            targetType: "export_window",
+            metadata: { amount, reference }
+        });
+
+        return { success: true };
+
+    } catch (error: any) {
+        logger.error("Verify export investment error:", error);
+        return { success: false, error: "Failed to verify investment" };
+    }
+}
+
+// ============================================
+// Get My Investments (Revised for Investors)
+// ============================================
+
+export async function getMyExportInvestmentsAction() {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+        const snapshot = await db.collection(COLLECTIONS.EXPORT_SLOTS)
+            .where("userId", "==", session.user.id)
+            .orderBy("createdAt", "desc")
+            .get();
+
+        const investments = await Promise.all(snapshot.docs.map(async (doc) => {
+            const data = doc.data();
+            // Fetch window details for display
+            const windowDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.exportId).get();
+            const windowData = windowDoc.data();
+
+            return {
+                id: doc.id,
+                ...data,
+                windowTitle: windowData?.title || windowData?.commodity || "Export Investment",
+                createdAt: data.createdAt?.toDate(),
+            };
+        }));
+
+        return { success: true, data: investments };
+    } catch (error) {
+        logger.error("Get my investments error:", error);
+        return { success: false, error: "Failed to fetch investments" };
+    }
+}
+
+/**
+ * Extend Escrow Period (Admin Only)
+ * Used when shipping delays or disputes occur
+ */
+export async function extendEscrowAction(
+    exportId: string,
+    days: number,
+    reason: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        // Check admin role
+        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        const exportDoc = await exportRef.get();
+
+        if (!exportDoc.exists) {
+            return { success: false, error: "Export window not found" };
+        }
+
+        const currentReleaseDate = exportDoc.data()?.escrowReleaseDate?.toDate() || new Date();
+        const newReleaseDate = new Date(currentReleaseDate);
+        newReleaseDate.setDate(newReleaseDate.getDate() + days);
+
+        await exportRef.update({
+            escrowReleaseDate: newReleaseDate,
+            updatedAt: FieldValue.serverTimestamp(),
+            // We might want to track extensions in a subcollection or array, but for now just audit log
+        });
+
+        // 📜 Audit Log
+        const { logAuditAction } = await import("@/lib/audit");
+        await logAuditAction({
+            userId: session.user.id,
+            action: "EXTEND_ESCROW",
+            details: `Extended escrow for ${exportId} by ${days} days. Reason: ${reason}`,
+            metadata: { exportId, days, reason, oldDate: currentReleaseDate, newDate: newReleaseDate }
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Extend escrow error:", error);
+        return { success: false, error: error.message };
     }
 }

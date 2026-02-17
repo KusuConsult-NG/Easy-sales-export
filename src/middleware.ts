@@ -73,6 +73,43 @@ export async function middleware(request: NextRequest) {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
     const session = token ? { user: token } : null;
 
+    // 🛡️ SECURITY: Redis-based Session Revocation (Zombie Session Fix)
+    // Check if user has been suspended via Admin/Bulk Action
+    if (session?.user?.id) {
+        try {
+            // Import redis dynamically to ensure it works in Edge or use fetch if needed
+            // @upstash/redis is edge compatible
+            // We use direct REST call if we want to be super safe or just import the lib
+            // For now, let's assume the lib/redis is safe
+            const { redis } = await import("@/lib/redis");
+
+            // Check suspension key (30 day TTL set by admin action)
+            const isSuspended = await redis.get(`user:suspended:${session.user.id}`);
+
+            if (isSuspended) {
+                // Immediate Logout
+                const response = NextResponse.redirect(new URL("/auth/login?error=account_suspended", request.url));
+
+                // Clear all auth cookies
+                response.cookies.delete("lastActivity");
+                response.cookies.delete("next-auth.session-token");
+                response.cookies.delete("__Secure-next-auth.session-token");
+                response.cookies.delete("next-auth.callback-url");
+                response.cookies.delete("__Secure-next-auth.callback-url");
+                response.cookies.delete("next-auth.csrf-token");
+                response.cookies.delete("__Secure-next-auth.csrf-token");
+
+                return response;
+            }
+        } catch (error) {
+            // Fail open (allow access) if Redis is down to prevent global outage? 
+            // OR Fail closed? 
+            // Better to log and proceed for availability, unless strict security mode.
+            // Using console.error since logger might not be edge safe
+            console.error("Redis suspension check failed:", error);
+        }
+    }
+
     // CRITICAL: Skip middleware for all auth pages to prevent redirect loops
     // This includes: /auth/login, /auth/register, /marketplace/login, /export/login, etc.
     const isAuthPage = pathname.includes('/login') || // Allows /wave/login, /export/login, etc.

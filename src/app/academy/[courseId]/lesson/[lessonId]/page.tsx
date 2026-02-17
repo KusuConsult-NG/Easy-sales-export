@@ -17,6 +17,11 @@ import {
     type Lesson,
     type CourseModule
 } from "@/app/actions/academy";
+import {
+    updateLessonProgress,
+    getLessonProgress
+} from "@/app/actions/course-actions";
+import { VideoPlayer } from "@/components/lms/VideoPlayer"; // Explicitly Import VideoPlayer
 import QuizComponent from "@/components/academy/QuizComponent";
 import DOMPurify from "isomorphic-dompurify";
 import { useToast } from "@/contexts/ToastContext";
@@ -40,6 +45,9 @@ export default function LessonPage(props: LessonPageProps) {
     const [loading, setLoading] = useState(true);
     const [completing, setCompleting] = useState(false);
 
+    // NEW: Track initial video progress
+    const [initialVideoProgress, setInitialVideoProgress] = useState(0);
+
     useEffect(() => {
         if (status === "unauthenticated") {
             router.push("/academy/login");
@@ -54,9 +62,11 @@ export default function LessonPage(props: LessonPageProps) {
 
             setLoading(true);
             try {
-                const [courseData, progressData] = await Promise.all([
+                // Fetch Course, User Progress (Course-level), and Lesson Progress (Video-level)
+                const [courseData, progressData, lessonProgressData] = await Promise.all([
                     getCourseByIdAction(courseId),
                     getUserProgressAction(session!.user.id, courseId),
+                    getLessonProgress(lessonId)
                 ]);
 
                 if (!mounted) return;
@@ -84,6 +94,11 @@ export default function LessonPage(props: LessonPageProps) {
                     setProgress(progressData);
                     setCurrentLesson(foundLesson);
                     setCurrentModule(foundModule);
+
+                    // Set initial video progress if exists
+                    if (lessonProgressData.success && lessonProgressData.progress) {
+                        setInitialVideoProgress(lessonProgressData.progress.progressPercent);
+                    }
                 }
             } catch (error) {
                 logger.error("Failed to load lesson data:", error);
@@ -131,7 +146,18 @@ export default function LessonPage(props: LessonPageProps) {
         }
     }, [courseId, lessonId, session]);
 
+    // NEW: Handle Video Progress Update
+    const handleVideoProgress = useCallback(async (progress: number, timeWatched: number) => {
+        if (!currentLesson || !courseId) return;
 
+        // This is called by VideoPlayer every 10s
+        await updateLessonProgress({
+            courseId,
+            lessonId: currentLesson.id,
+            progressPercent: progress,
+            lastWatchedSecond: timeWatched
+        });
+    }, [courseId, currentLesson]);
 
     async function handleMarkComplete() {
         if (!session?.user || !currentLesson) return;
@@ -296,13 +322,16 @@ export default function LessonPage(props: LessonPageProps) {
                 {/* Video Player (if video exists) */}
                 {currentLesson.videoUrl && (
                     <div className="bg-black rounded-2xl overflow-hidden mb-6" style={{ aspectRatio: "16/9" }}>
-                        <video
-                            controls
-                            className="w-full h-full"
-                            src={currentLesson.videoUrl}
-                        >
-                            Your browser does not support the video tag.
-                        </video>
+                        <VideoPlayer
+                            courseId={courseId}
+                            videoUrl={currentLesson.videoUrl}
+                            initialProgress={initialVideoProgress}
+                            onProgressUpdate={handleVideoProgress}
+                            onComplete={() => {
+                                // Optional: Auto-mark complete or show confetti
+                                // For now, we rely on the user clicking the button, but now it will be allowed!
+                            }}
+                        />
                     </div>
                 )}
 

@@ -77,8 +77,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const userData = userDoc.data() as FirestoreUser;
 
                     // 🔒 SECURITY FIX: Check for banned status
-                    if ((userData as any).isBanned === true || (userData as any).status === 'banned') {
-                        logger.warn(`Blocked login attempt for banned user: ${email}`);
+                    // 🔒 SECURITY FIX: Check for banned/suspended status
+                    if ((userData as any).isBanned === true || (userData as any).status === 'banned' || (userData as any).suspended === true) {
+                        logger.warn(`Blocked login attempt for suspended/banned user: ${email}`);
                         throw new Error("Your account has been suspended. Please contact support.");
                     }
 

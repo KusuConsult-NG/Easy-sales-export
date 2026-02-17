@@ -9,6 +9,39 @@ import { auth } from "@/lib/auth";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { logAuditAction } from "@/lib/audit";
+import {
+    sendWithdrawalApprovedEmail,
+    sendWithdrawalRejectedEmail
+} from "@/lib/email-notifications";
+import { COLLECTIONS } from "@/lib/types/firestore";
+
+// ============================================================================
+// ============================================================================
+// HELPER: Admin Scoping (IDOR Fix)
+// ============================================================================
+
+/**
+ * Determines the scope of access for an admin.
+ * Returns `cooperativeId` if scoped, or `null` if global (Platform Admin/Super Admin).
+ */
+async function getAdminScope(userId: string, userRoles: string[]): Promise<string | null> {
+    // Super Admins see everything
+    if (userRoles.includes("super_admin")) return null;
+
+    // Check if admin is restricted to a cooperative
+    // We assume admins with a 'cooperativeId' in their profile are scoped.
+    const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+    const data = userDoc.data();
+
+    // If they have a cooperativeId, they are scoped
+    if (data?.cooperativeId) {
+        return data.cooperativeId;
+    }
+
+    // Platform Admins (role 'admin' but no coopId) see everything
+    return null;
+}
 
 // ============================================================================
 // ADMIN DASHBOARD STATS
@@ -42,8 +75,14 @@ export async function getCooperativeStatsAction(): Promise<{
             return { success: false, error: "Unauthorized" };
         }
 
-        // Get all members
-        const membersSnap = await db.collection("cooperative_members").get();
+        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+
+        // Get members (Scoped)
+        let membersQuery: FirebaseFirestore.Query = db.collection("cooperative_members");
+        if (adminScope) {
+            membersQuery = membersQuery.where("cooperativeId", "==", adminScope);
+        }
+        const membersSnap = await membersQuery.get();
         const members = membersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         const totalMembers = members.length;
@@ -51,8 +90,12 @@ export async function getCooperativeStatsAction(): Promise<{
         const pendingMembers = members.filter((m: any) => m.membershipStatus === "pending").length;
         const suspendedMembers = members.filter((m: any) => m.membershipStatus === "suspended").length;
 
-        // Get all transactions
-        const transactionsSnap = await db.collection("cooperative_transactions").get();
+        // Get transactions (Scoped)
+        let txnQuery: FirebaseFirestore.Query = db.collection("cooperative_transactions");
+        if (adminScope) {
+            txnQuery = txnQuery.where("cooperativeId", "==", adminScope);
+        }
+        const transactionsSnap = await txnQuery.get();
         const transactions = transactionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         // Calculate contribution totals
@@ -74,9 +117,16 @@ export async function getCooperativeStatsAction(): Promise<{
             })
             .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
-        // Get all loans
+        // Get loans (Scoped via memberId mapping is hard without joins, assuming loans have coopId or we filter by member list)
+        // Ideally loans should have cooperativeId. Checking Schema...
+        // If not, we filter in memory against the 'members' list we already fetched.
         const loansSnap = await db.collection("cooperative_loans").get();
-        const loans = loansSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        let loans = loansSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+        if (adminScope) {
+            const memberIds = new Set(members.map(m => m.id));
+            loans = loans.filter((l: any) => memberIds.has(l.memberId));
+        }
 
         const totalLoans = loans.reduce((sum: number, l: any) => sum + (l.amount || 0), 0);
         const activeLoans = loans.filter(
@@ -150,7 +200,14 @@ export async function getAllMembersAction(options?: {
             return { success: false, error: "Unauthorized" };
         }
 
+        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+
         let q = db.collection("cooperative_members").orderBy("createdAt", "desc");
+
+        // 🔒 SECURITY FIX: Content Scoping
+        if (adminScope) {
+            q = q.where("cooperativeId", "==", adminScope);
+        }
 
         if (options?.status && options.status !== "all") {
             q = q.where("membershipStatus", "==", options.status);
@@ -234,7 +291,14 @@ export async function getAllTransactionsAction(options?: {
             return { success: false, error: "Unauthorized" };
         }
 
+        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+
         let q = db.collection("cooperative_transactions").orderBy("date", "desc");
+
+        // 🔒 SECURITY FIX: Content Scoping
+        if (adminScope) {
+            q = q.where("cooperativeId", "==", adminScope);
+        }
 
         if (options?.type && options.type !== "all") {
             q = q.where("type", "==", options.type);
@@ -290,11 +354,18 @@ export async function getContributionReportsAction(options?: {
             return { success: false, error: "Unauthorized" };
         }
 
+        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+
         // Get all contributions
-        const transactionsSnap = await db.collection("cooperative_transactions")
+        let q = db.collection("cooperative_transactions")
             .where("type", "==", "contribution")
-            .where("status", "==", "completed")
-            .get();
+            .where("status", "==", "completed");
+
+        if (adminScope) {
+            q = q.where("cooperativeId", "==", adminScope);
+        }
+
+        const transactionsSnap = await q.get();
 
         const contributions = transactionsSnap.docs.map((doc) => ({
             id: doc.id,
@@ -388,11 +459,18 @@ export async function getRecentActivityAction(): Promise<{
             return { success: false, error: "Unauthorized" };
         }
 
+        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+
         // Get recent transactions
-        const transactionsSnap = await db.collection("cooperative_transactions")
+        let q = db.collection("cooperative_transactions")
             .orderBy("date", "desc")
-            .limit(10)
-            .get();
+            .limit(10);
+
+        if (adminScope) {
+            q = q.where("cooperativeId", "==", adminScope);
+        }
+
+        const transactionsSnap = await q.get();
 
         const activities = transactionsSnap.docs.map((doc) => {
             const data = doc.data();
@@ -432,15 +510,24 @@ export async function approveWithdrawalAction(
         }
 
         const adminId = session.user.id;
-        const withdrawalRef = db.collection("withdrawals").doc(withdrawalId); // Hardcoded text or generic, using "withdrawals" from observation
+        const withdrawalRef = db.collection("withdrawals").doc(withdrawalId);
 
-        await db.runTransaction(async (transaction) => {
+        const adminScope = await getAdminScope(adminId, session.user.roles);
+
+        // Execute transaction and return notification data
+        const notificationData = await db.runTransaction(async (transaction) => {
             const withdrawalDoc = await transaction.get(withdrawalRef);
             if (!withdrawalDoc.exists) {
                 throw new Error("Withdrawal request not found");
             }
 
             const withdrawalData = withdrawalDoc.data();
+
+            // 🔒 Prevent IDOR on Approval
+            if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {
+                throw new Error("Unauthorized: Cannot approve withdrawal for another cooperative");
+            }
+
             if (withdrawalData?.status !== "pending") {
                 throw new Error(`Request is already ${withdrawalData?.status}`);
             }
@@ -448,22 +535,25 @@ export async function approveWithdrawalAction(
             const userId = withdrawalData.userId;
             const amount = withdrawalData.amount;
 
-            // Determine which member collection to use.
-            // If internal `withdrawal.ts` logic was used, it's `cooperative_members`.
-            // If `platform.ts` logic was used, it's nested `members`.
-            // We check `cooperative_members` first as it's the newer pattern.
+            // Fetch user for details
+            let email = "";
+            let name = "Member";
+
+            const userDoc = await transaction.get(db.collection(COLLECTIONS.USERS).doc(userId));
+            if (userDoc.exists) {
+                email = userDoc.data()?.email || "";
+                name = userDoc.data()?.fullName || "Member";
+            }
 
             const coopMemberRef = db.collection("cooperative_members").doc(userId);
             const coopMemberDoc = await transaction.get(coopMemberRef);
 
             if (coopMemberDoc.exists) {
-                // Happy path: Update locked balance
                 transaction.update(coopMemberRef, {
-                    lockedBalance: FieldValue.increment(-amount), // Remove from lock (it's spent)
+                    lockedBalance: FieldValue.increment(-amount),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
             } else {
-                // Fallback: Check nested structure if cooperativeId exists
                 if (withdrawalData.cooperativeId) {
                     const nestedMemberRef = db
                         .collection("cooperatives")
@@ -481,14 +571,34 @@ export async function approveWithdrawalAction(
                 }
             }
 
-            // Update Withdrawal Status
             transaction.update(withdrawalRef, {
                 status: "approved",
                 approvedBy: adminId,
                 approvedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
+
+            return { email, name, amount, userId };
         });
+
+        // 📜 Audit Log & Notification
+        if (notificationData) {
+            await logAuditAction({
+                userId: adminId,
+                action: "APPROVE_WITHDRAWAL",
+                details: `Approved withdrawal of ₦${notificationData.amount} for user ${notificationData.email}`,
+                metadata: { withdrawalId, amount: notificationData.amount }
+            });
+
+            if (notificationData.email) {
+                await sendWithdrawalApprovedEmail(
+                    notificationData.email,
+                    notificationData.name,
+                    notificationData.amount,
+                    withdrawalId
+                );
+            }
+        }
 
         return { success: true };
 
@@ -516,13 +626,22 @@ export async function rejectWithdrawalAction(
         const adminId = session.user.id;
         const withdrawalRef = db.collection("withdrawals").doc(withdrawalId);
 
-        await db.runTransaction(async (transaction) => {
+        const adminScope = await getAdminScope(adminId, session.user.roles);
+
+        // Execute transaction and return notification data
+        const notificationData = await db.runTransaction(async (transaction) => {
             const withdrawalDoc = await transaction.get(withdrawalRef);
             if (!withdrawalDoc.exists) {
                 throw new Error("Withdrawal request not found");
             }
 
             const withdrawalData = withdrawalDoc.data();
+
+            // 🔒 Prevent IDOR on Rejection
+            if (adminScope && withdrawalData?.cooperativeId && withdrawalData.cooperativeId !== adminScope) {
+                throw new Error("Unauthorized: Cannot reject withdrawal for another cooperative");
+            }
+
             if (withdrawalData?.status !== "pending") {
                 throw new Error(`Request is already ${withdrawalData?.status}`);
             }
@@ -530,14 +649,23 @@ export async function rejectWithdrawalAction(
             const userId = withdrawalData.userId;
             const amount = withdrawalData.amount;
 
-            // Refund Logic
+            // Fetch user for details
+            let email = "";
+            let name = "Member";
+
+            const userDoc = await transaction.get(db.collection(COLLECTIONS.USERS).doc(userId));
+            if (userDoc.exists) {
+                email = userDoc.data()?.email || "";
+                name = userDoc.data()?.fullName || "Member";
+            }
+
             const coopMemberRef = db.collection("cooperative_members").doc(userId);
             const coopMemberDoc = await transaction.get(coopMemberRef);
 
             if (coopMemberDoc.exists) {
                 transaction.update(coopMemberRef, {
-                    savingsBalance: FieldValue.increment(amount), // Refund!
-                    lockedBalance: FieldValue.increment(-amount), // Unlock
+                    savingsBalance: FieldValue.increment(amount),
+                    lockedBalance: FieldValue.increment(-amount),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
             } else {
@@ -551,7 +679,7 @@ export async function rejectWithdrawalAction(
                     const nestedDoc = await transaction.get(nestedMemberRef);
                     if (nestedDoc.exists) {
                         transaction.update(nestedMemberRef, {
-                            balance: FieldValue.increment(amount), // Note: platform.ts used 'balance' not 'savingsBalance'
+                            balance: FieldValue.increment(amount),
                             lockedBalance: FieldValue.increment(-amount),
                             updatedAt: FieldValue.serverTimestamp(),
                         });
@@ -559,7 +687,6 @@ export async function rejectWithdrawalAction(
                 }
             }
 
-            // Update Withdrawal Status
             transaction.update(withdrawalRef, {
                 status: "rejected",
                 rejectionReason: reason,
@@ -567,7 +694,28 @@ export async function rejectWithdrawalAction(
                 rejectedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
+
+            return { email, name, amount, userId };
         });
+
+        // 📜 Audit Log & Notification
+        if (notificationData) {
+            await logAuditAction({
+                userId: adminId,
+                action: "REJECT_WITHDRAWAL",
+                details: `Rejected withdrawal of ₦${notificationData.amount} for user ${notificationData.userId}. Reason: ${reason}`,
+                metadata: { withdrawalId, amount: notificationData.amount, reason }
+            });
+
+            if (notificationData.email) {
+                await sendWithdrawalRejectedEmail(
+                    notificationData.email,
+                    notificationData.name,
+                    notificationData.amount,
+                    reason
+                );
+            }
+        }
 
         return { success: true };
 

@@ -1,38 +1,60 @@
 "use client";
 
-import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, CheckCircle, Home } from "lucide-react";
+import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, CheckCircle, Home, Zap, Star } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
 export default function AcademyLandingPage() {
-    const featuredCourses = [
+    const programTiers = [
         {
-            title: "Modern Yam Farming",
-            instructor: "Dr. Adeyemi Ogunlade",
-            students: 2450,
-            duration: "8 weeks",
-            price: "₦45,000",
-            image: "/images/logo.jpg",
-            category: "Farming"
+            title: "Foundation Program",
+            price: "₦25,000",
+            description: "Essential knowledge for starting your agro-export journey correctly.",
+            features: ["Export fundamentals", "Agro-business structure", "Basic market access strategy"],
+            highlight: false
         },
         {
-            title: "Export Documentation & Compliance",
-            instructor: "Mrs. Jennifer Okoro",
-            students: 1820,
-            duration: "6 weeks",
-            price: "₦55,000",
-            image: "/images/logo.jpg",
-            category: "Export"
+            title: "Advanced Program",
+            price: "₦50,000",
+            description: "Deep dive into strategies, compliance, and scaling your operations.",
+            features: ["Advanced export strategies", "Comprehensive compliance training", "Cooperative opportunity positioning"],
+            highlight: true
         },
         {
-            title: "Agribusiness Management",
-            instructor: "Prof. Ibrahim Musa",
-            students: 3120,
-            duration: "12 weeks",
-            price: "₦75,000",
-            image: "/images/logo.jpg",
-            category: "Business"
+            title: "Elite Program",
+            price: "₦100,000",
+            description: "The complete playbook for high-level execution and dominance.",
+            features: ["Full ecosystem mastery", "Direct market linkages", "Priority positioning strategy"],
+            highlight: false
         }
+    ];
+
+    const learningObjectives = [
+        {
+            title: "Export Fundamentals",
+            description: "Understand the core principles of international trade and documentation.",
+            icon: BookOpen
+        },
+        {
+            title: "Market Access Strategy",
+            description: "Learn how to identify, approach, and secure international buyers.",
+            icon: GlobeIcon // Defined below or imported? Globe is better. I'll import Globe.
+        },
+        {
+            title: "Cooperative Positioning",
+            description: "How to leverage the cooperative structure for funding and opportunities.",
+            icon: Users
+        },
+        {
+            title: "Agro-business Structure",
+            description: "Building a legally sound and investable agricultural business.",
+            icon: TrendingUp
+        }
+    ];
+
+    const bonuses = [
+        "Speed Selling 101",
+        "Export Intelligence Guide"
     ];
 
     return (
@@ -47,30 +69,28 @@ export default function AcademyLandingPage() {
             </Link>
 
             {/* Hero Section */}
-            <div className="relative overflow-hidden bg-linear-to-br from-blue-600 via-indigo-600 to-purple-600 text-white">
+            <div className="relative overflow-hidden bg-linear-to-br from-blue-700 via-indigo-700 to-purple-800 text-white">
                 <div className="absolute inset-0 bg-black/10"></div>
-                <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
-                    <div className="max-w-3xl">
-                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-semibold mb-4 md:mb-6">
-                            <GraduationCap className="w-3 h-3 md:w-4 md:h-4" />
-                            Agricultural Education Platform
+                <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-20 md:py-32 text-center">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-semibold mb-8">
+                            <GraduationCap className="w-5 h-5" />
+                            <span>Easy Sales Export Academy</span>
                         </div>
-                        <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 leading-tight">
-                            Easy Sales Academy
+                        <h1 className="text-4xl md:text-6xl font-bold mb-8 leading-tight">
+                            Learn How to Position Yourself for <span className="text-blue-300">Agro and Export Opportunities</span>
                         </h1>
-                        <p className="text-lg md:text-xl lg:text-2xl mb-3 md:mb-4 text-blue-50">
-                            Master Modern Agriculture & Agribusiness
+                        <p className="text-xl md:text-2xl mb-10 text-blue-100 max-w-3xl mx-auto leading-relaxed">
+                            This program provides structured education designed to help Nigerians understand agricultural and export systems and position themselves properly.
                         </p>
-                        <p className="text-base md:text-lg mb-6 md:mb-8 text-blue-100 max-w-2xl">
-                            Learn from industry experts, earn recognized certifications, and transform your agricultural knowledge into profitable ventures.
-                        </p>
-                        <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4">
+
+                        <div className="flex flex-col sm:flex-row justify-center gap-4">
                             <Link
-                                href="/academy/register"
-                                className="group inline-flex items-center justify-center gap-2 md:gap-3 bg-white text-blue-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-blue-500/50 transition-all hover:scale-105"
+                                href="#programs"
+                                className="inline-flex items-center justify-center gap-3 bg-white text-blue-700 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                             >
-                                Start Learning Today
-                                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
+                                Enroll in the Academy Now
+                                <ArrowRight className="w-5 h-5" />
                             </Link>
                         </div>
                     </div>
@@ -83,196 +103,168 @@ export default function AcademyLandingPage() {
                 </div>
             </div>
 
-            {/* Stats Section */}
-            <div className="max-w-7xl mx-auto px-8 -mt-16 relative z-10">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-blue-600 mb-2">50+</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Expert Courses</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-blue-600 mb-2">25,000+</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Active Students</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-blue-600 mb-2">95%</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Completion Rate</div>
-                    </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-blue-600 mb-2">4.8/5</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Student Rating</div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Featured Courses */}
-            <div className="max-w-7xl mx-auto px-8 py-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-4">
-                    Featured Courses
-                </h2>
-                <p className="text-center text-slate-600 dark:text-slate-400 mb-12 max-w-2xl mx-auto">
-                    Handpicked courses from industry experts to accelerate your agricultural success
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-                    {featuredCourses.map((course, index) => (
-                        <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift">
-                            <div className="relative h-48 bg-slate-200 dark:bg-slate-700">
-                                <Image
-                                    src={course.image}
-                                    alt={course.title}
-                                    fill
-                                    className="object-cover"
-                                />
-                                <div className="absolute top-4 left-4">
-                                    <span className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
-                                        {course.category}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="p-6">
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                                    {course.title}
-                                </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                                    by {course.instructor}
-                                </p>
-                                <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mb-4">
-                                    <div className="flex items-center gap-1">
-                                        <Users className="w-4 h-4" />
-                                        {course.students.toLocaleString()}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Clock className="w-4 h-4" />
-                                        {course.duration}
-                                    </div>
-                                </div>
-                                <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-                                    <span className="text-2xl font-bold text-blue-600">
-                                        {course.price}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="text-center">
-                    <Link
-                        href="/academy/courses"
-                        className="inline-flex items-center gap-2 px-8 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition"
-                    >
-                        View All Courses
-                        <ArrowRight className="w-5 h-5" />
-                    </Link>
-                </div>
-            </div>
-
-            {/* Benefits Section */}
-            <div className="max-w-7xl mx-auto px-8 py-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-12">
-                    Why Learn With Us?
-                </h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
-                        <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6">
-                            <Award className="w-7 h-7 text-blue-600" />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                            Certified Programs
-                        </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
-                            Earn industry-recognized certifications upon course completion to boost your credibility.
-                        </p>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
-                        <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6">
-                            <BookOpen className="w-7 h-7 text-blue-600" />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                            Practical Learning
-                        </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
-                            Hands-on projects and real-world case studies from successful Nigerian agribusinesses.
-                        </p>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
-                        <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6">
-                            <TrendingUp className="w-7 h-7 text-blue-600" />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                            Career Growth
-                        </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
-                            Access to job opportunities and business partnerships through our alumni network.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Learning Paths */}
-            <div className="max-w-7xl mx-auto px-8 py-16">
-                <div className="bg-linear-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800 rounded-3xl p-12">
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
-                        Learning Paths
+            {/* What You Will Learn Section */}
+            <div className="max-w-7xl mx-auto px-8 py-20">
+                <div className="text-center mb-16">
+                    <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white mb-6">
+                        What You Will Learn
                     </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="flex items-start gap-4">
-                            <CheckCircle className="w-6 h-6 text-blue-600 shrink-0 mt-1" />
-                            <div>
-                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Farming Excellence</h4>
-                                <p className="text-slate-600 dark:text-slate-400">Modern farming techniques, crop management, and yield optimization</p>
+                    <p className="text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+                        A curriculum built for execution, not just theory.
+                    </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    {learningObjectives.map((obj, idx) => {
+                        const Icon = obj.icon;
+                        return (
+                            <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2 hover:shadow-lg transition border border-slate-100 dark:border-slate-700">
+                                <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6">
+                                    <Icon className="w-7 h-7 text-blue-600" />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                                    {obj.title}
+                                </h3>
+                                <p className="text-slate-600 dark:text-slate-400">
+                                    {obj.description}
+                                </p>
                             </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <CheckCircle className="w-6 h-6 text-blue-600 shrink-0 mt-1" />
-                            <div>
-                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Export Mastery</h4>
-                                <p className="text-slate-600 dark:text-slate-400">Documentation, compliance, and international trade regulations</p>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Programs & Pricing Section */}
+            <div id="programs" className="bg-slate-100 dark:bg-slate-900 py-20">
+                <div className="max-w-7xl mx-auto px-8">
+                    <h2 className="text-3xl md:text-5xl font-bold text-center text-slate-900 dark:text-white mb-16">
+                        Our Programs
+                    </h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                        {programTiers.map((tier, index) => (
+                            <div
+                                key={index}
+                                className={`relative bg-white dark:bg-slate-800 rounded-2xl overflow-hidden transition-all duration-300 ${tier.highlight
+                                        ? 'shadow-2xl scale-105 border-2 border-blue-600 z-10'
+                                        : 'shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl'
+                                    }`}
+                            >
+                                {tier.highlight && (
+                                    <div className="bg-blue-600 text-white text-center py-2 font-bold text-sm uppercase tracking-wider">
+                                        Most Popular
+                                    </div>
+                                )}
+                                <div className="p-8">
+                                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                        {tier.title}
+                                    </h3>
+                                    <div className="flex items-baseline mb-6">
+                                        <span className="text-4xl font-bold text-blue-600">{tier.price}</span>
+                                    </div>
+                                    <p className="text-slate-600 dark:text-slate-400 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
+                                        {tier.description}
+                                    </p>
+                                    <ul className="space-y-4 mb-8">
+                                        {tier.features.map((feature, fIdx) => (
+                                            <li key={fIdx} className="flex items-start gap-3">
+                                                <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                                                <span className="text-slate-700 dark:text-slate-300 font-medium">{feature}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <div className="text-center">
+                                        <Link
+                                            href={`/academy/register?plan=${tier.title.toLowerCase().replace(' ', '-')}`}
+                                            className={`inline-block w-full py-3 rounded-xl font-bold transition-colors ${tier.highlight
+                                                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600'
+                                                }`}
+                                        >
+                                            Choose {tier.title}
+                                        </Link>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <CheckCircle className="w-6 h-6 text-blue-600 shrink-0 mt-1" />
-                            <div>
-                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Agribusiness</h4>
-                                <p className="text-slate-600 dark:text-slate-400">Business planning, financial management, and market strategy</p>
-                            </div>
-                        </div>
-                        <div className="flex items-start gap-4">
-                            <CheckCircle className="w-6 h-6 text-blue-600 shrink-0 mt-1" />
-                            <div>
-                                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Technology & Innovation</h4>
-                                <p className="text-slate-600 dark:text-slate-400">AgTech, precision farming, and digital agriculture</p>
-                            </div>
-                        </div>
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* CTA Section */}
-            <div className="max-w-7xl mx-auto px-8 py-16">
-                <div className="bg-linear-to-r from-blue-600 to-indigo-600 rounded-3xl p-12 text-center text-white relative overflow-hidden">
-                    <div className="absolute inset-0 bg-black/10"></div>
+            {/* Bonus Section */}
+            <div className="max-w-4xl mx-auto px-8 py-20">
+                <div className="bg-linear-to-br from-yellow-500 to-orange-500 rounded-3xl p-12 text-center text-white relative shadow-2xl overflow-hidden">
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"></div>
+                    <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"></div>
+
                     <div className="relative z-10">
-                        <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                            Start Learning Today
+                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-bold mb-6">
+                            <Star className="w-5 h-5 text-yellow-100" />
+                            <span>Exclusive Bonuses</span>
+                        </div>
+                        <h2 className="text-3xl md:text-4xl font-bold mb-8">
+                            Sign Up Now and Get These Bonuses Free
                         </h2>
-                        <p className="text-xl mb-8 text-blue-100 max-w-2xl mx-auto">
-                            Join thousands of successful agripreneurs who transformed their careers through our courses.
-                        </p>
+
+                        <div className="grid md:grid-cols-2 gap-6 mb-10 text-left">
+                            {bonuses.map((bonus, idx) => (
+                                <div key={idx} className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 flex items-center gap-4">
+                                    <div className="bg-white/20 p-3 rounded-lg">
+                                        <Zap className="w-6 h-6 text-yellow-100" />
+                                    </div>
+                                    <span className="text-xl font-bold">{bonus}</span>
+                                </div>
+                            ))}
+                        </div>
+
                         <Link
-                            href="/academy/courses"
-                            className="group inline-flex items-center gap-3 bg-white text-blue-600 px-10 py-5 rounded-xl font-bold text-lg shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
+                            href="#programs"
+                            className="inline-flex items-center gap-3 bg-white text-orange-600 px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-white/50 transition-all hover:scale-105"
                         >
-                            Browse All Courses
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                            Claim Your Bonuses Now
+                            <ArrowRight className="w-5 h-5" />
                         </Link>
                     </div>
                 </div>
             </div>
+
+            {/* Final CTA Section */}
+            <div className="max-w-7xl mx-auto px-8 pb-20">
+                <div className="text-center">
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">
+                        Stop Guessing. Start Positioning.
+                    </h2>
+                    <Link
+                        href="#programs"
+                        className="inline-flex items-center gap-2 text-blue-600 font-bold hover:text-blue-700 transition"
+                    >
+                        View Program Options Again
+                        <ArrowRight className="w-5 h-5" />
+                    </Link>
+                </div>
+            </div>
         </div>
     );
+}
+
+// Helper component for Globe icon since it wasn't in the original imports but I used it
+function GlobeIcon(props: any) {
+    return (
+        <svg
+            {...props}
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" x2="22" y1="12" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+    )
 }

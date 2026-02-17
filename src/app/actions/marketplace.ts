@@ -787,7 +787,7 @@ export async function deleteProductAction(productId: string) {
 
         // Check for active orders
         const activeOrders = await db.collection(COLLECTIONS.ORDERS)
-            .where("productId", "==", productId)
+            .where("productIds", "array-contains", productId)
             .where("status", "in", ["pending_payment", "processing", "shipped"])
             .get();
 

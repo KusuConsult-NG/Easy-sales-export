@@ -13,9 +13,9 @@ import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 
 /**
- * Update course progress (called by video player)
+ * Update lesson progress (called by video player)
  */
-export async function updateCourseProgress(
+export async function updateLessonProgress(
     data: z.infer<typeof courseProgressSchema>
 ) {
     const session = await auth();
@@ -26,47 +26,25 @@ export async function updateCourseProgress(
     try {
         const validated = courseProgressSchema.parse(data);
 
-        // Check if progress record exists
-        const snapshot = await db.collection('course_progress')
-            .where('userId', '==', session.user.id)
-            .where('courseId', '==', validated.courseId)
-            .get();
+        // Use a composite ID for uniqueness: userId_courseId_lessonId
+        // Alternately, query by fields. Let's use a specific collection for granular tracking.
+        const progressId = `${session.user.id}_${validated.lessonId}`;
+        const lessonProgressRef = db.collection('lesson_video_progress').doc(progressId);
 
-        if (snapshot.empty) {
-            // Create new progress record
-            await db.collection('course_progress').add({
-                userId: session.user.id,
-                courseId: validated.courseId,
-                progressPercent: validated.progressPercent,
-                lastWatchedSecond: validated.lastWatchedSecond,
-                completed: validated.progressPercent >= 95,
-                completedAt: validated.progressPercent >= 95 ? FieldValue.serverTimestamp() : null,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-        } else {
-            // Update existing progress
-            const progressDoc = snapshot.docs[0];
-            await progressDoc.ref.update({
-                progressPercent: validated.progressPercent,
-                lastWatchedSecond: validated.lastWatchedSecond,
-                completed: validated.progressPercent >= 95,
-                completedAt: validated.progressPercent >= 95 ? FieldValue.serverTimestamp() : null,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-        }
+        await lessonProgressRef.set({
+            userId: session.user.id,
+            courseId: validated.courseId,
+            lessonId: validated.lessonId, // Now required
+            progressPercent: validated.progressPercent,
+            lastWatchedSecond: validated.lastWatchedSecond,
+            completed: validated.progressPercent >= 95,
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
 
-        // Audit log for completion
-        if (validated.progressPercent >= 95) {
-            await createAdminAuditLog({
-                userId: session.user.id,
-                action: 'course_completed',
-                targetId: validated.courseId,
-                targetType: 'course',
-                metadata: {
-                    progressPercent: validated.progressPercent,
-                },
-            });
-        }
+        // If completed, we should probably trigger the main "completeLessonAction" logic?
+        // No, let the user click "Mark Complete" but use this data to VERIFY.
+        // Or auto-complete? The "Honor System" fix is about verification.
+        // Let's keep it manual but verified.
 
         return {
             success: true,
@@ -74,6 +52,7 @@ export async function updateCourseProgress(
             completed: validated.progressPercent >= 95,
         };
     } catch (error) {
+        console.error("Lesson progress error:", error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
@@ -81,7 +60,7 @@ export async function updateCourseProgress(
                 details: error.issues.map(e => e.message),
             };
         }
-        return { success: false, error: "Failed to update course progress" };
+        return { success: false, error: "Failed to update lesson progress" };
     }
 }
 
@@ -195,6 +174,37 @@ export async function getCourseProgress(courseId: string) {
         };
     } catch (error) {
         return { success: false, error: "Failed to fetch course progress", progress: null };
+    }
+}
+
+/**
+ * Get lesson progress (video state)
+ */
+export async function getLessonProgress(lessonId: string) {
+    const session = await auth();
+    if (!session?.user) {
+        return { success: false, error: "Unauthorized", progress: null };
+    }
+
+    try {
+        const progressId = `${session.user.id}_${lessonId}`;
+        const doc = await db.collection('lesson_video_progress').doc(progressId).get();
+
+        if (!doc.exists) {
+            return { success: true, progress: null };
+        }
+
+        return {
+            success: true,
+            progress: doc.data() as {
+                progressPercent: number;
+                lastWatchedSecond: number;
+                completed: boolean;
+            },
+        };
+    } catch (error) {
+        console.error("Failed to fetch lesson progress:", error);
+        return { success: false, error: "Failed to fetch lesson progress", progress: null };
     }
 }
 

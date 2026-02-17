@@ -159,12 +159,21 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
 
         const userData = userDoc.data();
 
+        // 🔒 SECURITY FIX: Strict Gender Enforcement
+        // Verify gender is female AND ensure the user role is consistent if set.
         if (userData?.gender !== "female") {
+            // Edge case: If they SOMEHOW have the role but are not female, this is a data integrity violation.
+            if (userData?.roles?.includes("wave_participant")) {
+                logger.error(`WAVE Eligibility Violation: User ${userId} has 'wave_participant' role but gender is '${userData?.gender}'`);
+            }
             return {
                 eligible: false,
                 reason: "WAVE program is exclusively for women entrepreneurs"
             };
         }
+
+        // Double check: If they are female but somehow missed the role, we should probably allow them (as long as gender is correct)
+        // But let's stick to the gender field as the source of truth for eligibility.
 
         return { eligible: true };
     } catch (error) {
@@ -193,6 +202,34 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             };
         }
 
+        const validatedData = validation.data;
+
+        // 🔒 AGE INTEGRITY CHECK: Calculate age from DOB
+        const dob = new Date(validatedData.dateOfBirth);
+        const today = new Date();
+        let calculatedAge = today.getFullYear() - dob.getFullYear();
+        const m = today.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+            calculatedAge--;
+        }
+
+        // 1. Verify calculated age matches declared age (within reasonable margin of 1 year for birthday edge cases)
+        // or just enforce the 18+ rule strictly on the DOB.
+        if (calculatedAge < 18) {
+            return {
+                success: false,
+                error: `You must be at least 18 years old to apply. (Calculated age based on DOB: ${calculatedAge})`
+            };
+        }
+
+        // 2. Prevent "Age Paradox" (Declared 25, DOB indicates 15)
+        if (Math.abs(calculatedAge - validatedData.age) > 1) {
+            return {
+                success: false,
+                error: `Date of Birth does not match the declared age (${validatedData.age}). Please check your inputs.`
+            };
+        }
+
         // 🔒 LOGIC FIX: Prevent Duplicate Applications
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.wave?.status;
@@ -210,14 +247,13 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             };
         }
 
-        const validatedData = validation.data;
-
         // Generate application ID
         const applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
         // Save to Firestore
         await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).set({
             ...validatedData,
+            age: calculatedAge, // Enforce truth: Save calculated age, not user input
             userId: session.user.id,
             userEmail: session.user.email || validatedData.email,
             status: "pending", // pending | approved | rejected
@@ -250,6 +286,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
                 surname: validatedData.surname,
                 firstName: validatedData.firstName,
                 stateOfResidence: validatedData.stateOfResidence,
+                ageVerification: `Verified 18+ (Auto-calculated: ${calculatedAge})`
             },
         });
 
@@ -422,6 +459,13 @@ export async function getShipmentTrackingAction(userId: string): Promise<Shipmen
 /**
  * Update shipment status (admin only)
  */
+import { getLogisticsProvider } from "@/lib/logistics";
+
+// ... existing code ...
+
+/**
+ * Update shipment status (admin only)
+ */
 export async function updateShipmentStatusAction(
     shipmentId: string,
     status: ShipmentTracking["status"],
@@ -469,6 +513,49 @@ export async function updateShipmentStatusAction(
         return { success: true };
     } catch (error: any) {
         logger.error("Update shipment error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Sync shipment with carrier (Admin or Automator)
+ * This fetches real-time updates from the Logistics Provider (GIG/Kwik)
+ */
+export async function syncShipmentWithCarrierAction(shipmentId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        const shipmentRef = db.collection("wave_shipments").doc(shipmentId);
+        const shipmentDoc = await shipmentRef.get();
+
+        if (!shipmentDoc.exists) {
+            return { success: false, error: "Shipment not found" };
+        }
+
+        const shipmentData = shipmentDoc.data() as ShipmentTracking;
+
+        if (!shipmentData.trackingNumber) {
+            return { success: false, error: "No tracking number explicitly linked" };
+        }
+
+        const provider = getLogisticsProvider();
+        const updates = await provider.trackShipment(shipmentData.trackingNumber);
+
+        // Merge updates? Or just append new ones? 
+        // For simplicity, we just take the latest status from the provider
+        if (updates.length > 0) {
+            const latest = updates[updates.length - 1];
+
+            await shipmentRef.update({
+                status: latest.status,
+                updates: updates, // Overwrite with authoritative history from carrier
+                lastSyncedAt: FieldValue.serverTimestamp()
+            });
+
+            return { success: true };
+        }
+
+        return { success: true }; // No updates found
+    } catch (error: any) {
+        logger.error("Sync shipment error:", error);
         return { success: false, error: error.message };
     }
 }

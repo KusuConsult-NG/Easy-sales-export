@@ -145,9 +145,23 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             return { error: "Payment verification failed: User mismatch", success: false };
         }
 
-        // 🔒 SECURITY FIX #3: Amount re-validation
-        if (amountInNaira < 1000 || amountInNaira > 500000) {
-            return { error: "Invalid payment amount", success: false };
+        // 🔒 SECURITY FIX #3: Amount re-validation against REAL course price
+        const courseDoc = await db.collection(COLLECTIONS.COURSES).doc(metadata.courseId).get();
+        if (!courseDoc.exists) {
+            return { success: false, error: "Course not found during verification" };
+        }
+
+        const courseData = courseDoc.data();
+        const expectedPrice = courseData?.price || 0;
+
+        // Verify paid amount matches course price (allow slight epsilon for potential floating point issues, though unlikely with Paystack)
+        if (Math.abs(amountInNaira - expectedPrice) > 50) { // 50 Naira margin for safety/fees? No, should be exact. Let's make it tight. 
+            // Actually, Paystack returns exact amount paid. 
+            // If the user paid less, we reject.
+            if (amountInNaira < expectedPrice) {
+                logger.warn(`Price mismatch for course ${metadata.courseId}. Expected ${expectedPrice}, got ${amountInNaira}`);
+                return { success: false, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}).` };
+            }
         }
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity

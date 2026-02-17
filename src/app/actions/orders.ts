@@ -1,7 +1,3 @@
-/**
- * Server Actions for Order Management
- */
-
 "use server";
 
 import { auth } from "@/lib/auth";
@@ -10,6 +6,10 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, Product } from "@/lib/types/marketplace";
+
+/**
+ * Server Actions for Order Management
+ */
 
 export interface CreateOrderState {
     success: boolean;

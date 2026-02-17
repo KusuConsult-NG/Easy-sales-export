@@ -750,3 +750,102 @@ export async function checkFarmNationStatusAction(): Promise<string | null> {
         return null;
     }
 }
+
+/**
+ * Verify Property (Admin Only)
+ * Toggles the verified status of a property
+ */
+/**
+ * Upload Property Documents (Seller)
+ */
+export async function uploadPropertyDocumentsAction(
+    propertyId: string,
+    documents: {
+        cOfO?: string;
+        surveyPlan?: string;
+        taxClearance?: string;
+    }
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyDoc = await propertyRef.get();
+
+        if (!propertyDoc.exists) return { success: false, error: "Property not found" };
+
+        const property = propertyDoc.data();
+        if (property?.ownerId !== session.user.id) return { success: false, error: "Unauthorized" };
+
+        // Merge documents
+        const currentDocs = property?.documents || {};
+        const newDocs = { ...currentDocs, ...documents };
+
+        await propertyRef.update({
+            documents: newDocs,
+            updatedAt: FieldValue.serverTimestamp(),
+            verificationStatus: "pending_review" // Reset verification status if new docs added
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Upload documents error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Verify Property (Admin Only)
+ * Toggles the verified status of a property
+ */
+export async function verifyPropertyAction(propertyId: string, verified: boolean): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        // Check admin role
+        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyDoc = await propertyRef.get();
+
+        if (!propertyDoc.exists) return { success: false, error: "Property not found" };
+
+        const property = propertyDoc.data() as Property;
+
+        // 🔒 SECURITY FIX: Require Documents for Verification
+        if (verified) {
+            // Must have at least C of O OR Survey Plan
+            if (!property.documents?.cOfO && !property.documents?.surveyPlan) {
+                return {
+                    success: false,
+                    error: "Cannot verify property without documents (C of O or Survey Plan required)."
+                };
+            }
+        }
+
+        await propertyRef.update({
+            verified: verified,
+            verifiedAt: verified ? FieldValue.serverTimestamp() : null,
+            verifiedBy: verified ? session.user.id : null,
+            updatedAt: FieldValue.serverTimestamp(),
+            // Ensure status reflects verification
+            status: verified ? "available" : property.status // Keep existing if un-verifying, or reset? Let's leave status alone unless it was explicitly pending.
+        });
+
+        // 📜 Audit Log
+        const { logAuditAction } = await import("@/lib/audit");
+        await logAuditAction({
+            userId: session.user.id,
+            action: verified ? "VERIFY_PROPERTY" : "UNVERIFY_PROPERTY",
+            details: `${verified ? "Verified" : "Unverified"} property ${propertyId}`,
+            metadata: { propertyId, verified }
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Verify property error:", error);
+        return { success: false, error: error.message };
+    }
+}

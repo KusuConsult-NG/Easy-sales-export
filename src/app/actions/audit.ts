@@ -31,6 +31,7 @@ export type AuditAction =
     | "announcement_deleted"
     | "banner_created"
     | "loan_approved"
+    | "loan_partially_approved"
     | "loan_rejected"
     | "land_approve"
     | "land_reject"
@@ -43,7 +44,8 @@ export type AuditAction =
     | "export_approve"
     | "export_reject"
     | "academy_approve"
-    | "academy_reject";
+    | "academy_reject"
+    | "export_investment";
 
 export interface AuditLog {
     id: string;

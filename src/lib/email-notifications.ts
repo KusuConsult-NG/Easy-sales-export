@@ -200,3 +200,55 @@ export async function sendWaveApplicationEmail(
         metadata: { type: 'wave_application', status },
     });
 }
+
+/**
+ * Send Withdrawal Approved Email
+ */
+export async function sendWithdrawalApprovedEmail(
+    userEmail: string,
+    userName: string,
+    amount: number,
+    withdrawalId: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: 'Funds Disbursed - Withdrawal Approved',
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #16a34a;">Withdrawal Approved</h2>
+                <p>Hello ${userName},</p>
+                <p>Your withdrawal request for <strong>₦${amount.toLocaleString()}</strong> has been approved and processed.</p>
+                <p><strong>Reference ID:</strong> ${withdrawalId}</p>
+                <p>The funds should reflect in your bank account shortly.</p>
+                <p>Thank you for banking with us.</p>
+            </div>
+        `,
+        metadata: { type: 'withdrawal_approved', withdrawalId },
+    });
+}
+
+/**
+ * Send Withdrawal Rejected Email
+ */
+export async function sendWithdrawalRejectedEmail(
+    userEmail: string,
+    userName: string,
+    amount: number,
+    reason: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: 'Update on Your Withdrawal Request',
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc2626;">Withdrawal Request Rejected</h2>
+                <p>Hello ${userName},</p>
+                <p>We are unable to process your withdrawal request for <strong>₦${amount.toLocaleString()}</strong> at this time.</p>
+                <p><strong>Reason:</strong> ${reason}</p>
+                <p>The funds have been returned to your savings balance.</p>
+                <p>Please contact support if you believe this is an error.</p>
+            </div>
+        `,
+        metadata: { type: 'withdrawal_rejected', reason },
+    });
+}
