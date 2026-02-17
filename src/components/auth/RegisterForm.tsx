@@ -91,11 +91,13 @@ export default function RegisterForm() {
 
             <div className="relative w-full max-w-md">
                 {/* Welcome Section */}
-                <div className="mb-8">
-                    <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl mb-4 flex items-center justify-center shadow-lg transform -rotate-3">
-                        <User className="w-6 h-6 text-white" />
-                    </div>
-                    <h2 className="text-3xl font-bold bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300">
+                <div className="mb-8 flex flex-col items-center text-center">
+                    <Link href="/" className="group">
+                        <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl mb-4 flex items-center justify-center shadow-lg transform -rotate-3 group-hover:rotate-0 transition-transform">
+                            <User className="w-6 h-6 text-white" />
+                        </div>
+                    </Link>
+                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-linear-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300">
                         Create Account
                     </h2>
                     <p className="text-slate-600 dark:text-slate-400 mt-2">
