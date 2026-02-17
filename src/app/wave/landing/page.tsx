@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { ArrowRight, Users, TrendingUp, Globe, Shield, Sparkles, CheckCircle, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import BackToHub from "@/components/common/BackToHub";
 
 export default function WaveLandingPage() {
     // Image Slider State
@@ -62,6 +63,7 @@ export default function WaveLandingPage() {
 
             {/* Hero Section with Carousel */}
             <section className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
+                <BackToHub className="top-4 left-4" />
                 {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-5">
                     <div className="absolute inset-0" style={{

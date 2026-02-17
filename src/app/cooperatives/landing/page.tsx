@@ -179,11 +179,16 @@ export default function CooperativeLandingPage() {
             <nav className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-md z-50">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="flex items-center justify-between h-16">
-                        {/* Logo */}
-                        <Link href="/cooperatives/landing" className="flex items-center gap-2">
-                            <Users className="w-8 h-8 text-purple-600" />
-                            <span className="text-xl font-bold text-slate-900">Easy Sales Cooperative</span>
-                        </Link>
+                        <div className="flex items-center gap-4">
+                            <Link href="/" className="p-2 hover:bg-slate-100 rounded-full transition-colors hidden lg:block" title="Back to Hub">
+                                <Home className="w-5 h-5 text-slate-600 hover:text-purple-600" />
+                            </Link>
+                            {/* Logo */}
+                            <Link href="/cooperatives/landing" className="flex items-center gap-2">
+                                <Users className="w-8 h-8 text-purple-600" />
+                                <span className="text-xl font-bold text-slate-900">Easy Sales Cooperative</span>
+                            </Link>
+                        </div>
 
                         {/* Desktop Navigation */}
                         <div className="hidden lg:flex items-center gap-6">

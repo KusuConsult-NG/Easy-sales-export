@@ -3,6 +3,7 @@
 import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, CheckCircle, Home, Zap, Star } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import BackToHub from "@/components/common/BackToHub";
 
 export default function AcademyLandingPage() {
     const programTiers = [
@@ -63,6 +64,7 @@ export default function AcademyLandingPage() {
 
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-blue-700 via-indigo-700 to-purple-800 text-white">
+                <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
                 <div className="absolute inset-0 bg-black/10"></div>
                 <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-20 md:py-32 text-center">
                     <div className="max-w-4xl mx-auto">

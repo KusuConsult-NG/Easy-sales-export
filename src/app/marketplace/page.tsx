@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import Image from "next/image";
 import Link from "next/link";
 import { getRecommendedProductsAction } from "@/app/actions/marketplace";
+import BackToHub from "@/components/common/BackToHub";
 
 // Force dynamic rendering (prevent static generation at build time)
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ export default async function MarketplaceLandingPage() {
 
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-green-600 via-emerald-600 to-teal-600 text-white">
+                <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
                 <div className="absolute inset-0 bg-black/10"></div>
                 <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
                     <div className="max-w-3xl">

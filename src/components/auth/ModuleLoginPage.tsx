@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useActionState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2, type LucideIcon } from "lucide-react";
+import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2, Home, type LucideIcon } from "lucide-react";
 import { loginAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
@@ -138,6 +138,20 @@ function ModuleLoginContent({
 
     return (
         <div className={containerClasses}>
+            {/* Back to Hub Navigation */}
+            <div className="absolute top-4 left-4 z-50">
+                <Link
+                    href="/"
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-full shadow-sm backdrop-blur-sm transition-all hover:scale-105 font-medium text-sm ${backgroundConfig.type === 'custom'
+                        ? 'bg-black/20 hover:bg-black/30 text-white border border-white/10'
+                        : 'bg-white/80 hover:bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+                        }`}
+                >
+                    <Home className="w-4 h-4" />
+                    <span className="hidden sm:inline">Back to Hub</span>
+                </Link>
+            </div>
+
             {/* Background Pattern */}
             {backgroundConfig.type === "standard" && (
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">

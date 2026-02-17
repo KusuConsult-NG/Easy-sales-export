@@ -3,6 +3,7 @@
 import { ArrowRight, MapPin, TrendingUp, Home, CheckCircle, Search, Award } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import BackToHub from "@/components/common/BackToHub";
 
 export default function FarmNationLandingPage() {
     const featuredProperties = [
@@ -47,6 +48,7 @@ export default function FarmNationLandingPage() {
 
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-teal-600 via-cyan-600 to-blue-600 text-white">
+                <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
                 <div className="absolute inset-0 bg-black/10"></div>
                 <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
                     <div className="max-w-3xl">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight, Package, Shield, TrendingUp, Clock, Globe, CheckCircle, DollarSign, Home } from "lucide-react";
 import { useRouter } from "next/navigation";
+import BackToHub from "@/components/common/BackToHub";
 
 export default function ExportWindowsLandingPage() {
     const router = useRouter();
@@ -42,6 +43,7 @@ export default function ExportWindowsLandingPage() {
 
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-orange-600 via-amber-600 to-yellow-600 text-white">
+                <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
                 <div className="absolute inset-0 bg-black/10"></div>
                 <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
                     <div className="max-w-3xl">
