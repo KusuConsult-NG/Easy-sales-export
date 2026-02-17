@@ -43,14 +43,7 @@ export default function FarmNationLandingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            {/* Home Navigation Button */}
-            <Link
-                href="/"
-                className="fixed top-6 left-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700"
-            >
-                <Home className="w-4 h-4" />
-                <span className="font-semibold text-sm">Home</span>
-            </Link>
+
 
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-teal-600 via-cyan-600 to-blue-600 text-white">
@@ -75,14 +68,8 @@ export default function FarmNationLandingPage() {
                                 href="/farm-nation/properties"
                                 className="group inline-flex items-center justify-center gap-2 md:gap-3 bg-white text-teal-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-teal-500/50 transition-all hover:scale-105"
                             >
-                                Browse Farms
+                                Get Started
                                 <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
-                            </Link>
-                            <Link
-                                href="/farm-nation/register"
-                                className="inline-flex items-center justify-center gap-2 md:gap-3 bg-teal-700/50 text-white border border-teal-400/30 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg backdrop-blur-sm hover:bg-teal-700/70 transition-all hover:scale-105"
-                            >
-                                Start Investing
                             </Link>
                         </div>
                     </div>

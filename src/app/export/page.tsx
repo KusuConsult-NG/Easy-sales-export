@@ -38,14 +38,7 @@ export default function ExportWindowsLandingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-            {/* Home Navigation Button */}
-            <Link
-                href="/"
-                className="fixed top-6 left-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700"
-            >
-                <Home className="w-4 h-4" />
-                <span className="font-semibold text-sm">Home</span>
-            </Link>
+
 
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-orange-600 via-amber-600 to-yellow-600 text-white">
@@ -70,14 +63,8 @@ export default function ExportWindowsLandingPage() {
                                 href="/auth/register?callbackUrl=/export/application"
                                 className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition shadow-lg hover:shadow-slate-900/20"
                             >
-                                Start Exporting
+                                Get Started
                                 <ArrowRight className="ml-2 w-5 h-5" />
-                            </Link>
-                            <Link
-                                href="/auth/login?callbackUrl=/export/dashboard"
-                                className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-white text-slate-900 border-2 border-slate-200 rounded-xl font-bold hover:border-slate-900 hover:bg-slate-50 transition"
-                            >
-                                Login
                             </Link>
                         </div>
                     </div>

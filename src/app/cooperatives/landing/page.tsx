@@ -173,14 +173,7 @@ export default function CooperativeLandingPage() {
 
     return (
         <div className="min-h-screen bg-white">
-            {/* Home Navigation Button */}
-            <Link
-                href="/"
-                className="fixed top-20 left-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700"
-            >
-                <Home className="w-4 h-4" />
-                <span className="font-semibold text-sm">Home</span>
-            </Link>
+
 
             {/* Navigation */}
             <nav className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-md z-50">
@@ -209,19 +202,13 @@ export default function CooperativeLandingPage() {
                         </div>
 
                         {/* Desktop CTAs */}
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                        <div className="hidden lg:flex items-center gap-4">
                             <Link
                                 href="/auth/register?callbackUrl=/cooperatives/onboarding"
-                                className="inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-8 py-4 rounded-xl font-bold hover:bg-purple-700 transition shadow-lg shadow-purple-200"
+                                className="inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-purple-700 transition shadow-lg shadow-purple-200"
                             >
-                                Register Cooperative
+                                Become a Member
                                 <ArrowRight className="w-5 h-5" />
-                            </Link>
-                            <Link
-                                href="/auth/login?callbackUrl=/cooperatives/dashboard"
-                                className="inline-flex items-center justify-center gap-2 bg-white text-slate-700 px-8 py-4 rounded-xl font-bold hover:bg-slate-50 transition border border-slate-200 shadow-sm"
-                            >
-                                Member Login
                             </Link>
                         </div>
 
@@ -246,16 +233,10 @@ export default function CooperativeLandingPage() {
                                     {link.label}
                                 </button>
                             ))}
-                            <div className="mt-4 px-4 space-y-2">
+                            <div className="mt-4 px-4">
                                 <Link
-                                    href="/cooperatives/login"
-                                    className="block w-full text-center py-2 text-slate-600 border border-slate-300 rounded-lg"
-                                >
-                                    Login
-                                </Link>
-                                <Link
-                                    href="/cooperatives/register"
-                                    className="block w-full text-center bg-linear-to-r from-purple-600 to-indigo-600 text-white py-2 rounded-lg font-semibold"
+                                    href="/auth/register?callbackUrl=/cooperatives/onboarding"
+                                    className="block w-full text-center bg-linear-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-lg font-semibold"
                                 >
                                     Become a Member
                                 </Link>

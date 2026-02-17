@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, X, LayoutDashboard, LogIn } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { ChevronDown, Menu, X, LayoutDashboard, LogIn, LogOut } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 
 export default function HubNavigation() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -94,13 +94,22 @@ export default function HubNavigation() {
                         {/* Auth Buttons (Desktop) */}
                         <div className="ml-4 flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
                             {session?.user ? (
-                                <Link
-                                    href="/dashboard"
-                                    className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md hover:shadow-lg hover:scale-105"
-                                >
-                                    <LayoutDashboard className="w-4 h-4" />
-                                    Dashboard
-                                </Link>
+                                <>
+                                    <Link
+                                        href="/dashboard"
+                                        className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-md hover:shadow-lg hover:scale-105"
+                                    >
+                                        <LayoutDashboard className="w-4 h-4" />
+                                        Dashboard
+                                    </Link>
+                                    <button
+                                        onClick={() => signOut({ callbackUrl: '/' })}
+                                        className="flex items-center gap-2 px-5 py-2.5 text-slate-700 dark:text-slate-200 hover:text-red-600 dark:hover:text-red-400 font-bold transition-colors"
+                                    >
+                                        <LogOut className="w-4 h-4" />
+                                        Logout
+                                    </button>
+                                </>
                             ) : (
                                 <>
                                     <Link
@@ -186,14 +195,26 @@ export default function HubNavigation() {
                         {/* Auth Buttons (Mobile) */}
                         <div className="mt-6 px-4 space-y-3 pt-6 border-t border-slate-200 dark:border-slate-700">
                             {session?.user ? (
-                                <Link
-                                    href="/dashboard"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-primary text-white font-bold rounded-xl"
-                                >
-                                    <LayoutDashboard className="w-5 h-5" />
-                                    Go to Dashboard
-                                </Link>
+                                <>
+                                    <Link
+                                        href="/dashboard"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="flex items-center justify-center gap-2 w-full px-5 py-3 bg-primary text-white font-bold rounded-xl"
+                                    >
+                                        <LayoutDashboard className="w-5 h-5" />
+                                        Go to Dashboard
+                                    </Link>
+                                    <button
+                                        onClick={() => {
+                                            setIsMobileMenuOpen(false);
+                                            signOut({ callbackUrl: '/' });
+                                        }}
+                                        className="flex items-center justify-center gap-2 w-full px-5 py-3 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30"
+                                    >
+                                        <LogOut className="w-5 h-5" />
+                                        Logout
+                                    </button>
+                                </>
                             ) : (
                                 <>
                                     <Link

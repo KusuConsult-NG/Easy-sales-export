@@ -58,22 +58,7 @@ export default function WaveLandingPage() {
 
     return (
         <div className="min-h-screen">
-            {/* Home Navigation Button */}
-            <Link
-                href="/"
-                className="fixed top-6 left-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-slate-200 dark:border-slate-700"
-            >
-                <Home className="w-4 h-4" />
-                <span className="font-semibold text-sm">Home</span>
-            </Link>
 
-            {/* Login Button (Fixed Top-Right) */}
-            <Link
-                href="/auth/login?callbackUrl=/wave/dashboard"
-                className="fixed top-6 right-6 z-50 flex items-center gap-2 bg-white dark:bg-slate-900 text-green-700 dark:text-green-400 px-6 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 border border-green-200 dark:border-green-800 font-bold"
-            >
-                <span>Login</span>
-            </Link>
 
             {/* Hero Section with Carousel */}
             <section className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
