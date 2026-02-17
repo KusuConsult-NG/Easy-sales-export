@@ -104,11 +104,30 @@ export async function loginAction(prevState: any, formData: FormData) {
                 signInError.digest.startsWith('NEXT_REDIRECT')) {
                 // This is actually a success case!
                 logger.info(`User ${email} authentication prompted redirect (success)`);
-                return {
-                    error: "",
-                    success: true,
-                    redirectUrl: redirectTo || "/dashboard"
-                };
+
+                // If specific redirectTo provided, use it
+                if (redirectTo) {
+                    return { error: "", success: true, redirectUrl: redirectTo };
+                }
+
+                // Otherwise, fetch profile and calculate primary app
+                try {
+                    const userSnapshot = await db.collection(COLLECTIONS.USERS)
+                        .where('email', '==', validatedData.email)
+                        .limit(1)
+                        .get();
+
+                    if (!userSnapshot.empty) {
+                        const userData = userSnapshot.docs[0].data() as FirestoreUser;
+                        const userRoles = userData.roles || ['general_user'];
+                        const primaryApp = getPrimaryApp(userRoles);
+                        return { error: "", success: true, redirectUrl: primaryApp };
+                    }
+                } catch (profileError) {
+                    logger.error("Profile fetch failed:", profileError);
+                }
+
+                return { error: "", success: true, redirectUrl: "/dashboard" };
             }
             throw signInError;
         }
@@ -124,13 +143,33 @@ export async function loginAction(prevState: any, formData: FormData) {
 
         logger.info(`User ${email} authenticated successfully`);
 
-        // DO NOT REDIRECT SERVER-SIDE
-        // Return URL to client for reliable navigation
-        return {
-            error: "",
-            success: true,
-            redirectUrl: redirectTo || "/dashboard"
-        };
+        // Fetch user profile to determine primary app redirect
+        try {
+            const userSnapshot = await db.collection(COLLECTIONS.USERS)
+                .where('email', '==', validatedData.email)
+                .limit(1)
+                .get();
+
+            if (!userSnapshot.empty) {
+                const userData = userSnapshot.docs[0].data() as FirestoreUser;
+                const userRoles = userData.roles || ['general_user'];
+
+                // If specific redirectTo provided, use it
+                if (redirectTo) {
+                    return { error: "", success: true, redirectUrl: redirectTo };
+                }
+
+                // Calculate primary app based on roles
+                const primaryApp = getPrimaryApp(userRoles);
+                logger.info(`Redirecting to primary app: ${primaryApp}`);
+                return { error: "", success: true, redirectUrl: primaryApp };
+            }
+        } catch (profileError) {
+            logger.error("Failed to fetch user profile:", profileError);
+        }
+
+        // Fallback to /dashboard if profile fetch fails
+        return { error: "", success: true, redirectUrl: redirectTo || "/dashboard" };
 
     } catch (error) {
         // Log the error
