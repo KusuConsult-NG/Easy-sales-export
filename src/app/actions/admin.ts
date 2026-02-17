@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
@@ -332,11 +332,14 @@ export async function toggleUserVerificationAction(
 // ============================================
 
 export async function getWaveApplicationsAction(
-    statusFilter?: "pending" | "approved" | "rejected"
+    statusFilter?: "pending" | "approved" | "rejected",
+    limit = 50,
+    lastCreatedAt?: Date | string
 ): Promise<{
     error: string | null;
     success: boolean;
     data?: any[];
+    hasMore?: boolean; // simple indicator
 }> {
     try {
         const session = await auth();
@@ -345,12 +348,20 @@ export async function getWaveApplicationsAction(
         }
 
         let query = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-            .orderBy("createdAt", "desc");
+            .orderBy("createdAt", "desc")
+            .limit(limit);
 
         if (statusFilter) {
             query = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", "desc")
+                .limit(limit);
+        }
+
+        // Apply Cursor if provided
+        if (lastCreatedAt) {
+            const cursorDate = typeof lastCreatedAt === 'string' ? new Date(lastCreatedAt) : lastCreatedAt;
+            query = query.startAfter(Timestamp.fromDate(cursorDate));
         }
 
         const snapshot = await query.get();
@@ -365,6 +376,7 @@ export async function getWaveApplicationsAction(
             error: null,
             success: true,
             data: applications,
+            hasMore: applications.length === limit
         };
     } catch (error: any) {
         logger.error("Get WAVE applications error:", error);
@@ -376,10 +388,14 @@ export async function getWaveApplicationsAction(
 // Get Pending Withdrawals (Admin)
 // ============================================
 
-export async function getPendingWithdrawalsAction(): Promise<{
+export async function getPendingWithdrawalsAction(
+    limit = 50,
+    lastCreatedAt?: Date | string
+): Promise<{
     error: string | null;
     success: boolean;
     data?: any[];
+    hasMore?: boolean;
 }> {
     try {
         const session = await auth();
@@ -387,10 +403,17 @@ export async function getPendingWithdrawalsAction(): Promise<{
             return { error: "Unauthorized: Permission required - finance:read", success: false };
         }
 
-        const snapshot = await db.collection(COLLECTIONS.WITHDRAWALS)
+        let query = db.collection(COLLECTIONS.WITHDRAWALS)
             .where("status", "==", "pending")
             .orderBy("createdAt", "desc")
-            .get();
+            .limit(limit);
+
+        if (lastCreatedAt) {
+            const cursorDate = typeof lastCreatedAt === 'string' ? new Date(lastCreatedAt) : lastCreatedAt;
+            query = query.startAfter(Timestamp.fromDate(cursorDate));
+        }
+
+        const snapshot = await query.get();
 
         const withdrawals = snapshot.docs.map(doc => ({
             id: doc.id,
@@ -402,6 +425,7 @@ export async function getPendingWithdrawalsAction(): Promise<{
             error: null,
             success: true,
             data: withdrawals,
+            hasMore: withdrawals.length === limit
         };
     } catch (error: any) {
         logger.error("Get pending withdrawals error:", error);
@@ -413,7 +437,7 @@ export async function getPendingWithdrawalsAction(): Promise<{
 // Land Verification (Admin)
 // ============================================
 
-export async function getPendingLandListings(): Promise<{
+export async function getPendingLandListings(limit = 50): Promise<{
     error: string | null;
     success: boolean;
     listings?: any[];
@@ -424,9 +448,11 @@ export async function getPendingLandListings(): Promise<{
             return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
         }
 
+        // Pending lists are usually small, but let's cap it anyway
         const snapshot = await db.collection("land_listings")
             .where("verificationStatus", "==", "pending")
             .orderBy("createdAt", "desc")
+            .limit(limit)
             .get();
 
         const listings = snapshot.docs.map(doc => ({
@@ -599,11 +625,14 @@ export async function getPendingLoanApplications(): Promise<{
 // ============================================
 
 export async function getAllExportRequestsAction(
-    statusFilter?: "pending" | "in_transit" | "delivered" | "completed" | "all"
+    statusFilter?: "pending" | "in_transit" | "delivered" | "completed" | "all",
+    limit = 50,
+    lastCreatedAt?: Date | string
 ): Promise<{
     error: string | null;
     success: boolean;
     exports?: any[];
+    hasMore?: boolean;
 }> {
     try {
         const session = await auth();
@@ -612,12 +641,19 @@ export async function getAllExportRequestsAction(
         }
 
         let query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
-            .orderBy("createdAt", "desc");
+            .orderBy("createdAt", "desc")
+            .limit(limit);
 
         if (statusFilter && statusFilter !== "all") {
             query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
                 .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", "desc")
+                .limit(limit);
+        }
+
+        if (lastCreatedAt) {
+            const cursorDate = typeof lastCreatedAt === 'string' ? new Date(lastCreatedAt) : lastCreatedAt;
+            query = query.startAfter(Timestamp.fromDate(cursorDate));
         }
 
         const snapshot = await query.get();
@@ -635,6 +671,7 @@ export async function getAllExportRequestsAction(
             error: null,
             success: true,
             exports,
+            hasMore: exports.length === limit
         };
     } catch (error: any) {
         logger.error("Get all export requests error:", error);

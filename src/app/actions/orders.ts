@@ -7,6 +7,7 @@
 import { auth } from "@/lib/auth";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, Product } from "@/lib/types/marketplace";
 
