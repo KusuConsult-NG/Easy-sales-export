@@ -118,7 +118,7 @@ export async function middleware(request: NextRequest) {
         const [, module, type] = isModuleAuthPage;
         // Skip for 'auth' module itself (infinite loop prevention)
         if (module !== 'auth') {
-            const globalAuthUrl = new URL(`/auth/${type === 'register' ? 'signup' : 'signin'}`, request.url);
+            const globalAuthUrl = new URL(`/auth/${type}`, request.url);
             globalAuthUrl.searchParams.set('module', module);
             return NextResponse.redirect(globalAuthUrl);
         }
