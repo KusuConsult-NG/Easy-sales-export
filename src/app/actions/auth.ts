@@ -88,15 +88,27 @@ export async function loginAction(prevState: any, formData: FormData) {
         // Validate with Zod
         const validatedData = loginSchema.parse({ email, password });
 
-        // DO NOT MODIFY – AUTH STABILITY
-        // Sign in first, then redirect explicitly (form actions don't handle NEXT_REDIRECT from signIn)
-        await signIn("credentials", {
+        // Sign in with explicit error checking
+        const result = await signIn("credentials", {
             email: validatedData.email,
             password: validatedData.password,
             redirect: false,
         });
 
-        // DO NOT MODIFY – AUTH STABILITY
+        // Check if signIn actually succeeded
+        if (!result) {
+            logger.error("SignIn returned null/undefined");
+            return { error: "Authentication failed. Please try again.", success: false };
+        }
+
+        if (result.error) {
+            logger.error("SignIn failed:", result.error);
+            return { error: "Invalid email or password", success: false };
+        }
+
+        // If we got here, authentication succeeded
+        logger.info(`User ${email} authenticated successfully`);
+
         // Explicit redirect required for form actions
         // Use module-specific redirectTo if provided, otherwise default to /dashboard
         redirect(redirectTo || "/dashboard");
