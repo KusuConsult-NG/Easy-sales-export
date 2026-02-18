@@ -6,9 +6,18 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { CheckCircle, ArrowRight, AlertTriangle, Flame, ShieldCheck, DoorOpen } from "lucide-react";
 
 export default function ApplicationSuccessPage() {
+    const { data: session, status } = useSession();
+
+    // Determine the correct activation link based on auth status
+    const isLoggedIn = status === "authenticated" && !!session;
+    const activationHref = isLoggedIn
+        ? "/cooperatives/onboarding"  // Already logged in, go directly
+        : "/auth/login?callbackUrl=/cooperatives/onboarding";  // Not logged in, login first
+
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex items-center justify-center px-4 py-12">
             <div className="max-w-3xl w-full space-y-8">
@@ -165,7 +174,7 @@ export default function ApplicationSuccessPage() {
 
                         <div className="pt-4">
                             <Link
-                                href="/cooperatives/onboarding"
+                                href={activationHref}
                                 className="inline-flex items-center justify-center gap-2 bg-white text-green-700 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm sm:text-base border border-green-100"
                             >
                                 <ShieldCheck className="w-8 h-8" />
