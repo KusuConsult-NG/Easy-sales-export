@@ -13,10 +13,11 @@ export default function ApplicationSuccessPage() {
     const { data: session, status } = useSession();
 
     // Determine the correct activation link based on auth status
+    // CRITICAL: Use /cooperatives/payment (entry point) not /onboarding (requires payment first)
     const isLoggedIn = status === "authenticated" && !!session;
     const activationHref = isLoggedIn
-        ? "/cooperatives/onboarding"  // Already logged in, go directly
-        : "/auth/login?callbackUrl=/cooperatives/onboarding";  // Not logged in, login first
+        ? "/cooperatives/payment"  // Already logged in, start payment flow
+        : "/auth/login?callbackUrl=/cooperatives/payment";  // Not logged in, login first then payment
 
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex items-center justify-center px-4 py-12">
