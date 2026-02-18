@@ -189,7 +189,8 @@ export default auth(async (request: NextRequest & { auth: any }) => {
             const { canAccessAdminRoute } = await import('@/lib/admin-permissions');
 
             if (!canAccessAdminRoute(userRoles, pathname)) {
-                return NextResponse.redirect(new URL("/dashboard?error=admin_access_denied", request.url));
+                // Redirect to home page, not error dashboard
+                return NextResponse.redirect(new URL("/", request.url));
             }
         }
 
