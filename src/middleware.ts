@@ -118,6 +118,9 @@ export default auth(async (request: NextRequest & { auth: any }) => {
         '/marketplace/onboarding',
         '/export/onboarding',
         '/cooperatives/onboarding',
+        '/cooperatives/payment',           // Payment flow for new cooperative members
+        '/cooperatives/verify-payment',    // Payment verification step
+        '/cooperatives/payment/callback',  // Paystack callback after payment
         '/farm-nation/onboarding',
         '/academy/setup',
         '/academy/application',
