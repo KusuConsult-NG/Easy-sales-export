@@ -245,9 +245,9 @@ export default function LoginForm() {
                         <LoadingButton
                             type="submit"
                             variant="primary"
-                            isLoading={isLoading}
+                            loading={isLoading}
                             loadingText="Signing in..."
-                            className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all border-0 flex items-center justify-center gap-2"
+                            className="w-full py-2.5 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all border-0 flex items-center justify-center gap-2"
                         >
                             <span>Sign In</span>
                             <ArrowRight className="w-5 h-5" />
