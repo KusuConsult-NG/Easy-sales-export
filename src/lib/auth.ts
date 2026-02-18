@@ -213,29 +213,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
  * Extends the default session and user types with custom fields
  */
 // TypeScript module augmentation for NextAuth
-declare module "next-auth" {
-    interface User {
-        id: string;
-        email: string;
-        name: string;
-        image?: string | null;
-        roles: UserRole[]; // Multi-role support
-        verified?: boolean; // Email verification status
-        serviceRegistrations?: any; // Service access tracking
-    }
-
-    interface Session {
-        firebaseToken?: string; // Custom token for Firebase SDK
-        user: {
-            id: string;
-            email: string;
-            name: string;
-            image?: string | null;
-            roles: UserRole[]; // Multi-role support
-            verified: boolean;
-        };
-    }
-}
 
 declare module "next-auth" {
     interface Session {
