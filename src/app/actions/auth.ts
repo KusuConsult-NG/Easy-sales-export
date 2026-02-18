@@ -82,8 +82,6 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
 /**
  * Calculate where to redirect the user AFTER they have successfully logged in.
  * This is called by the client component after client-side signIn() succeeds.
- * 
- * CRITICAL: Checks onboarding status to prevent premature dashboard access.
  */
 export async function getPostLoginRedirect(email: string) {
     try {
@@ -98,81 +96,36 @@ export async function getPostLoginRedirect(email: string) {
             const userRoles = userData.roles || ['general_user'];
             const serviceRegistrations = (userData as any).serviceRegistrations || {};
 
-            // Determine primary app based on roles
-            const primaryApp = getPrimaryApp(userRoles);
+            // CRITICAL: Check if user has ANY approved modules
+            // If not, redirect to module selection page
+            const hasApprovedModule = Object.values(serviceRegistrations).some(
+                (reg: any) => reg?.status === 'approved'
+            );
 
-            // Check if user needs onboarding for their primary app
-            const onboardingUrl = getOnboardingUrlIfNeeded(userRoles, serviceRegistrations, primaryApp);
-
-            if (onboardingUrl) {
-                logger.info(`User ${email} needs onboarding, redirecting to: ${onboardingUrl}`);
+            if (!hasApprovedModule) {
+                logger.info(`User ${email} has no approved modules, redirecting to module selection`);
                 return {
                     success: true,
-                    redirectUrl: onboardingUrl
+                    redirectUrl: "/auth/get-started"
                 };
             }
 
+            // User has approved modules - redirect to primary app
+            const primaryApp = getPrimaryApp(userRoles);
             logger.info(`User ${email} redirecting to primary app: ${primaryApp}`);
+
             return {
                 success: true,
                 redirectUrl: primaryApp
             };
         }
 
-        return { success: true, redirectUrl: "/dashboard" };
+        // New user without profile - send to module selection
+        return { success: true, redirectUrl: "/auth/get-started" };
     } catch (error) {
         logger.error("Failed to determine redirect:", error);
-        return { success: true, redirectUrl: "/dashboard" }; // Fail safe
+        return { success: true, redirectUrl: "/auth/get-started" }; // Fail safe to module selection
     }
-}
-
-/**
- * Check if user needs to complete onboarding for their primary app.
- * Returns onboarding URL if needed, or null if onboarding is complete.
- */
-function getOnboardingUrlIfNeeded(
-    userRoles: UserRole[],
-    serviceRegistrations: Record<string, any>,
-    primaryApp: string
-): string | null {
-    // Map dashboard URLs to their onboarding URLs and service keys
-    const appOnboardingMap: Record<string, { onboardingUrl: string; serviceKey: string }> = {
-        '/wave/dashboard': { onboardingUrl: '/wave/application', serviceKey: 'wave' },
-        '/marketplace/buyer/dashboard': { onboardingUrl: '/marketplace/onboarding', serviceKey: 'marketplace' },
-        '/marketplace/seller/dashboard': { onboardingUrl: '/marketplace/onboarding', serviceKey: 'marketplace' },
-        '/export/dashboard': { onboardingUrl: '/export/onboarding', serviceKey: 'export' },
-        '/cooperatives/dashboard': { onboardingUrl: '/cooperatives/onboarding', serviceKey: 'cooperatives' },
-        '/farm-nation/dashboard': { onboardingUrl: '/farm-nation/onboarding', serviceKey: 'farm_nation' },
-        '/academy/dashboard': { onboardingUrl: '/academy/setup', serviceKey: 'academy' },
-    };
-
-    const appConfig = appOnboardingMap[primaryApp];
-
-    if (!appConfig) {
-        // No onboarding required for this app (e.g., admin, home page)
-        return null;
-    }
-
-    const { onboardingUrl, serviceKey } = appConfig;
-    const serviceStatus = serviceRegistrations[serviceKey];
-
-    // If no service registration OR status is 'pending' or missing, redirect to onboarding
-    if (!serviceStatus || serviceStatus.status === 'pending' || !serviceStatus.status) {
-        return onboardingUrl;
-    }
-
-    // If status is 'approved', allow dashboard access
-    if (serviceStatus.status === 'approved') {
-        return null;
-    }
-
-    // If status is 'rejected', send to a rejection notice page (or onboarding to reapply)
-    if (serviceStatus.status === 'rejected') {
-        return onboardingUrl; // Let them try again
-    }
-
-    // Default: require onboarding
-    return onboardingUrl;
 }
 
 // DEPRECATED: Old Server Action Login
@@ -236,9 +189,9 @@ export async function registerAction(prevState: any, formData: FormData) {
             throw new Error("Failed to create user profile. Please try again.");
         }
 
-        // SIMPLIFIED: Use callbackUrl for deep linking, default to dashboard
-        const callbackUrl = formData.get("callbackUrl") as string;
-        const redirectUrl = callbackUrl || "/dashboard";
+        // CRITICAL: Redirect to module selection page after registration
+        // Users MUST choose their module before accessing any dashboards
+        const redirectUrl = "/auth/get-started";
 
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
         // Server-side signIn in Server Actions causes race conditions with cookies.
