@@ -18,35 +18,28 @@ export default async function CooperativeOnboardingPage() {
     // Check membership status
     const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
-    if (!memberDoc.exists) {
-        // No record at all = hasn't started payment flow
-        redirect("/cooperatives/payment");
-    }
+    const memberData = memberDoc.exists ? memberDoc.data() : null;
 
-    const memberData = memberDoc.data();
-
-    // 1. Payment Check
-    if (memberData?.paymentStatus !== "completed") {
-        redirect("/cooperatives/payment");
-    }
-
-    // 2. Status Check
+    // If already approved/active, send to dashboard
     const status = memberData?.membershipStatus;
-
     if (status === "active" || status === "approved") {
         redirect("/cooperatives/dashboard");
     }
 
+    // If already submitted and pending review, show pending page
     if (status === "pending" || status === "under_review") {
         redirect("/cooperatives/onboarding/pending");
     }
 
-    // 3. Render Client Form
-    // If we get here, payment is done but registration is not fully submitted/approved
-    // Pass the tier from the server record
+    // Otherwise render the form — pass paymentStatus so the form knows
+    // whether to show the Pay button (step 4) or the Submit button (step 4, paid)
+    const paymentStatus = memberData?.paymentStatus || "pending";
+    const initialTier = memberData?.membershipTier || "basic";
+
     return (
         <OnboardingClient
-            initialTier={memberData?.membershipTier || "basic"}
+            initialTier={initialTier}
+            paymentStatus={paymentStatus}
         />
     );
 }

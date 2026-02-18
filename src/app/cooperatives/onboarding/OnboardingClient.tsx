@@ -1,17 +1,17 @@
 /**
  * Cooperative Membership Onboarding
- * 
- * Main onboarding flow orchestrator
+ *
+ * 4-step flow: Personal Info → Next of Kin → Documents → Payment & Submit
  */
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { logger } from '@/lib/logger';
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CreditCard, CheckCircle, ShieldCheck, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { registerCooperativeMemberAction } from "@/app/actions/cooperative";
+import { registerCooperativeMemberAction, initiateCooperativePaymentAction } from "@/app/actions/cooperative";
 import { CooperativeErrorBoundary } from "@/components/errors/CooperativeErrorBoundary";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -19,17 +19,21 @@ import { useToast } from "@/contexts/ToastContext";
 import PersonalInfoStep from "./steps/PersonalInfoStep";
 import NextOfKinStep from "./steps/NextOfKinStep";
 import DocumentUploadStep from "./steps/DocumentUploadStep";
-import { getMembershipAction, checkCooperativeStatusAction } from "@/app/actions/cooperative";
-import { Loader2 } from "lucide-react";
 
-function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | "premium" }) {
+interface OnboardingContentProps {
+    initialTier: "basic" | "premium";
+    paymentStatus: string; // "pending" | "completed"
+}
+
+function CooperativeOnboardingContent({ initialTier, paymentStatus }: OnboardingContentProps) {
     const router = useRouter();
     const { showToast } = useToast();
-    const [currentStep, setCurrentStep] = useState(1);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isLoading, setIsLoading] = useState(false); // No longer loading initially
 
-    // Use prop for tier
+    // If payment is already done, start at step 4 (review & submit)
+    const [currentStep, setCurrentStep] = useState(paymentStatus === "completed" ? 4 : 1);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isPaymentLoading, setIsPaymentLoading] = useState(false);
+
     const [tier] = useState<"basic" | "premium">(initialTier);
 
     const [personalInfo, setPersonalInfo] = useState({
@@ -60,26 +64,42 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
         bvn: ""
     });
 
-    const totalSteps = 3;
+    const isPaid = paymentStatus === "completed";
+    const totalSteps = 4;
 
     const steps = [
         { number: 1, name: "Personal Info" },
         { number: 2, name: "Next of Kin" },
         { number: 3, name: "Documents" },
+        { number: 4, name: "Payment" },
     ];
+
+    const handlePayNow = async () => {
+        setIsPaymentLoading(true);
+        try {
+            const result = await initiateCooperativePaymentAction("basic");
+            if (result.success && result.paymentUrl) {
+                window.location.href = result.paymentUrl;
+            } else {
+                showToast(result.error || "Failed to initiate payment", "error");
+                setIsPaymentLoading(false);
+            }
+        } catch (error) {
+            showToast("An unexpected error occurred", "error");
+            setIsPaymentLoading(false);
+        }
+    };
 
     const handleComplete = async () => {
         setIsSubmitting(true);
         try {
             const formData = new FormData();
 
-            // Tier (From Server, verified)
             formData.append("membershipTier", tier);
 
-            // Personal Info
             const nameParts = personalInfo.fullName.trim().split(" ");
             const firstName = nameParts[0] || "";
-            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : firstName; // Fallback if single name
+            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : firstName;
 
             formData.append("firstName", firstName);
             formData.append("lastName", lastName);
@@ -88,18 +108,13 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
             formData.append("email", personalInfo.email);
             formData.append("phone", personalInfo.phone);
             formData.append("occupation", personalInfo.occupation);
-
-            // Address Mapping
             formData.append("stateOfOrigin", personalInfo.address.state);
             formData.append("lga", personalInfo.address.lga || "N/A");
             formData.append("residentialAddress", personalInfo.address.street);
-
-            // Next of Kin
             formData.append("nextOfKinName", nextOfKin.fullName);
             formData.append("nextOfKinPhone", nextOfKin.phone);
             formData.append("nextOfKinAddress", nextOfKin.address);
 
-            // Documents (uploaded to Firebase Storage)
             if (documents.validId?.url) {
                 formData.append("validIdUrl", documents.validId.url);
                 formData.append("validIdName", documents.validId.name);
@@ -112,18 +127,14 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
                 formData.append("proofOfAddressUrl", documents.proofOfAddress.url);
                 formData.append("proofOfAddressName", documents.proofOfAddress.name);
             }
-
-            // BVN
             if (documents.bvn) {
                 formData.append("bvn", documents.bvn);
             }
 
-            // Call Server Action
             const result = await registerCooperativeMemberAction(formData);
 
             if (result.success) {
                 showToast("Application submitted successfully!", "success");
-                // Redirect to pending page
                 router.push("/cooperatives/onboarding/pending");
             } else {
                 showToast(result.error || "Registration failed. Please try again.", "error");
@@ -166,24 +177,20 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
                             <div key={step.number} className="flex items-center flex-1">
                                 <div className="flex flex-col items-center flex-1">
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${currentStep > step.number
-                                        ? "bg-purple-600 text-white"
-                                        : currentStep === step.number
-                                            ? "bg-purple-600 text-white ring-4 ring-purple-200"
-                                            : "bg-slate-200 text-slate-600"
+                                            ? "bg-purple-600 text-white"
+                                            : currentStep === step.number
+                                                ? "bg-purple-600 text-white ring-4 ring-purple-200"
+                                                : "bg-slate-200 text-slate-600"
                                         }`}>
-                                        {step.number}
+                                        {currentStep > step.number ? <CheckCircle className="w-5 h-5" /> : step.number}
                                     </div>
-                                    <span className={`text-xs mt-2 font-medium ${currentStep === step.number
-                                        ? "text-purple-600"
-                                        : "text-slate-600"
+                                    <span className={`text-xs mt-2 font-medium ${currentStep === step.number ? "text-purple-600" : "text-slate-600"
                                         }`}>
                                         {step.name}
                                     </span>
                                 </div>
                                 {index < steps.length - 1 && (
-                                    <div className={`h-0.5 flex-1 mx-2 ${currentStep > step.number
-                                        ? "bg-purple-600"
-                                        : "bg-slate-200"
+                                    <div className={`h-0.5 flex-1 mx-2 ${currentStep > step.number ? "bg-purple-600" : "bg-slate-200"
                                         }`} />
                                 )}
                             </div>
@@ -199,49 +206,144 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
 
             {/* Content */}
             <div className="max-w-4xl mx-auto px-8 py-12">
-                {isLoading ? (
-                    <div className="flex justify-center py-20">
-                        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+                {currentStep === 1 && (
+                    <PersonalInfoStep
+                        data={personalInfo}
+                        onChange={setPersonalInfo}
+                        onNext={() => setCurrentStep(2)}
+                        onBack={() => router.push("/cooperatives")}
+                    />
+                )}
+                {currentStep === 2 && (
+                    <NextOfKinStep
+                        data={nextOfKin}
+                        onChange={setNextOfKin}
+                        onNext={() => setCurrentStep(3)}
+                        onBack={() => setCurrentStep(1)}
+                    />
+                )}
+                {currentStep === 3 && (
+                    <DocumentUploadStep
+                        data={documents}
+                        onChange={setDocuments}
+                        onNext={() => setCurrentStep(4)}
+                        onBack={() => setCurrentStep(2)}
+                        isSubmitting={false}
+                    />
+                )}
+
+                {/* Step 4: Payment & Submit */}
+                {currentStep === 4 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-8">
+                        <div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-1">Membership Payment</h2>
+                            <p className="text-slate-500">Complete your one-time membership fee to submit your application.</p>
+                        </div>
+
+                        {isPaid ? (
+                            /* Payment already done — show submit */
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+                                    <CheckCircle className="w-6 h-6 text-green-600 shrink-0" />
+                                    <div>
+                                        <p className="font-semibold text-green-800">Payment Confirmed</p>
+                                        <p className="text-sm text-green-700">Your ₦10,000 membership fee has been received.</p>
+                                    </div>
+                                </div>
+
+                                <p className="text-slate-600">
+                                    Your application is ready to submit. Click below to send it for admin review.
+                                </p>
+
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => setCurrentStep(3)}
+                                        className="px-6 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition"
+                                    >
+                                        ← Back
+                                    </button>
+                                    <button
+                                        onClick={handleComplete}
+                                        disabled={isSubmitting}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 px-6 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition disabled:opacity-70 disabled:cursor-not-allowed"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                Submitting Application...
+                                            </>
+                                        ) : (
+                                            "Submit Application →"
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* Payment not yet done — show pay button */
+                            <div className="space-y-6">
+                                <div className="text-center py-6 border-2 border-dashed border-purple-200 rounded-2xl bg-purple-50">
+                                    <p className="text-sm font-semibold text-purple-600 uppercase tracking-widest mb-2">One-Time Membership Fee</p>
+                                    <div className="text-5xl font-extrabold text-slate-900 mb-1">₦10,000</div>
+                                    <p className="text-slate-500 text-sm">Pay once. Access forever.</p>
+                                </div>
+
+                                <ul className="space-y-2 text-sm text-slate-600">
+                                    {[
+                                        "Access to low-interest business loans",
+                                        "High-yield fixed savings plans",
+                                        "Network with top agricultural exporters",
+                                        "Exclusive export market insights",
+                                    ].map((item, i) => (
+                                        <li key={i} className="flex items-center gap-2">
+                                            <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                                            {item}
+                                        </li>
+                                    ))}
+                                </ul>
+
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => setCurrentStep(3)}
+                                        className="px-6 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition"
+                                    >
+                                        ← Back
+                                    </button>
+                                    <button
+                                        onClick={handlePayNow}
+                                        disabled={isPaymentLoading}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 px-6 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-purple-200"
+                                    >
+                                        {isPaymentLoading ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                Redirecting to payment...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CreditCard className="w-5 h-5" />
+                                                Pay ₦10,000 Now
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
+                                    <ShieldCheck className="w-4 h-4" />
+                                    <span>Secured by Paystack</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                ) : (
-                    <>
-                        {currentStep === 1 && (
-                            <PersonalInfoStep
-                                data={personalInfo}
-                                onChange={setPersonalInfo}
-                                onNext={() => setCurrentStep(2)}
-                                onBack={() => router.push("/cooperatives")} // Back to dashboard/hub
-                            />
-                        )}
-                        {currentStep === 2 && (
-                            <NextOfKinStep
-                                data={nextOfKin}
-                                onChange={setNextOfKin}
-                                onNext={() => setCurrentStep(3)}
-                                onBack={() => setCurrentStep(1)}
-                            />
-                        )}
-                        {currentStep === 3 && (
-                            <DocumentUploadStep
-                                data={documents}
-                                onChange={setDocuments}
-                                onNext={handleComplete}
-                                onBack={() => setCurrentStep(2)}
-                                isSubmitting={isSubmitting} // Pass submitting state to final step
-                            />
-                        )}
-                    </>
                 )}
             </div>
         </div>
     );
 }
 
-// Wrap with error boundary
-export default function CooperativeOnboardingClient({ initialTier }: { initialTier: "basic" | "premium" }) {
+export default function CooperativeOnboardingClient({ initialTier, paymentStatus }: OnboardingContentProps) {
     return (
         <CooperativeErrorBoundary>
-            <CooperativeOnboardingContent initialTier={initialTier} />
+            <CooperativeOnboardingContent initialTier={initialTier} paymentStatus={paymentStatus} />
         </CooperativeErrorBoundary>
     );
 }
