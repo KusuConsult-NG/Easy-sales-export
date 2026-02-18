@@ -7,9 +7,8 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
 import { Upload, FileText, Image, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { uploadFile, validateFile, generateDocumentPath } from "@/lib/storage-upload";
+import { uploadDocumentAction } from "@/app/actions/upload";
 
 interface DocumentUploadStepProps {
     data: {
@@ -32,7 +31,6 @@ interface UploadState {
 import { useToast } from "@/contexts/ToastContext";
 
 export default function DocumentUploadStep({ data, onChange, onNext, onBack }: DocumentUploadStepProps) {
-    const { data: session } = useSession();
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [bvnConsent, setBvnConsent] = useState(false);
@@ -43,61 +41,59 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
         proofOfAddress: { uploading: false, progress: 0 },
     });
 
+    const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+
     const handleFileUpload = async (field: string, file: File | null) => {
         if (!file) return;
 
-        // Validate file
-        const validation = validateFile(file, 5, ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf']);
-        if (!validation.valid) {
-            setErrors({ ...errors, [field]: validation.error || 'Invalid file' });
+        // Validate type
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            setErrors(prev => ({ ...prev, [field]: 'Invalid file type. Only JPG, PNG, PDF allowed.' }));
             return;
         }
 
-        // Clear previous errors
-        setErrors({ ...errors, [field]: '' });
+        // Validate size (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            setErrors(prev => ({ ...prev, [field]: 'File too large. Max 5MB.' }));
+            return;
+        }
 
-        // Set uploading state
-        setUploadStates({
-            ...uploadStates,
-            [field]: { uploading: true, progress: 0 }
-        });
+        // Clear previous error
+        setErrors(prev => ({ ...prev, [field]: '' }));
+
+        // Show uploading state
+        setUploadStates(prev => ({ ...prev, [field]: { uploading: true, progress: 10 } }));
 
         try {
-            // Use real authenticated user ID for Firebase Storage path
-            const userId = session?.user?.id || `anon-${Date.now()}`;
-            const filePath = generateDocumentPath(userId, field, file.name);
-
-            // Upload to Firebase Storage with progress tracking
-            const downloadURL = await uploadFile(file, filePath, (progress) => {
-                setUploadStates((prev: Record<string, UploadState>) => ({
-                    ...prev,
-                    [field]: {
-                        uploading: progress.status === 'uploading',
-                        progress: progress.progress,
-                        error: progress.error
-                    }
-                }));
+            // Read file as base64
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
             });
 
-            // Update form data with permanent URL
-            onChange({
-                ...data,
-                [field]: { name: file.name, url: downloadURL }
-            });
+            // Show progress
+            setUploadStates(prev => ({ ...prev, [field]: { uploading: true, progress: 40 } }));
 
-            // Reset upload state
-            setUploadStates((prev: Record<string, UploadState>) => ({
-                ...prev,
-                [field]: { uploading: false, progress: 100 }
-            }));
+            // Upload via Server Action (bypasses App Check)
+            const result = await uploadDocumentAction(base64, file.name, file.type, field);
+
+            if (!result.success || !result.url) {
+                throw new Error(result.error || 'Upload failed');
+            }
+
+            // Update form data
+            onChange({ ...data, [field]: { name: file.name, url: result.url } });
+
+            setUploadStates(prev => ({ ...prev, [field]: { uploading: false, progress: 100 } }));
+            showToast('File uploaded successfully', 'success');
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-            setErrors({ ...errors, [field]: errorMessage });
-            setUploadStates((prev: Record<string, UploadState>) => ({
-                ...prev,
-                [field]: { uploading: false, progress: 0, error: errorMessage }
-            }));
+            setErrors(prev => ({ ...prev, [field]: errorMessage }));
+            setUploadStates(prev => ({ ...prev, [field]: { uploading: false, progress: 0, error: errorMessage } }));
+            showToast(errorMessage, 'error');
         }
     };
 
