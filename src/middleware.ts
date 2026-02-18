@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
 import { canAccessRoute } from "@/lib/role-app-mapping";
 import { rateLimit } from "@/lib/rate-limit";
 import type { UserRole } from "@/lib/types/roles";
+
+// Initialize NextAuth with Edge-safe config
+const { auth } = NextAuth(authConfig);
 
 /**
  * Enhanced Next.js Middleware for Route Protection

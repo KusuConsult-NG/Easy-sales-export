@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { loginSchema } from "./schemas";
 import { COLLECTIONS, type UserRole } from "./types/firestore";
 import type { User as FirestoreUser } from "./types/firestore";
+import { authConfig } from "./auth.config";
 
 /**
  * NextAuth v5 Configuration
@@ -16,6 +17,7 @@ import type { User as FirestoreUser } from "./types/firestore";
 
 // Export real NextAuth configuration
 export const { handlers, signIn, signOut, auth } = NextAuth({
+    ...authConfig,
     providers: [
         Credentials({
             name: "credentials",
