@@ -34,6 +34,17 @@ const landingPages = [
     '/wave/landing'
 ];
 
+// Module prefixes that require an approved role before showing the sidebar
+// Maps route prefix → required role(s)
+const MODULE_ROLE_MAP: Record<string, string[]> = {
+    '/cooperatives': ['cooperative_member'],
+    '/wave': ['wave_participant'],
+    '/export': ['export_participant'],
+    '/marketplace': ['buyer', 'seller'],
+    '/farm-nation': ['farmer', 'land_owner', 'investor'],
+    '/academy': ['academy_participant'],
+};
+
 function LayoutContent({ children }: ClientLayoutProps) {
     const pathname = usePathname();
     const { data: session, status } = useSession();
@@ -43,20 +54,40 @@ function LayoutContent({ children }: ClientLayoutProps) {
     // 1. User must be authenticated
     // 2. Not on excluded routes (admin, auth, api)
     // 3. Not on a landing page (exact match)
-    // 4. Not on onboarding/login/registration flows for specific apps
+    // 4. Not on any pre-approval flow (onboarding, payment, pending, setup, etc.)
+    // 5. User must have an approved role for the module they're accessing
+
+    // Pre-approval path segments — sidebar is NEVER shown on these
     const isExcludedFlow =
         pathname.includes('/login') ||
         pathname.includes('/register') ||
         pathname.includes('/onboarding') ||
-        pathname.includes('/application') || // Wave application
-        pathname.includes('/join');
+        pathname.includes('/application') ||   // Wave application steps
+        pathname.includes('/join') ||
+        pathname.includes('/payment') ||        // Cooperative payment flow
+        pathname.includes('/verify-payment') || // Payment verification
+        pathname.includes('/pending') ||        // Pending approval pages
+        pathname.includes('/pending-payment') ||
+        pathname.includes('/review-pending') || // Wave review pending
+        pathname.includes('/setup') ||          // Academy setup
+        pathname.includes('/access-denied');    // Access denied pages
+
+    // Role-awareness: hide sidebar if user has no approved role for this module
+    const userRoles: string[] = (session?.user?.roles as string[]) || [];
+    const moduleEntry = Object.entries(MODULE_ROLE_MAP).find(([prefix]) =>
+        pathname.startsWith(prefix)
+    );
+    const lacksModuleRole = moduleEntry
+        ? !moduleEntry[1].some(role => userRoles.includes(role))
+        : false;
 
     const shouldShowSidebar =
         status === "authenticated" &&
         session &&
         !noSidebarRoutes.some(route => pathname.startsWith(route)) &&
         !landingPages.includes(pathname) &&
-        !isExcludedFlow;
+        !isExcludedFlow &&
+        !lacksModuleRole;
 
     return (
         <ToastProvider>

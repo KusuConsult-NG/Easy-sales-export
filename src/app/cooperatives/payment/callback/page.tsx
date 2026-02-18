@@ -23,14 +23,10 @@ function PaymentCallbackContent() {
 
             if (data.success) {
                 setStatus("success");
+                // Redirect to onboarding form so user can complete their membership application
                 setTimeout(() => {
-                    const cooperativeId = searchParams.get("cooperativeId");
-                    if (cooperativeId) {
-                        router.push(`/cooperatives/${cooperativeId}`);
-                    } else {
-                        router.push("/cooperatives");
-                    }
-                }, 3000);
+                    router.push("/cooperatives/onboarding");
+                }, 2000);
             } else {
                 setStatus("failed"); // Fixed type error (was "error")
                 setMessage(data.error || "Payment verification failed");
@@ -80,12 +76,9 @@ function PaymentCallbackContent() {
                         <p className="text-slate-600 mb-6">
                             {message}
                         </p>
-                        <Link
-                            href="/cooperatives"
-                            className="inline-block px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors"
-                        >
-                            Go to Cooperatives
-                        </Link>
+                        <p className="text-sm text-slate-500">
+                            Redirecting you to your membership form...
+                        </p>
                     </>
                 )}
 
@@ -102,7 +95,7 @@ function PaymentCallbackContent() {
                         </p>
                         <div className="flex gap-3">
                             <Link
-                                href="/auth/register?callbackUrl=/cooperatives/onboarding"
+                                href="/cooperatives/payment"
                                 className="inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-purple-700 transition"
                             >
                                 Try Again
