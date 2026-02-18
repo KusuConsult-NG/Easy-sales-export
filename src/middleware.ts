@@ -203,7 +203,6 @@ export default auth(async (request: NextRequest & { auth: any }) => {
             } else {
                 // CRITICAL FIX: Do NOT redirect to /dashboard?error=unauthorized
                 // Instead, redirect to module selection so users can apply for the module
-                logger.warn(`Access denied for user to ${pathname}, redirecting to module selection`);
                 return NextResponse.redirect(new URL("/auth/get-started", request.url));
             }
         }
