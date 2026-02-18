@@ -7,6 +7,7 @@
 "use client";
 
 import { useState } from "react";
+import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
 
 interface PersonalInfoStepProps {
     data: {
@@ -33,13 +34,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const nigeriaStates = [
-        "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
-        "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT", "Gombe", "Imo",
-        "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa",
-        "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba",
-        "Yobe", "Zamfara"
-    ];
+    // STATES and NIGERIAN_LOCATIONS imported from @/lib/locations
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
@@ -241,7 +236,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                                     }`}
                             >
                                 <option value="">Select state</option>
-                                {nigeriaStates.map((state) => (
+                                {STATES.map((state) => (
                                     <option key={state} value={state}>{state}</option>
                                 ))}
                             </select>
@@ -252,16 +247,22 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
 
                         <div>
                             <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                LGA
+                                LGA <span className="text-red-500">*</span>
                             </label>
-                            <input
-                                type="text"
+                            <select
                                 value={data.address.lga}
                                 onChange={(e) => onChange({ ...data, address: { ...data.address, lga: e.target.value } })}
-                                placeholder="Local Government Area"
                                 disabled={!data.address.state}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50"
-                            />
+                                className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 ${errors.lga ? "border-red-500" : "border-slate-300"}`}
+                            >
+                                <option value="">Select LGA</option>
+                                {(data.address.state && NIGERIAN_LOCATIONS[data.address.state]?.map((lga) => (
+                                    <option key={lga} value={lga}>{lga}</option>
+                                ))) || []}
+                            </select>
+                            {errors.lga && (
+                                <p className="text-sm text-red-600 mt-1">{errors.lga}</p>
+                            )}
                         </div>
                     </div>
 

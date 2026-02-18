@@ -7,6 +7,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Upload, FileText, Image, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { uploadFile, validateFile, generateDocumentPath } from "@/lib/storage-upload";
 
@@ -32,6 +33,7 @@ interface UploadState {
 import { useToast } from "@/contexts/ToastContext";
 
 export default function DocumentUploadStep({ data, onChange, onNext, onBack, isSubmitting = false }: DocumentUploadStepProps) {
+    const { data: session } = useSession();
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [bvnConsent, setBvnConsent] = useState(false);
@@ -62,10 +64,9 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
         });
 
         try {
-            // Generate unique file path
-            // Use a temporary ID for onboarding (will be replaced with actual user ID after auth)
-            const tempUserId = `temp-${Date.now()}`;
-            const filePath = generateDocumentPath(tempUserId, field, file.name);
+            // Use real authenticated user ID for Firebase Storage path
+            const userId = session?.user?.id || `anon-${Date.now()}`;
+            const filePath = generateDocumentPath(userId, field, file.name);
 
             // Upload to Firebase Storage with progress tracking
             const downloadURL = await uploadFile(file, filePath, (progress) => {
