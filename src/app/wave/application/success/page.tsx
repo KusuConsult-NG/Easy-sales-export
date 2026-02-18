@@ -165,7 +165,7 @@ export default function ApplicationSuccessPage() {
 
                         <div className="pt-4">
                             <Link
-                                href="/auth/register?callbackUrl=/cooperatives/onboarding"
+                                href="/cooperatives/onboarding"
                                 className="inline-flex items-center justify-center gap-2 bg-white text-green-700 px-6 py-3 rounded-full font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm sm:text-base border border-green-100"
                             >
                                 <ShieldCheck className="w-8 h-8" />
