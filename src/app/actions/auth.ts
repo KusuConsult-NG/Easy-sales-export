@@ -96,27 +96,59 @@ export async function getPostLoginRedirect(email: string) {
             const userRoles = userData.roles || ['general_user'];
             const serviceRegistrations = (userData as any).serviceRegistrations || {};
 
-            // CRITICAL: Check if user has ANY approved modules
-            // If not, redirect to module selection page
-            const hasApprovedModule = Object.values(serviceRegistrations).some(
-                (reg: any) => reg?.status === 'approved'
-            );
+            // CRITICAL: Check application status and redirect accordingly
+            // Priority: Approved > Pending > No Applications
 
-            if (!hasApprovedModule) {
-                logger.info(`User ${email} has no approved modules, redirecting to module selection`);
+            // 1. Check for approved modules
+            const approvedModules = Object.entries(serviceRegistrations)
+                .filter(([_, reg]: [string, any]) => reg?.status === 'approved');
+
+            if (approvedModules.length > 0) {
+                // User has approved modules - redirect to primary app
+                const primaryApp = getPrimaryApp(userRoles);
+                logger.info(`User ${email} has approved modules, redirecting to: ${primaryApp}`);
                 return {
                     success: true,
-                    redirectUrl: "/auth/get-started"
+                    redirectUrl: primaryApp
                 };
             }
 
-            // User has approved modules - redirect to primary app
-            const primaryApp = getPrimaryApp(userRoles);
-            logger.info(`User ${email} redirecting to primary app: ${primaryApp}`);
+            // 2. Check for pending applications
+            const pendingModules = Object.entries(serviceRegistrations)
+                .filter(([_, reg]: [string, any]) =>
+                    reg?.status === 'pending' ||
+                    reg?.status === 'under_review' ||
+                    reg?.status === 'pending_review'
+                );
 
+            if (pendingModules.length > 0) {
+                // User has pending applications - show them the review page
+                const [moduleKey, _] = pendingModules[0]; // Get first pending module
+
+                // Map module keys to their pending pages
+                const pendingPageMap: Record<string, string> = {
+                    'wave': '/wave/application/review-pending',
+                    'export': '/export/onboarding/pending',
+                    'marketplace': '/marketplace/onboarding/pending',
+                    'cooperatives': '/cooperatives/onboarding/pending',
+                    'farm_nation': '/farm-nation/onboarding/pending',
+                    'academy': '/academy/application/pending',
+                };
+
+                const pendingPage = pendingPageMap[moduleKey] || '/auth/get-started';
+                logger.info(`User ${email} has pending application for ${moduleKey}, redirecting to: ${pendingPage}`);
+
+                return {
+                    success: true,
+                    redirectUrl: pendingPage
+                };
+            }
+
+            // 3. No applications - send to module selection
+            logger.info(`User ${email} has no applications, redirecting to module selection`);
             return {
                 success: true,
-                redirectUrl: primaryApp
+                redirectUrl: "/auth/get-started"
             };
         }
 
