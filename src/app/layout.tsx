@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClientLayout } from "@/components/layout/ClientLayout";
 import { validateProductionSecrets, checkForExposedKeys } from "@/lib/security-checks";
-import SessionDebugger from "@/components/debug/SessionDebugger";
 
 // Run security checks on app initialization
 if (process.env.NODE_ENV === 'production') {
