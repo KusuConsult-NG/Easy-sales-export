@@ -82,6 +82,8 @@ function determinePostRegistrationRedirect(platforms: string[], roles: UserRole[
 /**
  * Calculate where to redirect the user AFTER they have successfully logged in.
  * This is called by the client component after client-side signIn() succeeds.
+ * 
+ * CRITICAL: Checks onboarding status to prevent premature dashboard access.
  */
 export async function getPostLoginRedirect(email: string) {
     try {
@@ -94,11 +96,23 @@ export async function getPostLoginRedirect(email: string) {
         if (!userSnapshot.empty) {
             const userData = userSnapshot.docs[0].data() as FirestoreUser;
             const userRoles = userData.roles || ['general_user'];
+            const serviceRegistrations = (userData as any).serviceRegistrations || {};
 
             // Determine primary app based on roles
             const primaryApp = getPrimaryApp(userRoles);
-            logger.info(`User ${email} redirecting to primary app: ${primaryApp}`);
 
+            // Check if user needs onboarding for their primary app
+            const onboardingUrl = getOnboardingUrlIfNeeded(userRoles, serviceRegistrations, primaryApp);
+
+            if (onboardingUrl) {
+                logger.info(`User ${email} needs onboarding, redirecting to: ${onboardingUrl}`);
+                return {
+                    success: true,
+                    redirectUrl: onboardingUrl
+                };
+            }
+
+            logger.info(`User ${email} redirecting to primary app: ${primaryApp}`);
             return {
                 success: true,
                 redirectUrl: primaryApp
@@ -110,6 +124,55 @@ export async function getPostLoginRedirect(email: string) {
         logger.error("Failed to determine redirect:", error);
         return { success: true, redirectUrl: "/dashboard" }; // Fail safe
     }
+}
+
+/**
+ * Check if user needs to complete onboarding for their primary app.
+ * Returns onboarding URL if needed, or null if onboarding is complete.
+ */
+function getOnboardingUrlIfNeeded(
+    userRoles: UserRole[],
+    serviceRegistrations: Record<string, any>,
+    primaryApp: string
+): string | null {
+    // Map dashboard URLs to their onboarding URLs and service keys
+    const appOnboardingMap: Record<string, { onboardingUrl: string; serviceKey: string }> = {
+        '/wave/dashboard': { onboardingUrl: '/wave/application', serviceKey: 'wave' },
+        '/marketplace/buyer/dashboard': { onboardingUrl: '/marketplace/onboarding', serviceKey: 'marketplace' },
+        '/marketplace/seller/dashboard': { onboardingUrl: '/marketplace/onboarding', serviceKey: 'marketplace' },
+        '/export/dashboard': { onboardingUrl: '/export/onboarding', serviceKey: 'export' },
+        '/cooperatives/dashboard': { onboardingUrl: '/cooperatives/onboarding', serviceKey: 'cooperatives' },
+        '/farm-nation/dashboard': { onboardingUrl: '/farm-nation/onboarding', serviceKey: 'farm_nation' },
+        '/academy/dashboard': { onboardingUrl: '/academy/setup', serviceKey: 'academy' },
+    };
+
+    const appConfig = appOnboardingMap[primaryApp];
+
+    if (!appConfig) {
+        // No onboarding required for this app (e.g., admin, home page)
+        return null;
+    }
+
+    const { onboardingUrl, serviceKey } = appConfig;
+    const serviceStatus = serviceRegistrations[serviceKey];
+
+    // If no service registration OR status is 'pending' or missing, redirect to onboarding
+    if (!serviceStatus || serviceStatus.status === 'pending' || !serviceStatus.status) {
+        return onboardingUrl;
+    }
+
+    // If status is 'approved', allow dashboard access
+    if (serviceStatus.status === 'approved') {
+        return null;
+    }
+
+    // If status is 'rejected', send to a rejection notice page (or onboarding to reapply)
+    if (serviceStatus.status === 'rejected') {
+        return onboardingUrl; // Let them try again
+    }
+
+    // Default: require onboarding
+    return onboardingUrl;
 }
 
 // DEPRECATED: Old Server Action Login
