@@ -237,14 +237,25 @@ declare module "next-auth" {
     }
 }
 
-declare module "next-auth/jwt" {
-    interface JWT {
+declare module "next-auth" {
+    interface Session {
+        user: {
+            id: string;
+            email: string;
+            name?: string | null;
+            image?: string | null;
+            roles: UserRole[];
+            verified: boolean;
+        };
+        firebaseToken?: string;
+    }
+
+    interface User {
         id: string;
         email: string;
-        name: string;
+        name?: string | null;
         image?: string | null;
-        roles: UserRole[]; // Multi-role support
+        roles: UserRole[];
         verified: boolean;
-        firebaseToken?: string;
     }
 }
