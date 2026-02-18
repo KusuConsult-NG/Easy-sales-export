@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { logger } from '@/lib/logger';
-import { ArrowLeft, CreditCard, CheckCircle, ShieldCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, CreditCard, CheckCircle, ShieldCheck, Loader2, Home } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registerCooperativeMemberAction, initiateCooperativePaymentAction } from "@/app/actions/cooperative";
@@ -152,13 +152,22 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             {/* Header */}
             <div className="bg-white border-b border-slate-200">
                 <div className="max-w-4xl mx-auto px-8 py-6">
-                    <Link
-                        href="/cooperatives"
-                        className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600 mb-4"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Cooperatives
-                    </Link>
+                    <div className="flex items-center justify-between mb-4">
+                        <Link
+                            href="/cooperatives"
+                            className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back to Cooperatives
+                        </Link>
+                        <Link
+                            href="/dashboard"
+                            className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600 text-sm font-medium"
+                        >
+                            <Home className="w-4 h-4" />
+                            Hub
+                        </Link>
+                    </div>
                     <h1 className="text-2xl font-bold text-slate-900">
                         Cooperative Membership Application
                     </h1>
