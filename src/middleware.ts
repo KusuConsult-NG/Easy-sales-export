@@ -111,6 +111,24 @@ export default auth(async (request: NextRequest & { auth: any }) => {
         return NextResponse.next();
     }
 
+    // CRITICAL: Allow access to onboarding/application pages WITHOUT role checks
+    // These are where users GET their roles, so they must be publicly accessible to authenticated users
+    const onboardingRoutes = [
+        '/wave/application',
+        '/marketplace/onboarding',
+        '/export/onboarding',
+        '/cooperatives/onboarding',
+        '/farm-nation/onboarding',
+        '/academy/setup',
+        '/academy/application',
+    ];
+
+    const isOnboardingPage = onboardingRoutes.some(route => pathname.startsWith(route));
+    if (isOnboardingPage && session) {
+        // Allow any authenticated user to access onboarding pages
+        return NextResponse.next();
+    }
+
     // Check session timeout
     if (session) {
         const lastActivity = request.cookies.get("lastActivity")?.value;
