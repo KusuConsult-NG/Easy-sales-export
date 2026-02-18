@@ -267,7 +267,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                 className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             >
                                 <option value="">Select state</option>
-                                {NIGERIAN_STATES.map((state) => (
+                                {STATES.map((state) => (
                                     <option key={state} value={state}>
                                         {state}
                                     </option>
@@ -462,10 +462,9 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 </div>
             </div>
         </div>
-            </div >
 
         {/* Next Button */ }
-        < div className = "mt-8" >
+        <div className="mt-8">
             <button
                 onClick={handleNext}
                 className="w-full bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2"
@@ -473,7 +472,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 Continue to Civic Status
                 <CheckCircle className="w-5 h-5" />
             </button>
-            </div >
-        </div >
+        </div>
+    </div >
     );
 }
