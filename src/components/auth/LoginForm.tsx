@@ -67,17 +67,29 @@ export default function LoginForm() {
             console.log("Client-side login success, fetching redirect...");
 
             // Force session update to be absolutely sure client state matches server
-            await update();
+            showToast("Login successful!", "success");
 
-            // Calculate where to go next based on user roles
-            const redirectResult = await getPostLoginRedirect(formData.email);
-            const targetUrl = redirectResult.redirectUrl || callbackUrl;
+            // CRITICAL: Prioritize explicit callback URL over automatic redirect logic
+            // If user came from a specific page (e.g., activation link), honor that destination
+            const searchParams = new URLSearchParams(window.location.search);
+            const explicitCallbackUrl = searchParams.get('callbackUrl');
 
-            console.log("Redirecting to:", targetUrl);
+            if (explicitCallbackUrl) {
+                // Explicit callback specified - use it directly
+                console.log("Using explicit callback URL:", explicitCallbackUrl);
+                router.push(explicitCallbackUrl);
+            } else {
+                // No callback - use smart redirect based on user's roles/status
+                const redirectResult = await getPostLoginRedirect(formData.email);
 
-            // 3. Force a HARD RELOAD to ensure session cookies are fully recognized
-            // by the middleware on the new page request.
-            window.location.href = targetUrl;
+                if (redirectResult.success && redirectResult.redirectUrl) {
+                    console.log("Using smart redirect:", redirectResult.redirectUrl);
+                    router.push(redirectResult.redirectUrl);
+                } else {
+                    // Fallback to module selection
+                    router.push("/auth/get-started");
+                }
+            }
 
         } catch (err: any) {
             console.error("Login error:", err);
