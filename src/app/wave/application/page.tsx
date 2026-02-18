@@ -264,17 +264,17 @@ export default function WaveApplicationPage() {
     };
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-stone-900 via-emerald-900 to-stone-900">
+        <div className="min-h-screen bg-white">
             <div className="max-w-4xl mx-auto px-4 py-12">
                 {/* Header */}
                 <div className="text-center mb-12">
-                    <h1 className="text-4xl font-bold text-white mb-4">
+                    <h1 className="text-4xl font-bold text-slate-900 mb-4">
                         WAVE Program Application
                     </h1>
-                    <p className="text-lg text-emerald-200 mb-2">
+                    <p className="text-lg text-slate-700 mb-2">
                         Women's Agribusiness Venture Empowerment
                     </p>
-                    <p className="text-xs text-emerald-200/50 uppercase tracking-widest font-semibold">
+                    <p className="text-xs text-slate-500 uppercase tracking-widest font-semibold">
                         Implemented by Easy Sales Export
                     </p>
                 </div>
