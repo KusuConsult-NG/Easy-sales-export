@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { User, Phone, MapPin, Building, ArrowRight, ArrowLeft } from "lucide-react";
+import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 
 interface ProfileStepProps {
     onNext: (data: any) => void;
@@ -31,7 +32,12 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        if (name === "state") {
+            // Reset LGA when state changes
+            setFormData((prev) => ({ ...prev, state: value, lga: "" }));
+        } else {
+            setFormData((prev) => ({ ...prev, [name]: value }));
+        }
         // Clear error when user starts typing
         if (errors[name]) {
             setErrors((prev) => ({ ...prev, [name]: "" }));
@@ -160,15 +166,19 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Local Government Area <span className="text-red-500">*</span>
                     </label>
-                    <input
-                        type="text"
+                    <select
                         name="lga"
                         value={formData.lga}
                         onChange={handleChange}
+                        disabled={!formData.state}
                         className={`w-full px-4 py-3 bg-slate-50 border ${errors.lga ? "border-red-500" : "border-slate-200"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
-                        placeholder="Enter LGA"
-                    />
+                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all disabled:opacity-50`}
+                    >
+                        <option value="">Select LGA</option>
+                        {formData.state && NIGERIAN_LOCATIONS[formData.state]?.map((lga) => (
+                            <option key={lga} value={lga}>{lga}</option>
+                        ))}
+                    </select>
                     {errors.lga && <p className="mt-1 text-sm text-red-500">{errors.lga}</p>}
                 </div>
 

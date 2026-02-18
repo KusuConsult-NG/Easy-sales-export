@@ -621,7 +621,9 @@ export interface AcademyApplicationData {
         email: string;
         phone: string;
         dateOfBirth: string;
+        gender: string;
         state: string;
+        lga: string;
         occupation: string;
     };
     education: {
@@ -635,6 +637,140 @@ export interface AcademyApplicationData {
         topics: string;
         goals: string;
     };
+}
+
+const ACADEMY_REGISTRATION_FEE = 5000; // ₦5,000
+
+/**
+ * Initiate academy onboarding payment (must pay before submitting application)
+ */
+export async function initiateAcademyPaymentAction(): Promise<{
+    success: boolean;
+    paymentUrl?: string;
+    error?: string;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { error: "You must be logged in", success: false };
+        }
+
+        const userId = session.user.id;
+
+        // Check if already paid
+        const existingApp = await db.collection("ACADEMY_APPLICATIONS")
+            .where("userId", "==", userId)
+            .where("paymentStatus", "==", "completed")
+            .limit(1)
+            .get();
+
+        if (!existingApp.empty) {
+            return { error: "You have already paid. Please proceed to complete your application.", success: false };
+        }
+
+        const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!paystackSecretKey) {
+            return { error: "Payment system not configured", success: false };
+        }
+
+        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${paystackSecretKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                email: session.user.email,
+                amount: ACADEMY_REGISTRATION_FEE * 100, // Kobo
+                metadata: {
+                    userId,
+                    purpose: "academy_registration",
+                },
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/payment/callback`,
+            }),
+        });
+
+        if (!paystackResponse.ok) {
+            return { error: "Failed to initialize payment", success: false };
+        }
+
+        const paystackData = await paystackResponse.json();
+
+        if (!paystackData.status || !paystackData.data?.authorization_url) {
+            return { error: "Failed to generate payment link", success: false };
+        }
+
+        return {
+            success: true,
+            paymentUrl: paystackData.data.authorization_url,
+        };
+    } catch (error) {
+        logger.error("Academy payment init failed:", error);
+        return { error: "Failed to initiate payment", success: false };
+    }
+}
+
+/**
+ * Verify academy registration payment callback
+ */
+export async function verifyAcademyPaymentAction(reference: string): Promise<{
+    success: boolean;
+    error?: string;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "Authentication required" };
+
+        const verify = await verifyPaystackPayment(reference);
+        if (!verify.status || verify.data.status !== "success") {
+            return { success: false, error: "Payment verification failed" };
+        }
+
+        const metadata = verify.data.metadata;
+        if (metadata.purpose !== "academy_registration") {
+            return { success: false, error: "Invalid payment type" };
+        }
+
+        // Mark payment as completed for the user
+        await db.collection("users").doc(session.user.id).set({
+            serviceRegistrations: {
+                academy: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    paymentAmount: verify.data.amount / 100,
+                    paidAt: FieldValue.serverTimestamp(),
+                }
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Academy payment verification error:", error);
+        return { success: false, error: "Failed to verify payment" };
+    }
+}
+
+/**
+ * Check if user has paid for academy registration
+ */
+export async function checkAcademyPaymentStatusAction(): Promise<"paid" | "unpaid"> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return "unpaid";
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        if (userData?.serviceRegistrations?.academy?.paymentStatus === "completed") {
+            return "paid";
+        }
+
+        return "unpaid";
+    } catch (error) {
+        logger.error("Check academy payment status error:", error);
+        return "unpaid";
+    }
 }
 
 /**

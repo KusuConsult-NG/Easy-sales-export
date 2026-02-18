@@ -7,6 +7,7 @@
 "use client";
 
 import { useState } from "react";
+import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
 
 interface BusinessProfileData {
     businessName: string;
@@ -26,13 +27,7 @@ interface BusinessProfileStepProps {
     onBack: () => void;
 }
 
-const nigerianStates = [
-    "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
-    "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT", "Gombe", "Imo",
-    "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa",
-    "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba",
-    "Yobe", "Zamfara"
-];
+
 
 export default function BusinessProfileStep({ data, onChange, onNext, onBack }: BusinessProfileStepProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -52,6 +47,10 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
         if (!data.location.state) {
             newErrors.state = "State is required";
+        }
+
+        if (!data.location.lga) {
+            newErrors.lga = "LGA is required";
         }
 
         if (!data.location.address.trim()) {
@@ -114,8 +113,8 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                                 key={type.value}
                                 onClick={() => onChange({ businessType: type.value as any })}
                                 className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${data.businessType === type.value
-                                        ? "border-green-500 bg-green-50 text-green-700"
-                                        : "border-slate-300 hover:border-green-300"
+                                    ? "border-green-500 bg-green-50 text-green-700"
+                                    : "border-slate-300 hover:border-green-300"
                                     }`}
                             >
                                 {type.label}
@@ -149,12 +148,12 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                     </label>
                     <select
                         value={data.location.state}
-                        onChange={(e) => onChange({ location: { ...data.location, state: e.target.value } })}
+                        onChange={(e) => onChange({ location: { ...data.location, state: e.target.value, lga: "" } })}
                         className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.state ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     >
                         <option value="">Select State</option>
-                        {nigerianStates.map((state) => (
+                        {STATES.map((state) => (
                             <option key={state} value={state}>
                                 {state}
                             </option>
@@ -168,15 +167,23 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                 {/* LGA */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Local Government Area
+                        Local Government Area *
                     </label>
-                    <input
-                        type="text"
+                    <select
                         value={data.location.lga}
                         onChange={(e) => onChange({ location: { ...data.location, lga: e.target.value } })}
-                        placeholder="Enter LGA"
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
+                        disabled={!data.location.state}
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.lga ? "border-red-500" : "border-slate-300"
+                            } focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50`}
+                    >
+                        <option value="">Select LGA</option>
+                        {data.location.state && NIGERIAN_LOCATIONS[data.location.state]?.map((lga) => (
+                            <option key={lga} value={lga}>{lga}</option>
+                        ))}
+                    </select>
+                    {errors.lga && (
+                        <p className="mt-1 text-sm text-red-600">{errors.lga}</p>
+                    )}
                 </div>
 
                 {/* Address */}

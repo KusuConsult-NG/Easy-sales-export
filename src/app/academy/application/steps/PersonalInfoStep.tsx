@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import { User, MapPin, Briefcase, Phone, Calendar } from "lucide-react";
+import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
 
 interface PersonalInfoData {
     fullName: string;
     email: string;
     phone: string;
     dateOfBirth: string;
+    gender: string;
     state: string;
+    lga: string;
     occupation: string;
 }
 
@@ -18,17 +20,14 @@ interface PersonalInfoStepProps {
     errors: Record<string, string>;
 }
 
-const NIGERIAN_STATES = [
-    "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
-    "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT", "Gombe",
-    "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara",
-    "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau",
-    "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"
-];
-
 export default function PersonalInfoStep({ data, onChange, errors }: PersonalInfoStepProps) {
     const handleChange = (field: keyof PersonalInfoData, value: string) => {
-        onChange({ ...data, [field]: value });
+        if (field === "state") {
+            // Reset LGA when state changes
+            onChange({ ...data, state: value, lga: "" });
+        } else {
+            onChange({ ...data, [field]: value });
+        }
     };
 
     return (
@@ -96,6 +95,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                             className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.phone ? "border-red-500" : "border-slate-300"
                                 } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="+234 800 000 0000"
+                            maxLength={11}
                         />
                     </div>
                     {errors.phone && (
@@ -122,6 +122,27 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                     )}
                 </div>
 
+                {/* Gender */}
+                <div>
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        Gender *
+                    </label>
+                    <select
+                        value={data.gender}
+                        onChange={(e) => handleChange("gender", e.target.value)}
+                        className={`w-full px-4 py-3 bg-white border ${errors.gender ? "border-red-500" : "border-slate-300"
+                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                    >
+                        <option value="">Select gender</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                    </select>
+                    {errors.gender && (
+                        <p className="mt-1 text-sm text-red-600">{errors.gender}</p>
+                    )}
+                </div>
+
+                {/* State */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         State of Residence *
@@ -135,7 +156,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                                 } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                         >
                             <option value="">Select your state</option>
-                            {NIGERIAN_STATES.map((state) => (
+                            {STATES.map((state) => (
                                 <option key={state} value={state}>
                                     {state}
                                 </option>
@@ -147,6 +168,29 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                     )}
                 </div>
 
+                {/* LGA */}
+                <div>
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        Local Government Area *
+                    </label>
+                    <select
+                        value={data.lga}
+                        onChange={(e) => handleChange("lga", e.target.value)}
+                        disabled={!data.state}
+                        className={`w-full px-4 py-3 bg-white border ${errors.lga ? "border-red-500" : "border-slate-300"
+                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50`}
+                    >
+                        <option value="">Select LGA</option>
+                        {data.state && NIGERIAN_LOCATIONS[data.state]?.map((lga) => (
+                            <option key={lga} value={lga}>{lga}</option>
+                        ))}
+                    </select>
+                    {errors.lga && (
+                        <p className="mt-1 text-sm text-red-600">{errors.lga}</p>
+                    )}
+                </div>
+
+                {/* Occupation */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Current Occupation *

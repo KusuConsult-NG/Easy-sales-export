@@ -88,7 +88,9 @@ export default function AcademyOnboardingPage() {
                     email: session.user.email || "",
                     phone: "", // TODO: Should collect phone
                     dateOfBirth: "", // TODO: Should collect DOB
+                    gender: "", // TODO: Should collect gender
                     state: "", // TODO: Should collect state
+                    lga: "", // TODO: Should collect LGA
                     occupation: "", // TODO: Should collect occupation
                 },
                 education: {
