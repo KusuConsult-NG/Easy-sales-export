@@ -132,17 +132,17 @@ export default function MessagesPage() {
     }
 
     return (
-        <div className="h-screen flex bg-slate-50 dark:bg-slate-950">
+        <div className="h-screen flex bg-slate-50">
             {/* Conversations List */}
-            <div className="w-80 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
-                <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+            <div className="w-80 border-r border-slate-200 bg-white flex flex-col">
+                <div className="p-4 border-b border-slate-200">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Messages</h2>
+                        <h2 className="text-xl font-bold text-slate-900">Messages</h2>
                         <button
                             onClick={() => setShowNewChat(!showNewChat)}
-                            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
                         >
-                            <Plus className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                            <Plus className="w-5 h-5 text-slate-600" />
                         </button>
                     </div>
 
@@ -155,7 +155,7 @@ export default function MessagesPage() {
                                     value={searchQuery}
                                     onChange={(e) => handleSearch(e.target.value)}
                                     placeholder="Search users..."
-                                    className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full pl-10 pr-4 py-2 bg-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
 
@@ -167,9 +167,9 @@ export default function MessagesPage() {
                                         <button
                                             key={user.uid}
                                             onClick={() => handleStartConversation(user.uid)}
-                                            className="w-full p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition-colors"
+                                            className="w-full p-3 rounded-lg hover:bg-slate-100 text-left transition-colors"
                                         >
-                                            <div className="font-medium text-slate-900 dark:text-white">{user.fullName}</div>
+                                            <div className="font-medium text-slate-900">{user.fullName}</div>
                                             <div className="text-xs text-slate-500">{user.email}</div>
                                         </button>
                                     ))}
@@ -181,7 +181,7 @@ export default function MessagesPage() {
 
                 <div className="flex-1 overflow-y-auto">
                     {conversations.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+                        <div className="p-8 text-center text-slate-500 text-sm">
                             No conversations yet. Click + to start chatting.
                         </div>
                     ) : (
@@ -193,7 +193,7 @@ export default function MessagesPage() {
                                 <button
                                     key={conv.id}
                                     onClick={() => setSelectedConv(conv.id)}
-                                    className={`w-full p-4 border-b border-slate-100 dark:border-slate-800 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isSelected ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                                    className={`w-full p-4 border-b border-slate-100 text-left hover:bg-slate-50 transition-colors ${isSelected ? "bg-blue-50" : ""
                                         }`}
                                 >
                                     <div className="flex items-start gap-3">
@@ -201,10 +201,10 @@ export default function MessagesPage() {
                                             {other?.name.charAt(0).toUpperCase() || "U"}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-slate-900 dark:text-white truncate">
+                                            <div className="font-medium text-slate-900 truncate">
                                                 {other?.name || "User"}
                                             </div>
-                                            <div className="text-sm text-slate-500 dark:text-slate-400 truncate">
+                                            <div className="text-sm text-slate-500 truncate">
                                                 {conv.lastMessage?.text || "No messages yet"}
                                             </div>
                                         </div>
@@ -224,13 +224,13 @@ export default function MessagesPage() {
             {/* Message Thread */}
             <div className="flex-1 flex flex-col">
                 {!selectedConv ? (
-                    <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+                    <div className="flex-1 flex items-center justify-center bg-slate-50">
                         <div className="text-center">
-                            <MessageSquare className="w-20 h-20 mx-auto text-slate-300 dark:text-slate-900 mb-4" />
-                            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                            <MessageSquare className="w-20 h-20 mx-auto text-slate-300 mb-4" />
+                            <h3 className="text-xl font-semibold text-slate-900 mb-2">
                                 Select a conversation
                             </h3>
-                            <p className="text-slate-500 dark:text-slate-400">
+                            <p className="text-slate-500">
                                 Choose a chat from the list or start a new conversation
                             </p>
                         </div>
@@ -238,13 +238,13 @@ export default function MessagesPage() {
                 ) : (
                     <>
                         {/* Header */}
-                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <div className="p-4 border-b border-slate-200 bg-white">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
                                     {getOtherParticipant(conversations.find(c => c.id === selectedConv)!)?.name.charAt(0).toUpperCase() || "U"}
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-slate-900 dark:text-white">
+                                    <h3 className="font-semibold text-slate-900">
                                         {getOtherParticipant(conversations.find(c => c.id === selectedConv)!)?.name || "User"}
                                     </h3>
                                     <p className="text-xs text-slate-500">
@@ -255,7 +255,7 @@ export default function MessagesPage() {
                         </div>
 
                         {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
                             {messages.map(msg => {
                                 const isOwnMessage = msg.senderId === session?.user?.id;
 
@@ -266,7 +266,7 @@ export default function MessagesPage() {
                                     >
                                         <div className={`max-w-md px-4 py-2 rounded-2xl ${isOwnMessage
                                                 ? "bg-blue-600 text-white"
-                                                : "bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                                                : "bg-white text-slate-900"
                                             }`}>
                                             {!isOwnMessage && (
                                                 <div className="text-xs font-medium mb-1 opacity-70">
@@ -284,7 +284,7 @@ export default function MessagesPage() {
                         </div>
 
                         {/* Input */}
-                        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <div className="p-4 border-t border-slate-200 bg-white">
                             <div className="flex items-center gap-2">
                                 <input
                                     type="text"
@@ -293,7 +293,7 @@ export default function MessagesPage() {
                                     onKeyPress={(e) => e.key === "Enter" && handleSend()}
                                     placeholder="Type a message..."
                                     disabled={sending}
-                                    className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                                    className="flex-1 px-4 py-2 bg-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                                 />
                                 <button
                                     onClick={handleSend}

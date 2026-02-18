@@ -109,22 +109,22 @@ export default function AdminAcademyApplicationsPage() {
     const getStatusColor = (status: ApplicationStatus) => {
         switch (status) {
             case "approved":
-                return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400";
+                return "bg-green-100 text-green-700";
             case "rejected":
-                return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400";
+                return "bg-red-100 text-red-700";
             case "pending":
-                return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400";
+                return "bg-yellow-100 text-yellow-700";
         }
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-8">
+        <div className="min-h-screen bg-slate-50 p-8">
             {/* Header */}
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     Academy Applications
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Review and manage Academy learner applications
                 </p>
             </div>
@@ -135,7 +135,7 @@ export default function AdminAcademyApplicationsPage() {
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "all")}
-                    className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
                 >
                     <option value="all">All Applications</option>
                     <option value="pending">Pending</option>
@@ -165,21 +165,21 @@ export default function AdminAcademyApplicationsPage() {
                     {applications.map((app) => (
                         <div
                             key={app.id}
-                            className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2"
+                            className="bg-white rounded-2xl p-6 elevation-2"
                         >
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                                        <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                        <BookOpen className="w-6 h-6 text-blue-600" />
                                     </div>
                                     <div>
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                                        <h3 className="text-lg font-bold text-slate-900">
                                             {app.personalInfo?.fullName}
                                         </h3>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                        <p className="text-sm text-slate-500">
                                             {app.personalInfo?.email} • {app.personalInfo?.phone}
                                         </p>
-                                        <p className="text-sm text-slate-600 dark:text-white mt-1">
+                                        <p className="text-sm text-slate-600 mt-1">
                                             Education: <span className="font-semibold">{app.education?.educationLevel} ({app.education?.fieldOfStudy})</span>
                                         </p>
                                     </div>
@@ -189,8 +189,8 @@ export default function AdminAcademyApplicationsPage() {
                                 </span>
                             </div>
 
-                            <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+                                <p className="text-xs text-slate-500">
                                     Applied: {formatDate(app.submittedAt)}
                                 </p>
 
@@ -199,7 +199,7 @@ export default function AdminAcademyApplicationsPage() {
                                         <button
                                             onClick={() => handleReject(app.id)}
                                             disabled={processingId === app.id}
-                                            className="px-4 py-2 rounded-lg border border-red-300 dark:border-red-600 text-red-700 dark:text-red-400 font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-50 flex items-center gap-2"
+                                            className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
                                         >
                                             {processingId === app.id ? (
                                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -224,7 +224,7 @@ export default function AdminAcademyApplicationsPage() {
                                 )}
 
                                 {app.status === "rejected" && app.rejectionReason && (
-                                    <p className="text-sm text-red-600 dark:text-red-400">
+                                    <p className="text-sm text-red-600">
                                         Reason: {app.rejectionReason}
                                     </p>
                                 )}
@@ -233,12 +233,12 @@ export default function AdminAcademyApplicationsPage() {
                     ))}
 
                     {applications.length === 0 && (
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center">
-                            <BookOpen className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                        <div className="bg-white rounded-2xl p-12 text-center">
+                            <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 No Applications Found
                             </h3>
-                            <p className="text-slate-600 dark:text-slate-400">
+                            <p className="text-slate-600">
                                 {statusFilter !== "all"
                                     ? `No ${statusFilter} applications`
                                     : "No applications have been submitted yet"}

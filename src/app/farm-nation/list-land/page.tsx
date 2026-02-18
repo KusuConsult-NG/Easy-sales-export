@@ -185,7 +185,7 @@ export default function ListLandPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-5xl mx-auto px-4">
                 <Link
                     href="/farm-nation"
@@ -195,7 +195,7 @@ export default function ListLandPage() {
                     Back to Farm Nation
                 </Link>
 
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     {/* Header */}
                     <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white flex justify-between items-center">
                         <div>
@@ -215,28 +215,28 @@ export default function ListLandPage() {
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
                         {/* Basic Information */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <Map className="w-6 h-6" />
                                 Land Information
                             </h2>
 
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Land Title *
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.title}
                                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="e.g., 50 Acres Farmland in Kaduna"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Land Category *
                                     </label>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -246,12 +246,12 @@ export default function ListLandPage() {
                                                 type="button"
                                                 onClick={() => setFormData({ ...formData, category: cat.value as LandCategory })}
                                                 className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category === cat.value
-                                                    ? "border-green-600 bg-green-50 dark:bg-green-900/30"
-                                                    : "border-slate-200 dark:border-slate-700 hover:border-green-400"
+                                                    ? "border-green-600 bg-green-50"
+                                                    : "border-slate-200 hover:border-green-400"
                                                     }`}
                                             >
                                                 <div className="text-2xl mb-2">{cat.icon}</div>
-                                                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                <p className="text-sm font-semibold text-slate-900">
                                                     {cat.label}
                                                 </p>
                                             </button>
@@ -260,14 +260,14 @@ export default function ListLandPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Description *
                                     </label>
                                     <textarea
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                         rows={5}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Describe the land, its features, soil type, water access, nearby infrastructure, etc."
                                         required
                                     />
@@ -277,7 +277,7 @@ export default function ListLandPage() {
 
                         {/* Location */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <MapPin className="w-6 h-6" />
                                 Location & GPS Coordinates
                             </h2>
@@ -285,13 +285,13 @@ export default function ListLandPage() {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             State *
                                         </label>
                                         <select
                                             value={formData.state}
                                             onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             required
                                         >
                                             <option value="">Select State</option>
@@ -301,14 +301,14 @@ export default function ListLandPage() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             LGA *
                                         </label>
                                         <input
                                             type="text"
                                             value={formData.lga}
                                             onChange={(e) => setFormData({ ...formData, lga: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             placeholder="Enter LGA"
                                             required
                                         />
@@ -316,36 +316,36 @@ export default function ListLandPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Detailed Address *
                                     </label>
                                     <textarea
                                         value={formData.address}
                                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                                         rows={2}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Full address with landmarks"
                                         required
                                     />
                                 </div>
 
-                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3">
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <p className="text-sm font-semibold text-blue-900 mb-3">
                                         GPS Coordinates (Optional but recommended)
                                     </p>
-                                    <p className="text-xs text-blue-700 dark:text-blue-300 mb-4">
+                                    <p className="text-xs text-blue-700 mb-4">
                                         Provide accurate GPS coordinates for better visibility on the map. Nigeria bounds: Lat 4° to 14°N, Long 3° to 15°E
                                     </p>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                                            <label className="block text-xs font-semibold text-blue-900 mb-1">
                                                 Latitude
                                             </label>
                                             <input
                                                 type="number"
                                                 value={formData.latitude}
                                                 onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                className="w-full px-3 py-2 bg-white border border-blue-300 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 placeholder="e.g., 9.0820"
                                                 step="0.000001"
                                                 min="4"
@@ -353,14 +353,14 @@ export default function ListLandPage() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                                            <label className="block text-xs font-semibold text-blue-900 mb-1">
                                                 Longitude
                                             </label>
                                             <input
                                                 type="number"
                                                 value={formData.longitude}
                                                 onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                                                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                className="w-full px-3 py-2 bg-white border border-blue-300 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                 placeholder="e.g., 8.6753"
                                                 step="0.000001"
                                                 min="3"
@@ -374,20 +374,20 @@ export default function ListLandPage() {
 
                         {/* Size & Pricing */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                 Size & Pricing
                             </h2>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Land Size *
                                     </label>
                                     <input
                                         type="number"
                                         value={formData.size}
                                         onChange={(e) => setFormData({ ...formData, size: Number(e.target.value) })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="0"
                                         min="0"
                                         step="0.1"
@@ -396,13 +396,13 @@ export default function ListLandPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Unit *
                                     </label>
                                     <select
                                         value={formData.unit}
                                         onChange={(e) => setFormData({ ...formData, unit: e.target.value as "acres" | "hectares" })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         required
                                     >
                                         <option value="acres">Acres</option>
@@ -411,14 +411,14 @@ export default function ListLandPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Price per {formData.unit} (₦) *
                                     </label>
                                     <input
                                         type="number"
                                         value={formData.pricePerUnit}
                                         onChange={(e) => setFormData({ ...formData, pricePerUnit: Number(e.target.value) })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="0"
                                         min="0"
                                         step="1000"
@@ -428,8 +428,8 @@ export default function ListLandPage() {
                             </div>
 
                             {formData.size > 0 && formData.pricePerUnit > 0 && (
-                                <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                                    <p className="text-sm text-green-900 dark:text-green-100">
+                                <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                                    <p className="text-sm text-green-900">
                                         <span className="font-semibold">Total Price: </span>
                                         ₦{(formData.size * formData.pricePerUnit).toLocaleString()}
                                     </p>
@@ -439,7 +439,7 @@ export default function ListLandPage() {
 
                         {/* Documents */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <FileText className="w-6 h-6" />
                                 Legal Documents
                             </h2>
@@ -476,7 +476,7 @@ export default function ListLandPage() {
 
                         {/* Media */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <Video className="w-6 h-6" />
                                 Photos & Video
                             </h2>
@@ -484,10 +484,10 @@ export default function ListLandPage() {
                             <div className="space-y-6">
                                 {/* Images */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Land Photos (Max 8) *
                                     </label>
-                                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6">
+                                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-6">
                                         {media.images.length > 0 ? (
                                             <div className="grid grid-cols-4 gap-4 mb-4">
                                                 {media.images.map((img, index) => (
@@ -520,7 +520,7 @@ export default function ListLandPage() {
                                         {media.images.length < 8 && (
                                             <label className="flex flex-col items-center cursor-pointer">
                                                 <Upload className="w-12 h-12 text-slate-400 mb-3" />
-                                                <p className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                                                <p className="text-sm font-semibold text-slate-900 mb-1">
                                                     Click to upload photos
                                                 </p>
                                                 <p className="text-xs text-slate-500">JPG, PNG (max 5MB each)</p>
@@ -540,12 +540,12 @@ export default function ListLandPage() {
 
                         {/* Availability Options */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                 Availability Options
                             </h2>
 
                             <div className="space-y-4">
-                                <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg">
                                     <input
                                         type="checkbox"
                                         id="forSale"
@@ -553,12 +553,12 @@ export default function ListLandPage() {
                                         onChange={(e) => setFormData({ ...formData, availableForSale: e.target.checked })}
                                         className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                                     />
-                                    <label htmlFor="forSale" className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    <label htmlFor="forSale" className="text-sm font-semibold text-slate-900">
                                         Available for Sale
                                     </label>
                                 </div>
 
-                                <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg">
                                     <input
                                         type="checkbox"
                                         id="forRent"
@@ -566,12 +566,12 @@ export default function ListLandPage() {
                                         onChange={(e) => setFormData({ ...formData, availableForRent: e.target.checked })}
                                         className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                                     />
-                                    <label htmlFor="forRent" className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    <label htmlFor="forRent" className="text-sm font-semibold text-slate-900">
                                         Available for Rent/Lease
                                     </label>
                                 </div>
 
-                                <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg">
                                     <input
                                         type="checkbox"
                                         id="escrow"
@@ -579,7 +579,7 @@ export default function ListLandPage() {
                                         onChange={(e) => setFormData({ ...formData, escrowAvailable: e.target.checked })}
                                         className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
                                     />
-                                    <label htmlFor="escrow" className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    <label htmlFor="escrow" className="text-sm font-semibold text-slate-900">
                                         Enable Escrow Protection (Recommended)
                                     </label>
                                 </div>
@@ -607,8 +607,8 @@ export default function ListLandPage() {
                             </button>
                         </div>
 
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-                            <p className="text-sm text-yellow-900 dark:text-yellow-100">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <p className="text-sm text-yellow-900">
                                 ⚠️ Your listing will be reviewed by our team to verify the documents and land details before going live.
                             </p>
                         </div>
@@ -642,17 +642,17 @@ function FileUploadField({
 
     return (
         <div>
-            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+            <label className="block text-sm font-semibold text-slate-900 mb-2">
                 {label} {required && "*"}
             </label>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">{description}</p>
+            <p className="text-sm text-slate-600 mb-3">{description}</p>
 
-            <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6 relative">
+            <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 relative">
                 {/* Upload Overlay */}
                 {uploadState?.isUploading && (
-                    <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 flex items-center justify-center z-10 flex-col">
+                    <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10 flex-col">
                         <Loader2 className="w-6 h-6 animate-spin text-green-600 mb-2" />
-                        <span className="text-sm font-bold text-green-800 dark:text-green-400">Uploading {Math.round(uploadState.progress)}%</span>
+                        <span className="text-sm font-bold text-green-800">Uploading {Math.round(uploadState.progress)}%</span>
                     </div>
                 )}
 
@@ -661,7 +661,7 @@ function FileUploadField({
                         <div className="flex items-center gap-3">
                             <FileText className="w-8 h-8 text-green-600" />
                             <div>
-                                <p className="font-semibold text-slate-900 dark:text-white">{file.name}</p>
+                                <p className="font-semibold text-slate-900">{file.name}</p>
                                 <p className="text-sm text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                             </div>
                         </div>
@@ -669,7 +669,7 @@ function FileUploadField({
                             type="button"
                             onClick={() => onChange(null)}
                             disabled={uploadState?.isUploading}
-                            className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors disabled:opacity-50"
+                            className="p-2 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
                         >
                             <X className="w-5 h-5 text-red-600" />
                         </button>
@@ -677,7 +677,7 @@ function FileUploadField({
                 ) : (
                     <label className="flex flex-col items-center cursor-pointer">
                         <Upload className="w-12 h-12 text-slate-400 mb-3" />
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                        <p className="text-sm font-semibold text-slate-900 mb-1">
                             Click to upload
                         </p>
                         <p className="text-xs text-slate-500">PDF, JPG, PNG (max 5MB)</p>

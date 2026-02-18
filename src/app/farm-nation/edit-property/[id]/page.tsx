@@ -131,14 +131,14 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-green-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-5xl mx-auto px-4">
                 <Link
                     href="/farm-nation/my-properties"
@@ -148,7 +148,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                     Back to My Properties
                 </Link>
 
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     {/* Header */}
                     <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white">
                         <h1 className="text-3xl font-bold mb-2">Edit Property</h1>
@@ -160,27 +160,27 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
                         {/* Basic Information */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <Map className="w-6 h-6" />
                                 Property Information
                             </h2>
 
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Property Name *
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Property Type *
                                     </label>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -190,12 +190,12 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                                 type="button"
                                                 onClick={() => setFormData({ ...formData, propertyType: type.value as PropertyType })}
                                                 className={`p-4 border-2 rounded-lg transition-all text-left ${formData.propertyType === type.value
-                                                    ? "border-green-600 bg-green-50 dark:bg-green-900/30"
-                                                    : "border-slate-200 dark:border-slate-700 hover:border-green-400"
+                                                    ? "border-green-600 bg-green-50"
+                                                    : "border-slate-200 hover:border-green-400"
                                                     }`}
                                             >
                                                 <div className="text-2xl mb-2">{type.icon}</div>
-                                                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                <p className="text-sm font-semibold text-slate-900">
                                                     {type.label}
                                                 </p>
                                             </button>
@@ -204,14 +204,14 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Description *
                                     </label>
                                     <textarea
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                         rows={5}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         required
                                     />
                                 </div>
@@ -220,7 +220,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
 
                         {/* Location */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <MapPin className="w-6 h-6" />
                                 Location
                             </h2>
@@ -228,13 +228,13 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             State *
                                         </label>
                                         <select
                                             value={formData.state}
                                             onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             required
                                         >
                                             <option value="">Select State</option>
@@ -244,28 +244,28 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             LGA *
                                         </label>
                                         <input
                                             type="text"
                                             value={formData.lga}
                                             onChange={(e) => setFormData({ ...formData, lga: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             required
                                         />
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Address *
                                     </label>
                                     <textarea
                                         value={formData.address}
                                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                                         rows={2}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         required
                                     />
                                 </div>
@@ -274,20 +274,20 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
 
                         {/* Size & Pricing */}
                         <section>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                 Size & Pricing
                             </h2>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Size (acres) *
                                     </label>
                                     <input
                                         type="number"
                                         value={formData.size}
                                         onChange={(e) => setFormData({ ...formData, size: Number(e.target.value) })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         min="0"
                                         step="0.1"
                                         required
@@ -295,14 +295,14 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Price per Acre (₦) *
                                     </label>
                                     <input
                                         type="number"
                                         value={formData.pricePerAcre}
                                         onChange={(e) => setFormData({ ...formData, pricePerAcre: Number(e.target.value) })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         min="0"
                                         step="1000"
                                         required
@@ -311,8 +311,8 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                             </div>
 
                             {formData.size > 0 && formData.pricePerAcre > 0 && (
-                                <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                                    <p className="text-sm text-green-900 dark:text-green-100">
+                                <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                                    <p className="text-sm text-green-900">
                                         <span className="font-semibold">Total Price: </span>
                                         ₦{(formData.size * formData.pricePerAcre).toLocaleString()}
                                     </p>

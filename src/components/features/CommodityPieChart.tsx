@@ -25,12 +25,12 @@ export default function CommodityPieChart() {
             const data = payload[0].payload;
             const percentage = ((data.value / total) * 100).toFixed(1);
             return (
-                <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 shadow-lg">
-                    <p className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-lg">
+                    <p className="font-semibold text-slate-900 flex items-center gap-2">
                         <span className="text-xl">{data.icon}</span>
                         {data.name}
                     </p>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    <p className="text-sm text-slate-600 mt-1">
                         {formatCurrency(data.value)} ({percentage}%)
                     </p>
                 </div>
@@ -45,8 +45,8 @@ export default function CommodityPieChart() {
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">
+        <div className="bg-white rounded-2xl p-6 elevation-2">
+            <h3 className="text-lg font-bold text-slate-900 mb-6">
                 Commodity Distribution
             </h3>
             <ResponsiveContainer width="100%" height={280}>
@@ -76,12 +76,12 @@ export default function CommodityPieChart() {
                                 className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: COLORS[index] }}
                             />
-                            <span className="text-sm font-medium text-slate-900 dark:text-white flex items-center gap-1">
+                            <span className="text-sm font-medium text-slate-900 flex items-center gap-1">
                                 <span>{commodity.icon}</span>
                                 {commodity.name}
                             </span>
                         </div>
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                        <span className="text-sm font-semibold text-slate-900">
                             {formatCurrency(commodity.value)}
                         </span>
                     </div>

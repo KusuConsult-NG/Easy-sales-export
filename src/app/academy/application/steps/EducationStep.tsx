@@ -49,17 +49,17 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">
                     Educational Background
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Help us understand your educational and professional background.
                 </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Highest Education Level *
                     </label>
                     <div className="relative">
@@ -67,7 +67,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                         <select
                             value={data.educationLevel}
                             onChange={(e) => handleChange("educationLevel", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border ${errors.educationLevel ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.educationLevel ? "border-red-500" : "border-slate-300"
                                 } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                         >
                             <option value="">Select education level</option>
@@ -84,7 +84,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Field of Study
                     </label>
                     <div className="relative">
@@ -93,7 +93,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                             type="text"
                             value={data.fieldOfStudy}
                             onChange={(e) => handleChange("fieldOfStudy", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border ${errors.fieldOfStudy ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.fieldOfStudy ? "border-red-500" : "border-slate-300"
                                 } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="e.g., Agricultural Science, Business, Engineering"
                         />
@@ -104,7 +104,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Years of Experience in Agriculture *
                     </label>
                     <div className="relative">
@@ -115,7 +115,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                             max="50"
                             value={data.yearsExperience}
                             onChange={(e) => handleChange("yearsExperience", parseInt(e.target.value) || 0)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border ${errors.yearsExperience ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.yearsExperience ? "border-red-500" : "border-slate-300"
                                 } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="0"
                         />
@@ -129,7 +129,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                 </div>
 
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Current Role *
                     </label>
                     <div className="relative">
@@ -137,7 +137,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                         <select
                             value={data.currentRole}
                             onChange={(e) => handleChange("currentRole", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border ${errors.currentRole ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.currentRole ? "border-red-500" : "border-slate-300"
                                 } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                         >
                             <option value="">Select your current role</option>

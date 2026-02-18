@@ -67,7 +67,7 @@ export default function FeatureTogglesPage() {
     }, {} as Record<string, FeatureToggle[]>);
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
+        <div className="min-h-screen bg-slate-50 p-6">
             {/* Header */}
             <div className="max-w-7xl mx-auto mb-8">
                 <div className="flex items-center justify-between mb-2">
@@ -76,10 +76,10 @@ export default function FeatureTogglesPage() {
                             <Shield className="w-6 h-6 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+                            <h1 className="text-3xl font-bold text-slate-900">
                                 Feature Toggles
                             </h1>
-                            <p className="text-slate-600 dark:text-slate-400">
+                            <p className="text-slate-600">
                                 Manage feature rollout and access control
                             </p>
                         </div>
@@ -103,13 +103,13 @@ export default function FeatureTogglesPage() {
                             placeholder="Search features..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-900"
                         />
                     </div>
                     <select
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
-                        className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                        className="px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-900"
                     >
                         <option value="ALL">All Categories</option>
                         <option value="CORE">Core Features</option>
@@ -126,12 +126,12 @@ export default function FeatureTogglesPage() {
                         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                     </div>
                 ) : Object.keys(groupedToggles).length === 0 ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-xl p-8 text-center">
-                        <p className="text-slate-600 dark:text-slate-400">No features found</p>
+                    <div className="bg-white rounded-xl p-8 text-center">
+                        <p className="text-slate-600">No features found</p>
                     </div>
                 ) : (
                     Object.entries(groupedToggles).map(([category, categoryToggles]) => (
-                        <div key={category} className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+                        <div key={category} className="bg-white rounded-xl shadow-lg overflow-hidden">
                             <div className="bg-linear-to-r from-slate-700 to-slate-800 px-6 py-4">
                                 <h2 className="text-xl font-bold text-white">
                                     {FEATURE_CATEGORIES[category as keyof typeof FEATURE_CATEGORIES]}
@@ -139,7 +139,7 @@ export default function FeatureTogglesPage() {
                                 <p className="text-sm text-slate-300">{categoryToggles.length} features</p>
                             </div>
 
-                            <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                            <div className="divide-y divide-slate-200">
                                 {categoryToggles.map((toggle) => {
                                     const metadata = FEATURE_METADATA[toggle.id];
                                     const isUpdating = updating === toggle.id;
@@ -147,31 +147,31 @@ export default function FeatureTogglesPage() {
                                     return (
                                         <div
                                             key={toggle.id}
-                                            className="p-6 hover:bg-slate-50 dark:hover:bg-slate-750 transition"
+                                            className="p-6 hover:bg-slate-50 transition"
                                         >
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1">
                                                     <div className="flex items-center space-x-3 mb-2">
-                                                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                                                        <h3 className="text-lg font-semibold text-slate-900">
                                                             {metadata?.name || toggle.name}
                                                         </h3>
                                                         {toggle.enabled ? (
-                                                            <span className="flex items-center space-x-1 text-xs font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded-full">
+                                                            <span className="flex items-center space-x-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full">
                                                                 <CheckCircle className="w-3 h-3" />
                                                                 <span>Active</span>
                                                             </span>
                                                         ) : (
-                                                            <span className="flex items-center space-x-1 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">
+                                                            <span className="flex items-center space-x-1 text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-full">
                                                                 <XCircle className="w-3 h-3" />
                                                                 <span>Disabled</span>
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                                                    <p className="text-sm text-slate-600 mb-3">
                                                         {metadata?.description || toggle.description}
                                                     </p>
-                                                    <div className="flex items-center space-x-4 text-xs text-slate-500 dark:text-slate-500">
-                                                        <span>ID: <code className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">{toggle.id}</code></span>
+                                                    <div className="flex items-center space-x-4 text-xs text-slate-500">
+                                                        <span>ID: <code className="bg-slate-100 px-2 py-1 rounded">{toggle.id}</code></span>
                                                         {toggle.targetRoles && toggle.targetRoles.length > 0 && (
                                                             <span className="flex items-center space-x-1">
                                                                 <Shield className="w-3 h-3" />
@@ -186,8 +186,8 @@ export default function FeatureTogglesPage() {
                                                     onClick={() => handleToggle(toggle.id, toggle.enabled)}
                                                     disabled={isUpdating}
                                                     className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 ${toggle.enabled
-                                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50"
-                                                        : "bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-600"
+                                                        ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                                        : "bg-slate-200 text-slate-900 hover:bg-slate-300"
                                                         }`}
                                                 >
                                                     {isUpdating ? (
@@ -211,12 +211,12 @@ export default function FeatureTogglesPage() {
 
             {/* Warning Notice */}
             <div className="max-w-7xl mx-auto mt-8">
-                <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded">
+                <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded">
                     <div className="flex items-start space-x-3">
-                        <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-500 mt-0.5" />
+                        <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
                         <div>
-                            <h4 className="font-semibold text-amber-800 dark:text-amber-400">Important</h4>
-                            <p className="text-sm text-amber-700 dark:text-amber-500 mt-1">
+                            <h4 className="font-semibold text-amber-800">Important</h4>
+                            <p className="text-sm text-amber-700 mt-1">
                                 Disabling core features may affect user experience. All toggle changes are logged in the audit trail.
                             </p>
                         </div>

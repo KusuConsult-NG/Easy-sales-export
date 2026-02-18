@@ -30,14 +30,14 @@ export function OnboardingLayout({
     return (
         <div className="min-h-screen bg-white">
             {/* Header */}
-            <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <div className="bg-white border-b border-slate-200">
                 <div className="max-w-4xl mx-auto px-4 py-4">
                     <div className="flex items-center justify-between">
                         {/* Back Button */}
                         {backUrl && (
                             <Link
                                 href={backUrl}
-                                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
+                                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors"
                             >
                                 <ArrowLeft className="w-5 h-5" />
                                 <span>Back</span>
@@ -52,16 +52,16 @@ export function OnboardingLayout({
                                 </div>
                             )}
                             <div>
-                                <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+                                <h1 className="text-xl font-bold text-slate-900">
                                     {serviceName}
                                 </h1>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">Onboarding</p>
+                                <p className="text-sm text-slate-600">Onboarding</p>
                             </div>
                         </div>
 
                         {/* Progress Indicator */}
                         {currentStep && totalSteps && (
-                            <div className="text-sm text-slate-600 dark:text-slate-400">
+                            <div className="text-sm text-slate-600">
                                 Step {currentStep} of {totalSteps}
                             </div>
                         )}

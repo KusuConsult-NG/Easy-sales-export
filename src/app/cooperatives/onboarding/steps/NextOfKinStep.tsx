@@ -74,17 +74,17 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
         <div className="space-y-8">
             {/* Header */}
             <div className="text-center">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
+                <h2 className="text-3xl font-bold text-slate-900 mb-3">
                     Next of Kin Information
                 </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400">
+                <p className="text-lg text-slate-600">
                     Provide emergency contact details
                 </p>
             </div>
 
             {/* Info Banner */}
-            <div className="max-w-2xl mx-auto bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-                <p className="text-sm text-blue-800 dark:text-blue-300">
+            <div className="max-w-2xl mx-auto bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p className="text-sm text-blue-800">
                     ℹ️ Your next of kin will be contacted in case of emergencies and will be the beneficiary
                     of your savings in the event of unforeseen circumstances.
                 </p>
@@ -94,7 +94,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Full Name */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Full Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -102,7 +102,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
                         value={data.fullName}
                         onChange={(e) => onChange({ ...data, fullName: e.target.value })}
                         placeholder="Jane Doe"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.fullName ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.fullName ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.fullName && (
@@ -112,13 +112,13 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
 
                 {/* Relationship */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Relationship <span className="text-red-500">*</span>
                     </label>
                     <select
                         value={data.relationship}
                         onChange={(e) => onChange({ ...data, relationship: e.target.value })}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.relationship ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.relationship ? "border-red-500" : "border-slate-300"
                             }`}
                     >
                         <option value="">Select relationship</option>
@@ -133,7 +133,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
 
                 {/* Phone Number */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Phone Number <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -141,7 +141,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
                         value={data.phone}
                         onChange={(e) => onChange({ ...data, phone: e.target.value })}
                         placeholder="08012345678"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.phone ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.phone ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.phone && (
@@ -151,7 +151,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
 
                 {/* Address */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Address <span className="text-red-500">*</span>
                     </label>
                     <textarea
@@ -159,7 +159,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
                         onChange={(e) => onChange({ ...data, address: e.target.value })}
                         placeholder="Full address including state"
                         rows={3}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.address ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.address ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.address && (
@@ -172,7 +172,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-semibold hover:bg-slate-50 transition-all"
                 >
                     Back
                 </button>

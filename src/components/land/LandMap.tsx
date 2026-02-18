@@ -70,10 +70,10 @@ function getMarkerIcon(soilQuality: SoilQuality): Icon {
 
 function getSoilQualityColor(quality: SoilQuality): string {
     const colors = {
-        [SoilQuality.EXCELLENT]: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        [SoilQuality.GOOD]: 'bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200',
-        [SoilQuality.FAIR]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-        [SoilQuality.POOR]: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+        [SoilQuality.EXCELLENT]: 'bg-green-100 text-green-800',
+        [SoilQuality.GOOD]: 'bg-lime-100 text-lime-800',
+        [SoilQuality.FAIR]: 'bg-yellow-100 text-yellow-800',
+        [SoilQuality.POOR]: 'bg-red-100 text-red-800',
     };
     return colors[quality];
 }
@@ -94,10 +94,10 @@ export function LandMap({
     if (!mounted) {
         return (
             <div
-                className="w-full bg-slate-200 dark:bg-slate-700 rounded-xl flex items-center justify-center"
+                className="w-full bg-slate-200 rounded-xl flex items-center justify-center"
                 style={{ height }}
             >
-                <p className="text-slate-600 dark:text-slate-400">Loading map...</p>
+                <p className="text-slate-600">Loading map...</p>
             </div>
         );
     }
@@ -203,9 +203,9 @@ export function LandMap({
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="absolute top-4 left-4 bg-white dark:bg-slate-800 rounded-xl p-4 shadow-lg z-40"
+                className="absolute top-4 left-4 bg-white rounded-xl p-4 shadow-lg z-40"
             >
-                <h4 className="font-bold text-sm mb-3 text-slate-900 dark:text-white">Soil Quality</h4>
+                <h4 className="font-bold text-sm mb-3 text-slate-900">Soil Quality</h4>
                 <div className="space-y-2">
                     {[
                         { quality: SoilQuality.EXCELLENT, label: 'Excellent', color: '#22c55e' },
@@ -218,7 +218,7 @@ export function LandMap({
                                 className="w-4 h-4 rounded-full border-2 border-white shadow"
                                 style={{ backgroundColor: color }}
                             />
-                            <span className="text-xs text-slate-600 dark:text-slate-400">{label}</span>
+                            <span className="text-xs text-slate-600">{label}</span>
                         </div>
                     ))}
                 </div>
@@ -228,10 +228,10 @@ export function LandMap({
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="absolute bottom-4 right-4 bg-white dark:bg-slate-800 rounded-xl p-4 shadow-lg z-40"
+                className="absolute bottom-4 right-4 bg-white rounded-xl p-4 shadow-lg z-40"
             >
                 <p className="text-2xl font-bold text-[#1358ec] mb-1">{listings.length}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                <p className="text-xs text-slate-600">
                     {listings.length === 1 ? 'Listing' : 'Listings'}
                 </p>
             </motion.div>

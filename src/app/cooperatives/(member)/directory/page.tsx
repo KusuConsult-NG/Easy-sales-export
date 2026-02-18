@@ -37,17 +37,17 @@ export default function CooperativeDirectoryPage() {
         <div className="space-y-6">
             {/* Header */}
             <div>
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                     <Users className="w-8 h-8 text-purple-600" />
                     Member Directory
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400 mt-1">
+                <p className="text-slate-600 mt-1">
                     Connect with other cooperative members
                 </p>
             </div>
 
             {/* Search and Filter */}
-            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
@@ -55,10 +55,10 @@ export default function CooperativeDirectoryPage() {
                         placeholder="Search by name, occupation, or location..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                     />
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-white hover:text-purple-600">
+                <button className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:text-purple-600">
                     <Filter className="w-4 h-4" />
                     <span>Filter</span>
                 </button>
@@ -73,9 +73,9 @@ export default function CooperativeDirectoryPage() {
 
             {/* Empty State */}
             {!loading && filteredMembers.length === 0 && (
-                <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl">
+                <div className="text-center p-12 bg-white rounded-xl">
                     <Users className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-slate-900 dark:text-white">No members found</h3>
+                    <h3 className="text-lg font-medium text-slate-900">No members found</h3>
                     <p className="text-slate-500">Try adjusting your search terms</p>
                 </div>
             )}
@@ -83,7 +83,7 @@ export default function CooperativeDirectoryPage() {
             {/* Members Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredMembers.map(member => (
-                    <div key={member.id} className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all group">
+                    <div key={member.id} className="bg-white rounded-2xl p-6 shadow-lg border border-slate-200 hover:shadow-xl transition-all group">
                         <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-12 h-12 bg-linear-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center text-white font-bold text-xl overflow-hidden relative">
@@ -94,12 +94,12 @@ export default function CooperativeDirectoryPage() {
                                     )}
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-slate-900 dark:text-white group-hover:text-purple-600 transition">
+                                    <h3 className="font-bold text-slate-900 group-hover:text-purple-600 transition">
                                         {member.name}
                                     </h3>
                                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${member.role.includes("Premium")
-                                        ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
-                                        : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+                                        ? "bg-purple-100 text-purple-700"
+                                        : "bg-slate-100 text-slate-600"
                                         }`}>
                                         {member.role}
                                     </span>
@@ -108,22 +108,22 @@ export default function CooperativeDirectoryPage() {
                         </div>
 
                         <div className="space-y-3 mb-6">
-                            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm">
+                            <div className="flex items-center gap-2 text-slate-600 text-sm">
                                 <MapPin className="w-4 h-4 text-slate-400" />
                                 {member.location}
                             </div>
-                            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 text-sm">
+                            <div className="flex items-center gap-2 text-slate-600 text-sm">
                                 <Users className="w-4 h-4 text-slate-400" />
                                 {member.occupation}
                             </div>
                         </div>
 
-                        <div className="flex gap-2 border-t border-slate-200 dark:border-slate-700 pt-4">
-                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-slate-600 dark:text-white hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:text-purple-600 transition text-sm font-medium">
+                        <div className="flex gap-2 border-t border-slate-200 pt-4">
+                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 rounded-lg text-slate-600 hover:bg-purple-50 hover:text-purple-600 transition text-sm font-medium">
                                 <Mail className="w-4 h-4" />
                                 Message
                             </button>
-                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-lg text-slate-600 dark:text-white hover:bg-green-50 dark:hover:bg-green-900/20 hover:text-green-600 transition text-sm font-medium">
+                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 rounded-lg text-slate-600 hover:bg-green-50 hover:text-green-600 transition text-sm font-medium">
                                 <Phone className="w-4 h-4" />
                                 Call
                             </button>

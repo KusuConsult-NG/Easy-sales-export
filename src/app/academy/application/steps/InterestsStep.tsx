@@ -56,16 +56,16 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">
                     Learning Interests
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Tell us about your learning interests and goals so we can personalize your experience.
                 </p>
             </div>
 
             <div>
-                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                <label className="block text-sm font-semibold text-slate-900 mb-3">
                     Select Learning Paths (Choose at least one) *
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -75,8 +75,8 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                             type="button"
                             onClick={() => handlePathToggle(path.id)}
                             className={`relative p-4 rounded-xl border-2 text-left transition-all ${data.learningPaths.includes(path.id)
-                                    ? "border-blue-600 bg-blue-50 dark:bg-blue-950/30"
-                                    : "border-slate-300 dark:border-slate-600 hover:border-blue-400"
+                                    ? "border-blue-600 bg-blue-50"
+                                    : "border-slate-300 hover:border-blue-400"
                                 }`}
                         >
                             {data.learningPaths.includes(path.id) && (
@@ -85,10 +85,10 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                                 </div>
                             )}
                             <div className="text-2xl mb-2">{path.icon}</div>
-                            <h3 className="font-bold text-slate-900 dark:text-white mb-1">
+                            <h3 className="font-bold text-slate-900 mb-1">
                                 {path.title}
                             </h3>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 {path.description}
                             </p>
                         </button>
@@ -100,7 +100,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
             </div>
 
             <div>
-                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold text-slate-900 mb-2">
                     Specific Topics of Interest
                 </label>
                 <div className="relative">
@@ -109,7 +109,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                         value={data.topics}
                         onChange={(e) => handleChange("topics", e.target.value)}
                         rows={4}
-                        className={`w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border ${errors.topics ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.topics ? "border-red-500" : "border-slate-300"
                             } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none`}
                         placeholder="e.g., Yam farming, Export documentation, Organic farming, Poultry management..."
                     />
@@ -120,7 +120,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
             </div>
 
             <div>
-                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                <label className="block text-sm font-semibold text-slate-900 mb-2">
                     Learning Goals *
                 </label>
                 <div className="relative">
@@ -129,7 +129,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                         value={data.goals}
                         onChange={(e) => handleChange("goals", e.target.value)}
                         rows={4}
-                        className={`w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border ${errors.goals ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.goals ? "border-red-500" : "border-slate-300"
                             } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none`}
                         placeholder="What do you hope to achieve through the Academy? Be specific..."
                     />

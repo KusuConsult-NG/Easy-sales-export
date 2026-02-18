@@ -131,23 +131,23 @@ export default function AdminDisputesPage() {
     const getStatusBadge = (status: string) => {
         const config = {
             open: {
-                bg: "bg-yellow-100 dark:bg-yellow-900/30",
-                text: "text-yellow-700 dark:text-yellow-400",
+                bg: "bg-yellow-100",
+                text: "text-yellow-700",
                 icon: Clock,
             },
             investigating: {
-                bg: "bg-blue-100 dark:bg-blue-900/30",
-                text: "text-blue-700 dark:text-blue-400",
+                bg: "bg-blue-100",
+                text: "text-blue-700",
                 icon: AlertCircle,
             },
             resolved: {
-                bg: "bg-green-100 dark:bg-green-900/30",
-                text: "text-green-700 dark:text-green-400",
+                bg: "bg-green-100",
+                text: "text-green-700",
                 icon: CheckCircle,
             },
             closed: {
-                bg: "bg-slate-100 dark:bg-slate-700",
-                text: "text-slate-900 dark:text-white",
+                bg: "bg-slate-100",
+                text: "text-slate-900",
                 icon: CheckCircle,
             },
         };
@@ -164,11 +164,11 @@ export default function AdminDisputesPage() {
 
     const getPriorityBadge = (priority: string) => {
         const colors = {
-            low: "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white",
+            low: "bg-slate-100 text-slate-900",
             medium:
-                "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
-            high: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400",
-            urgent: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
+                "bg-yellow-100 text-yellow-700",
+            high: "bg-orange-100 text-orange-700",
+            urgent: "bg-red-100 text-red-700",
         };
 
         return (
@@ -190,16 +190,16 @@ export default function AdminDisputesPage() {
         <div className="p-8">
             {/* Header */}
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     Dispute Management
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Review and resolve member disputes
                 </p>
             </div>
 
             {/* Filters */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 mb-6">
+            <div className="bg-white rounded-2xl p-6 elevation-2 mb-6">
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="flex-1 min-w-[300px]">
                         <div className="relative">
@@ -207,7 +207,7 @@ export default function AdminDisputesPage() {
                             <input
                                 type="text"
                                 placeholder="Search by ID, order, or complainant..."
-                                className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                             />
                         </div>
                     </div>
@@ -216,7 +216,7 @@ export default function AdminDisputesPage() {
                         <select
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value)}
-                            className="px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                             <option value="all">All Status</option>
                             <option value="open">Open</option>
@@ -236,7 +236,7 @@ export default function AdminDisputesPage() {
                         <div
                             key={dispute.id}
                             onClick={() => setSelectedDispute(dispute.id)}
-                            className={`bg-white dark:bg-slate-800 rounded-xl p-5 cursor-pointer transition-all animate-[slideInUp_0.6s_ease-out] ${selectedDispute === dispute.id
+                            className={`bg-white rounded-xl p-5 cursor-pointer transition-all animate-[slideInUp_0.6s_ease-out] ${selectedDispute === dispute.id
                                     ? "ring-2 ring-primary elevation-3"
                                     : "elevation-1 hover-lift"
                                 }`}
@@ -244,16 +244,16 @@ export default function AdminDisputesPage() {
                         >
                             <div className="flex items-start justify-between mb-3">
                                 <div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                    <p className="text-xs text-slate-500 mb-1">
                                         {dispute.id}
                                     </p>
-                                    <h3 className="font-bold text-slate-900 dark:text-white">
+                                    <h3 className="font-bold text-slate-900">
                                         {dispute.subject}
                                     </h3>
                                 </div>
                                 {getPriorityBadge(dispute.priority)}
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3 line-clamp-2">
+                            <p className="text-sm text-slate-600 mb-3 line-clamp-2">
                                 {dispute.description}
                             </p>
                             <div className="flex items-center justify-between">
@@ -269,7 +269,7 @@ export default function AdminDisputesPage() {
                 {/* Dispute Detail */}
                 <div className="lg:col-span-2">
                     {selectedDispute ? (
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
+                        <div className="bg-white rounded-2xl p-6 elevation-2">
                             {(() => {
                                 const dispute = disputes.find((d) => d.id === selectedDispute);
                                 if (!dispute) return null;
@@ -277,13 +277,13 @@ export default function AdminDisputesPage() {
                                 return (
                                     <>
                                         {/* Header */}
-                                        <div className="mb-6 pb-6 border-b border-slate-200 dark:border-slate-700">
+                                        <div className="mb-6 pb-6 border-b border-slate-200">
                                             <div className="flex items-start justify-between mb-4">
                                                 <div>
-                                                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
+                                                    <p className="text-sm text-slate-500 mb-1">
                                                         Dispute ID: {dispute.id}
                                                     </p>
-                                                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                                    <h2 className="text-2xl font-bold text-slate-900">
                                                         {dispute.subject}
                                                     </h2>
                                                 </div>
@@ -291,29 +291,29 @@ export default function AdminDisputesPage() {
                                                     {getStatusBadge(dispute.status)}
                                                 </div>
                                             </div>
-                                            <p className="text-slate-600 dark:text-slate-400 mb-4">
+                                            <p className="text-slate-600 mb-4">
                                                 {dispute.description}
                                             </p>
                                             <div className="grid grid-cols-2 gap-4">
-                                                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl">
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                                <div className="p-3 bg-slate-50 rounded-xl">
+                                                    <p className="text-xs text-slate-500 mb-1">
                                                         Complainant
                                                     </p>
-                                                    <p className="font-semibold text-slate-900 dark:text-white">
+                                                    <p className="font-semibold text-slate-900">
                                                         {dispute.complainant.name}
                                                     </p>
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                                                    <p className="text-xs text-slate-600">
                                                         {dispute.complainant.email}
                                                     </p>
                                                 </div>
-                                                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl">
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                                <div className="p-3 bg-slate-50 rounded-xl">
+                                                    <p className="text-xs text-slate-500 mb-1">
                                                         Respondent
                                                     </p>
-                                                    <p className="font-semibold text-slate-900 dark:text-white">
+                                                    <p className="font-semibold text-slate-900">
                                                         {dispute.respondent.name}
                                                     </p>
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                                                    <p className="text-xs text-slate-600">
                                                         {dispute.respondent.email}
                                                     </p>
                                                 </div>
@@ -322,7 +322,7 @@ export default function AdminDisputesPage() {
 
                                         {/* Messages */}
                                         <div className="mb-6">
-                                            <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
                                                 <MessageSquare className="w-5 h-5" />
                                                 Conversation History
                                             </h3>
@@ -332,18 +332,18 @@ export default function AdminDisputesPage() {
                                                         key={message.id}
                                                         className={`p-4 rounded-xl ${message.senderId === "ADMIN"
                                                                 ? "bg-primary/10 border border-primary/20"
-                                                                : "bg-slate-50 dark:bg-slate-900"
+                                                                : "bg-slate-50"
                                                             }`}
                                                     >
                                                         <div className="flex items-center justify-between mb-2">
-                                                            <p className="font-semibold text-slate-900 dark:text-white">
+                                                            <p className="font-semibold text-slate-900">
                                                                 {message.senderName}
                                                             </p>
                                                             <p className="text-xs text-slate-500">
                                                                 {message.timestamp}
                                                             </p>
                                                         </div>
-                                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                        <p className="text-sm text-slate-600">
                                                             {message.message}
                                                         </p>
                                                     </div>
@@ -361,7 +361,7 @@ export default function AdminDisputesPage() {
                                                     <button className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors">
                                                         Resolve in Favor of Seller
                                                     </button>
-                                                    <button className="px-6 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                                    <button className="px-6 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors">
                                                         Request More Info
                                                     </button>
                                                 </>
@@ -372,9 +372,9 @@ export default function AdminDisputesPage() {
                             })()}
                         </div>
                     ) : (
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 elevation-2 text-center">
-                            <AlertCircle className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                            <p className="text-slate-500 dark:text-slate-400">
+                        <div className="bg-white rounded-2xl p-12 elevation-2 text-center">
+                            <AlertCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                            <p className="text-slate-500">
                                 Select a dispute to view details
                             </p>
                         </div>

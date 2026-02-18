@@ -72,10 +72,10 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
         <div className="space-y-6">
             {/* Header */}
             <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
+                <h2 className="text-3xl font-bold text-slate-900 mb-3">
                     Business Profile
                 </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400">
+                <p className="text-lg text-slate-600">
                     Tell us about your business or farm
                 </p>
             </div>
@@ -83,7 +83,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Business Name */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Business/Farm Name *
                     </label>
                     <input
@@ -91,7 +91,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         value={data.businessName}
                         onChange={(e) => onChange({ businessName: e.target.value })}
                         placeholder="Enter your business or farm name"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white ${errors.businessName ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.businessName ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     />
                     {errors.businessName && (
@@ -101,7 +101,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* Business Type */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Business Type *
                     </label>
                     <div className="grid grid-cols-3 gap-3">
@@ -114,8 +114,8 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                                 key={type.value}
                                 onClick={() => onChange({ businessType: type.value as any })}
                                 className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${data.businessType === type.value
-                                        ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300"
-                                        : "border-slate-300 dark:border-slate-600 hover:border-green-300"
+                                        ? "border-green-500 bg-green-50 text-green-700"
+                                        : "border-slate-300 hover:border-green-300"
                                     }`}
                             >
                                 {type.label}
@@ -126,7 +126,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* Phone Number */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Phone Number *
                     </label>
                     <input
@@ -134,7 +134,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         value={data.phone}
                         onChange={(e) => onChange({ phone: e.target.value })}
                         placeholder="08012345678"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white ${errors.phone ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.phone ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     />
                     {errors.phone && (
@@ -144,13 +144,13 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* State */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         State *
                     </label>
                     <select
                         value={data.location.state}
                         onChange={(e) => onChange({ location: { ...data.location, state: e.target.value } })}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white ${errors.state ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.state ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     >
                         <option value="">Select State</option>
@@ -167,7 +167,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
                 {/* LGA */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Local Government Area
                     </label>
                     <input
@@ -175,13 +175,13 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         value={data.location.lga}
                         onChange={(e) => onChange({ location: { ...data.location, lga: e.target.value } })}
                         placeholder="Enter LGA"
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
                 </div>
 
                 {/* Address */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Business Address *
                     </label>
                     <textarea
@@ -189,7 +189,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         onChange={(e) => onChange({ location: { ...data.location, address: e.target.value } })}
                         placeholder="Enter your complete business address"
                         rows={3}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white ${errors.address ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.address ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     />
                     {errors.address && (
@@ -202,7 +202,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
                 >
                     Back
                 </button>

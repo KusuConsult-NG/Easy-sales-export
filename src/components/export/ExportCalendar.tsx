@@ -61,26 +61,26 @@ export default function ExportCalendar({ exportWindows, onDateClick }: ExportCal
     const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+        <div className="bg-white rounded-xl shadow-lg p-6">
             {/* Calendar Header */}
             <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                     <CalendarIcon className="w-6 h-6 text-primary" />
                     Export Calendar
                 </h3>
                 <div className="flex items-center gap-2">
                     <button
                         onClick={previousMonth}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
                     >
                         ←
                     </button>
-                    <span className="text-sm font-semibold text-slate-900 dark:text-white min-w-[140px] text-center">
+                    <span className="text-sm font-semibold text-slate-900 min-w-[140px] text-center">
                         {monthName}
                     </span>
                     <button
                         onClick={nextMonth}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors"
                     >
                         →
                     </button>
@@ -93,7 +93,7 @@ export default function ExportCalendar({ exportWindows, onDateClick }: ExportCal
                 {weekDays.map(day => (
                     <div
                         key={day}
-                        className="text-center text-xs font-semibold text-slate-500 dark:text-slate-400 py-2"
+                        className="text-center text-xs font-semibold text-slate-500 py-2"
                     >
                         {day}
                     </div>
@@ -120,11 +120,11 @@ export default function ExportCalendar({ exportWindows, onDateClick }: ExportCal
                             className={`aspect-square rounded-lg p-1 relative transition-all hover:ring-2 hover:ring-primary ${isToday
                                     ? "bg-primary text-white font-bold"
                                     : exportsOnDay.length > 0
-                                        ? "bg-slate-100 dark:bg-slate-700 font-semibold"
-                                        : "hover:bg-slate-50 dark:hover:bg-slate-700"
+                                        ? "bg-slate-100 font-semibold"
+                                        : "hover:bg-slate-50"
                                 }`}
                         >
-                            <div className={`text-sm ${isToday ? "text-white" : "text-slate-900 dark:text-white"}`}>
+                            <div className={`text-sm ${isToday ? "text-white" : "text-slate-900"}`}>
                                 {day}
                             </div>
                             {exportsOnDay.length > 0 && (
@@ -153,24 +153,24 @@ export default function ExportCalendar({ exportWindows, onDateClick }: ExportCal
             </div>
 
             {/* Legend */}
-            <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3">Status Legend:</p>
+            <div className="mt-6 pt-4 border-t border-slate-200">
+                <p className="text-xs font-semibold text-slate-500 mb-3">Status Legend:</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                        <span className="text-slate-600 dark:text-slate-400">Pending</span>
+                        <span className="text-slate-600">Pending</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-blue-500" />
-                        <span className="text-slate-600 dark:text-slate-400">In Transit</span>
+                        <span className="text-slate-600">In Transit</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-green-500" />
-                        <span className="text-slate-600 dark:text-slate-400">Delivered</span>
+                        <span className="text-slate-600">Delivered</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-purple-500" />
-                        <span className="text-slate-600 dark:text-slate-400">Completed</span>
+                        <span className="text-slate-600">Completed</span>
                     </div>
                 </div>
             </div>

@@ -123,21 +123,21 @@ export default function NotificationCenter() {
         switch (type) {
             case "payment":
             case "success":
-                return "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400";
+                return "bg-green-100 text-green-600";
             case "loan":
             case "info":
-                return "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400";
+                return "bg-blue-100 text-blue-600";
             case "wave":
             case "warning":
-                return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400";
+                return "bg-yellow-100 text-yellow-600";
             case "withdrawal":
-                return "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400";
+                return "bg-purple-100 text-purple-600";
             case "land":
-                return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400";
+                return "bg-emerald-100 text-emerald-600";
             case "error":
-                return "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400";
+                return "bg-red-100 text-red-600";
             default:
-                return "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400";
+                return "bg-slate-100 text-slate-600";
         }
     };
 
@@ -151,18 +151,18 @@ export default function NotificationCenter() {
             {({ open }) => (
                 <>
                     <Menu.Button
-                        className="relative p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        className="relative p-2 rounded-xl hover:bg-slate-100 transition-colors"
                         onClick={() => setIsOpen(!isOpen)}
                     >
                         {unreadCount > 0 ? (
                             <>
-                                <BellDot className="w-6 h-6 text-slate-900 dark:text-white" />
+                                <BellDot className="w-6 h-6 text-slate-900" />
                                 <span className="absolute top-0 right-0 w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
                                     {unreadCount > 99 ? '99+' : unreadCount}
                                 </span>
                             </>
                         ) : (
-                            <Bell className="w-6 h-6 text-slate-900 dark:text-white" />
+                            <Bell className="w-6 h-6 text-slate-900" />
                         )}
                     </Menu.Button>
 
@@ -176,17 +176,17 @@ export default function NotificationCenter() {
                         leaveFrom="transform opacity-100 scale-100"
                         leaveTo="transform opacity-0 scale-95"
                     >
-                        <Menu.Items className="absolute right-0 mt-2 w-96 max-w-[calc(100vw-2rem)] origin-top-right rounded-2xl bg-white dark:bg-slate-800 shadow-xl ring-1 ring-black/5 dark:ring-white/10 focus:outline-none z-50">
+                        <Menu.Items className="absolute right-0 mt-2 w-96 max-w-[calc(100vw-2rem)] origin-top-right rounded-2xl bg-white shadow-xl ring-1 ring-black/5 focus:outline-none z-50">
                             {/* Header */}
-                            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                            <div className="px-6 py-4 border-b border-slate-200">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                                    <h3 className="text-lg font-bold text-slate-900">
                                         Notifications
                                     </h3>
                                     {unreadCount > 0 && (
                                         <button
                                             onClick={markAllAsRead}
-                                            className="text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition"
+                                            className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition"
                                         >
                                             Mark all read
                                         </button>
@@ -199,14 +199,14 @@ export default function NotificationCenter() {
                                 {loading ? (
                                     <div className="px-6 py-8 text-center">
                                         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                        <p className="text-sm text-slate-500">
                                             Loading notifications...
                                         </p>
                                     </div>
                                 ) : notifications.length === 0 ? (
                                     <div className="px-6 py-8 text-center">
-                                        <Bell className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" />
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                        <Bell className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                                        <p className="text-sm text-slate-500">
                                             No notifications yet
                                         </p>
                                     </div>
@@ -215,11 +215,11 @@ export default function NotificationCenter() {
                                         <Menu.Item key={notification.id}>
                                             {({ active }) => (
                                                 <div
-                                                    className={`relative px-6 py-4 border-b border-slate-100 dark:border-slate-700 last:border-0 cursor-pointer transition ${active
-                                                            ? "bg-slate-50 dark:bg-slate-700/50"
+                                                    className={`relative px-6 py-4 border-b border-slate-100 last:border-0 cursor-pointer transition ${active
+                                                            ? "bg-slate-50"
                                                             : ""
                                                         } ${!notification.read
-                                                            ? "bg-blue-50/30 dark:bg-blue-900/10"
+                                                            ? "bg-blue-50/30"
                                                             : ""
                                                         }`}
                                                     onClick={() => {
@@ -241,17 +241,17 @@ export default function NotificationCenter() {
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-start justify-between gap-2 mb-1">
-                                                                <p className="font-semibold text-sm text-slate-900 dark:text-white">
+                                                                <p className="font-semibold text-sm text-slate-900">
                                                                     {notification.title}
                                                                 </p>
                                                                 {!notification.read && (
                                                                     <div className="w-2 h-2 bg-blue-600 rounded-full shrink-0 mt-1" />
                                                                 )}
                                                             </div>
-                                                            <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                                                            <p className="text-xs text-slate-600 mb-2">
                                                                 {notification.message}
                                                             </p>
-                                                            <p className="text-xs text-slate-500 dark:text-slate-500">
+                                                            <p className="text-xs text-slate-500">
                                                                 {formatDistanceToNow(
                                                                     notification.createdAt.toDate(),
                                                                     { addSuffix: true }
@@ -268,10 +268,10 @@ export default function NotificationCenter() {
 
                             {/* Footer */}
                             {notifications.length > 0 && (
-                                <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-700">
+                                <div className="px-6 py-3 border-t border-slate-200">
                                     <a
                                         href="/notifications"
-                                        className="text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center justify-center transition"
+                                        className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center justify-center transition"
                                     >
                                         View All Notifications
                                     </a>

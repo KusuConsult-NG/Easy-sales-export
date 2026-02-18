@@ -114,71 +114,71 @@ export default function WithdrawalsHistoryPage() {
     const lastWithdrawal = withdrawals.find((w) => w.status === "completed");
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
                     <Link
                         href="/cooperatives"
-                        className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white mb-4 transition"
+                        className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Cooperative
                     </Link>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         Withdrawal History
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Track all your withdrawal requests and their status
                     </p>
                 </div>
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                                <Wallet className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                                <Wallet className="w-5 h-5 text-green-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 Total Withdrawn
                             </p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-3xl font-bold text-slate-900">
                             {formatCurrency(totalWithdrawn)}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl flex items-center justify-center">
-                                <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                            <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+                                <Clock className="w-5 h-5 text-yellow-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 Pending Requests
                             </p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-3xl font-bold text-slate-900">
                             {pendingCount}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                                <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                                <CheckCircle className="w-5 h-5 text-blue-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 Last Withdrawal
                             </p>
                         </div>
-                        <p className="text-lg font-bold text-slate-900 dark:text-white">
+                        <p className="text-lg font-bold text-slate-900">
                             {lastWithdrawal
                                 ? formatCurrency(lastWithdrawal.amount)
                                 : "None yet"}
                         </p>
                         {lastWithdrawal && (
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            <p className="text-xs text-slate-500 mt-1">
                                 {formatDate(lastWithdrawal.processedAt || lastWithdrawal.requestedAt)}
                             </p>
                         )}
@@ -186,16 +186,16 @@ export default function WithdrawalsHistoryPage() {
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg mb-6">
+                <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Time Period
                             </label>
                             <select
                                 value={timeFilter}
                                 onChange={(e) => setTimeFilter(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-green-600"
+                                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-green-600"
                             >
                                 <option value="all">All Time</option>
                                 <option value="7days">Last 7 Days</option>
@@ -205,13 +205,13 @@ export default function WithdrawalsHistoryPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Status
                             </label>
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-green-600"
+                                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-green-600"
                             >
                                 <option value="all">All Status</option>
                                 <option value="pending">Pending</option>
@@ -232,31 +232,31 @@ export default function WithdrawalsHistoryPage() {
                         {filteredWithdrawals.map((withdrawal) => (
                             <div
                                 key={withdrawal.id}
-                                className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg"
+                                className="bg-white rounded-2xl p-6 shadow-lg"
                             >
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-center gap-3">
                                         <div
                                             className={`w-12 h-12 rounded-xl flex items-center justify-center ${withdrawal.status === "completed"
-                                                ? "bg-green-100 dark:bg-green-900/30"
+                                                ? "bg-green-100"
                                                 : withdrawal.status === "pending"
-                                                    ? "bg-yellow-100 dark:bg-yellow-900/30"
-                                                    : "bg-red-100 dark:bg-red-900/30"
+                                                    ? "bg-yellow-100"
+                                                    : "bg-red-100"
                                                 }`}
                                         >
                                             {withdrawal.status === "completed" ? (
-                                                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+                                                <CheckCircle className="w-6 h-6 text-green-600" />
                                             ) : withdrawal.status === "pending" ? (
-                                                <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                                                <Clock className="w-6 h-6 text-yellow-600" />
                                             ) : (
-                                                <XCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                                                <XCircle className="w-6 h-6 text-red-600" />
                                             )}
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-slate-900 dark:text-white text-lg">
+                                            <h3 className="font-bold text-slate-900 text-lg">
                                                 {formatCurrency(withdrawal.amount)}
                                             </h3>
-                                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                            <p className="text-sm text-slate-600">
                                                 {formatDate(withdrawal.requestedAt)}
                                             </p>
                                         </div>
@@ -264,10 +264,10 @@ export default function WithdrawalsHistoryPage() {
 
                                     <span
                                         className={`px-3 py-1 rounded-full text-xs font-semibold ${withdrawal.status === "completed"
-                                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                            ? "bg-green-100 text-green-700"
                                             : withdrawal.status === "pending"
-                                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                                : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                                ? "bg-yellow-100 text-yellow-700"
+                                                : "bg-red-100 text-red-700"
                                             }`}
                                     >
                                         {withdrawal.status.charAt(0).toUpperCase() +
@@ -277,41 +277,41 @@ export default function WithdrawalsHistoryPage() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                     <div>
-                                        <p className="text-slate-500 dark:text-slate-400 mb-1">
+                                        <p className="text-slate-500 mb-1">
                                             Bank Details
                                         </p>
-                                        <p className="text-slate-900 dark:text-white font-semibold">
+                                        <p className="text-slate-900 font-semibold">
                                             {withdrawal.bankName}
                                         </p>
-                                        <p className="text-slate-600 dark:text-slate-400">
+                                        <p className="text-slate-600">
                                             {withdrawal.accountNumber} - {withdrawal.accountName}
                                         </p>
                                     </div>
 
                                     <div>
-                                        <p className="text-slate-500 dark:text-slate-400 mb-1">
+                                        <p className="text-slate-500 mb-1">
                                             Reason
                                         </p>
-                                        <p className="text-slate-900 dark:text-white">
+                                        <p className="text-slate-900">
                                             {withdrawal.reason}
                                         </p>
                                     </div>
                                 </div>
 
                                 {withdrawal.status === "completed" && withdrawal.processedAt && (
-                                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    <div className="mt-4 pt-4 border-t border-slate-200">
+                                        <p className="text-xs text-slate-500">
                                             ✓ Processed on {formatDate(withdrawal.processedAt)}
                                         </p>
                                     </div>
                                 )}
 
                                 {withdrawal.status === "rejected" && withdrawal.adminNotes && (
-                                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                                        <p className="text-sm text-red-600 dark:text-red-400 font-semibold mb-1">
+                                    <div className="mt-4 pt-4 border-t border-slate-200">
+                                        <p className="text-sm text-red-600 font-semibold mb-1">
                                             Rejection Reason:
                                         </p>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        <p className="text-sm text-slate-600">
                                             {withdrawal.adminNotes}
                                         </p>
                                     </div>
@@ -320,12 +320,12 @@ export default function WithdrawalsHistoryPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-12 text-center">
+                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
                         <Filter className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                        <h3 className="text-xl font-semibold text-slate-900 mb-2">
                             No Withdrawals Found
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        <p className="text-slate-600 mb-6">
                             {timeFilter !== "all" || statusFilter !== "all"
                                 ? "Try adjusting your filters"
                                 : "You haven't made any withdrawal requests yet"}

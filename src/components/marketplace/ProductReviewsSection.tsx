@@ -81,7 +81,7 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
 
     if (loading) {
         return (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
+            <div className="bg-white rounded-2xl shadow-lg p-8">
                 <div className="text-center text-gray-500">Loading reviews...</div>
             </div>
         );
@@ -89,11 +89,11 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
 
     if (reviews.length === 0) {
         return (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            <div className="bg-white rounded-2xl shadow-lg p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">
                     Customer Reviews
                 </h2>
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div className="text-center py-8 text-gray-500">
                     No reviews yet. Be the first to review this product!
                 </div>
             </div>
@@ -101,21 +101,21 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
     }
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
+        <div className="bg-white rounded-2xl shadow-lg p-8">
             {/* Header */}
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">
                 Customer Reviews
             </h2>
 
             {/* Rating Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 pb-8 border-b border-gray-200 dark:border-gray-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 pb-8 border-b border-gray-200">
                 {/* Average Rating */}
                 <div className="flex flex-col items-center justify-center">
-                    <div className="text-5xl font-bold text-gray-900 dark:text-white mb-2">
+                    <div className="text-5xl font-bold text-gray-900 mb-2">
                         {averageRating.toFixed(1)}
                     </div>
                     <StarDisplay rating={averageRating} />
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    <div className="text-sm text-gray-600 mt-2">
                         {reviews.length} {reviews.length === 1 ? "review" : "reviews"}
                     </div>
                 </div>
@@ -126,16 +126,16 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                         <button
                             key={rating}
                             onClick={() => setFilterRating(filterRating === rating ? null : rating)}
-                            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 p-2 rounded-lg transition ${filterRating === rating ? "bg-gray-100 dark:bg-gray-700" : ""
+                            className={`w-full flex items-center gap-3 hover:bg-gray-50 p-2 rounded-lg transition ${filterRating === rating ? "bg-gray-100" : ""
                                 }`}
                         >
                             <div className="flex items-center gap-1 w-16">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                <span className="text-sm font-semibold text-gray-900">
                                     {rating}
                                 </span>
                                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                             </div>
-                            <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div
                                     className="h-full bg-yellow-400 transition-all"
                                     style={{
@@ -143,7 +143,7 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                                     }}
                                 />
                             </div>
-                            <div className="w-12 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <div className="w-12 text-sm text-gray-600 text-right">
                                 {distribution[rating as keyof typeof distribution]}
                             </div>
                         </button>
@@ -154,7 +154,7 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
             {/* Filter Active */}
             {filterRating && (
                 <div className="mb-4 flex items-center gap-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="text-sm text-gray-600">
                         Showing {filterRating}-star reviews
                     </span>
                     <button
@@ -171,7 +171,7 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                 {reviews.map((review) => (
                     <div
                         key={review.id}
-                        className="pb-6 border-b border-gray-200 dark:border-gray-700 last:border-0"
+                        className="pb-6 border-b border-gray-200 last:border-0"
                     >
                         {/* Review Header */}
                         <div className="flex items-start justify-between mb-3">
@@ -180,11 +180,11 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                                         <User className="w-4 h-4 text-primary" />
                                     </div>
-                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                    <span className="font-semibold text-gray-900">
                                         {review.userId.slice(0, 8)}
                                     </span>
                                     {review.verified && (
-                                        <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 text-xs font-semibold rounded-full">
+                                        <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
                                             <Check className="w-3 h-3" />
                                             Verified Purchase
                                         </span>
@@ -192,13 +192,13 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                                 </div>
                                 <StarDisplay rating={review.rating} />
                             </div>
-                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                            <span className="text-sm text-gray-500">
                                 {toDate(review.createdAt).toLocaleDateString()}
                             </span>
                         </div>
 
                         {/* Review Content */}
-                        <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                        <p className="text-gray-700 leading-relaxed">
                             {review.comment}
                         </p>
 
@@ -208,7 +208,7 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                                 {review.images.map((url, idx) => (
                                     <div
                                         key={idx}
-                                        className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700"
+                                        className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200"
                                     >
                                         <img
                                             src={url}

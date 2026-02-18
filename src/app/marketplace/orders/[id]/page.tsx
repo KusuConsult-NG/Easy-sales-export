@@ -40,7 +40,7 @@ export default function OrderConfirmationPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
         );
@@ -49,22 +49,22 @@ export default function OrderConfirmationPage() {
     if (!order) return null;
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-4xl mx-auto px-4">
                 {/* Order Status Hero */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-8 text-center">
-                    <div className="w-20 h-20 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400" />
+                <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 text-center">
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-12 h-12 text-green-600" />
                     </div>
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         Order Confirmed!
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    <p className="text-gray-600 mb-4">
                         Thank you for your order. We'll notify you when it's on the way.
                     </p>
-                    <div className="inline-block px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Order Number</p>
-                        <p className="text-lg font-bold text-gray-900 dark:text-white">
+                    <div className="inline-block px-4 py-2 bg-gray-100 rounded-lg">
+                        <p className="text-sm text-gray-500">Order Number</p>
+                        <p className="text-lg font-bold text-gray-900">
                             {order.orderNumber}
                         </p>
                     </div>
@@ -72,15 +72,15 @@ export default function OrderConfirmationPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     {/* Delivery Address */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
                         <div className="flex items-center gap-3 mb-4">
                             <MapPin className="w-6 h-6 text-primary" />
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-bold text-gray-900">
                                 Delivery Address
                             </h2>
                         </div>
-                        <div className="space-y-2 text-gray-600 dark:text-gray-400">
-                            <p className="font-semibold text-gray-900 dark:text-white">
+                        <div className="space-y-2 text-gray-600">
+                            <p className="font-semibold text-gray-900">
                                 {order.deliveryAddress.recipientName}
                             </p>
                             <p>{order.deliveryAddress.recipientPhone}</p>
@@ -93,30 +93,30 @@ export default function OrderConfirmationPage() {
                     </div>
 
                     {/* Order Status */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
                         <div className="flex items-center gap-3 mb-4">
                             <Truck className="w-6 h-6 text-primary" />
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-bold text-gray-900">
                                 Order Status
                             </h2>
                         </div>
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Status:</span>
-                                <span className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 font-semibold rounded-full text-sm capitalize">
+                                <span className="text-gray-600">Status:</span>
+                                <span className="px-3 py-1 bg-yellow-100 text-yellow-800 font-semibold rounded-full text-sm capitalize">
                                     {order.status.replace("_", " ")}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Order Date:</span>
-                                <span className="font-semibold text-gray-900 dark:text-white">
+                                <span className="text-gray-600">Order Date:</span>
+                                <span className="font-semibold text-gray-900">
                                     {new Date(order.createdAt).toLocaleDateString()}
                                 </span>
                             </div>
                             {order.estimatedDeliveryDate && (
                                 <div className="flex items-center justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Est. Delivery:</span>
-                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                    <span className="text-gray-600">Est. Delivery:</span>
+                                    <span className="font-semibold text-gray-900">
                                         {new Date(order.estimatedDeliveryDate).toLocaleDateString()}
                                     </span>
                                 </div>
@@ -126,10 +126,10 @@ export default function OrderConfirmationPage() {
                 </div>
 
                 {/* Order Items */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-8">
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
                     <div className="flex items-center gap-3 mb-6">
                         <Package className="w-6 h-6 text-primary" />
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                        <h2 className="text-xl font-bold text-gray-900">
                             Order Items
                         </h2>
                     </div>
@@ -137,22 +137,22 @@ export default function OrderConfirmationPage() {
                         {order.items.map((item, index) => (
                             <div
                                 key={index}
-                                className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700 last:border-0"
+                                className="flex items-center justify-between pb-4 border-b border-gray-200 last:border-0"
                             >
                                 <div className="flex-1">
-                                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                                    <h3 className="font-semibold text-gray-900">
                                         {item.productTitle}
                                     </h3>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    <p className="text-sm text-gray-600">
                                         {formatCurrency(item.unitPrice)} × {item.quantity}
                                         {item.tier !== "retail" && (
-                                            <span className="ml-2 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 text-xs font-semibold rounded capitalize">
+                                            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded capitalize">
                                                 {item.tier}
                                             </span>
                                         )}
                                     </p>
                                 </div>
-                                <p className="font-bold text-gray-900 dark:text-white">
+                                <p className="font-bold text-gray-900">
                                     {formatCurrency(item.totalPrice)}
                                 </p>
                             </div>
@@ -161,36 +161,36 @@ export default function OrderConfirmationPage() {
                 </div>
 
                 {/* Order Summary */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-8">
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
                     <div className="flex items-center gap-3 mb-6">
                         <CreditCard className="w-6 h-6 text-primary" />
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                        <h2 className="text-xl font-bold text-gray-900">
                             Payment Summary
                         </h2>
                     </div>
                     <div className="space-y-3">
-                        <div className="flex items-center justify-between text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center justify-between text-gray-600">
                             <span>Subtotal:</span>
-                            <span className="font-semibold text-gray-900 dark:text-white">
+                            <span className="font-semibold text-gray-900">
                                 {formatCurrency(order.subtotal)}
                             </span>
                         </div>
-                        <div className="flex items-center justify-between text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center justify-between text-gray-600">
                             <span>Delivery Fee:</span>
-                            <span className="font-semibold text-gray-900 dark:text-white">
+                            <span className="font-semibold text-gray-900">
                                 {formatCurrency(order.deliveryFee)}
                             </span>
                         </div>
                         {order.serviceFee > 0 && (
-                            <div className="flex items-center justify-between text-gray-600 dark:text-gray-400">
+                            <div className="flex items-center justify-between text-gray-600">
                                 <span>Service Fee:</span>
-                                <span className="font-semibold text-gray-900 dark:text-white">
+                                <span className="font-semibold text-gray-900">
                                     {formatCurrency(order.serviceFee)}
                                 </span>
                             </div>
                         )}
-                        <div className="flex items-center justify-between text-lg font-bold pt-3 border-t border-gray-200 dark:border-gray-700">
-                            <span className="text-gray-900 dark:text-white">Total:</span>
+                        <div className="flex items-center justify-between text-lg font-bold pt-3 border-t border-gray-200">
+                            <span className="text-gray-900">Total:</span>
                             <span className="text-primary">{formatCurrency(order.totalAmount)}</span>
                         </div>
                     </div>

@@ -118,34 +118,34 @@ export default function NotificationsPage() {
 
     const getIconColor = (type: Notification["type"]) => {
         switch (type) {
-            case "order": return "text-blue-600 bg-blue-100 dark:bg-blue-900/20";
-            case "payment": return "text-green-600 bg-green-100 dark:bg-green-900/20";
-            case "system": return "text-yellow-600 bg-yellow-100 dark:bg-yellow-900/20";
-            case "wave": return "text-purple-600 bg-purple-100 dark:bg-purple-900/20";
-            case "cooperative": return "text-indigo-600 bg-indigo-100 dark:bg-indigo-900/20";
-            case "academy": return "text-pink-600 bg-pink-100 dark:bg-pink-900/20";
-            default: return "text-gray-600 bg-gray-100 dark:bg-gray-900/20";
+            case "order": return "text-blue-600 bg-blue-100";
+            case "payment": return "text-green-600 bg-green-100";
+            case "system": return "text-yellow-600 bg-yellow-100";
+            case "wave": return "text-purple-600 bg-purple-100";
+            case "cooperative": return "text-indigo-600 bg-indigo-100";
+            case "academy": return "text-pink-600 bg-pink-100";
+            default: return "text-gray-600 bg-gray-100";
         }
     };
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+        <div className="min-h-screen bg-gray-50 py-8 px-4">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
                             Notifications
                         </h1>
-                        <p className="text-gray-600 dark:text-gray-400">
+                        <p className="text-gray-600">
                             {unreadCount} unread notification{unreadCount !== 1 ? "s" : ""}
                         </p>
                     </div>
@@ -161,7 +161,7 @@ export default function NotificationsPage() {
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow mb-6">
+                <div className="bg-white rounded-xl p-4 shadow mb-6">
                     <div className="flex items-center gap-2 overflow-x-auto">
                         <Filter className="w-5 h-5 text-gray-400 shrink-0" />
                         {[
@@ -178,7 +178,7 @@ export default function NotificationsPage() {
                                 onClick={() => setFilter(f.key as any)}
                                 className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${filter === f.key
                                     ? "bg-blue-600 text-white"
-                                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"
+                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                     }`}
                             >
                                 {f.label}
@@ -194,12 +194,12 @@ export default function NotificationsPage() {
 
                 {/* Notifications List */}
                 {filteredNotifications.length === 0 ? (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center shadow">
-                        <Bell className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    <div className="bg-white rounded-xl p-12 text-center shadow">
+                        <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">
                             No Notifications
                         </h3>
-                        <p className="text-gray-600 dark:text-gray-400">
+                        <p className="text-gray-600">
                             {filter === "all"
                                 ? "You're all caught up!"
                                 : `No ${filter} notifications`}
@@ -210,7 +210,7 @@ export default function NotificationsPage() {
                         {filteredNotifications.map((notif) => (
                             <div
                                 key={notif.id}
-                                className={`bg-white dark:bg-gray-800 rounded-xl p-5 shadow transition hover:shadow-lg ${!notif.read ? "border-l-4 border-blue-600" : ""
+                                className={`bg-white rounded-xl p-5 shadow transition hover:shadow-lg ${!notif.read ? "border-l-4 border-blue-600" : ""
                                     }`}
                             >
                                 <div className="flex items-start gap-4">
@@ -222,14 +222,14 @@ export default function NotificationsPage() {
                                     {/* Content */}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-3 mb-2">
-                                            <h3 className={`font-bold ${!notif.read ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-400"}`}>
+                                            <h3 className={`font-bold ${!notif.read ? "text-gray-900" : "text-gray-600"}`}>
                                                 {notif.title}
                                             </h3>
                                             <span className="text-xs text-gray-500 whitespace-nowrap">
                                                 {formatDistanceToNow(notif.createdAt, { addSuffix: true })}
                                             </span>
                                         </div>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                        <p className="text-sm text-gray-600 mb-3">
                                             {notif.message}
                                         </p>
 
@@ -247,7 +247,7 @@ export default function NotificationsPage() {
                                             {!notif.read && (
                                                 <button
                                                     onClick={() => handleMarkAsRead(notif.id)}
-                                                    className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-lg transition flex items-center gap-1.5"
+                                                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition flex items-center gap-1.5"
                                                 >
                                                     <Check className="w-3.5 h-3.5" />
                                                     Mark Read
@@ -255,7 +255,7 @@ export default function NotificationsPage() {
                                             )}
                                             <button
                                                 onClick={() => handleDelete(notif.id)}
-                                                className="px-3 py-1.5 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 text-sm rounded-lg transition flex items-center gap-1.5"
+                                                className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-600 text-sm rounded-lg transition flex items-center gap-1.5"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                                 Delete

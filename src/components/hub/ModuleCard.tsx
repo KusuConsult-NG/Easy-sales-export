@@ -27,7 +27,7 @@ export default function ModuleCard({
 }: ModuleCardProps) {
     return (
         <Link href={href}>
-            <div className="group relative bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="group relative bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-slate-200 overflow-hidden">
                 {/* Gradient overlay on hover */}
                 <div className={`absolute inset-0 bg-linear-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
 
@@ -54,10 +54,10 @@ export default function ModuleCard({
                 </div>
 
                 {/* Content */}
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 group-hover:text-primary transition-colors">
+                <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-primary transition-colors">
                     {title}
                 </h3>
-                <p className="text-slate-600 dark:text-slate-400 text-sm mb-4 line-clamp-2">
+                <p className="text-slate-600 text-sm mb-4 line-clamp-2">
                     {description}
                 </p>
 

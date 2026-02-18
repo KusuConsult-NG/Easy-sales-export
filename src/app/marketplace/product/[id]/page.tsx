@@ -98,7 +98,7 @@ export default function ProductDetailPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
         );
@@ -110,12 +110,12 @@ export default function ProductDetailPage() {
     const inStock = product.status === "active" && product.availableQuantity > 0;
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Back Button */}
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-primary mb-6 transition"
+                    className="flex items-center gap-2 text-gray-600 hover:text-primary mb-6 transition"
                 >
                     <ArrowLeft className="w-5 h-5" />
                     Back to Marketplace
@@ -124,7 +124,7 @@ export default function ProductDetailPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                     {/* Images */}
                     <div className="space-y-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="bg-white rounded-2xl overflow-hidden shadow-lg">
                             <div className="relative h-96">
                                 {product.images[selectedImage] ? (
                                     <Image
@@ -134,7 +134,7 @@ export default function ProductDetailPage() {
                                         className="object-cover"
                                     />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700">
+                                    <div className="w-full h-full flex items-center justify-center bg-gray-200">
                                         <Store className="w-24 h-24 text-gray-400" />
                                     </div>
                                 )}
@@ -162,7 +162,7 @@ export default function ProductDetailPage() {
                                         onClick={() => setSelectedImage(idx)}
                                         className={`relative h-24 rounded-xl overflow-hidden border-2 transition ${selectedImage === idx
                                             ? "border-primary"
-                                            : "border-gray-200 dark:border-gray-700"
+                                            : "border-gray-200"
                                             }`}
                                     >
                                         <Image
@@ -179,8 +179,8 @@ export default function ProductDetailPage() {
 
                     {/* Product Info */}
                     <div className="space-y-6">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
-                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl shadow-lg p-8">
+                            <h1 className="text-3xl font-bold text-gray-900 mb-4">
                                 {product.title}
                             </h1>
 
@@ -191,11 +191,11 @@ export default function ProductDetailPage() {
                                             key={i}
                                             className={`w-5 h-5 ${i < 4
                                                 ? "fill-yellow-400 text-yellow-400"
-                                                : "text-gray-300 dark:text-gray-600"
+                                                : "text-gray-300"
                                                 }`}
                                         />
                                     ))}
-                                    <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">
+                                    <span className="text-sm text-gray-600 ml-2">
                                         (0 reviews)
                                     </span>
                                 </div>
@@ -203,7 +203,7 @@ export default function ProductDetailPage() {
 
                             {/* Pricing Tiers */}
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
                                     Select Pricing Tier
                                 </label>
                                 <div className="space-y-2">
@@ -213,15 +213,15 @@ export default function ProductDetailPage() {
                                             onClick={() => setSelectedTier(idx)}
                                             className={`w-full p-4 rounded-xl border-2 transition text-left ${selectedTier === idx
                                                 ? "border-primary bg-primary/5"
-                                                : "border-gray-200 dark:border-gray-700 hover:border-primary/50"
+                                                : "border-gray-200 hover:border-primary/50"
                                                 }`}
                                         >
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <div className="font-semibold text-gray-900 dark:text-white capitalize">
+                                                    <div className="font-semibold text-gray-900 capitalize">
                                                         {tier.type} Price
                                                     </div>
-                                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                    <div className="text-sm text-gray-600">
                                                         Min: {tier.minQuantity} {product.unit}
                                                     </div>
                                                 </div>
@@ -236,13 +236,13 @@ export default function ProductDetailPage() {
 
                             {/* Quantity */}
                             <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
                                     Quantity ({product.unit})
                                 </label>
                                 <div className="flex items-center gap-4">
                                     <button
                                         onClick={() => setQuantity(Math.max(product.minimumOrderQuantity, quantity - 1))}
-                                        className="w-12 h-12 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                                        className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition"
                                     >
                                         <Minus className="w-5 h-5" />
                                     </button>
@@ -254,11 +254,11 @@ export default function ProductDetailPage() {
                                             setQuantity(Math.max(product.minimumOrderQuantity, val));
                                         }}
                                         min={product.minimumOrderQuantity}
-                                        className="w-24 px-4 py-3 text-center text-lg font-semibold border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        className="w-24 px-4 py-3 text-center text-lg font-semibold border border-gray-300 rounded-xl bg-white text-gray-900"
                                     />
                                     <button
                                         onClick={() => setQuantity(quantity + 1)}
-                                        className="w-12 h-12 flex items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                                        className="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-xl hover:bg-gray-200 transition"
                                     >
                                         <Plus className="w-5 h-5" />
                                     </button>
@@ -274,10 +274,10 @@ export default function ProductDetailPage() {
                             </div>
 
                             {/* Total Price */}
-                            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 mb-6">
+                            <div className="bg-gray-50 rounded-xl p-4 mb-6">
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
-                                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                                    <span className="text-gray-600">Subtotal:</span>
+                                    <span className="text-2xl font-bold text-gray-900">
                                         {formatCurrency(selectedPrice.price * quantity)}
                                     </span>
                                 </div>
@@ -309,55 +309,55 @@ export default function ProductDetailPage() {
                 </div>
 
                 {/* Product Details Tabs */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
+                <div className="bg-white rounded-2xl shadow-lg p-8">
                     <div className="space-y-6">
                         {/* Description */}
                         <div>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                            <h2 className="text-xl font-bold text-gray-900 mb-4">
                                 Description
                             </h2>
-                            <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                            <p className="text-gray-600 leading-relaxed">
                                 {product.description}
                             </p>
                         </div>
 
                         {/* Specifications */}
                         <div>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                            <h2 className="text-xl font-bold text-gray-900 mb-4">
                                 Specifications
                             </h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
                                     <Package className="w-5 h-5 text-primary" />
                                     <div>
                                         <p className="text-sm text-gray-500">Category</p>
-                                        <p className="font-semibold text-gray-900 dark:text-white capitalize">
+                                        <p className="font-semibold text-gray-900 capitalize">
                                             {product.category.replace("_", " ")}
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
                                     <MapPin className="w-5 h-5 text-primary" />
                                     <div>
                                         <p className="text-sm text-gray-500">Location</p>
-                                        <p className="font-semibold text-gray-900 dark:text-white">
+                                        <p className="font-semibold text-gray-900">
                                             {product.location.lga}, {product.location.state}
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
                                     <Truck className="w-5 h-5 text-primary" />
                                     <div>
                                         <p className="text-sm text-gray-500">Delivery Method</p>
-                                        <p className="font-semibold text-gray-900 dark:text-white capitalize">
+                                        <p className="font-semibold text-gray-900 capitalize">
                                             {product.deliveryMethod}
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
                                     <Shield className="w-5 h-5 text-primary" />
                                     <div>
                                         <p className="text-sm text-gray-500">Status</p>

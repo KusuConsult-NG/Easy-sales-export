@@ -58,10 +58,10 @@ export default function AcademyLiveClassPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading live class...</p>
+                    <p className="text-slate-600">Loading live class...</p>
                 </div>
             </div>
         );
@@ -74,37 +74,37 @@ export default function AcademyLiveClassPage() {
     const isInstructor = user.roles?.includes("instructor") || user.roles?.includes("admin");
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-6">
                     <button
                         onClick={() => router.push("/academy/courses")}
-                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-primary mb-4"
+                        className="flex items-center gap-2 text-slate-600 hover:text-primary mb-4"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Courses
                     </button>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                    <div className="bg-white rounded-xl shadow-lg p-6">
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
                                     <BookOpen className="w-6 h-6 text-primary" />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    <h1 className="text-2xl font-bold text-slate-900">
                                         {course?.title || "Live Class"}
                                     </h1>
-                                    <p className="text-slate-600 dark:text-slate-400 mt-1">
+                                    <p className="text-slate-600 mt-1">
                                         Live interactive session with instructor
                                     </p>
                                 </div>
                             </div>
 
                             {isInstructor && (
-                                <div className="bg-purple-100 dark:bg-purple-900/30 px-3 py-1 rounded-lg">
-                                    <span className="text-sm font-semibold text-purple-700 dark:text-purple-400">
+                                <div className="bg-purple-100 px-3 py-1 rounded-lg">
+                                    <span className="text-sm font-semibold text-purple-700">
                                         Instructor
                                     </span>
                                 </div>
@@ -114,13 +114,13 @@ export default function AcademyLiveClassPage() {
                         <div className="flex items-center gap-6 mt-6 text-sm">
                             <div className="flex items-center gap-2">
                                 <Users className="w-4 h-4 text-slate-400" />
-                                <span className="text-slate-600 dark:text-slate-400">
+                                <span className="text-slate-600">
                                     {course?.instructor}
                                 </span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Video className="w-4 h-4 text-slate-400" />
-                                <span className="text-slate-600 dark:text-slate-400">
+                                <span className="text-slate-600">
                                     Live Session
                                 </span>
                             </div>
@@ -141,11 +141,11 @@ export default function AcademyLiveClassPage() {
                 </div>
 
                 {/* Instructions */}
-                <div className="mt-6 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-6">
-                    <h3 className="font-bold text-purple-900 dark:text-purple-300 mb-3">
+                <div className="mt-6 bg-purple-50 rounded-xl p-6">
+                    <h3 className="font-bold text-purple-900 mb-3">
                         Live Class Guidelines:
                     </h3>
-                    <ul className="space-y-2 text-sm text-purple-800 dark:text-purple-400">
+                    <ul className="space-y-2 text-sm text-purple-800">
                         <li>• Please mute your microphone when the instructor is speaking</li>
                         <li>• Use the "Raise Hand" feature to ask questions</li>
                         <li>• Chat is open for questions and discussions</li>

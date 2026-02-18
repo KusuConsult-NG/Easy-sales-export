@@ -133,22 +133,22 @@ export default function AdminWaveApplicationsPage() {
     const getStatusColor = (status: ApplicationStatus) => {
         switch (status) {
             case "approved":
-                return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400";
+                return "bg-green-100 text-green-700";
             case "rejected":
-                return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400";
+                return "bg-red-100 text-red-700";
             case "pending":
-                return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400";
+                return "bg-yellow-100 text-yellow-700";
         }
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-8">
+        <div className="min-h-screen bg-slate-50 p-8">
             {/* Header */}
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     WAVE Applications
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Review and manage WAVE program applications
                 </p>
             </div>
@@ -159,7 +159,7 @@ export default function AdminWaveApplicationsPage() {
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "all")}
-                    className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
                 >
                     <option value="all">All Applications</option>
                     <option value="pending">Pending</option>
@@ -189,7 +189,7 @@ export default function AdminWaveApplicationsPage() {
                     {applications.map((app) => (
                         <div
                             key={app.id}
-                            className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2"
+                            className="bg-white rounded-2xl p-6 elevation-2"
                         >
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-start gap-4">
@@ -197,13 +197,13 @@ export default function AdminWaveApplicationsPage() {
                                         <FileText className="w-6 h-6 text-primary" />
                                     </div>
                                     <div>
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                                        <h3 className="text-lg font-bold text-slate-900">
                                             {app.fullName}
                                         </h3>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                        <p className="text-sm text-slate-500">
                                             {app.email} • {app.phone}
                                         </p>
-                                        <p className="text-sm text-slate-600 dark:text-white mt-1">
+                                        <p className="text-sm text-slate-600 mt-1">
                                             Farm Size: <span className="font-semibold">{app.farmSize}</span>
                                         </p>
                                     </div>
@@ -213,8 +213,8 @@ export default function AdminWaveApplicationsPage() {
                                 </span>
                             </div>
 
-                            <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                            <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+                                <p className="text-xs text-slate-500">
                                     Applied: {formatDate(app.createdAt)}
                                 </p>
 
@@ -223,7 +223,7 @@ export default function AdminWaveApplicationsPage() {
                                         <button
                                             onClick={() => handleReject(app.id)}
                                             disabled={processingId === app.id}
-                                            className="px-4 py-2 rounded-lg border border-red-300 dark:border-red-600 text-red-700 dark:text-red-400 font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-50 flex items-center gap-2"
+                                            className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
                                         >
                                             {processingId === app.id ? (
                                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -248,7 +248,7 @@ export default function AdminWaveApplicationsPage() {
                                 )}
 
                                 {app.status === "rejected" && app.rejectionReason && (
-                                    <p className="text-sm text-red-600 dark:text-red-400">
+                                    <p className="text-sm text-red-600">
                                         Reason: {app.rejectionReason}
                                     </p>
                                 )}
@@ -262,7 +262,7 @@ export default function AdminWaveApplicationsPage() {
                             <button
                                 onClick={() => fetchApplications(true)}
                                 disabled={isLoadingMore}
-                                className="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                                className="px-6 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
                             >
                                 {isLoadingMore ? (
                                     <>
@@ -279,12 +279,12 @@ export default function AdminWaveApplicationsPage() {
                     )}
 
                     {applications.length === 0 && (
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center">
-                            <FileText className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                        <div className="bg-white rounded-2xl p-12 text-center">
+                            <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 No Applications Found
                             </h3>
-                            <p className="text-slate-600 dark:text-slate-400">
+                            <p className="text-slate-600">
                                 {statusFilter !== "all"
                                     ? `No ${statusFilter} applications`
                                     : "No applications have been submitted yet"}

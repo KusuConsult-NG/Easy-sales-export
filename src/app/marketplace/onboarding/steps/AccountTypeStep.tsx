@@ -71,10 +71,10 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
         <div className="space-y-8">
             {/* Header */}
             <div className="text-center">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
+                <h2 className="text-3xl font-bold text-slate-900 mb-3">
                     Choose Your Account Type
                 </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400">
+                <p className="text-lg text-slate-600">
                     Select how you want to use the marketplace
                 </p>
             </div>
@@ -90,8 +90,8 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
                             key={type.id}
                             onClick={() => handleSelect(type.id)}
                             className={`relative p-6 rounded-2xl border-2 transition-all text-left ${isSelected
-                                    ? "border-green-500 bg-green-50 dark:bg-green-900/20 shadow-lg scale-105"
-                                    : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-green-300 hover:shadow-md"
+                                    ? "border-green-500 bg-green-50 shadow-lg scale-105"
+                                    : "border-slate-200 bg-white hover:border-green-300 hover:shadow-md"
                                 }`}
                         >
                             {/* Selection Indicator */}
@@ -109,17 +109,17 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
                             </div>
 
                             {/* Title & Description */}
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 {type.title}
                             </h3>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                            <p className="text-sm text-slate-600 mb-4">
                                 {type.description}
                             </p>
 
                             {/* Benefits */}
                             <ul className="space-y-2">
                                 {type.benefits.map((benefit, index) => (
-                                    <li key={index} className="flex items-start gap-2 text-sm text-slate-900 dark:text-white">
+                                    <li key={index} className="flex items-start gap-2 text-sm text-slate-900">
                                         <span className="text-green-500 mt-0.5">✓</span>
                                         <span>{benefit}</span>
                                     </li>
@@ -131,16 +131,16 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
             </div>
 
             {/* Info Banner */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                     <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                         <span className="text-white text-sm">ℹ</span>
                     </div>
                     <div className="text-sm">
-                        <p className="font-semibold text-blue-900 dark:text-blue-200 mb-1">
+                        <p className="font-semibold text-blue-900 mb-1">
                             Onboarding Duration
                         </p>
-                        <p className="text-blue-800 dark:text-blue-300">
+                        <p className="text-blue-800">
                             <strong>Buyers:</strong> 4 quick steps, immediate access<br />
                             <strong>Sellers:</strong> 6 steps with document verification (1-3 days approval)
                         </p>

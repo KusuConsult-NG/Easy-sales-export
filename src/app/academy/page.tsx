@@ -59,7 +59,7 @@ export default function AcademyLandingPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
 
 
             {/* Hero Section */}
@@ -101,10 +101,10 @@ export default function AcademyLandingPage() {
             {/* What You Will Learn Section */}
             <div className="max-w-7xl mx-auto px-8 py-20">
                 <div className="text-center mb-16">
-                    <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-white mb-6">
+                    <h2 className="text-3xl md:text-5xl font-bold text-slate-900 mb-6">
                         What You Will Learn
                     </h2>
-                    <p className="text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+                    <p className="text-xl text-slate-600 max-w-2xl mx-auto">
                         A curriculum built for execution, not just theory.
                     </p>
                 </div>
@@ -113,14 +113,14 @@ export default function AcademyLandingPage() {
                     {learningObjectives.map((obj, idx) => {
                         const Icon = obj.icon;
                         return (
-                            <div key={idx} className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2 hover:shadow-lg transition border border-slate-100 dark:border-slate-700">
-                                <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center mb-6">
+                            <div key={idx} className="bg-white rounded-2xl p-8 elevation-2 hover:shadow-lg transition border border-slate-100">
+                                <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mb-6">
                                     <Icon className="w-7 h-7 text-blue-600" />
                                 </div>
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                                <h3 className="text-xl font-bold text-slate-900 mb-3">
                                     {obj.title}
                                 </h3>
-                                <p className="text-slate-600 dark:text-slate-400">
+                                <p className="text-slate-600">
                                     {obj.description}
                                 </p>
                             </div>
@@ -130,9 +130,9 @@ export default function AcademyLandingPage() {
             </div>
 
             {/* Programs & Pricing Section */}
-            <div id="programs" className="bg-slate-100 dark:bg-slate-900 py-20">
+            <div id="programs" className="bg-slate-100 py-20">
                 <div className="max-w-7xl mx-auto px-8">
-                    <h2 className="text-3xl md:text-5xl font-bold text-center text-slate-900 dark:text-white mb-16">
+                    <h2 className="text-3xl md:text-5xl font-bold text-center text-slate-900 mb-16">
                         Our Programs
                     </h2>
 
@@ -140,9 +140,9 @@ export default function AcademyLandingPage() {
                         {programTiers.map((tier, index) => (
                             <div
                                 key={index}
-                                className={`relative bg-white dark:bg-slate-800 rounded-2xl overflow-hidden transition-all duration-300 ${tier.highlight
+                                className={`relative bg-white rounded-2xl overflow-hidden transition-all duration-300 ${tier.highlight
                                     ? 'shadow-2xl scale-105 border-2 border-blue-600 z-10'
-                                    : 'shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl'
+                                    : 'shadow-lg border border-slate-200 hover:shadow-xl'
                                     }`}
                             >
                                 {tier.highlight && (
@@ -151,20 +151,20 @@ export default function AcademyLandingPage() {
                                     </div>
                                 )}
                                 <div className="p-8">
-                                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                    <h3 className="text-2xl font-bold text-slate-900 mb-4">
                                         {tier.title}
                                     </h3>
                                     <div className="flex items-baseline mb-6">
                                         <span className="text-4xl font-bold text-blue-600">{tier.price}</span>
                                     </div>
-                                    <p className="text-slate-600 dark:text-slate-400 mb-8 pb-8 border-b border-slate-100 dark:border-slate-700">
+                                    <p className="text-slate-600 mb-8 pb-8 border-b border-slate-100">
                                         {tier.description}
                                     </p>
                                     <ul className="space-y-4 mb-8">
                                         {tier.features.map((feature, fIdx) => (
                                             <li key={fIdx} className="flex items-start gap-3">
                                                 <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-                                                <span className="text-slate-700 dark:text-slate-300 font-medium">{feature}</span>
+                                                <span className="text-slate-700 font-medium">{feature}</span>
                                             </li>
                                         ))}
                                     </ul>
@@ -226,7 +226,7 @@ export default function AcademyLandingPage() {
             {/* Final CTA Section */}
             <div className="max-w-7xl mx-auto px-8 pb-20">
                 <div className="text-center">
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">
+                    <h2 className="text-3xl font-bold text-slate-900 mb-6">
                         Stop Guessing. Start Positioning.
                     </h2>
                     <Link
@@ -240,13 +240,13 @@ export default function AcademyLandingPage() {
             </div>
 
             {/* Disclaimer Section */}
-            <div className="bg-slate-100 dark:bg-slate-900 py-12 border-t border-slate-200 dark:border-slate-800">
+            <div className="bg-slate-100 py-12 border-t border-slate-200">
                 <div className="max-w-4xl mx-auto px-8 text-center">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">Disclaimer</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
+                    <p className="text-sm text-slate-500 leading-relaxed mb-4">
                         All export training services provided by Easy Sales Export LTD. are for informational and educational purposes only. Participants are solely responsible for complying with all applicable export regulations, customs laws, and international trade requirements.
                     </p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                    <p className="text-sm text-slate-500 leading-relaxed">
                         The Company makes no representations or warranties regarding specific financial outcomes or regulatory approvals.
                     </p>
                 </div>

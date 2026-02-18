@@ -93,10 +93,10 @@ export default function AdminExportPage() {
 
     const getStatusColor = (status: string) => {
         const colors: any = {
-            pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-            in_transit: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-            delivered: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
-            completed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+            pending: "bg-amber-100 text-amber-800",
+            in_transit: "bg-blue-100 text-blue-800",
+            delivered: "bg-purple-100 text-purple-800",
+            completed: "bg-emerald-100 text-emerald-800",
         };
         return colors[status] || "bg-slate-100 text-slate-800";
     };
@@ -110,15 +110,15 @@ export default function AdminExportPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8">
+        <div className="min-h-screen bg-slate-50 p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h1 className="text-3xl font-bold text-slate-900 mb-2">
                             Export Requests
                         </h1>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Manage and track commodity exports
                         </p>
                     </div>
@@ -132,7 +132,7 @@ export default function AdminExportPage() {
                             onClick={() => setFilter(f)}
                             className={`px-4 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap transition ${filter === f
                                 ? "bg-blue-600 text-white"
-                                : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                                : "bg-white text-slate-600 hover:bg-slate-100"
                                 }`}
                         >
                             {f.replace("_", " ")}
@@ -142,23 +142,23 @@ export default function AdminExportPage() {
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Total Requests</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{exports.length}</p>
+                        <p className="text-2xl font-bold text-slate-900">{exports.length}</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Pending Action</p>
                         <p className="text-2xl font-bold text-amber-600">
                             {exports.filter(e => e.status === 'pending').length}
                         </p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">In Transit</p>
                         <p className="text-2xl font-bold text-blue-600">
                             {exports.filter(e => e.status === 'in_transit').length}
                         </p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Total Volume</p>
                         <p className="text-2xl font-bold text-emerald-600">
                             {exports.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0).toLocaleString()} <span className="text-xs text-slate-400 font-normal">NGN</span>
@@ -167,10 +167,10 @@ export default function AdminExportPage() {
                 </div>
 
                 {/* List */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                            <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                                 <tr>
                                     <th className="px-6 py-4 font-semibold">Order ID</th>
                                     <th className="px-6 py-4 font-semibold">Commodity</th>
@@ -181,7 +181,7 @@ export default function AdminExportPage() {
                                     <th className="px-6 py-4 font-semibold text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            <tbody className="divide-y divide-slate-100">
                                 {exports.length === 0 ? (
                                     <tr>
                                         <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
@@ -191,7 +191,7 @@ export default function AdminExportPage() {
                                     </tr>
                                 ) : (
                                     exports.map((exp) => (
-                                        <tr key={exp.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                                        <tr key={exp.id} className="hover:bg-slate-50 transition">
                                             <td className="px-6 py-4 font-mono text-xs">{exp.orderId}</td>
                                             <td className="px-6 py-4 capitalize">{exp.commodity}</td>
                                             <td className="px-6 py-4">{exp.quantity}</td>
@@ -207,13 +207,13 @@ export default function AdminExportPage() {
                                             <td className="px-6 py-4 text-right flex justify-end gap-2">
                                                 <Link
                                                     href={`/admin/export/edit/${exp.id}`}
-                                                    className="inline-flex items-center justify-center p-2 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition"
+                                                    className="inline-flex items-center justify-center p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition"
                                                 >
                                                     <Pencil className="w-4 h-4" />
                                                 </Link>
                                                 <button
                                                     onClick={() => setSelectedExport(exp)}
-                                                    className="inline-flex items-center justify-center p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+                                                    className="inline-flex items-center justify-center p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                                 >
                                                     <Eye className="w-4 h-4" />
                                                 </button>
@@ -226,11 +226,11 @@ export default function AdminExportPage() {
                     </div>
                     {/* Pagination */}
                     {hasMore && (
-                        <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                        <div className="p-4 border-t border-slate-200 flex justify-center">
                             <button
                                 onClick={handleLoadMore}
                                 disabled={loadingMore}
-                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium"
+                                className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm font-medium"
                             >
                                 {loadingMore ? (
                                     <>
@@ -251,14 +251,14 @@ export default function AdminExportPage() {
                 {/* Detail Modal */}
                 {selectedExport && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-lg w-full overflow-hidden">
-                            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                        <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden">
+                            <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-slate-900">
                                     Export Details
                                 </h3>
                                 <button
                                     onClick={() => setSelectedExport(null)}
-                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                                    className="text-slate-400 hover:text-slate-600"
                                 >
                                     <XCircle className="w-6 h-6" />
                                 </button>
@@ -296,7 +296,7 @@ export default function AdminExportPage() {
                                     </div>
                                 </div>
 
-                                <div className="border-t border-slate-200 dark:border-slate-800 pt-6">
+                                <div className="border-t border-slate-200 pt-6">
                                     <h4 className="text-sm font-semibold mb-3">Update Status</h4>
                                     <div className="grid grid-cols-2 gap-2">
                                         <button

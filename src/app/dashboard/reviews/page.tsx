@@ -33,7 +33,7 @@ function StarRating({ rating, onRate }: { rating: number; onRate?: (r: number) =
                     <Star
                         className={`w-5 h-5 ${star <= (hover || rating)
                             ? "fill-yellow-400 text-yellow-400"
-                            : "text-gray-300 dark:text-gray-600"
+                            : "text-gray-300"
                             }`}
                     />
                 </button>
@@ -128,13 +128,13 @@ export default function MyReviewsPage() {
     const getStatusColor = (status: string) => {
         switch (status) {
             case "pending":
-                return "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200";
+                return "bg-yellow-100 text-yellow-800";
             case "approved":
-                return "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200";
+                return "bg-green-100 text-green-800";
             case "rejected":
-                return "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200";
+                return "bg-red-100 text-red-800";
             default:
-                return "bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-200";
+                return "bg-gray-100 text-gray-800";
         }
     };
 
@@ -146,14 +146,14 @@ export default function MyReviewsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-4xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         My Reviews
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Manage your product reviews and ratings
                     </p>
                 </div>
@@ -172,18 +172,18 @@ export default function MyReviewsPage() {
                             return (
                                 <div
                                     key={review.id}
-                                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6"
+                                    className="bg-white rounded-2xl shadow-lg p-6"
                                 >
                                     {/* Header */}
                                     <div className="flex items-start justify-between mb-4">
                                         <div>
                                             <div className="flex items-center gap-3 mb-2">
                                                 <Package className="w-5 h-5 text-primary" />
-                                                <span className="font-semibold text-gray-900 dark:text-white">
+                                                <span className="font-semibold text-gray-900">
                                                     Product: {review.productId.slice(0, 16)}...
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
                                                 <Calendar className="w-4 h-4" />
                                                 {toDate(review.createdAt).toLocaleDateString()}
                                                 <span
@@ -199,10 +199,10 @@ export default function MyReviewsPage() {
                                         {!isEditing && editable && review.status !== "rejected" && (
                                             <button
                                                 onClick={() => startEdit(review)}
-                                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                                className="p-2 hover:bg-gray-100 rounded-lg transition"
                                                 title="Edit review"
                                             >
-                                                <Edit className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                                <Edit className="w-5 h-5 text-gray-600" />
                                             </button>
                                         )}
                                     </div>
@@ -212,7 +212,7 @@ export default function MyReviewsPage() {
                                         <div className="space-y-4">
                                             {/* Edit Rating */}
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">
                                                     Rating
                                                 </label>
                                                 <StarRating rating={editRating} onRate={setEditRating} />
@@ -220,7 +220,7 @@ export default function MyReviewsPage() {
 
                                             {/* Edit Comment */}
                                             <div>
-                                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">
                                                     Review
                                                 </label>
                                                 <textarea
@@ -228,7 +228,7 @@ export default function MyReviewsPage() {
                                                     onChange={(e) => setEditComment(e.target.value)}
                                                     rows={4}
                                                     maxLength={500}
-                                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary resize-none"
+                                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary resize-none"
                                                 />
                                                 <div className="mt-1 flex justify-between text-sm">
                                                     <span className={editComment.length < 20 ? "text-red-500" : "text-gray-500"}>
@@ -243,7 +243,7 @@ export default function MyReviewsPage() {
                                                 <button
                                                     onClick={cancelEdit}
                                                     disabled={submitting}
-                                                    className="flex-1 px-4 py-2 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50"
+                                                    className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
                                                 >
                                                     Cancel
                                                 </button>
@@ -263,8 +263,8 @@ export default function MyReviewsPage() {
                                                 </button>
                                             </div>
 
-                                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
-                                                <p className="text-sm text-blue-900 dark:text-blue-200">
+                                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                                                <p className="text-sm text-blue-900">
                                                     <strong>Note:</strong> Updated reviews will be re-submitted for moderation.
                                                 </p>
                                             </div>
@@ -272,23 +272,23 @@ export default function MyReviewsPage() {
                                     ) : (
                                         <>
                                             <StarRating rating={review.rating} />
-                                            <p className="text-gray-900 dark:text-white mt-3 leading-relaxed">
+                                            <p className="text-gray-900 mt-3 leading-relaxed">
                                                 {review.comment}
                                             </p>
 
                                             {review.status === "rejected" && review.rejectionReason && (
-                                                <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
-                                                    <p className="text-sm font-semibold text-red-900 dark:text-red-200 mb-1">
+                                                <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4">
+                                                    <p className="text-sm font-semibold text-red-900 mb-1">
                                                         Rejection Reason:
                                                     </p>
-                                                    <p className="text-sm text-red-800 dark:text-red-300">
+                                                    <p className="text-sm text-red-800">
                                                         {review.rejectionReason}
                                                     </p>
                                                 </div>
                                             )}
 
                                             {!editable && review.status !== "rejected" && (
-                                                <div className="mt-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                                <div className="mt-4 flex items-center gap-2 text-sm text-gray-500">
                                                     <Clock className="w-4 h-4" />
                                                     <span>Review cannot be edited after 30 days</span>
                                                 </div>
@@ -300,12 +300,12 @@ export default function MyReviewsPage() {
                         })}
                     </div>
                 ) : (
-                    <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl">
+                    <div className="text-center py-12 bg-white rounded-2xl">
                         <Star className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
                             No Reviews Yet
                         </h3>
-                        <p className="text-gray-500 dark:text-gray-400 mb-6">
+                        <p className="text-gray-500 mb-6">
                             You haven't written any reviews yet
                         </p>
                         <button

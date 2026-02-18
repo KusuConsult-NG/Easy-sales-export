@@ -104,10 +104,10 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-8"
                 >
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-3xl font-bold text-slate-900 mb-2">
                         Loan Application
                     </h2>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Complete all steps to submit your application
                     </p>
                 </motion.div>
@@ -115,7 +115,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                 {/* Progress Steps */}
                 <div className="mb-12 relative">
                     {/* Progress Line */}
-                    <div className="absolute top-6 left-0 right-0 h-1 bg-slate-200 dark:bg-slate-700 -z-10" />
+                    <div className="absolute top-6 left-0 right-0 h-1 bg-slate-200 -z-10" />
                     <motion.div
                         className="absolute top-6 left-0 h-1 bg-[#1358ec] -z-10"
                         initial={{ width: "0%" }}
@@ -139,7 +139,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                                 ? 'bg-green-600'
                                                 : isActive
                                                     ? 'bg-[#1358ec]'
-                                                    : 'bg-slate-200 dark:bg-slate-700'
+                                                    : 'bg-slate-200'
                                             }
                     `}
                                         whileHover={{ scale: 1.1 }}
@@ -172,23 +172,23 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                             animate={{ opacity: 1, x: 0 }}
                             exit={{ opacity: 0, x: -20 }}
                             transition={{ duration: 0.3 }}
-                            className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-lg mb-8"
+                            className="bg-white rounded-2xl p-8 shadow-lg mb-8"
                         >
                             {/* Step 1: Loan Details */}
                             {currentStep === 1 && (
                                 <div className="space-y-6">
-                                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                    <h3 className="text-2xl font-bold text-slate-900 mb-4">
                                         Loan Details
                                     </h3>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Loan Amount (₦)
                                         </label>
                                         <input
                                             type="number"
                                             {...register("amount", { valueAsNumber: true })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1358ec] focus:border-transparent"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec] focus:border-transparent"
                                             placeholder="10,000"
                                         />
                                         {errors.amount && (
@@ -197,12 +197,12 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Loan Purpose
                                         </label>
                                         <select
                                             {...register("purpose")}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1358ec]"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                         >
                                             <option value={LoanPurpose.AGRICULTURE}>Agriculture</option>
                                             <option value={LoanPurpose.EQUIPMENT}>Equipment</option>
@@ -216,13 +216,13 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Repayment Period (Months)
                                         </label>
                                         <input
                                             type="number"
                                             {...register("repaymentPeriod", { valueAsNumber: true })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1358ec]"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                             placeholder="12"
                                         />
                                         {errors.repaymentPeriod && (
@@ -235,17 +235,17 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                             {/* Step 2: Collateral */}
                             {currentStep === 2 && (
                                 <div className="space-y-6">
-                                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                    <h3 className="text-2xl font-bold text-slate-900 mb-4">
                                         Collateral Information
                                     </h3>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Collateral Type
                                         </label>
                                         <input
                                             {...register("collateral.type")}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1358ec]"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                             placeholder="e.g., Land, Vehicle, Equipment"
                                         />
                                         {errors.collateral?.type && (
@@ -254,13 +254,13 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Estimated Value (₦)
                                         </label>
                                         <input
                                             type="number"
                                             {...register("collateral.value", { valueAsNumber: true })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1358ec]"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                             placeholder="50,000"
                                         />
                                         {errors.collateral?.value && (
@@ -269,13 +269,13 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Description
                                         </label>
                                         <textarea
                                             {...register("collateral.description")}
                                             rows={4}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1358ec]"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec]"
                                             placeholder="Provide detailed description of the collateral..."
                                         />
                                         {errors.collateral?.description && (
@@ -288,18 +288,18 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                             {/* Step 3: Business Details */}
                             {currentStep === 3 && (
                                 <div className="space-y-6">
-                                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                    <h3 className="text-2xl font-bold text-slate-900 mb-4">
                                         Business Information
                                     </h3>
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                            <label className="block text-sm font-medium text-slate-900 mb-2">
                                                 Business Name
                                             </label>
                                             <input
                                                 {...register("businessDetails.name")}
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-[#1358ec]"
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-[#1358ec]"
                                             />
                                             {errors.businessDetails?.name && (
                                                 <p className="mt-1 text-sm text-red-600">{errors.businessDetails.name.message}</p>
@@ -307,12 +307,12 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                            <label className="block text-sm font-medium text-slate-900 mb-2">
                                                 Business Type
                                             </label>
                                             <input
                                                 {...register("businessDetails.type")}
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-[#1358ec]"
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-[#1358ec]"
                                             />
                                             {errors.businessDetails?.type && (
                                                 <p className="mt-1 text-sm text-red-600">{errors.businessDetails.type.message}</p>
@@ -320,13 +320,13 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                            <label className="block text-sm font-medium text-slate-900 mb-2">
                                                 Years in Operation
                                             </label>
                                             <input
                                                 type="number"
                                                 {...register("businessDetails.yearsInOperation", { valueAsNumber: true })}
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-[#1358ec]"
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-[#1358ec]"
                                             />
                                             {errors.businessDetails?.yearsInOperation && (
                                                 <p className="mt-1 text-sm text-red-600">{errors.businessDetails.yearsInOperation.message}</p>
@@ -334,13 +334,13 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                            <label className="block text-sm font-medium text-slate-900 mb-2">
                                                 Annual Revenue (₦)
                                             </label>
                                             <input
                                                 type="number"
                                                 {...register("businessDetails.annualRevenue", { valueAsNumber: true })}
-                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 focus:ring-2 focus:ring-[#1358ec]"
+                                                className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-[#1358ec]"
                                             />
                                             {errors.businessDetails?.annualRevenue && (
                                                 <p className="mt-1 text-sm text-red-600">{errors.businessDetails.annualRevenue.message}</p>
@@ -353,12 +353,12 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                             {/* Step 4: Documents - Simplified for now */}
                             {currentStep === 4 && (
                                 <div className="space-y-6">
-                                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                    <h3 className="text-2xl font-bold text-slate-900 mb-4">
                                         Upload Documents
                                     </h3>
-                                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center">
+                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
                                         <Upload className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                                        <p className="text-slate-600 dark:text-slate-400">
+                                        <p className="text-slate-600">
                                             Document upload functionality - integrate with your file upload service
                                         </p>
                                     </div>
@@ -368,19 +368,19 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                             {/* Step 5: Review */}
                             {currentStep === 5 && (
                                 <div className="space-y-6">
-                                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                    <h3 className="text-2xl font-bold text-slate-900 mb-4">
                                         Review & Submit
                                     </h3>
                                     <div className="space-y-4">
-                                        <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-xl">
+                                        <div className="bg-slate-50 p-4 rounded-xl">
                                             <h4 className="font-semibold mb-2">Loan Amount:</h4>
                                             <p className="text-2xl font-bold text-[#1358ec]">₦{watch("amount")?.toLocaleString()}</p>
                                         </div>
-                                        <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-xl">
+                                        <div className="bg-slate-50 p-4 rounded-xl">
                                             <h4 className="font-semibold mb-2">Purpose:</h4>
                                             <p>{watch("purpose")}</p>
                                         </div>
-                                        <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-xl">
+                                        <div className="bg-slate-50 p-4 rounded-xl">
                                             <h4 className="font-semibold mb-2">Repayment Period:</h4>
                                             <p>{watch("repaymentPeriod")} months</p>
                                         </div>
@@ -395,7 +395,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
                         <button
                             type="button"
                             onClick={currentStep === 1 ? onCancel : prevStep}
-                            className="px-6 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors flex items-center gap-2"
+                            className="px-6 py-3 rounded-xl bg-slate-200 text-slate-900 font-medium hover:bg-slate-300 transition-colors flex items-center gap-2"
                         >
                             <ChevronLeft className="w-5 h-5" />
                             {currentStep === 1 ? 'Cancel' : 'Previous'}

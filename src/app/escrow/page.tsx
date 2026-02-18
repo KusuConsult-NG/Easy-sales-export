@@ -82,7 +82,7 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
             {/* Stepper Progress */}
             <div className="flex items-center justify-between mb-12 relative">
                 {/* Progress Line */}
-                <div className="absolute top-6 left-0 right-0 h-1 bg-slate-200 dark:bg-slate-700 -z-10" />
+                <div className="absolute top-6 left-0 right-0 h-1 bg-slate-200 -z-10" />
                 <motion.div
                     className="absolute top-6 left-0 h-1 bg-[#1358ec] -z-10"
                     initial={{ width: "0%" }}
@@ -115,12 +115,12 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
                   w-14 h-14 rounded-full flex items-center justify-center
                   transition-all duration-300 shadow-lg
                   ${isCancelled
-                                        ? 'bg-gray-300 dark:bg-gray-700'
+                                        ? 'bg-gray-300'
                                         : isCompleted
-                                            ? 'bg-green-600 dark:bg-green-500'
+                                            ? 'bg-green-600'
                                             : isActive
-                                                ? 'bg-[#1358ec] dark:bg-[#1358ec]'
-                                                : 'bg-slate-200 dark:bg-slate-700'
+                                                ? 'bg-[#1358ec]#1358ec]'
+                                                : 'bg-slate-200'
                                     }
                 `}
                                 whileHover={{ scale: 1.1 }}
@@ -135,7 +135,7 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
                                         <Check className="w-7 h-7 text-white" />
                                     </motion.div>
                                 ) : (
-                                    <Icon className={`w-7 h-7 ${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500'
+                                    <Icon className={`w-7 h-7 ${isActive ? 'text-white' : 'text-slate-400'
                                         }`} />
                                 )}
                             </motion.div>
@@ -143,14 +143,14 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
                             {/* Step Label */}
                             <div className="mt-3 text-center">
                                 <p className={`text-sm font-semibold ${isActive
-                                    ? 'text-[#1358ec] dark:text-[#1358ec]'
+                                    ? 'text-[#1358ec]#1358ec]'
                                     : isCompleted
-                                        ? 'text-green-600 dark:text-green-400'
-                                        : 'text-slate-400 dark:text-slate-500'
+                                        ? 'text-green-600'
+                                        : 'text-slate-400'
                                     }`}>
                                     {step.label}
                                 </p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                <p className="text-xs text-slate-500 mt-1">
                                     {step.description}
                                 </p>
                             </div>
@@ -175,12 +175,12 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-3"
+                    className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3"
                 >
-                    <X className="w-6 h-6 text-red-600 dark:text-red-400" />
+                    <X className="w-6 h-6 text-red-600" />
                     <div>
-                        <p className="font-semibold text-red-900 dark:text-red-100">Transaction Cancelled</p>
-                        <p className="text-sm text-red-700 dark:text-red-300">This escrow transaction has been cancelled.</p>
+                        <p className="font-semibold text-red-900">Transaction Cancelled</p>
+                        <p className="text-sm text-red-700">This escrow transaction has been cancelled.</p>
                     </div>
                 </motion.div>
             )}
@@ -190,12 +190,12 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl flex items-center gap-3"
+                    className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center gap-3"
                 >
-                    <AlertTriangle className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                    <AlertTriangle className="w-6 h-6 text-yellow-600" />
                     <div>
-                        <p className="font-semibold text-yellow-900 dark:text-yellow-100">Transaction Under Dispute</p>
-                        <p className="text-sm text-yellow-700 dark:text-yellow-300">This transaction is being reviewed by our team.</p>
+                        <p className="font-semibold text-yellow-900">Transaction Under Dispute</p>
+                        <p className="text-sm text-yellow-700">This transaction is being reviewed by our team.</p>
                     </div>
                 </motion.div>
             )}
@@ -229,7 +229,7 @@ export default function EscrowDashboardPage() {
     });
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 p-8">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <motion.div
@@ -237,10 +237,10 @@ export default function EscrowDashboardPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="mb-8"
                 >
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-4xl font-bold text-slate-900 mb-2">
                         Escrow Dashboard
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Secure payment protection for Farm Nation, Marketplace, and Export Windows
                     </p>
                 </motion.div>
@@ -258,7 +258,7 @@ export default function EscrowDashboardPage() {
                             onClick={() => setSelectedTab(tab.key as typeof selectedTab)}
                             className={`px-6 py-3 rounded-xl font-medium transition-all ${selectedTab === tab.key
                                 ? 'bg-[#1358ec] text-white shadow-lg'
-                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                : 'bg-white text-slate-600 hover:bg-slate-50'
                                 }`}
                         >
                             {tab.label}
@@ -275,10 +275,10 @@ export default function EscrowDashboardPage() {
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="text-center py-12 bg-white dark:bg-slate-800 rounded-2xl"
+                        className="text-center py-12 bg-white rounded-2xl"
                     >
-                        <Lock className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                        <p className="text-slate-600 dark:text-slate-400">No escrow transactions yet</p>
+                        <Lock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                        <p className="text-slate-600">No escrow transactions yet</p>
                     </motion.div>
                 ) : (
                     <div className="space-y-6">
@@ -288,18 +288,18 @@ export default function EscrowDashboardPage() {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: index * 0.1 }}
-                                className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg"
+                                className="bg-white rounded-2xl p-6 shadow-lg"
                             >
                                 <div className="flex justify-between items-start mb-6">
                                     <div>
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                                        <h3 className="text-xl font-bold text-slate-900 mb-1">
                                             Transaction #{transaction.id ? transaction.id.slice(0, 8) : '...'}
                                         </h3>
                                         <p className="text-2xl font-bold text-[#1358ec]">
                                             {formatCurrency(transaction.amount)}
                                         </p>
                                     </div>
-                                    <div className="text-right text-sm text-slate-500 dark:text-slate-400">
+                                    <div className="text-right text-sm text-slate-500">
                                         <p>{formatDate(transaction.createdAt)}</p>
                                     </div>
                                 </div>

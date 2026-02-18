@@ -130,10 +130,10 @@ export default function PropertyDetailsPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading property details...</p>
+                    <p className="text-slate-600">Loading property details...</p>
                 </div>
             </div>
         );
@@ -141,11 +141,11 @@ export default function PropertyDetailsPage() {
 
     if (error || !property) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-8">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
                 <div className="max-w-md text-center">
                     <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Property Not Found</h1>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">{error || "This property may have been removed."}</p>
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Property Not Found</h1>
+                    <p className="text-slate-600 mb-6">{error || "This property may have been removed."}</p>
                     <button
                         onClick={() => router.push("/farm-nation/properties")}
                         className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition"
@@ -158,13 +158,13 @@ export default function PropertyDetailsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-12">
+        <div className="min-h-screen bg-slate-50 pb-12">
             {/* Header */}
-            <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4">
+            <div className="bg-white border-b border-slate-200 p-4">
                 <div className="max-w-7xl mx-auto flex items-center justify-between">
                     <button
                         onClick={() => router.push("/farm-nation/properties")}
-                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                        className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition"
                     >
                         <ArrowLeft className="w-5 h-5" />
                         Back to Marketplace
@@ -173,15 +173,15 @@ export default function PropertyDetailsPage() {
                         <button
                             onClick={() => setIsFavorite(!isFavorite)}
                             className={`p-2 rounded-lg transition ${isFavorite
-                                ? "bg-red-100 dark:bg-red-900/20 text-red-600"
-                                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-red-600"
+                                ? "bg-red-100 text-red-600"
+                                : "bg-slate-100 text-slate-600 hover:text-red-600"
                                 }`}
                         >
                             <Heart className={`w-5 h-5 ${isFavorite ? "fill-current" : ""}`} />
                         </button>
                         <button
                             onClick={handleShare}
-                            className="p-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:text-blue-600 rounded-lg transition"
+                            className="p-2 bg-slate-100 text-slate-600 hover:text-blue-600 rounded-lg transition"
                         >
                             <Share2 className="w-5 h-5" />
                         </button>
@@ -194,10 +194,10 @@ export default function PropertyDetailsPage() {
                     {/* Main Content */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Image Gallery */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
                             {property.images && property.images.length > 0 ? (
                                 <div className="relative">
-                                    <div className="aspect-video relative bg-slate-200 dark:bg-slate-700">
+                                    <div className="aspect-video relative bg-slate-200">
                                         <Image
                                             src={property.images[currentImageIndex] || "/placeholder-land.jpg"}
                                             alt={property.title}
@@ -211,7 +211,7 @@ export default function PropertyDetailsPage() {
                                                 onClick={() =>
                                                     setCurrentImageIndex((currentImageIndex - 1 + property.images.length) % property.images.length)
                                                 }
-                                                className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 dark:bg-slate-800/90 text-slate-900 dark:text-white rounded-full hover:bg-white dark:hover:bg-slate-800 transition"
+                                                className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 text-slate-900 rounded-full hover:bg-white transition"
                                             >
                                                 ←
                                             </button>
@@ -219,7 +219,7 @@ export default function PropertyDetailsPage() {
                                                 onClick={() =>
                                                     setCurrentImageIndex((currentImageIndex + 1) % property.images.length)
                                                 }
-                                                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 dark:bg-slate-800/90 text-slate-900 dark:text-white rounded-full hover:bg-white dark:hover:bg-slate-800 transition"
+                                                className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/90 text-slate-900 rounded-full hover:bg-white transition"
                                             >
                                                 →
                                             </button>
@@ -239,7 +239,7 @@ export default function PropertyDetailsPage() {
                                     )}
                                 </div>
                             ) : (
-                                <div className="aspect-video bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                <div className="aspect-video bg-slate-200 flex items-center justify-center">
                                     <p className="text-slate-500">No images available</p>
                                 </div>
                             )}
@@ -264,50 +264,50 @@ export default function PropertyDetailsPage() {
                         </div>
 
                         {/* Property Details */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm">
+                        <div className="bg-white rounded-2xl p-6 shadow-sm">
                             <div className="flex items-start justify-between mb-4">
                                 <div>
-                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                                         {property.title}
                                     </h1>
-                                    <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                    <div className="flex items-center gap-2 text-slate-600">
                                         <MapPin className="w-4 h-4" />
                                         <span>{property.location.address}, {property.location.lga}, {property.location.state}</span>
                                     </div>
                                 </div>
-                                <div className="px-4 py-2 rounded-lg font-semibold bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400">
+                                <div className="px-4 py-2 rounded-lg font-semibold bg-green-100 text-green-700">
                                     For Sale
                                 </div>
                             </div>
 
                             {/* Key Stats */}
                             <div className="grid grid-cols-3 gap-4 mb-6">
-                                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4">
+                                <div className="bg-slate-50 rounded-xl p-4">
                                     <div className="flex items-center gap-2 text-green-600 mb-2">
                                         <DollarSign className="w-5 h-5" />
                                         <span className="text-sm font-semibold">Price</span>
                                     </div>
-                                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    <p className="text-2xl font-bold text-slate-900">
                                         ₦{property.price.toLocaleString()}
                                     </p>
                                 </div>
 
-                                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4">
+                                <div className="bg-slate-50 rounded-xl p-4">
                                     <div className="flex items-center gap-2 text-blue-600 mb-2">
                                         <Maximize className="w-5 h-5" />
                                         <span className="text-sm font-semibold">Size</span>
                                     </div>
-                                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    <p className="text-2xl font-bold text-slate-900">
                                         {property.size} <span className="text-lg">ha</span>
                                     </p>
                                 </div>
 
-                                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4">
+                                <div className="bg-slate-50 rounded-xl p-4">
                                     <div className="flex items-center gap-2 text-purple-600 mb-2">
                                         <Calendar className="w-5 h-5" />
                                         <span className="text-sm font-semibold">Category</span>
                                     </div>
-                                    <p className="text-lg font-bold text-slate-900 dark:text-white capitalize">
+                                    <p className="text-lg font-bold text-slate-900 capitalize">
                                         {property.category || "Farmland"}
                                     </p>
                                 </div>
@@ -315,8 +315,8 @@ export default function PropertyDetailsPage() {
 
                             {/* Description */}
                             <div className="mb-6">
-                                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">Description</h2>
-                                <p className="text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line">
+                                <h2 className="text-xl font-bold text-slate-900 mb-3">Description</h2>
+                                <p className="text-slate-600 leading-relaxed whitespace-pre-line">
                                     {property.description}
                                 </p>
                             </div>
@@ -324,15 +324,15 @@ export default function PropertyDetailsPage() {
                             {/* Features */}
                             <div className="grid grid-cols-2 gap-4">
                                 {property.soilType && (
-                                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                    <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
                                         <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
-                                        <span className="text-sm font-medium text-slate-900 dark:text-white">Soil: {property.soilType}</span>
+                                        <span className="text-sm font-medium text-slate-900">Soil: {property.soilType}</span>
                                     </div>
                                 )}
                                 {property.waterSource && (
-                                    <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                    <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
                                         <CheckCircle className="w-5 h-5 text-blue-600 shrink-0" />
-                                        <span className="text-sm font-medium text-slate-900 dark:text-white">Water: {property.waterSource}</span>
+                                        <span className="text-sm font-medium text-slate-900">Water: {property.waterSource}</span>
                                     </div>
                                 )}
                             </div>
@@ -342,9 +342,9 @@ export default function PropertyDetailsPage() {
                     {/* Sidebar */}
                     <div className="lg:col-span-1 space-y-6">
                         {/* CTA Card */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm sticky top-24">
+                        <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-24">
                             <div className="mb-6">
-                                <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
+                                <p className="text-3xl font-bold text-slate-900 mb-1">
                                     ₦{property.price.toLocaleString()}
                                 </p>
                                 <p className="text-sm text-slate-500">Purchase price</p>
@@ -359,8 +359,8 @@ export default function PropertyDetailsPage() {
                                     Contact Seller
                                 </button>
                             ) : (
-                                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
-                                    <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200 capitalize">
+                                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                                    <p className="text-sm font-semibold text-yellow-800 capitalize">
                                         {property.status === "pending_verification" ? "Verification Pending" : `Status: ${property.status}`}
                                     </p>
                                 </div>
@@ -368,8 +368,8 @@ export default function PropertyDetailsPage() {
                         </div>
 
                         {/* Seller Info (Protected) */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Seller Information</h3>
+                        <div className="bg-white rounded-2xl p-6 shadow-sm">
+                            <h3 className="text-lg font-bold text-slate-900 mb-4">Seller Information</h3>
 
                             {userTier === "Premium" ? (
                                 <div className="space-y-3">
@@ -377,21 +377,21 @@ export default function PropertyDetailsPage() {
                                         <User className="w-5 h-5 text-slate-400" />
                                         <div>
                                             <p className="text-xs text-slate-500">Name</p>
-                                            <p className="font-semibold text-slate-900 dark:text-white">{property.ownerName}</p>
+                                            <p className="font-semibold text-slate-900">{property.ownerName}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <Mail className="w-5 h-5 text-slate-400" />
                                         <div>
                                             <p className="text-xs text-slate-500">Email</p>
-                                            <p className="font-semibold text-slate-900 dark:text-white">{property.ownerEmail}</p>
+                                            <p className="font-semibold text-slate-900">{property.ownerEmail}</p>
                                         </div>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg cursor-pointer" onClick={() => setShowUpgradeModal(true)}>
+                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer" onClick={() => setShowUpgradeModal(true)}>
                                     <Lock className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                                    <p className="text-sm text-center text-blue-800 dark:text-blue-200">
+                                    <p className="text-sm text-center text-blue-800">
                                         Upgrade to Premium to view full seller contact details
                                     </p>
                                 </div>
@@ -404,55 +404,55 @@ export default function PropertyDetailsPage() {
             {/* Inquiry Modal */}
             {showInquiryModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-lg w-full">
+                    <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Contact Seller</h2>
-                            <button onClick={() => setShowInquiryModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full">
+                            <h2 className="text-2xl font-bold text-slate-900">Contact Seller</h2>
+                            <button onClick={() => setShowInquiryModal(false)} className="p-2 hover:bg-slate-100 rounded-full">
                                 <X className="w-6 h-6 text-slate-500" />
                             </button>
                         </div>
 
                         <form onSubmit={submitInquiry} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-1">Your Name</label>
+                                <label className="block text-sm font-semibold text-slate-900 mb-1">Your Name</label>
                                 <input
                                     type="text"
                                     value={inquiryForm.name}
                                     onChange={e => setInquiryForm({ ...inquiryForm, name: e.target.value })}
                                     required
-                                    className="w-full px-4 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600"
+                                    className="w-full px-4 py-2 border rounded-lg"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-1">Email</label>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-1">Email</label>
                                     <input
                                         type="email"
                                         value={inquiryForm.email}
                                         onChange={e => setInquiryForm({ ...inquiryForm, email: e.target.value })}
                                         required
-                                        className="w-full px-4 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600"
+                                        className="w-full px-4 py-2 border rounded-lg"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-1">Phone</label>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-1">Phone</label>
                                     <input
                                         type="tel"
                                         value={inquiryForm.phone}
                                         onChange={e => setInquiryForm({ ...inquiryForm, phone: e.target.value })}
                                         required
-                                        className="w-full px-4 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600"
+                                        className="w-full px-4 py-2 border rounded-lg"
                                     />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-1">Message</label>
+                                <label className="block text-sm font-semibold text-slate-900 mb-1">Message</label>
                                 <textarea
                                     value={inquiryForm.message}
                                     onChange={e => setInquiryForm({ ...inquiryForm, message: e.target.value })}
                                     required
                                     rows={4}
-                                    className="w-full px-4 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600"
+                                    className="w-full px-4 py-2 border rounded-lg"
                                     placeholder="I am interested in this property..."
                                 />
                             </div>
@@ -472,18 +472,18 @@ export default function PropertyDetailsPage() {
             {/* Upgrade Modal */}
             {showUpgradeModal && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 max-w-md w-full">
+                    <div className="bg-white rounded-2xl p-8 max-w-md w-full">
                         <Lock className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white text-center mb-2">
+                        <h2 className="text-2xl font-bold text-slate-900 text-center mb-2">
                             Premium Membership Required
                         </h2>
-                        <p className="text-slate-600 dark:text-slate-400 text-center mb-6">
+                        <p className="text-slate-600 text-center mb-6">
                             Upgrade to Premium to view full seller contact details.
                         </p>
                         <div className="flex gap-3">
                             <button
                                 onClick={() => setShowUpgradeModal(false)}
-                                className="flex-1 px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                className="flex-1 px-6 py-3 border border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition"
                             >
                                 Cancel
                             </button>

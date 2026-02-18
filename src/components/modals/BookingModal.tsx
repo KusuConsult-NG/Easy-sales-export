@@ -60,18 +60,18 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div
-                className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 animate-[slideInUp_0.3s_ease-out]"
+                className="bg-white rounded-2xl max-w-md w-full p-6 animate-[slideInUp_0.3s_ease-out]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {isSuccess ? (
                     <div className="text-center py-8">
-                        <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle className="w-10 h-10 text-green-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">
                             Booking Submitted!
                         </h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                        <p className="text-sm text-slate-600">
                             Your slot reservation is pending confirmation
                         </p>
                     </div>
@@ -80,34 +80,34 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                         {/* Header */}
                         <div className="flex items-start justify-between mb-6">
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-1">
                                     Book Your Slot
                                 </h2>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <p className="text-sm text-slate-600">
                                     {exportWindow.title}
                                 </p>
                             </div>
                             <button
                                 onClick={onClose}
-                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
+                                className="p-2 hover:bg-slate-100 rounded-lg transition"
                             >
                                 <X className="w-5 h-5 text-slate-500" />
                             </button>
                         </div>
 
                         {/* Window Details */}
-                        <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 mb-6">
+                        <div className="bg-slate-50 rounded-xl p-4 mb-6">
                             <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                <div className="flex items-center gap-2 text-sm text-slate-600">
                                     <Package className="w-4 h-4" />
                                     <span>Commodity</span>
                                 </div>
-                                <span className="font-semibold text-slate-900 dark:text-white">
+                                <span className="font-semibold text-slate-900">
                                     {exportWindow.commodity}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                <div className="flex items-center gap-2 text-sm text-slate-600">
                                     <Hash className="w-4 h-4" />
                                     <span>Price per kg</span>
                                 </div>
@@ -116,11 +116,11 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                <div className="flex items-center gap-2 text-sm text-slate-600">
                                     <Package className="w-4 h-4" />
                                     <span>Available</span>
                                 </div>
-                                <span className="font-semibold text-slate-900 dark:text-white">
+                                <span className="font-semibold text-slate-900">
                                     {availableVolume.toLocaleString()}kg
                                 </span>
                             </div>
@@ -128,7 +128,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
 
                         {/* Quantity Input */}
                         <div className="mb-6">
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Quantity (kg)
                             </label>
                             <input
@@ -137,9 +137,9 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                                 max={availableVolume}
                                 value={quantity}
                                 onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                                className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                             />
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            <p className="text-xs text-slate-500 mt-1">
                                 Maximum: {availableVolume.toLocaleString()}kg
                             </p>
                         </div>
@@ -147,7 +147,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                         {/* Total */}
                         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-6">
                             <div className="flex items-center justify-between">
-                                <span className="font-semibold text-slate-900 dark:text-white">
+                                <span className="font-semibold text-slate-900">
                                     Total Amount
                                 </span>
                                 <span className="text-2xl font-bold text-primary">
@@ -161,7 +161,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                             <button
                                 onClick={onClose}
                                 disabled={isSubmitting}
-                                className="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50"
+                                className="flex-1 px-4 py-3 border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition disabled:opacity-50"
                             >
                                 Cancel
                             </button>
@@ -181,7 +181,7 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
                             </button>
                         </div>
 
-                        <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-4">
+                        <p className="text-xs text-center text-slate-500 mt-4">
                             Pending confirmation - payment details will be sent to your email
                         </p>
                     </>

@@ -90,20 +90,20 @@ export default function ProfilePage() {
 
     if (isFetching) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8">
             <div className="max-w-4xl mx-auto space-y-8">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">My Profile</h1>
-                        <p className="text-slate-500 dark:text-slate-400">Manage your account settings and preferences</p>
+                        <h1 className="text-3xl font-bold text-slate-900">My Profile</h1>
+                        <p className="text-slate-500">Manage your account settings and preferences</p>
                     </div>
                     <div className="flex gap-3">
                         <button
@@ -126,8 +126,8 @@ export default function ProfilePage() {
                     <div className={`
                         p-4 rounded-xl border flex items-center gap-3
                         ${saveMessage.type === 'success'
-                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
-                            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                            ? 'bg-green-50 border-green-200 text-green-800'
+                            : 'bg-red-50 border-red-200 text-red-800'
                         }
                     `}>
                         <CheckCircle className="w-5 h-5" />
@@ -139,10 +139,10 @@ export default function ProfilePage() {
                     {/* Sidebar / User Card */}
                     <div className="md:col-span-4 space-y-6">
                         {/* User Card */}
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
                             <div className="flex flex-col items-center text-center">
                                 <div className="relative mb-4 group cursor-pointer">
-                                    <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-800 shadow-lg">
+                                    <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 border-4 border-white shadow-lg">
                                         {user.image ? (
                                             <Image
                                                 src={user.image}
@@ -161,18 +161,18 @@ export default function ProfilePage() {
                                         <Camera className="w-6 h-6 text-white" />
                                     </div>
                                 </div>
-                                <h2 className="text-xl font-bold text-slate-900 dark:text-white">{user.name}</h2>
-                                <p className="text-sm text-slate-500 dark:text-slate-400 capitalize">
+                                <h2 className="text-xl font-bold text-slate-900">{user.name}</h2>
+                                <p className="text-sm text-slate-500 capitalize">
                                     {user.roles && user.roles.length > 0 ? user.roles[0] : 'Member'}
                                 </p>
                             </div>
 
-                            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 space-y-4">
-                                <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
+                            <div className="mt-6 pt-6 border-t border-slate-100 space-y-4">
+                                <div className="flex items-center gap-3 text-sm text-slate-600">
                                     <Mail className="w-4 h-4 text-slate-400" />
                                     <span className="truncate">{user.email}</span>
                                 </div>
-                                <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
+                                <div className="flex items-center gap-3 text-sm text-slate-600">
                                     <Shield className="w-4 h-4 text-slate-400" />
                                     <span>Verified Account</span>
                                 </div>
@@ -180,12 +180,12 @@ export default function ProfilePage() {
                         </div>
 
                         {/* Navigation Tabs */}
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <div className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
                             <button
                                 onClick={() => setActiveTab('general')}
                                 className={`w-full flex items-center gap-3 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'general'
-                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-l-4 border-blue-600'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'
+                                    ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600'
+                                    : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
                                     }`}
                             >
                                 <User className="w-4 h-4" />
@@ -194,8 +194,8 @@ export default function ProfilePage() {
                             <button
                                 onClick={() => setActiveTab('security')}
                                 className={`w-full flex items-center gap-3 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'security'
-                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-l-4 border-blue-600'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'
+                                    ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600'
+                                    : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
                                     }`}
                             >
                                 <Lock className="w-4 h-4" />
@@ -204,8 +204,8 @@ export default function ProfilePage() {
                             <button
                                 onClick={() => setActiveTab('preferences')}
                                 className={`w-full flex items-center gap-3 px-6 py-4 text-sm font-medium transition-colors ${activeTab === 'preferences'
-                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-l-4 border-blue-600'
-                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'
+                                    ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600'
+                                    : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'
                                     }`}
                             >
                                 <Bell className="w-4 h-4" />
@@ -221,59 +221,59 @@ export default function ProfilePage() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.2 }}
-                            className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 md:p-8"
+                            className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8"
                         >
                             {activeTab === 'general' && (
                                 <div className="space-y-6">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">General Information</h3>
+                                    <h3 className="text-lg font-bold text-slate-900 mb-6">General Information</h3>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Full Name</label>
+                                            <label className="text-sm font-medium text-slate-900">Full Name</label>
                                             <input
                                                 type="text"
                                                 defaultValue={user.name || ''}
                                                 disabled
-                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed"
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Email Address</label>
+                                            <label className="text-sm font-medium text-slate-900">Email Address</label>
                                             <input
                                                 type="email"
                                                 defaultValue={user.email || ''}
                                                 disabled
-                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed"
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Phone Number</label>
+                                            <label className="text-sm font-medium text-slate-900">Phone Number</label>
                                             <input
                                                 type="tel"
                                                 value={userData.phone}
                                                 onChange={(e) => setUserData({ ...userData, phone: e.target.value })}
                                                 placeholder="+234 000 000 0000"
-                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Location</label>
+                                            <label className="text-sm font-medium text-slate-900">Location</label>
                                             <input
                                                 type="text"
                                                 value={userData.location}
                                                 onChange={(e) => setUserData({ ...userData, location: e.target.value })}
                                                 placeholder="City, State"
-                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                             />
                                         </div>
                                         <div className="md:col-span-2 space-y-2">
-                                            <label className="text-sm font-medium text-slate-900 dark:text-white">Bio</label>
+                                            <label className="text-sm font-medium text-slate-900">Bio</label>
                                             <textarea
                                                 rows={4}
                                                 value={userData.bio}
                                                 onChange={(e) => setUserData({ ...userData, bio: e.target.value })}
                                                 placeholder="Tell us about yourself..."
-                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
                                             />
                                         </div>
                                     </div>
@@ -282,15 +282,15 @@ export default function ProfilePage() {
 
                             {activeTab === 'security' && (
                                 <div className="space-y-8">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Security Settings</h3>
+                                    <h3 className="text-lg font-bold text-slate-900">Security Settings</h3>
 
-                                    <div className="pb-8 border-b border-slate-100 dark:border-slate-800">
+                                    <div className="pb-8 border-b border-slate-100">
                                         <div className="flex items-center justify-between mb-4">
                                             <div>
-                                                <h4 className="font-medium text-slate-900 dark:text-white">Password</h4>
-                                                <p className="text-sm text-slate-500 dark:text-slate-400">Last changed 3 months ago</p>
+                                                <h4 className="font-medium text-slate-900">Password</h4>
+                                                <p className="text-sm text-slate-500">Last changed 3 months ago</p>
                                             </div>
-                                            <button className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                            <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
                                                 Change Password
                                             </button>
                                         </div>
@@ -299,20 +299,20 @@ export default function ProfilePage() {
                                     <div>
                                         <div className="flex items-center justify-between mb-4">
                                             <div>
-                                                <h4 className="font-medium text-slate-900 dark:text-white">Two-Factor Authentication</h4>
-                                                <p className="text-sm text-slate-500 dark:text-slate-400">Add an extra layer of security to your account</p>
+                                                <h4 className="font-medium text-slate-900">Two-Factor Authentication</h4>
+                                                <p className="text-sm text-slate-500">Add an extra layer of security to your account</p>
                                             </div>
-                                            <div className="relative inline-flex h-6 w-11 items-center rounded-full bg-slate-200 dark:bg-slate-700 cursor-pointer">
+                                            <div className="relative inline-flex h-6 w-11 items-center rounded-full bg-slate-200 cursor-pointer">
                                                 <span className="translate-x-1 inline-block h-4 w-4 transform rounded-full bg-white transition" />
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl flex gap-3">
-                                        <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                                    <div className="bg-blue-50 p-4 rounded-xl flex gap-3">
+                                        <Shield className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                                         <div>
-                                            <p className="text-sm font-medium text-blue-900 dark:text-blue-200">Security Checkup</p>
-                                            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Your account security score is 85%. Enable 2FA to reach 100%.</p>
+                                            <p className="text-sm font-medium text-blue-900">Security Checkup</p>
+                                            <p className="text-xs text-blue-700 mt-1">Your account security score is 85%. Enable 2FA to reach 100%.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -320,21 +320,21 @@ export default function ProfilePage() {
 
                             {activeTab === 'preferences' && (
                                 <div className="space-y-8">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Preferences</h3>
+                                    <h3 className="text-lg font-bold text-slate-900">Preferences</h3>
 
-                                    <div className="pb-8 border-b border-slate-100 dark:border-slate-800">
-                                        <h4 className="font-medium text-slate-900 dark:text-white mb-4">Theme Settings</h4>
+                                    <div className="pb-8 border-b border-slate-100">
+                                        <h4 className="font-medium text-slate-900 mb-4">Theme Settings</h4>
                                         <div className="grid grid-cols-2 gap-4">
                                             <button
                                                 onClick={() => theme !== 'light' && toggleTheme()}
-                                                className={`flex items-center gap-3 p-4 rounded-xl border ${theme === 'light' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}
+                                                className={`flex items-center gap-3 p-4 rounded-xl border ${theme === 'light' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}
                                             >
                                                 <Sun className="w-5 h-5" />
                                                 <span className="font-medium">Light Mode</span>
                                             </button>
                                             <button
                                                 onClick={() => theme !== 'dark' && toggleTheme()}
-                                                className={`flex items-center gap-3 p-4 rounded-xl border ${theme === 'dark' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'}`}
+                                                className={`flex items-center gap-3 p-4 rounded-xl border ${theme === 'dark' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}
                                             >
                                                 <Moon className="w-5 h-5" />
                                                 <span className="font-medium">Dark Mode</span>
@@ -343,12 +343,12 @@ export default function ProfilePage() {
                                     </div>
 
                                     <div>
-                                        <h4 className="font-medium text-slate-900 dark:text-white mb-4">Notifications</h4>
+                                        <h4 className="font-medium text-slate-900 mb-4">Notifications</h4>
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="font-medium text-slate-900 dark:text-white">Email Notifications</p>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Receive updates about your investments</p>
+                                                    <p className="font-medium text-slate-900">Email Notifications</p>
+                                                    <p className="text-xs text-slate-500">Receive updates about your investments</p>
                                                 </div>
                                                 <input
                                                     type="checkbox"
@@ -359,8 +359,8 @@ export default function ProfilePage() {
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="font-medium text-slate-900 dark:text-white">Push Notifications</p>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Receive real-time alerts on your device</p>
+                                                    <p className="font-medium text-slate-900">Push Notifications</p>
+                                                    <p className="text-xs text-slate-500">Receive real-time alerts on your device</p>
                                                 </div>
                                                 <input
                                                     type="checkbox"
@@ -371,8 +371,8 @@ export default function ProfilePage() {
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="font-medium text-slate-900 dark:text-white">SMS Notifications</p>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Receive text message updates</p>
+                                                    <p className="font-medium text-slate-900">SMS Notifications</p>
+                                                    <p className="text-xs text-slate-500">Receive text message updates</p>
                                                 </div>
                                                 <input
                                                     type="checkbox"

@@ -77,23 +77,23 @@ export default function MyPropertiesPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading your properties...</p>
+                    <p className="text-slate-600">Loading your properties...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-8">
+        <div className="min-h-screen bg-slate-50 p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">My Properties</h1>
-                        <p className="text-slate-600 dark:text-slate-400">Manage your land listings</p>
+                        <h1 className="text-4xl font-bold text-slate-900 mb-2">My Properties</h1>
+                        <p className="text-slate-600">Manage your land listings</p>
                     </div>
                     <button
                         onClick={() => router.push("/farm-nation/list-land")}
@@ -106,38 +106,38 @@ export default function MyPropertiesPage() {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Total Listings</p>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.total}</p>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Total Listings</p>
+                        <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Available</p>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Available</p>
                         <p className="text-3xl font-bold text-green-600">{stats.available}</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Pending Sale</p>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Pending Sale</p>
                         <p className="text-3xl font-bold text-yellow-600">{stats.pending}</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Total Views</p>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Total Views</p>
                         <div className="flex items-center gap-2">
                             <TrendingUp className="w-5 h-5 text-blue-600" />
-                            <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.totalViews}</p>
+                            <p className="text-3xl font-bold text-slate-900">{stats.totalViews}</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 mb-6 elevation-2">
+                <div className="bg-white rounded-2xl p-4 mb-6 elevation-2">
                     <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white">Filter:</span>
+                        <span className="text-sm font-semibold text-slate-900">Filter:</span>
                         {["all", "available", "pending", "sold", "leased"].map((status) => (
                             <button
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
                                 className={`px-4 py-2 rounded-lg font-medium text-sm transition ${filterStatus === status
                                     ? "bg-green-600 text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                     }`}
                             >
                                 {status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1)}
@@ -148,23 +148,23 @@ export default function MyPropertiesPage() {
 
                 {/* Error Display */}
                 {error && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6 flex items-start gap-3">
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
                         <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                        <p className="text-red-800 dark:text-red-200">{error}</p>
+                        <p className="text-red-800">{error}</p>
                     </div>
                 )}
 
                 {/* Properties Grid */}
                 {filteredProperties.length === 0 ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center elevation-2">
+                    <div className="bg-white rounded-2xl p-12 text-center elevation-2">
                         <div className="max-w-md mx-auto">
-                            <div className="w-24 h-24 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <MapPin className="w-12 h-12 text-slate-400" />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 {filterStatus === "all" ? "No Properties Listed" : `No ${filterStatus} Properties`}
                             </h3>
-                            <p className="text-slate-600 dark:text-slate-400 mb-6">
+                            <p className="text-slate-600 mb-6">
                                 {filterStatus === "all"
                                     ? "Get started by listing your first property on Farm Nation marketplace."
                                     : `You don't have any properties with status "${filterStatus}".`}
@@ -184,10 +184,10 @@ export default function MyPropertiesPage() {
                         {filteredProperties.map((property) => (
                             <div
                                 key={property.id}
-                                className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift transition"
+                                className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift transition"
                             >
                                 {/* Property Image */}
-                                <div className="relative aspect-video bg-slate-200 dark:bg-slate-700">
+                                <div className="relative aspect-video bg-slate-200">
                                     {property.images && property.images.length > 0 ? (
                                         <Image
                                             src={property.images[0]}
@@ -225,39 +225,39 @@ export default function MyPropertiesPage() {
 
                                 {/* Property Info */}
                                 <div className="p-5">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">
+                                    <h3 className="text-lg font-bold text-slate-900 mb-2 line-clamp-1">
                                         {property.name}
                                     </h3>
 
-                                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                    <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
                                         <MapPin className="w-4 h-4" />
                                         <span className="line-clamp-1">{property.location}, {property.state}</span>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-3 mb-4">
-                                        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                                        <div className="bg-slate-50 rounded-lg p-3">
                                             <div className="flex items-center gap-1 text-green-600 mb-1">
                                                 <DollarSign className="w-4 h-4" />
                                                 <span className="text-xs font-semibold">Price</span>
                                             </div>
-                                            <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                            <p className="text-sm font-bold text-slate-900">
                                                 ₦{(property.price / 1000000).toFixed(1)}M
                                             </p>
                                         </div>
 
-                                        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+                                        <div className="bg-slate-50 rounded-lg p-3">
                                             <div className="flex items-center gap-1 text-blue-600 mb-1">
                                                 <Maximize className="w-4 h-4" />
                                                 <span className="text-xs font-semibold">Size</span>
                                             </div>
-                                            <p className="text-sm font-bold text-slate-900 dark:text-white">
+                                            <p className="text-sm font-bold text-slate-900">
                                                 {property.size} ha
                                             </p>
                                         </div>
                                     </div>
 
                                     {/* Stats */}
-                                    <div className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-4 border-b border-slate-200 dark:border-slate-700">
+                                    <div className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-4 border-b border-slate-200">
                                         <div className="flex items-center gap-1">
                                             <Eye className="w-3 h-3" />
                                             <span>{property.viewCount || 0} views</span>
@@ -279,14 +279,14 @@ export default function MyPropertiesPage() {
                                         </button>
                                         <button
                                             onClick={() => router.push(`/farm-nation/edit-property/${property.id}`)}
-                                            className="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg transition"
+                                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-lg transition"
                                             title="Edit Property"
                                         >
                                             <Edit className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => handleDeleteProperty(property.id, property.name)}
-                                            className="px-4 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/40 text-red-600 rounded-lg transition"
+                                            className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition"
                                             title="Delete Property"
                                         >
                                             <Trash2 className="w-4 h-4" />

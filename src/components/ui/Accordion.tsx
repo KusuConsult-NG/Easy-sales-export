@@ -12,12 +12,12 @@ export function AccordionItem({ title, children }: AccordionItemProps) {
     const [isOpen, setIsOpen] = useState(false);
 
     return (
-        <div className="border-b border-slate-200 dark:border-slate-700">
+        <div className="border-b border-slate-200">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full py-4 px-6 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                className="w-full py-4 px-6 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
             >
-                <span className="font-semibold text-slate-900 dark:text-white">
+                <span className="font-semibold text-slate-900">
                     {title}
                 </span>
                 <ChevronDown
@@ -29,7 +29,7 @@ export function AccordionItem({ title, children }: AccordionItemProps) {
                 className={`overflow-hidden transition-all duration-300 ${isOpen ? "max-h-96" : "max-h-0"
                     }`}
             >
-                <div className="px-6 pb-4 text-slate-600 dark:text-slate-400">
+                <div className="px-6 pb-4 text-slate-600">
                     {children}
                 </div>
             </div>

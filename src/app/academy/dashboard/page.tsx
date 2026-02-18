@@ -70,23 +70,23 @@ export default function AcademyDashboardPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading dashboard...</p>
+                    <p className="text-slate-600">Loading dashboard...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         My Learning Dashboard
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Track your progress and achievements
                     </p>
                 </div>
@@ -127,15 +127,15 @@ export default function AcademyDashboardPage() {
                 </div>
 
                 {/* My Courses */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 mb-8">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-6">
                         My Courses
                     </h2>
 
                     {courses.length === 0 ? (
                         <div className="text-center py-12">
-                            <BookOpen className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                            <p className="text-slate-500 dark:text-slate-400 mb-4">
+                            <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                            <p className="text-slate-500 mb-4">
                                 You haven't enrolled in any courses yet
                             </p>
                             <Link
@@ -153,9 +153,9 @@ export default function AcademyDashboardPage() {
                                     href={`/academy/courses/${course.courseId}`}
                                     className="block"
                                 >
-                                    <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-6 hover:shadow-lg transition-all border border-slate-200 dark:border-slate-700">
+                                    <div className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all border border-slate-200">
                                         <div className="flex items-start justify-between mb-4">
-                                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                                            <h3 className="text-lg font-bold text-slate-900">
                                                 {course.courseTitle}
                                             </h3>
                                             {course.certificateId && (
@@ -166,14 +166,14 @@ export default function AcademyDashboardPage() {
                                         {/* Progress Bar */}
                                         <div className="mb-4">
                                             <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                <span className="text-sm font-semibold text-slate-900">
                                                     Progress
                                                 </span>
                                                 <span className="text-sm font-bold text-primary">
                                                     {course.completionPercentage}%
                                                 </span>
                                             </div>
-                                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                            <div className="w-full bg-slate-200 rounded-full h-2">
                                                 <div
                                                     className="bg-primary h-2 rounded-full transition-all"
                                                     style={{ width: `${course.completionPercentage}%` }}
@@ -182,7 +182,7 @@ export default function AcademyDashboardPage() {
                                         </div>
 
                                         {/* Stats */}
-                                        <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+                                        <div className="flex items-center gap-4 text-sm text-slate-600">
                                             <div className="flex items-center gap-1">
                                                 <BookOpen className="w-4 h-4" />
                                                 {course.completedLessons.length}/{course.totalLessons} lessons
@@ -204,8 +204,8 @@ export default function AcademyDashboardPage() {
 
                 {/* Certificates */}
                 {certificates.length > 0 && (
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                    <div className="bg-white rounded-xl shadow-lg p-6">
+                        <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                             <Award className="w-7 h-7 text-yellow-500" />
                             My Certificates
                         </h2>
@@ -214,17 +214,17 @@ export default function AcademyDashboardPage() {
                             {certificates.map((cert) => (
                                 <div
                                     key={cert.id}
-                                    className="bg-linear-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-xl p-6 border-2 border-yellow-200 dark:border-yellow-700"
+                                    className="bg-linear-to-br from-yellow-50 to-yellow-100 rounded-xl p-6 border-2 border-yellow-200"
                                 >
                                     <div className="flex items-center justify-center mb-4">
                                         <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center">
                                             <Award className="w-10 h-10 text-white" />
                                         </div>
                                     </div>
-                                    <h3 className="text-center font-bold text-slate-900 dark:text-white mb-2">
+                                    <h3 className="text-center font-bold text-slate-900 mb-2">
                                         {cert.courseTitle}
                                     </h3>
-                                    <p className="text-center text-sm text-slate-600 dark:text-slate-400 mb-1">
+                                    <p className="text-center text-sm text-slate-600 mb-1">
                                         Completed: {new Date(cert.completionDate).toLocaleDateString()}
                                     </p>
                                     {cert.grade && (

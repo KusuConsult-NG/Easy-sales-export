@@ -180,21 +180,21 @@ export default function HelpCenterPage() {
     })).filter(category => category.questions.length > 0);
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 py-12">
+        <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 py-12">
             <div className="max-w-6xl mx-auto px-4">
                 {/* Header */}
                 <div className="text-center mb-12">
                     <Link
                         href="/"
-                        className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-primary mb-6 transition"
+                        className="inline-flex items-center gap-2 text-slate-600 hover:text-primary mb-6 transition"
                     >
                         <Home className="w-4 h-4" />
                         Back to Home
                     </Link>
-                    <h1 className="text-5xl font-bold text-slate-900 dark:text-white mb-4">
+                    <h1 className="text-5xl font-bold text-slate-900 mb-4">
                         How can we help you?
                     </h1>
-                    <p className="text-xl text-slate-600 dark:text-slate-400">
+                    <p className="text-xl text-slate-600">
                         Search our knowledge base or browse FAQs
                     </p>
                 </div>
@@ -208,7 +208,7 @@ export default function HelpCenterPage() {
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search for answers..."
-                            className="w-full pl-12 pr-4 py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-primary shadow-lg"
+                            className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl text-slate-900 focus:ring-2 focus:ring-primary focus:border-primary shadow-lg"
                         />
                     </div>
                 </div>
@@ -219,13 +219,13 @@ export default function HelpCenterPage() {
                         <Link
                             key={resource.title}
                             href={resource.link}
-                            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 border border-slate-200 dark:border-slate-700"
+                            className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 border border-slate-200"
                         >
                             <resource.icon className="w-10 h-10 text-primary mb-3" />
-                            <h3 className="font-bold text-slate-900 dark:text-white mb-2">
+                            <h3 className="font-bold text-slate-900 mb-2">
                                 {resource.title}
                             </h3>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 {resource.description}
                             </p>
                         </Link>
@@ -234,7 +234,7 @@ export default function HelpCenterPage() {
 
                 {/* FAQs */}
                 <div className="mb-12">
-                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white text-center mb-8">
+                    <h2 className="text-3xl font-bold text-slate-900 text-center mb-8">
                         Frequently Asked Questions
                     </h2>
 
@@ -243,7 +243,7 @@ export default function HelpCenterPage() {
                             <div key={category.category}>
                                 <div className="flex items-center gap-3 mb-4">
                                     <category.icon className="w-6 h-6 text-primary" />
-                                    <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    <h3 className="text-2xl font-bold text-slate-900">
                                         {category.category}
                                     </h3>
                                 </div>
@@ -256,13 +256,13 @@ export default function HelpCenterPage() {
                                         return (
                                             <div
                                                 key={questionId}
-                                                className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 overflow-hidden"
+                                                className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden"
                                             >
                                                 <button
                                                     onClick={() => toggleQuestion(questionId)}
-                                                    className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                                    className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition"
                                                 >
-                                                    <span className="font-semibold text-slate-900 dark:text-white">
+                                                    <span className="font-semibold text-slate-900">
                                                         {faq.q}
                                                     </span>
                                                     {isExpanded ? (
@@ -272,8 +272,8 @@ export default function HelpCenterPage() {
                                                     )}
                                                 </button>
                                                 {isExpanded && (
-                                                    <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-                                                        <p className="text-slate-900 dark:text-white">
+                                                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-200">
+                                                        <p className="text-slate-900">
                                                             {faq.a}
                                                         </p>
                                                     </div>
@@ -288,7 +288,7 @@ export default function HelpCenterPage() {
 
                     {filteredFaqs.length === 0 && searchQuery && (
                         <div className="text-center py-12">
-                            <p className="text-slate-600 dark:text-slate-400 mb-4">
+                            <p className="text-slate-600 mb-4">
                                 No results found for "{searchQuery}"
                             </p>
                             <button

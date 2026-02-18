@@ -48,15 +48,15 @@ export default function MessagesLayout({
     }, []);
 
     return (
-        <div className="h-[calc(100vh-64px)] bg-white dark:bg-slate-950 flex overflow-hidden">
+        <div className="h-[calc(100vh-64px)] bg-white flex overflow-hidden">
             <div className={`
-                w-full md:w-80 lg:w-96 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900
+                w-full md:w-80 lg:w-96 border-r border-slate-200 flex flex-col bg-white
                 ${isConversationOpen ? 'hidden md:flex' : 'flex'}
             `}>
-                <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-                    <h1 className="text-xl font-bold text-slate-800 dark:text-white">Messages</h1>
+                <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+                    <h1 className="text-xl font-bold text-slate-800">Messages</h1>
                     <div className="flex gap-2">
-                        <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 transition-colors">
+                        <button className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
                             <Filter className="w-5 h-5" />
                         </button>
                         <button className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors shadow-sm">
@@ -73,7 +73,7 @@ export default function MessagesLayout({
                             placeholder="Search messages..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            className="w-full pl-10 pr-4 py-2 bg-slate-100 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         />
                     </div>
                 </div>
@@ -99,20 +99,20 @@ export default function MessagesLayout({
                                     key={conversation.id}
                                     href={`/messages/${conversation.id}`}
                                     className={`
-                                        flex items-start gap-3 p-4 border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer
-                                        ${isActive ? 'bg-blue-50 dark:bg-blue-900/10 border-l-4 border-l-blue-600' : 'border-l-4 border-l-transparent'}
+                                        flex items-start gap-3 p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer
+                                        ${isActive ? 'bg-blue-50 border-l-4 border-l-blue-600' : 'border-l-4 border-l-transparent'}
                                     `}
                                 >
                                     <div className="relative shrink-0">
                                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
                                             U
                                         </div>
-                                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
+                                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
                                     </div>
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between items-baseline mb-1">
-                                            <h3 className={`font-semibold truncate pr-2 ${isActive ? 'text-blue-700 dark:text-blue-400' : 'text-slate-900 dark:text-white'}`}>
+                                            <h3 className={`font-semibold truncate pr-2 ${isActive ? 'text-blue-700' : 'text-slate-900'}`}>
                                                 User
                                             </h3>
                                             {conversation.lastMessageAt && (
@@ -122,7 +122,7 @@ export default function MessagesLayout({
                                             )}
                                         </div>
                                         <div className="flex justify-between items-center">
-                                            <p className={`text-sm truncate pr-2 ${unreadCount > 0 ? 'font-semibold text-slate-800 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>
+                                            <p className={`text-sm truncate pr-2 ${unreadCount > 0 ? 'font-semibold text-slate-800' : 'text-slate-500'}`}>
                                                 {conversation.lastMessage || "No messages yet"}
                                             </p>
                                             {unreadCount > 0 && (
@@ -139,7 +139,7 @@ export default function MessagesLayout({
                 </div>
             </div>
 
-            <div className={`flex-1 bg-slate-50 dark:bg-slate-950 flex flex-col ${!isConversationOpen ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`flex-1 bg-slate-50 flex flex-col ${!isConversationOpen ? 'hidden md:flex' : 'flex'}`}>
                 {children}
             </div>
         </div>

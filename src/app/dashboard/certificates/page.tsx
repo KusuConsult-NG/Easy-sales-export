@@ -124,23 +124,23 @@ export default function CertificatesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8">
             <div className="max-w-4xl mx-auto">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+                    <h1 className="text-3xl font-bold text-slate-900">
                         My Certificates
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mt-2">
+                    <p className="text-slate-600 mt-2">
                         Manage your certificates and documents
                     </p>
                 </div>
 
                 {/* Upload Section */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-8 shadow-xl">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                <div className="bg-white rounded-2xl p-6 mb-8 shadow-xl">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">
                         Upload Certificate
                     </h2>
-                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition">
+                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl p-8 cursor-pointer hover:border-blue-500 transition">
                         <input
                             type="file"
                             accept=".pdf,.jpg,.jpeg,.png"
@@ -151,15 +151,15 @@ export default function CertificatesPage() {
                         {isUploading ? (
                             <>
                                 <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-                                <p className="text-slate-600 dark:text-slate-400">Uploading...</p>
+                                <p className="text-slate-600">Uploading...</p>
                             </>
                         ) : (
                             <>
                                 <Plus className="w-12 h-12 text-slate-400 mb-4" />
-                                <p className="text-slate-900 dark:text-white font-semibold mb-2">
+                                <p className="text-slate-900 font-semibold mb-2">
                                     Click to upload
                                 </p>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                <p className="text-sm text-slate-500">
                                     PDF, JPG, or PNG (max 5MB)
                                 </p>
                             </>
@@ -168,8 +168,8 @@ export default function CertificatesPage() {
                 </div>
 
                 {/* Certificates List */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6">
+                <div className="bg-white rounded-2xl p-6 shadow-xl">
+                    <h2 className="text-xl font-bold text-slate-900 mb-6">
                         Your Certificates ({certificates.length})
                     </h2>
 
@@ -179,8 +179,8 @@ export default function CertificatesPage() {
                         </div>
                     ) : certificates.length === 0 ? (
                         <div className="text-center py-12">
-                            <FileText className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                            <p className="text-slate-600 dark:text-slate-400">
+                            <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                            <p className="text-slate-600">
                                 No certificates yet. Upload your first certificate above.
                             </p>
                         </div>
@@ -189,17 +189,17 @@ export default function CertificatesPage() {
                             {certificates.map((cert) => (
                                 <div
                                     key={cert.id}
-                                    className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-400 transition"
+                                    className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-blue-500 transition"
                                 >
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                                             <FileText className="w-6 h-6 text-blue-600" />
                                         </div>
                                         <div>
-                                            <h3 className="font-semibold text-slate-900 dark:text-white">
+                                            <h3 className="font-semibold text-slate-900">
                                                 {cert.fileName}
                                             </h3>
-                                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                                            <p className="text-sm text-slate-500">
                                                 Uploaded {new Date(cert.uploadedAt).toLocaleDateString()}
                                             </p>
                                         </div>
@@ -207,14 +207,14 @@ export default function CertificatesPage() {
                                     <div className="flex items-center gap-2">
                                         <button
                                             onClick={() => handleDownload(cert)}
-                                            className="p-2 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg transition"
+                                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition"
                                             title="Download"
                                         >
                                             <Download className="w-5 h-5" />
                                         </button>
                                         <button
                                             onClick={() => handleDelete(cert.id)}
-                                            className="p-2 text-red-600 hover:bg-red-100 dark:hover:bg-red-900 rounded-lg transition"
+                                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition"
                                             title="Delete"
                                         >
                                             <Trash2 className="w-5 h-5" />

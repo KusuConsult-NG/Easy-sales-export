@@ -27,8 +27,8 @@ const data: RevenueDataPoint[] = [
 
 export default function RevenueChart() {
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6">
+        <div className="bg-white rounded-2xl p-6 elevation-2">
+            <h3 className="text-lg font-bold text-slate-900 mb-6">
                 Revenue Trends
             </h3>
             <ResponsiveContainer width="100%" height={280}>
@@ -80,10 +80,10 @@ export default function RevenueChart() {
                 </LineChart>
             </ResponsiveContainer>
             <div className="mt-4 flex items-center justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">
+                <span className="text-slate-600">
                     Last 6 months performance
                 </span>
-                <span className="text-green-600 dark:text-green-400 font-semibold">
+                <span className="text-green-600 font-semibold">
                     +133% growth
                 </span>
             </div>

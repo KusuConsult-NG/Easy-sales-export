@@ -114,15 +114,15 @@ export default function AdminUsersPage() {
 
     const getRoleBadge = (role: string) => {
         const colors: Record<string, string> = {
-            admin: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400",
-            farmer: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
-            buyer: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
-            seller: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400",
-            exporter: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400",
-            vendor: "bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400",
-            member: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400",
+            admin: "bg-purple-100 text-purple-700",
+            farmer: "bg-green-100 text-green-700",
+            buyer: "bg-blue-100 text-blue-700",
+            seller: "bg-orange-100 text-orange-700",
+            exporter: "bg-indigo-100 text-indigo-700",
+            vendor: "bg-pink-100 text-pink-700",
+            member: "bg-cyan-100 text-cyan-700",
         };
-        return colors[role] || "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-400";
+        return colors[role] || "bg-slate-100 text-slate-900";
     };
 
     const columns = [
@@ -134,7 +134,7 @@ export default function AdminUsersPage() {
                         <Users className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                        <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
                             {user.name}
                             {user.isVerified && <Shield className="w-3 h-3 text-green-600" />}
                         </div>
@@ -165,8 +165,8 @@ export default function AdminUsersPage() {
                         onClick={(e) => { e.stopPropagation(); handleToggleVerification(user.id); }}
                         disabled={processingId === user.id}
                         className={`p-1.5 rounded-lg transition disabled:opacity-50 ${user.isVerified
-                                ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                : "text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                ? "text-red-600 hover:bg-red-50"
+                                : "text-green-600 hover:bg-green-50"
                             }`}
                         title={user.isVerified ? "Unverify" : "Verify"}
                     >
@@ -180,7 +180,7 @@ export default function AdminUsersPage() {
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); handleManageUser(user); }}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                         title="Manage Roles"
                     >
                         <Edit className="w-4 h-4" />
@@ -206,12 +206,12 @@ export default function AdminUsersPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-8">
+        <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
             <div className="mb-6 sm:mb-8">
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
                     User Management
                 </h1>
-                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400">
+                <p className="text-sm sm:text-base text-slate-600">
                     Manage user verification and access control
                 </p>
             </div>
@@ -248,7 +248,7 @@ export default function AdminUsersPage() {
                         <select
                             value={filters.role || "all"}
                             onChange={(e) => updateFilter("role", e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm"
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
                         >
                             <option value="all">All Roles</option>
                             <option value="farmer">Farmers</option>
@@ -258,7 +258,7 @@ export default function AdminUsersPage() {
                         <select
                             value={filters.status || "all"}
                             onChange={(e) => updateFilter("status", e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm"
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
                         >
                             <option value="all">All Status</option>
                             <option value="verified">Verified</option>
@@ -278,10 +278,10 @@ export default function AdminUsersPage() {
                     <div className="space-y-6">
                         <div>
                             <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Details</h4>
-                            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl space-y-2 text-sm text-slate-800 dark:text-slate-200">
-                                <p><span className="font-semibold text-slate-600 dark:text-slate-400">Name:</span> {selectedUserForModal.name}</p>
-                                <p><span className="font-semibold text-slate-600 dark:text-slate-400">Email:</span> {selectedUserForModal.email}</p>
-                                <p><span className="font-semibold text-slate-600 dark:text-slate-400">Phone:</span> {selectedUserForModal.phone || "N/A"}</p>
+                            <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-sm text-slate-800">
+                                <p><span className="font-semibold text-slate-600">Name:</span> {selectedUserForModal.name}</p>
+                                <p><span className="font-semibold text-slate-600">Email:</span> {selectedUserForModal.email}</p>
+                                <p><span className="font-semibold text-slate-600">Phone:</span> {selectedUserForModal.phone || "N/A"}</p>
                             </div>
                         </div>
 
@@ -290,20 +290,20 @@ export default function AdminUsersPage() {
                                 <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Roles</h4>
                                 <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1">
                                     {ROLES_LIST.map(role => (
-                                        <label key={role} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-blue-500 transition text-sm">
+                                        <label key={role} className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-blue-500 transition text-sm">
                                             <input
                                                 type="checkbox"
                                                 name={`role_${role}`}
                                                 defaultChecked={selectedUserForModal.roles?.includes(role)}
                                                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-600"
                                             />
-                                            <span className="capitalize text-slate-900 dark:text-white">{role.replace("_", " ")}</span>
+                                            <span className="capitalize text-slate-900">{role.replace("_", " ")}</span>
                                         </label>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700 mt-6">
+                            <div className="flex justify-end gap-3 pt-6 border-t border-slate-200 mt-6">
                                 <button
                                     type="button"
                                     onClick={() => setIsModalOpen(false)}

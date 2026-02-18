@@ -12,9 +12,9 @@ const LandMap = dynamic(
     {
         ssr: false,
         loading: () => (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg" style={{ height: '600px' }}>
-                <div className="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-xl flex items-center justify-center">
-                    <p className="text-slate-600 dark:text-slate-400">Loading map...</p>
+            <div className="bg-white rounded-2xl p-6 shadow-lg" style={{ height: '600px' }}>
+                <div className="w-full h-full bg-slate-200 rounded-xl flex items-center justify-center">
+                    <p className="text-slate-600">Loading map...</p>
                 </div>
             </div>
         )
@@ -37,30 +37,30 @@ export default function LandMapPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-slate-600 dark:text-slate-400">Loading land listings...</p>
+                    <p className="mt-4 text-slate-600">Loading land listings...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 p-8">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-4xl font-bold text-slate-900 mb-2">
                         Land Listings Map
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Browse available agricultural land with interactive map
                     </p>
                 </div>
 
                 {/* Map */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <LandMap
                         listings={listings}
                         height="600px"
@@ -76,15 +76,15 @@ export default function LandMapPage() {
                     {listings.map((listing) => (
                         <div
                             key={listing.id}
-                            className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow"
+                            className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow"
                         >
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 {listing.title}
                             </h3>
                             <p className="text-2xl font-bold text-[#1358ec] mb-4">
                                 ₦{listing.price.toLocaleString()}
                             </p>
-                            <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                            <div className="space-y-2 text-sm text-slate-600">
                                 <p>📍 {listing.location.city}, {listing.location.state}</p>
                                 <p>📏 {(listing.size * 2.47).toFixed(1)} acres</p>
                                 <p>🌱 {listing.soilQuality} soil quality</p>

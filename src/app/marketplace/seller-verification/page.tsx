@@ -103,7 +103,7 @@ export default function SellerVerificationPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-4xl mx-auto px-4">
                 <Link
                     href="/marketplace/sell"
@@ -113,7 +113,7 @@ export default function SellerVerificationPage() {
                     Back
                 </Link>
 
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     {/* Header */}
                     <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white">
                         <h1 className="text-3xl font-bold mb-2">Seller Verification</h1>
@@ -123,7 +123,7 @@ export default function SellerVerificationPage() {
                     </div>
 
                     {/* Progress Steps */}
-                    <div className="p-8 border-b border-slate-200 dark:border-slate-700">
+                    <div className="p-8 border-b border-slate-200">
                         <div className="flex items-center justify-between">
                             {steps.map((step, index) => {
                                 const Icon = step.icon;
@@ -137,7 +137,7 @@ export default function SellerVerificationPage() {
                                                     ? "bg-green-600 text-white"
                                                     : isActive
                                                         ? "bg-primary text-white"
-                                                        : "bg-slate-200 dark:bg-slate-700 text-slate-400"
+                                                        : "bg-slate-200 text-slate-400"
                                                 }`}>
                                                 {isCompleted ? (
                                                     <Check className="w-6 h-6" />
@@ -145,13 +145,13 @@ export default function SellerVerificationPage() {
                                                     <Icon className="w-6 h-6" />
                                                 )}
                                             </div>
-                                            <p className={`text-sm font-semibold ${isActive ? "text-primary" : "text-slate-600 dark:text-slate-400"
+                                            <p className={`text-sm font-semibold ${isActive ? "text-primary" : "text-slate-600"
                                                 }`}>
                                                 {step.title}
                                             </p>
                                         </div>
                                         {index < steps.length - 1 && (
-                                            <div className={`h-1 flex-1 mx-2 ${isCompleted ? "bg-green-600" : "bg-slate-200 dark:bg-slate-700"
+                                            <div className={`h-1 flex-1 mx-2 ${isCompleted ? "bg-green-600" : "bg-slate-200"
                                                 }`} />
                                         )}
                                     </div>
@@ -165,32 +165,32 @@ export default function SellerVerificationPage() {
                         {/* Step 1: Business Information */}
                         {currentStep === 1 && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                     Business Information
                                 </h2>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Business Name *
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.businessName}
                                         onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Enter your business name"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Business Type *
                                     </label>
                                     <select
                                         value={formData.businessType}
                                         onChange={(e) => setFormData({ ...formData, businessType: e.target.value as any })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                     >
                                         <option value="individual">Individual/Sole Proprietor</option>
                                         <option value="company">Registered Company</option>
@@ -199,14 +199,14 @@ export default function SellerVerificationPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Business Description *
                                     </label>
                                     <textarea
                                         value={formData.businessDescription}
                                         onChange={(e) => setFormData({ ...formData, businessDescription: e.target.value })}
                                         rows={4}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Describe your business and the products you'll be selling..."
                                         required
                                     />
@@ -217,47 +217,47 @@ export default function SellerVerificationPage() {
                         {/* Step 2: Location */}
                         {currentStep === 2 && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                     Contact & Location
                                 </h2>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Phone Number *
                                     </label>
                                     <input
                                         type="tel"
                                         value={formData.phone}
                                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="08012345678"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Email Address *
                                     </label>
                                     <input
                                         type="email"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="you@example.com"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Business Address *
                                     </label>
                                     <textarea
                                         value={formData.address}
                                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                                         rows={3}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Enter your full business address"
                                         required
                                     />
@@ -265,13 +265,13 @@ export default function SellerVerificationPage() {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             State *
                                         </label>
                                         <select
                                             value={formData.state}
                                             onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             required
                                         >
                                             <option value="">Select State</option>
@@ -281,14 +281,14 @@ export default function SellerVerificationPage() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                                             LGA *
                                         </label>
                                         <input
                                             type="text"
                                             value={formData.lga}
                                             onChange={(e) => setFormData({ ...formData, lga: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                             placeholder="Enter LGA"
                                             required
                                         />
@@ -300,7 +300,7 @@ export default function SellerVerificationPage() {
                         {/* Step 3: Documents */}
                         {currentStep === 3 && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                     Upload Documents
                                 </h2>
 
@@ -333,39 +333,39 @@ export default function SellerVerificationPage() {
                         {/* Step 4: Bank Details */}
                         {currentStep === 4 && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                     Bank Account Details
                                 </h2>
 
-                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
-                                    <p className="text-sm text-blue-900 dark:text-blue-100">
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                                    <p className="text-sm text-blue-900">
                                         💡 Your bank account will be used for receiving payments from sales. Ensure the account name matches your business name.
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Bank Name *
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.bankName}
                                         onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="e.g., First Bank of Nigeria"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Account Number *
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.accountNumber}
                                         onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="1234567890"
                                         maxLength={10}
                                         required
@@ -373,14 +373,14 @@ export default function SellerVerificationPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Account Name *
                                     </label>
                                     <input
                                         type="text"
                                         value={formData.accountName}
                                         onChange={(e) => setFormData({ ...formData, accountName: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="Account name as per bank records"
                                         required
                                     />
@@ -390,11 +390,11 @@ export default function SellerVerificationPage() {
                     </div>
 
                     {/* Navigation Buttons */}
-                    <div className="p-8 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <div className="p-8 border-t border-slate-200 flex items-center justify-between">
                         <button
                             onClick={handleBack}
                             disabled={currentStep === 1}
-                            className="px-6 py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             <ArrowLeft className="w-5 h-5" />
                             Back
@@ -455,24 +455,24 @@ function FileUploadField({
 
     return (
         <div>
-            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+            <label className="block text-sm font-semibold text-slate-900 mb-2">
                 {label} {required && "*"}
             </label>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">{description}</p>
+            <p className="text-sm text-slate-600 mb-3">{description}</p>
 
-            <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-6">
+            <div className="border-2 border-dashed border-slate-300 rounded-lg p-6">
                 {file ? (
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <FileText className="w-8 h-8 text-green-600" />
                             <div>
-                                <p className="font-semibold text-slate-900 dark:text-white">{file.name}</p>
+                                <p className="font-semibold text-slate-900">{file.name}</p>
                                 <p className="text-sm text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                             </div>
                         </div>
                         <button
                             onClick={() => onChange(null)}
-                            className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                            className="p-2 hover:bg-red-100 rounded-lg transition-colors"
                         >
                             <X className="w-5 h-5 text-red-600" />
                         </button>
@@ -480,7 +480,7 @@ function FileUploadField({
                 ) : (
                     <label className="flex flex-col items-center cursor-pointer">
                         <Upload className="w-12 h-12 text-slate-400 mb-3" />
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                        <p className="text-sm font-semibold text-slate-900 mb-1">
                             Click to upload
                         </p>
                         <p className="text-xs text-slate-500">PDF, JPG, PNG (max 5MB)</p>

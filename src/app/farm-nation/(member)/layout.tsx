@@ -39,7 +39,7 @@ export default async function FarmNationMemberLayout({
 
     return (
         <ErrorBoundary>
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            <div className="min-h-screen bg-slate-50">
                 <FarmNationSidebar />
 
                 {/* Main Content - Offset for sidebar */}

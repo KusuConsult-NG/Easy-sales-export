@@ -40,24 +40,24 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
                     Terms & Agreement
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Please review and accept the following terms to complete your onboarding
                 </p>
             </div>
 
             {/* Terms & Conditions */}
             <div className="space-y-4">
-                <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700">
+                <div className="p-6 bg-slate-50 rounded-xl border-2 border-slate-200">
                     <div className="flex items-start gap-3 mb-4">
                         <FileText className="w-6 h-6 text-teal-600 shrink-0 mt-1" />
                         <div>
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                            <h3 className="text-lg font-bold text-slate-900 mb-2">
                                 Farm Nation Terms of Service
                             </h3>
-                            <div className="space-y-2 text-sm text-slate-900 dark:text-white max-h-64 overflow-y-auto">
+                            <div className="space-y-2 text-sm text-slate-900 max-h-64 overflow-y-auto">
                                 <p className="font-semibold">Key Points:</p>
                                 <ul className="list-disc list-inside space-y-1 ml-2">
                                     <li>All property listings must be accurate and genuine</li>
@@ -78,7 +78,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                             onChange={() => handleCheckboxChange("termsAccepted")}
                             className="mt-1 w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-2 focus:ring-teal-500"
                         />
-                        <span className="text-sm text-slate-900 dark:text-white group-hover:text-teal-600 transition-colors">
+                        <span className="text-sm text-slate-900 group-hover:text-teal-600 transition-colors">
                             I have read and agree to the{" "}
                             <Link href="/terms" target="_blank" className="text-teal-600 hover:underline font-medium">
                                 Terms of Service
@@ -89,14 +89,14 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                 </div>
 
                 {/* Privacy Policy */}
-                <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-xl border-2 border-slate-200 dark:border-slate-700">
+                <div className="p-6 bg-slate-50 rounded-xl border-2 border-slate-200">
                     <div className="flex items-start gap-3 mb-4">
                         <Shield className="w-6 h-6 text-teal-600 shrink-0 mt-1" />
                         <div>
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                            <h3 className="text-lg font-bold text-slate-900 mb-2">
                                 Privacy Policy
                             </h3>
-                            <div className="space-y-2 text-sm text-slate-900 dark:text-white">
+                            <div className="space-y-2 text-sm text-slate-900">
                                 <p>We collect and process your personal data to:</p>
                                 <ul className="list-disc list-inside space-y-1 ml-2">
                                     <li>Match you with relevant property listings</li>
@@ -118,7 +118,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                             onChange={() => handleCheckboxChange("privacyAccepted")}
                             className="mt-1 w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-2 focus:ring-teal-500"
                         />
-                        <span className="text-sm text-slate-900 dark:text-white group-hover:text-teal-600 transition-colors">
+                        <span className="text-sm text-slate-900 group-hover:text-teal-600 transition-colors">
                             I acknowledge the{" "}
                             <Link href="/privacy" target="_blank" className="text-teal-600 hover:underline font-medium">
                                 Privacy Policy
@@ -129,14 +129,14 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                 </div>
 
                 {/* Fee Disclosure */}
-                <div className="p-6 bg-teal-50 dark:bg-teal-900/10 rounded-xl border-2 border-teal-200 dark:border-teal-800">
+                <div className="p-6 bg-teal-50 rounded-xl border-2 border-teal-200">
                     <div className="flex items-start gap-3 mb-4">
                         <CheckCircle className="w-6 h-6 text-teal-600 shrink-0 mt-1" />
                         <div>
-                            <h3 className="text-lg font-bold text-teal-900 dark:text-teal-100 mb-2">
+                            <h3 className="text-lg font-bold text-teal-900 mb-2">
                                 Platform Fees
                             </h3>
-                            <div className="space-y-2 text-sm text-teal-800 dark:text-teal-200">
+                            <div className="space-y-2 text-sm text-teal-800">
                                 <p className="font-semibold">Transparent Pricing:</p>
                                 <ul className="list-disc list-inside space-y-1 ml-2">
                                     <li><strong>Buyers:</strong> Free to browse and inquire. No commission fees.</li>
@@ -154,7 +154,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                             onChange={() => handleCheckboxChange("feeDisclosureAccepted")}
                             className="mt-1 w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-2 focus:ring-teal-500"
                         />
-                        <span className="text-sm text-teal-800 dark:text-teal-200 group-hover:text-teal-600 transition-colors">
+                        <span className="text-sm text-teal-800 group-hover:text-teal-600 transition-colors">
                             I understand and accept the platform fee structure{" "}
                             <span className="text-red-500">*</span>
                         </span>
@@ -163,8 +163,8 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
             </div>
 
             {error && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
-                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <p className="text-sm text-red-600">{error}</p>
                 </div>
             )}
 
@@ -172,7 +172,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
                 <button
                     type="button"
                     onClick={onBack}
-                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back

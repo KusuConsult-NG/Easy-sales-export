@@ -70,17 +70,17 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
                 Section D: Agricultural Interest & Value Chain Selection
             </h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-8">
+            <p className="text-slate-600 mb-8">
                 Tell us about your interests in the agricultural value chain
             </p>
 
             <div className="space-y-6">
                 {/* Value Chain Areas */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Which area would you like to participate in under WAVE? *
                         <span className="text-xs font-normal text-slate-500 ml-1">(Select all that apply)</span>
                     </label>
@@ -95,8 +95,8 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             <label
                                 key={area.value}
                                 className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.valueChainAreas.includes(area.value)
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -120,7 +120,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
 
                 {/* Preferred Commodities */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Preferred Crop / Commodity *
                         <span className="text-xs font-normal text-slate-500 ml-1">(Select all that apply)</span>
                     </label>
@@ -138,8 +138,8 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             <label
                                 key={commodity.value}
                                 className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.preferredCommodities.includes(commodity.value)
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -163,14 +163,14 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 {/* If Others specified */}
                 {data.preferredCommodities.includes("other") && (
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Please specify *
                         </label>
                         <input
                             type="text"
                             value={data.preferredCommodityOther}
                             onChange={(e) => updateData({ preferredCommodityOther: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Specify other commodity"
                         />
                         {errors.preferredCommodityOther && (
@@ -184,7 +184,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
 
                 {/* Farmland Access */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Do you currently have access to farmland? *
                     </label>
                     <div className="flex gap-4">
@@ -195,8 +195,8 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.hasAccessToFarmland === option.value
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -215,7 +215,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 {/* If YES, hectares */}
                 {data.hasAccessToFarmland && (
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             If YES, how many hectares? *
                         </label>
                         <input
@@ -224,7 +224,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             step="0.1"
                             value={data.farmlandHectares || ""}
                             onChange={(e) => updateData({ farmlandHectares: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="e.g., 2.5"
                         />
                         {errors.farmlandHectares && (
@@ -239,7 +239,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 {/* If NO, would you like WAVE to provide */}
                 {!data.hasAccessToFarmland && (
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             If NO, would you like WAVE to provide farmland access? *
                         </label>
                         <div className="flex gap-4">
@@ -250,8 +250,8 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                                 <label
                                     key={option.label}
                                     className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.needsFarmlandAccess === option.value
-                                        ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                        ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                        : "border-slate-300 hover:bg-slate-50"
                                         }`}
                                 >
                                     <input
@@ -273,7 +273,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

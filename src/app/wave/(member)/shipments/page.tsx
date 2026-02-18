@@ -72,36 +72,36 @@ export default function WaveShipmentsPage() {
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-900/20 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-blue-900/20 py-8 px-4">
+        <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 py-8 px-4">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-3">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
                         <Truck className="w-8 h-8 text-blue-600" />
                         Shipment Tracking
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Track your WAVE program shipments in real-time
                     </p>
                 </div>
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                    <div className="bg-white rounded-xl p-6 shadow-lg">
                         <div className="flex items-center justify-between mb-2">
                             <Package className="w-6 h-6 text-gray-400" />
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                            <span className="text-2xl font-bold text-gray-900">
                                 {stats.total}
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Total Shipments</p>
+                        <p className="text-sm text-gray-600">Total Shipments</p>
                     </div>
 
                     <div className="bg-linear-to-br from-yellow-500 to-orange-500 rounded-xl p-6 shadow-lg text-white">
@@ -131,12 +131,12 @@ export default function WaveShipmentsPage() {
 
                 {/* Shipments List */}
                 {shipments.length === 0 ? (
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 text-center shadow-xl">
-                        <Truck className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    <div className="bg-white rounded-2xl p-12 text-center shadow-xl">
+                        <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">
                             No Shipments Yet
                         </h3>
-                        <p className="text-gray-600 dark:text-gray-400">
+                        <p className="text-gray-600">
                             Your shipments will appear here once orders are placed
                         </p>
                     </div>
@@ -151,7 +151,7 @@ export default function WaveShipmentsPage() {
                             return (
                                 <div
                                     key={shipment.id}
-                                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition"
+                                    className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition"
                                 >
                                     {/* Shipment Header */}
                                     <div className={`bg-linear-to-r from-${statusColor}-500 to-${statusColor}-600 text-white p-6`}>
@@ -185,11 +185,11 @@ export default function WaveShipmentsPage() {
                                             <div>
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <MapPin className="w-5 h-5 text-gray-400" />
-                                                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                                                    <p className="text-sm font-semibold text-gray-600">
                                                         Destination
                                                     </p>
                                                 </div>
-                                                <p className="font-bold text-gray-900 dark:text-white">
+                                                <p className="font-bold text-gray-900">
                                                     {shipment.destination}
                                                 </p>
                                             </div>
@@ -198,11 +198,11 @@ export default function WaveShipmentsPage() {
                                             <div>
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <Truck className="w-5 h-5 text-gray-400" />
-                                                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                                                    <p className="text-sm font-semibold text-gray-600">
                                                         Carrier
                                                     </p>
                                                 </div>
-                                                <p className="font-bold text-gray-900 dark:text-white">
+                                                <p className="font-bold text-gray-900">
                                                     {shipment.carrier}
                                                 </p>
                                             </div>
@@ -211,11 +211,11 @@ export default function WaveShipmentsPage() {
                                             <div>
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <Calendar className="w-5 h-5 text-gray-400" />
-                                                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                                                    <p className="text-sm font-semibold text-gray-600">
                                                         {shipment.status === "delivered" ? "Delivered On" : "Est. Delivery"}
                                                     </p>
                                                 </div>
-                                                <p className="font-bold text-gray-900 dark:text-white">
+                                                <p className="font-bold text-gray-900">
                                                     {shipment.status === "delivered" && shipment.actualDelivery
                                                         ? new Date(shipment.actualDelivery as any).toLocaleDateString()
                                                         : new Date(shipment.estimatedDelivery).toLocaleDateString()}
@@ -225,14 +225,14 @@ export default function WaveShipmentsPage() {
 
                                         {/* Latest Update */}
                                         {latestUpdate && (
-                                            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 mb-4">
+                                            <div className="bg-gray-50 rounded-xl p-4 mb-4">
                                                 <div className="flex items-start gap-3">
                                                     <Navigation className="w-5 h-5 text-blue-600 mt-0.5" />
                                                     <div className="flex-1">
-                                                        <p className="font-semibold text-gray-900 dark:text-white mb-1">
+                                                        <p className="font-semibold text-gray-900 mb-1">
                                                             {latestUpdate.location}
                                                         </p>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                                        <p className="text-sm text-gray-600">
                                                             {latestUpdate.note || latestUpdate.status}
                                                         </p>
                                                         <p className="text-xs text-gray-500 mt-1">
@@ -264,7 +264,7 @@ export default function WaveShipmentsPage() {
                 {/* Tracking Details Modal */}
                 {showTrackingModal && selectedShipment && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full my-8">
+                        <div className="bg-white rounded-2xl max-w-2xl w-full my-8">
                             {/* Modal Header */}
                             <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl">
                                 <div className="flex items-start justify-between">
@@ -288,7 +288,7 @@ export default function WaveShipmentsPage() {
                             {/* Modal Content */}
                             <div className="p-6">
                                 {/* Timeline */}
-                                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <Clock className="w-5 h-5 text-blue-600" />
                                     Shipment History
                                 </h3>
@@ -304,25 +304,25 @@ export default function WaveShipmentsPage() {
                                                     <div className="flex flex-col items-center">
                                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${idx === 0
                                                                 ? "bg-blue-600 text-white"
-                                                                : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                                                                : "bg-gray-200 text-gray-600"
                                                             }`}>
                                                             {idx === 0 ? <MapPin className="w-5 h-5" /> : <div className="w-3 h-3 rounded-full bg-current" />}
                                                         </div>
                                                         {idx < selectedShipment.updates.length - 1 && (
-                                                            <div className="w-0.5 h-full bg-gray-200 dark:bg-gray-700 mt-2" style={{ minHeight: "30px" }} />
+                                                            <div className="w-0.5 h-full bg-gray-200 mt-2" style={{ minHeight: "30px" }} />
                                                         )}
                                                     </div>
 
                                                     {/* Update Details */}
                                                     <div className="flex-1 pb-6">
-                                                        <p className="font-semibold text-gray-900 dark:text-white mb-1">
+                                                        <p className="font-semibold text-gray-900 mb-1">
                                                             {update.location}
                                                         </p>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 capitalize">
+                                                        <p className="text-sm text-gray-600 mb-2 capitalize">
                                                             {update.status}
                                                         </p>
                                                         {update.note && (
-                                                            <p className="text-sm text-gray-500 dark:text-gray-500 mb-2">
+                                                            <p className="text-sm text-gray-500 mb-2">
                                                                 {update.note}
                                                             </p>
                                                         )}
@@ -333,7 +333,7 @@ export default function WaveShipmentsPage() {
                                                 </div>
                                             ))
                                     ) : (
-                                        <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                                        <p className="text-center text-gray-500 py-8">
                                             No tracking updates yet
                                         </p>
                                     )}

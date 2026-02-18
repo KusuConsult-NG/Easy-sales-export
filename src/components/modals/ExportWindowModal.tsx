@@ -62,7 +62,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
 
                 {/* Commodity Selection */}
                 <div>
-                    <label htmlFor="commodity" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label htmlFor="commodity" className="block text-sm font-medium text-slate-900 mb-2">
                         <Package className="w-4 h-4 inline mr-2" />
                         Commodity Type
                     </label>
@@ -70,7 +70,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         id="commodity"
                         name="commodity"
                         required
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
                     >
                         <option value="">Select commodity...</option>
                         <option value="yam">🌾 Yam Tubers</option>
@@ -82,7 +82,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
 
                 {/* Quantity */}
                 <div>
-                    <label htmlFor="quantity" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label htmlFor="quantity" className="block text-sm font-medium text-slate-900 mb-2">
                         Quantity (kg/tons)
                     </label>
                     <input
@@ -91,13 +91,13 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         name="quantity"
                         required
                         placeholder="e.g., 500 tons"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
                     />
                 </div>
 
                 {/* Amount */}
                 <div>
-                    <label htmlFor="amount" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label htmlFor="amount" className="block text-sm font-medium text-slate-900 mb-2">
                         <DollarSign className="w-4 h-4 inline mr-2" />
                         Amount (₦)
                     </label>
@@ -109,16 +109,16 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         min="0"
                         step="1000"
                         placeholder="e.g., 50000000"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
                     />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                         Total value of the export window
                     </p>
                 </div>
 
                 {/* Delivery Date (Optional) */}
                 <div>
-                    <label htmlFor="deliveryDate" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label htmlFor="deliveryDate" className="block text-sm font-medium text-slate-900 mb-2">
                         <Calendar className="w-4 h-4 inline mr-2" />
                         Expected Delivery Date (Optional)
                     </label>
@@ -126,22 +126,22 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         type="date"
                         id="deliveryDate"
                         name="deliveryDate"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
                     />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                         Escrow will be released 30 days after delivery
                     </p>
                 </div>
 
                 {/* Destination */}
                 <div>
-                    <label htmlFor="destination" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label htmlFor="destination" className="block text-sm font-medium text-slate-900 mb-2">
                         🌍 Export Destination
                     </label>
                     <select
                         id="destination"
                         name="destination"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
                     >
                         <option value="">Select destination...</option>
                         <option value="europe">🇪🇺 Europe</option>
@@ -151,7 +151,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         <option value="africa">🌍 Africa</option>
                         <option value="other">🌐 Other</option>
                     </select>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                         Target market for this export
                     </p>
                 </div>
@@ -162,7 +162,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 text-slate-900 font-semibold hover:bg-slate-50 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

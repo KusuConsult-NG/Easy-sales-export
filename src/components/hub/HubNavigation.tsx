@@ -37,7 +37,7 @@ export default function HubNavigation() {
     };
 
     return (
-        <nav className="sticky top-0 z-50 bg-white dark:bg-slate-900 shadow-md">
+        <nav className="sticky top-0 z-50 bg-white shadow-md">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="flex items-center justify-between h-16">
                     {/* Logo/Brand */}
@@ -55,12 +55,12 @@ export default function HubNavigation() {
                                     <>
                                         <button
                                             onClick={() => setIsEcosystemOpen(!isEcosystemOpen)}
-                                            className="flex items-center gap-1 px-4 py-2 text-slate-900 dark:text-white hover:text-primary dark:hover:text-primary font-medium transition-colors rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+                                            className="flex items-center gap-1 px-4 py-2 text-slate-900 hover:text-primary font-medium transition-colors rounded-lg hover:bg-slate-50"
                                         >
                                             {item.label}
                                             <ChevronDown className="w-4 h-4" />
                                         </button>
-                                        <div className="absolute top-full left-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                        <div className="absolute top-full left-0 mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                                             <div className="py-2">
                                                 {item.dropdown.map((subItem, subIndex) => (
                                                     <Link
@@ -68,7 +68,7 @@ export default function HubNavigation() {
                                                         href={subItem.href}
                                                         className={`block px-4 py-2.5 text-sm font-medium transition-colors ${isActive(subItem.href)
                                                             ? "text-primary bg-primary/10"
-                                                            : "text-slate-900 dark:text-white hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700"
+                                                            : "text-slate-900 hover:text-primary hover:bg-slate-50"
                                                             }`}
                                                     >
                                                         {subItem.label}
@@ -82,7 +82,7 @@ export default function HubNavigation() {
                                         href={item.href}
                                         className={`px-4 py-2 font-medium rounded-lg transition-colors ${isActive(item.href)
                                             ? "text-primary bg-primary/10"
-                                            : "text-slate-900 dark:text-white hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800"
+                                            : "text-slate-900 hover:text-primary hover:bg-slate-50"
                                             }`}
                                     >
                                         {item.label}
@@ -92,7 +92,7 @@ export default function HubNavigation() {
                         ))}
 
                         {/* Auth Buttons (Desktop) */}
-                        <div className="ml-4 flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-700">
+                        <div className="ml-4 flex items-center gap-3 pl-4 border-l border-slate-200">
                             {session?.user ? (
                                 <>
                                     <Link
@@ -104,7 +104,7 @@ export default function HubNavigation() {
                                     </Link>
                                     <button
                                         onClick={() => signOut({ callbackUrl: '/' })}
-                                        className="flex items-center gap-2 px-5 py-2.5 text-slate-700 dark:text-slate-200 hover:text-red-600 dark:hover:text-red-400 font-bold transition-colors"
+                                        className="flex items-center gap-2 px-5 py-2.5 text-slate-700 hover:text-red-600 font-bold transition-colors"
                                     >
                                         <LogOut className="w-4 h-4" />
                                         Logout
@@ -114,7 +114,7 @@ export default function HubNavigation() {
                                 <>
                                     <Link
                                         href="/auth/login"
-                                        className="px-5 py-2.5 font-bold text-slate-700 dark:text-slate-200 hover:text-primary dark:hover:text-primary transition-colors"
+                                        className="px-5 py-2.5 font-bold text-slate-700 hover:text-primary transition-colors"
                                     >
                                         Log In
                                     </Link>
@@ -132,26 +132,26 @@ export default function HubNavigation() {
                     {/* Mobile Menu Button */}
                     <button
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                        className="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        className="lg:hidden p-2 rounded-lg hover:bg-slate-100 transition-colors"
                     >
                         {isMobileMenuOpen ? (
-                            <X className="w-6 h-6 text-slate-900 dark:text-white" />
+                            <X className="w-6 h-6 text-slate-900" />
                         ) : (
-                            <Menu className="w-6 h-6 text-slate-900 dark:text-white" />
+                            <Menu className="w-6 h-6 text-slate-900" />
                         )}
                     </button>
                 </div>
 
                 {/* Mobile Navigation */}
                 {isMobileMenuOpen && (
-                    <div className="lg:hidden py-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="lg:hidden py-4 border-t border-slate-200">
                         {navItems.map((item, index) => (
                             <div key={index}>
                                 {item.dropdown ? (
                                     <>
                                         <button
                                             onClick={() => setIsEcosystemOpen(!isEcosystemOpen)}
-                                            className="flex items-center justify-between w-full px-4 py-3 text-left font-medium text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg"
+                                            className="flex items-center justify-between w-full px-4 py-3 text-left font-medium text-slate-900 hover:bg-slate-50 rounded-lg"
                                         >
                                             {item.label}
                                             <ChevronDown
@@ -168,7 +168,7 @@ export default function HubNavigation() {
                                                         onClick={() => setIsMobileMenuOpen(false)}
                                                         className={`block px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive(subItem.href)
                                                             ? "text-primary bg-primary/10"
-                                                            : "text-slate-600 dark:text-slate-400 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800"
+                                                            : "text-slate-600 hover:text-primary hover:bg-slate-50"
                                                             }`}
                                                     >
                                                         {subItem.label}
@@ -183,7 +183,7 @@ export default function HubNavigation() {
                                         onClick={() => setIsMobileMenuOpen(false)}
                                         className={`block px-4 py-3 font-medium rounded-lg transition-colors ${isActive(item.href)
                                             ? "text-primary bg-primary/10"
-                                            : "text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-800"
+                                            : "text-slate-900 hover:bg-slate-50"
                                             }`}
                                     >
                                         {item.label}
@@ -193,7 +193,7 @@ export default function HubNavigation() {
                         ))}
 
                         {/* Auth Buttons (Mobile) */}
-                        <div className="mt-6 px-4 space-y-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+                        <div className="mt-6 px-4 space-y-3 pt-6 border-t border-slate-200">
                             {session?.user ? (
                                 <>
                                     <Link
@@ -209,7 +209,7 @@ export default function HubNavigation() {
                                             setIsMobileMenuOpen(false);
                                             signOut({ callbackUrl: '/' });
                                         }}
-                                        className="flex items-center justify-center gap-2 w-full px-5 py-3 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 font-bold rounded-xl hover:bg-red-50 dark:hover:bg-red-950/30"
+                                        className="flex items-center justify-center gap-2 w-full px-5 py-3 text-red-600 border border-red-200 font-bold rounded-xl hover:bg-red-50"
                                     >
                                         <LogOut className="w-5 h-5" />
                                         Logout
@@ -220,7 +220,7 @@ export default function HubNavigation() {
                                     <Link
                                         href="/auth/login"
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className="block w-full text-center px-5 py-3 font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800"
+                                        className="block w-full text-center px-5 py-3 font-bold text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50"
                                     >
                                         Log In
                                     </Link>

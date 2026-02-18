@@ -124,25 +124,25 @@ export default function MFASetupPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8">
             <div className="max-w-2xl mx-auto">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
                         <Shield className="w-8 h-8 text-green-600" />
                         Multi-Factor Authentication
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mt-2">
+                    <p className="text-slate-600 mt-2">
                         Add an extra layer of security to your account
                     </p>
                 </div>
 
                 {mfaEnabled && step === "setup" ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
                         <div className="flex items-center gap-3 text-green-600 mb-4">
                             <CheckCircle className="w-6 h-6" />
                             <h2 className="text-xl font-bold">MFA is Active</h2>
                         </div>
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        <p className="text-slate-600 mb-6">
                             Your account is protected with multi-factor authentication.
                         </p>
                         <button
@@ -154,40 +154,40 @@ export default function MFASetupPage() {
                         </button>
                     </div>
                 ) : step === "setup" ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
+                        <h2 className="text-2xl font-bold text-slate-900 mb-4">
                             Enable MFA
                         </h2>
                         <div className="space-y-4 mb-6">
                             <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">
                                     1
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-slate-900 dark:text-white">Download Authenticator App</h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    <h3 className="font-semibold text-slate-900">Download Authenticator App</h3>
+                                    <p className="text-sm text-slate-600">
                                         Install Google Authenticator, Authy, or Microsoft Authenticator
                                     </p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">
                                     2
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-slate-900 dark:text-white">Scan QR Code</h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    <h3 className="font-semibold text-slate-900">Scan QR Code</h3>
+                                    <p className="text-sm text-slate-600">
                                         Use your app to scan the QR code we'll provide
                                     </p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 font-bold shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">
                                     3
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-slate-900 dark:text-white">Verify Setup</h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    <h3 className="font-semibold text-slate-900">Verify Setup</h3>
+                                    <p className="text-sm text-slate-600">
                                         Enter the 6-digit code from your app
                                     </p>
                                 </div>
@@ -212,8 +212,8 @@ export default function MFASetupPage() {
                         </button>
                     </div>
                 ) : step === "verify" ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
+                        <h2 className="text-2xl font-bold text-slate-900 mb-6">
                             Scan QR Code
                         </h2>
 
@@ -229,17 +229,17 @@ export default function MFASetupPage() {
                                 </div>
                             )}
                             <div className="mt-4 text-center">
-                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                <p className="text-sm text-slate-600 mb-2">
                                     Or enter this code manually:
                                 </p>
-                                <code className="bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded text-sm font-mono">
+                                <code className="bg-slate-100 px-3 py-1 rounded text-sm font-mono">
                                     {secret}
                                 </code>
                             </div>
                         </div>
 
                         <div className="mb-6">
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Enter 6-digit code
                             </label>
                             <input
@@ -247,7 +247,7 @@ export default function MFASetupPage() {
                                 maxLength={6}
                                 value={verificationCode}
                                 onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 text-center text-2xl tracking-widest font-mono"
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 text-center text-2xl tracking-widest font-mono"
                                 placeholder="000000"
                             />
                         </div>
@@ -261,33 +261,33 @@ export default function MFASetupPage() {
                         </button>
                     </div>
                 ) : (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
                         <div className="flex items-center justify-center flex-col mb-6">
-                            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center mb-4">
+                            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
                                 <CheckCircle className="w-10 h-10 text-green-600" />
                             </div>
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                            <h2 className="text-2xl font-bold text-slate-900">
                                 MFA Enabled!
                             </h2>
-                            <p className="text-slate-600 dark:text-slate-400 mt-2 text-center">
+                            <p className="text-slate-600 mt-2 text-center">
                                 Your account is now protected with multi-factor authentication
                             </p>
                         </div>
 
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 mb-6">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
                             <div className="flex items-start gap-3">
                                 <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
                                 <div>
-                                    <h3 className="font-semibold text-yellow-900 dark:text-yellow-200 mb-2">
+                                    <h3 className="font-semibold text-yellow-900 mb-2">
                                         Save Your Recovery Codes
                                     </h3>
-                                    <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-3">
+                                    <p className="text-sm text-yellow-800 mb-3">
                                         If you lose access to your authenticator app, you can use these codes to access your account. Each code can only be used once.
                                     </p>
-                                    <div className="bg-white dark:bg-slate-800 rounded-lg p-3 mb-3">
+                                    <div className="bg-white rounded-lg p-3 mb-3">
                                         <div className="grid grid-cols-2 gap-2 font-mono text-sm">
                                             {recoveryCodes.map((code, i) => (
-                                                <div key={i} className="text-slate-900 dark:text-white">
+                                                <div key={i} className="text-slate-900">
                                                     {code}
                                                 </div>
                                             ))}

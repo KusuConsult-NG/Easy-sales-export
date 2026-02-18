@@ -185,10 +185,10 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading quiz...</p>
+                    <p className="text-slate-600">Loading quiz...</p>
                 </div>
             </div>
         );
@@ -196,11 +196,11 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
 
     if (!quiz) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Quiz Not Found</h2>
-                    <p className="text-slate-600 dark:text-slate-400">This quiz doesn't exist or has been removed.</p>
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">Quiz Not Found</h2>
+                    <p className="text-slate-600">This quiz doesn't exist or has been removed.</p>
                 </div>
             </div>
         );
@@ -208,42 +208,42 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
 
     if (!hasStarted) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12">
+            <div className="min-h-screen bg-slate-50 py-12">
                 <div className="max-w-3xl mx-auto px-4">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="bg-white rounded-2xl shadow-xl p-8">
+                        <h1 className="text-3xl font-bold text-slate-900 mb-4">
                             {quiz.title}
                         </h1>
                         {quiz.description && (
-                            <p className="text-slate-600 dark:text-slate-400 mb-8">
+                            <p className="text-slate-600 mb-8">
                                 {quiz.description}
                             </p>
                         )}
 
                         <div className="space-y-4 mb-8">
-                            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">Questions</span>
-                                <span className="text-sm text-slate-600 dark:text-slate-400">{quiz.questions.length}</span>
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                                <span className="text-sm font-semibold text-slate-900">Questions</span>
+                                <span className="text-sm text-slate-600">{quiz.questions.length}</span>
                             </div>
-                            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">Passing Score</span>
-                                <span className="text-sm text-slate-600 dark:text-slate-400">{quiz.passingScore}%</span>
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                                <span className="text-sm font-semibold text-slate-900">Passing Score</span>
+                                <span className="text-sm text-slate-600">{quiz.passingScore}%</span>
                             </div>
                             {quiz.timeLimit > 0 && (
-                                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                    <span className="text-sm font-semibold text-slate-900 dark:text-white">Time Limit</span>
-                                    <span className="text-sm text-slate-600 dark:text-slate-400">{quiz.timeLimit} minutes</span>
+                                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                                    <span className="text-sm font-semibold text-slate-900">Time Limit</span>
+                                    <span className="text-sm text-slate-600">{quiz.timeLimit} minutes</span>
                                 </div>
                             )}
-                            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">Attempt</span>
-                                <span className="text-sm text-slate-600 dark:text-slate-400">{attemptNumber} of {quiz.maxAttempts}</span>
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                                <span className="text-sm font-semibold text-slate-900">Attempt</span>
+                                <span className="text-sm text-slate-600">{attemptNumber} of {quiz.maxAttempts}</span>
                             </div>
                         </div>
 
-                        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
-                            <h3 className="text-sm font-bold text-blue-900 dark:text-blue-200 mb-2">Instructions</h3>
-                            <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-disc list-inside">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+                            <h3 className="text-sm font-bold text-blue-900 mb-2">Instructions</h3>
+                            <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
                                 <li>Answer all questions to the best of your ability</li>
                                 {quiz.timeLimit > 0 && <li>The quiz will auto-submit when time runs out</li>}
                                 <li>You can navigate between questions using the navigation buttons</li>
@@ -268,23 +268,23 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
     const answeredQuestions = Object.keys(answers).length;
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-4xl mx-auto px-4">
                 {/* Header with Timer */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 mb-6">
+                <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                            <h1 className="text-2xl font-bold text-slate-900">
                                 {quiz.title}
                             </h1>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                            <p className="text-sm text-slate-600 mt-1">
                                 Question {currentQuestionIndex + 1} of {quiz.questions.length}
                             </p>
                         </div>
                         {timeRemaining !== null && (
                             <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${timeRemaining < 60
-                                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                                : 'bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-slate-100 text-slate-900'
                                 }`}>
                                 <Clock className="w-5 h-5" />
                                 <span className="font-mono font-bold text-lg">
@@ -296,30 +296,30 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
 
                     {/* Progress Bar */}
                     <div className="mt-4">
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                        <div className="w-full bg-slate-200 rounded-full h-2">
                             <div
                                 className="bg-primary h-2 rounded-full transition-all duration-300"
                                 style={{ width: `${progress}%` }}
                             />
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                        <p className="text-xs text-slate-500 mt-2">
                             {answeredQuestions} of {quiz.questions.length} answered
                         </p>
                     </div>
                 </div>
 
                 {/* Question */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 mb-6">
+                <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
                     <div className="mb-6">
                         <div className="flex items-center gap-3 mb-4">
                             <span className="px-4 py-2 bg-primary/20 text-primary font-bold rounded-lg">
                                 Q{currentQuestionIndex + 1}
                             </span>
-                            <span className="text-sm text-slate-500 dark:text-slate-400">
+                            <span className="text-sm text-slate-500">
                                 {currentQuestion.points} point{currentQuestion.points !== 1 ? 's' : ''}
                             </span>
                         </div>
-                        <p className="text-xl font-semibold text-slate-900 dark:text-white leading-relaxed">
+                        <p className="text-xl font-semibold text-slate-900 leading-relaxed">
                             {currentQuestion.question}
                         </p>
                     </div>
@@ -331,7 +331,7 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
                                 value={(answers[currentQuestion.id] as string) || ""}
                                 onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
                                 rows={5}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                                 placeholder="Type your answer here..."
                             />
                         ) : (
@@ -346,20 +346,20 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
                                         key={answer.id}
                                         onClick={() => handleMultipleChoice(currentQuestion.id, answer.id, isMultiple)}
                                         className={`w-full p-4 text-left rounded-lg border-2 transition-all ${isSelected
-                                            ? 'border-primary bg-primary/10 dark:bg-primary/20'
-                                            : 'border-slate-200 dark:border-slate-700 hover:border-primary/50 bg-slate-50 dark:bg-slate-900'
+                                            ? 'border-primary bg-primary/10'
+                                            : 'border-slate-200 hover:border-primary/50 bg-slate-50'
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`w-5 h-5 rounded ${isMultiple ? 'rounded-md' : 'rounded-full'} border-2 flex items-center justify-center ${isSelected
                                                 ? 'border-primary bg-primary'
-                                                : 'border-slate-300 dark:border-slate-600'
+                                                : 'border-slate-300'
                                                 }`}>
                                                 {isSelected && (
                                                     <CheckCircle className="w-4 h-4 text-white" fill="currentColor" />
                                                 )}
                                             </div>
-                                            <span className="text-slate-900 dark:text-white font-medium">
+                                            <span className="text-slate-900 font-medium">
                                                 {answer.text}
                                             </span>
                                         </div>
@@ -375,7 +375,7 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
                     <button
                         onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
                         disabled={currentQuestionIndex === 0}
-                        className="px-6 py-3 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl border border-slate-200 dark:border-slate-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-6 py-3 bg-white hover:bg-slate-50 text-slate-900 font-semibold rounded-xl border border-slate-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         <ChevronLeft className="w-5 h-5" />
                         Previous

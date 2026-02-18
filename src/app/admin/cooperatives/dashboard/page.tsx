@@ -63,21 +63,21 @@ export default function AdminCooperativeDashboardPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-green-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         Cooperative Dashboard
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Overview of cooperative activities and performance
                     </p>
                 </div>
@@ -85,20 +85,20 @@ export default function AdminCooperativeDashboardPage() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                     {/* Total Members */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                                <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                                <Users className="w-6 h-6 text-blue-600" />
                             </div>
                             <Link
                                 href="/admin/cooperatives/members"
-                                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                className="text-sm text-blue-600 hover:underline"
                             >
                                 View all
                             </Link>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Members</p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <p className="text-sm text-gray-600 mb-1">Total Members</p>
+                        <p className="text-3xl font-bold text-gray-900">
                             {stats?.totalMembers || 0}
                         </p>
                         <div className="flex items-center gap-2 mt-2 text-sm">
@@ -108,24 +108,24 @@ export default function AdminCooperativeDashboardPage() {
                     </div>
 
                     {/* Total Contributions */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                                <TrendingUp className="w-6 h-6 text-green-600 dark:text-green-400" />
+                            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                <TrendingUp className="w-6 h-6 text-green-600" />
                             </div>
                             <Link
                                 href="/admin/cooperatives/contributions"
-                                className="text-sm text-green-600 dark:text-green-400 hover:underline"
+                                className="text-sm text-green-600 hover:underline"
                             >
                                 Details
                             </Link>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Contributions</p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <p className="text-sm text-gray-600 mb-1">Total Contributions</p>
+                        <p className="text-3xl font-bold text-gray-900">
                             {formatCurrency(stats?.totalContributions || 0)}
                         </p>
                         <div className="flex items-center gap-1 mt-2 text-sm">
-                            <span className="text-gray-600 dark:text-gray-400">This month:</span>
+                            <span className="text-gray-600">This month:</span>
                             <span className="font-semibold text-green-600">
                                 {formatCurrency(stats?.monthlyContributions || 0)}
                             </span>
@@ -133,20 +133,20 @@ export default function AdminCooperativeDashboardPage() {
                     </div>
 
                     {/* Active Loans */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                                <DollarSign className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                                <DollarSign className="w-6 h-6 text-purple-600" />
                             </div>
                             <Link
                                 href="/admin/cooperatives/loans"
-                                className="text-sm text-purple-600 dark:text-purple-400 hover:underline"
+                                className="text-sm text-purple-600 hover:underline"
                             >
                                 Manage
                             </Link>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Active Loans</p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <p className="text-sm text-gray-600 mb-1">Active Loans</p>
+                        <p className="text-3xl font-bold text-gray-900">
                             {stats?.activeLoans || 0}
                         </p>
                         <div className="flex items-center gap-2 mt-2 text-sm">
@@ -156,31 +156,31 @@ export default function AdminCooperativeDashboardPage() {
                     </div>
 
                     {/* Total Savings */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
-                                <Wallet className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                            <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                                <Wallet className="w-6 h-6 text-indigo-600" />
                             </div>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Savings</p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <p className="text-sm text-gray-600 mb-1">Total Savings</p>
+                        <p className="text-3xl font-bold text-gray-900">
                             {formatCurrency(stats?.totalSavings || 0)}
                         </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        <p className="text-sm text-gray-600 mt-2">
                             Fixed savings deposits
                         </p>
                     </div>
 
                     {/* Monthly Growth */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
-                                <Activity className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                                <Activity className="w-6 h-6 text-emerald-600" />
                             </div>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Monthly Growth</p>
+                        <p className="text-sm text-gray-600 mb-1">Monthly Growth</p>
                         <div className="flex items-center gap-2">
-                            <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                            <p className="text-3xl font-bold text-gray-900">
                                 {stats?.monthlyGrowth?.toFixed(1) || 0}%
                             </p>
                             {stats?.monthlyGrowth >= 0 ? (
@@ -189,29 +189,29 @@ export default function AdminCooperativeDashboardPage() {
                                 <ArrowDown className="w-6 h-6 text-red-600" />
                             )}
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        <p className="text-sm text-gray-600 mt-2">
                             vs. previous month
                         </p>
                     </div>
 
                     {/* Transactions */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
-                                <FileText className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                                <FileText className="w-6 h-6 text-orange-600" />
                             </div>
                             <Link
                                 href="/admin/cooperatives/transactions"
-                                className="text-sm text-orange-600 dark:text-orange-400 hover:underline"
+                                className="text-sm text-orange-600 hover:underline"
                             >
                                 View all
                             </Link>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Recent Activity</p>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <p className="text-sm text-gray-600 mb-1">Recent Activity</p>
+                        <p className="text-3xl font-bold text-gray-900">
                             {activities.length}
                         </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        <p className="text-sm text-gray-600 mt-2">
                             Last 10 transactions
                         </p>
                     </div>
@@ -220,8 +220,8 @@ export default function AdminCooperativeDashboardPage() {
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                     {/* Contribution Trend */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                        <h2 className="text-xl font-bold text-gray-900 mb-4">
                             Contribution Trend
                         </h2>
                         {reports?.monthlyTrend && reports.monthlyTrend.length > 0 ? (
@@ -253,8 +253,8 @@ export default function AdminCooperativeDashboardPage() {
                     </div>
 
                     {/* Recent Activity */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                        <h2 className="text-xl font-bold text-gray-900 mb-4">
                             Recent Activity
                         </h2>
                         <div className="space-y-3 max-h-64 overflow-y-auto">
@@ -262,13 +262,13 @@ export default function AdminCooperativeDashboardPage() {
                                 activities.map((activity, idx) => (
                                     <div
                                         key={idx}
-                                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                                     >
                                         <div>
-                                            <p className="font-semibold text-gray-900 dark:text-white capitalize">
+                                            <p className="font-semibold text-gray-900 capitalize">
                                                 {activity.type}
                                             </p>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            <p className="text-sm text-gray-600">
                                                 {activity.description}
                                             </p>
                                         </div>

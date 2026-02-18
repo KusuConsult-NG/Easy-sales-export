@@ -66,7 +66,7 @@ export default function ExportWindowsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-linear-to-r from-purple-600 to-pink-600 text-white py-16">
                 <div className="max-w-7xl mx-auto px-8">
@@ -82,7 +82,7 @@ export default function ExportWindowsPage() {
 
             {/* Filters & Search */}
             <div className="max-w-7xl mx-auto px-8 py-8">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg mb-8">
+                <div className="bg-white rounded-2xl p-6 shadow-lg mb-8">
                     <div className="flex flex-col md:flex-row gap-4">
                         {/* Search */}
                         <div className="flex-1">
@@ -91,13 +91,13 @@ export default function ExportWindowsPage() {
                                 <input
                                     type="text"
                                     placeholder="Search export opportunities..."
-                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
+                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition"
                                 />
                             </div>
                         </div>
 
                         {/* Commodity Filter */}
-                        <select className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition">
+                        <select className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition">
                             <option>All Commodities</option>
                             <option>Grains & Tubers</option>
                             <option>Nuts & Seeds</option>
@@ -109,7 +109,7 @@ export default function ExportWindowsPage() {
                         </select>
 
                         {/* Status Filter */}
-                        <select className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition">
+                        <select className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition">
                             <option>All Status</option>
                             <option>Open</option>
                             <option>Opening Soon</option>
@@ -117,7 +117,7 @@ export default function ExportWindowsPage() {
                         </select>
 
                         {/* Destination Filter */}
-                        <select className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition">
+                        <select className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition">
                             <option>All Destinations</option>
                             <option>Europe</option>
                             <option>Asia</option>
@@ -134,9 +134,9 @@ export default function ExportWindowsPage() {
                         <Loader2 className="animate-spin h-12 w-12 text-purple-600" />
                     </div>
                 ) : exportWindows.length === 0 ? (
-                    <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-2xl shadow-lg">
+                    <div className="text-center py-20 bg-white rounded-2xl shadow-lg">
                         <Package2 className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">No Export Windows Found</h3>
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">No Export Windows Found</h3>
                         <p className="text-slate-500 mb-6">There are currently no open investment opportunities.</p>
                         <button
                             onClick={handleSeed}
@@ -152,11 +152,11 @@ export default function ExportWindowsPage() {
                         {exportWindows.map((window) => (
                             <div
                                 key={window.id}
-                                className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1"
+                                className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1"
                             >
                                 <div className="flex gap-6 p-6">
                                     {/* Commodity Image */}
-                                    <div className="relative w-32 h-32 shrink-0 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-700">
+                                    <div className="relative w-32 h-32 shrink-0 rounded-xl overflow-hidden bg-slate-200">
                                         <Image
                                             src={window.image}
                                             alt={window.commodity}
@@ -169,18 +169,18 @@ export default function ExportWindowsPage() {
                                     <div className="flex-1">
                                         <div className="flex items-start justify-between mb-3">
                                             <div>
-                                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                                                <h3 className="text-xl font-bold text-slate-900 mb-1">
                                                     {window.commodity}
                                                 </h3>
-                                                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                                <div className="flex items-center gap-2 text-slate-600">
                                                     <MapPin className="w-4 h-4" />
                                                     <span className="text-sm">{window.destination}</span>
                                                 </div>
                                             </div>
                                             <span
                                                 className={`px-3 py-1 rounded-full text-xs font-bold ${window.status === "Open"
-                                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                                    ? "bg-green-100 text-green-700"
+                                                    : "bg-blue-100 text-blue-700"
                                                     }`}
                                             >
                                                 {window.status}
@@ -189,25 +189,25 @@ export default function ExportWindowsPage() {
 
                                         <div className="grid grid-cols-2 gap-3 mb-4">
                                             <div>
-                                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                                <div className="text-xs text-slate-500 mb-1">
                                                     Min. Investment
                                                 </div>
-                                                <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                                                <div className="text-lg font-bold text-purple-600">
                                                     {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(window.minInvestment)}
                                                 </div>
                                             </div>
                                             <div>
-                                                <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                                <div className="text-xs text-slate-500 mb-1">
                                                     Projected ROI
                                                 </div>
-                                                <div className="text-lg font-bold text-green-600 dark:text-green-400 flex items-center gap-1">
+                                                <div className="text-lg font-bold text-green-600 flex items-center gap-1">
                                                     <TrendingUp className="w-4 h-4" />
                                                     {window.projectedROI}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                        <div className="flex items-center gap-4 text-sm text-slate-600 mb-4">
                                             <div className="flex items-center gap-1">
                                                 <Calendar className="w-4 h-4" />
                                                 <span>Opens: {new Date(window.openDate).toLocaleDateString()}</span>
@@ -219,12 +219,12 @@ export default function ExportWindowsPage() {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                                        <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                             <div className="text-sm">
-                                                <span className="font-semibold text-slate-900 dark:text-white">
+                                                <span className="font-semibold text-slate-900">
                                                     {window.spotsLeft} spots
                                                 </span>{" "}
-                                                <span className="text-slate-500 dark:text-slate-400">remaining</span>
+                                                <span className="text-slate-500">remaining</span>
                                             </div>
                                             <Link
                                                 href={`/export/windows/${window.id}`}
@@ -247,7 +247,7 @@ export default function ExportWindowsPage() {
                         <button
                             onClick={handleLoadMore}
                             disabled={loadingMore}
-                            className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-all"
+                            className="flex items-center gap-2 px-6 py-3 bg-white text-slate-900 font-semibold rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-all"
                         >
                             {loadingMore ? (
                                 <>

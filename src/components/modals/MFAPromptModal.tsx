@@ -62,14 +62,14 @@ export default function MFAPromptModal({
         <Modal isOpen={isOpen} onClose={onClose} title="Multi-Factor Authentication Required">
             <div className="space-y-4">
                 {/* Info */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-start gap-3">
-                        <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                        <Shield className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                            <p className="text-sm font-semibold text-blue-900">
                                 MFA Required
                             </p>
-                            <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                            <p className="text-sm text-blue-700 mt-1">
                                 This action requires multi-factor authentication. Please enter your 6-digit verification code.
                             </p>
                         </div>
@@ -78,7 +78,7 @@ export default function MFAPromptModal({
 
                 {/* Code Input */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Verification Code
                     </label>
                     <input
@@ -91,20 +91,20 @@ export default function MFAPromptModal({
                         }}
                         placeholder="000000"
                         maxLength={6}
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-center text-2xl font-mono tracking-widest text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-center text-2xl font-mono tracking-widest text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
                         autoFocus
                         disabled={isVerifying}
                     />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
+                    <p className="text-xs text-slate-500 mt-2 text-center">
                         Enter the 6-digit code from your authenticator app
                     </p>
                 </div>
 
                 {/* Error */}
                 {error && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-                        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                        <p className="text-sm text-red-700">{error}</p>
                     </div>
                 )}
 
@@ -127,14 +127,14 @@ export default function MFAPromptModal({
 
                     <button
                         onClick={handleSetup}
-                        className="w-full px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        className="w-full px-6 py-3 border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
                     >
                         Set Up MFA
                     </button>
 
                     <button
                         onClick={onClose}
-                        className="w-full px-6 py-3 text-slate-600 dark:text-slate-400 font-medium hover:text-slate-900 dark:hover:text-white transition-colors"
+                        className="w-full px-6 py-3 text-slate-600 font-medium hover:text-slate-900 transition-colors"
                     >
                         Cancel
                     </button>

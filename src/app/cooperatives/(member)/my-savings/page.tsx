@@ -92,22 +92,22 @@ export default function MySavingsPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-green-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
                     <BackButton fallbackPath="/cooperatives/dashboard" />
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         My Savings
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Track your savings plans and interest earnings
                     </p>
                 </div>
@@ -122,26 +122,26 @@ export default function MySavingsPage() {
                         <p className="text-3xl font-bold">{formatCurrency(totalSavings)}</p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                                <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                                <TrendingUp className="w-5 h-5 text-blue-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Interest Earned</p>
+                            <p className="text-sm text-slate-600">Interest Earned</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-3xl font-bold text-slate-900">
                             {formatCurrency(totalInterest)}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                                <Award className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                                <Award className="w-5 h-5 text-purple-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Active Plans</p>
+                            <p className="text-sm text-slate-600">Active Plans</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-3xl font-bold text-slate-900">
                             {savings.length}
                         </p>
                     </div>
@@ -163,7 +163,7 @@ export default function MySavingsPage() {
                             return (
                                 <div
                                     key={plan.id}
-                                    className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden"
+                                    className="bg-white rounded-2xl shadow-lg overflow-hidden"
                                 >
                                     {/* Plan Header */}
                                     <div className="bg-linear-to-r from-green-600 to-emerald-600 text-white p-6">
@@ -210,14 +210,14 @@ export default function MySavingsPage() {
                                     <div className="p-6">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                             <div className="flex items-start gap-3">
-                                                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center shrink-0">
-                                                    <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                                                    <Calendar className="w-5 h-5 text-blue-600" />
                                                 </div>
                                                 <div>
-                                                    <p className="font-semibold text-slate-900 dark:text-white mb-1">
+                                                    <p className="font-semibold text-slate-900 mb-1">
                                                         Started
                                                     </p>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                    <p className="text-sm text-slate-600">
                                                         {formatDate(plan.startDate)}
                                                     </p>
                                                     <p className="text-xs text-slate-500 mt-1">
@@ -227,14 +227,14 @@ export default function MySavingsPage() {
                                             </div>
 
                                             <div className="flex items-start gap-3">
-                                                <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center shrink-0">
-                                                    <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center shrink-0">
+                                                    <Clock className="w-5 h-5 text-purple-600" />
                                                 </div>
                                                 <div>
-                                                    <p className="font-semibold text-slate-900 dark:text-white mb-1">
+                                                    <p className="font-semibold text-slate-900 mb-1">
                                                         Maturity Date
                                                     </p>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                    <p className="text-sm text-slate-600">
                                                         {formatDate(plan.maturityDate)}
                                                     </p>
                                                     <p className="text-xs text-slate-500 mt-1">
@@ -244,28 +244,28 @@ export default function MySavingsPage() {
                                             </div>
 
                                             <div className="flex items-start gap-3">
-                                                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center shrink-0">
-                                                    <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
+                                                    <DollarSign className="w-5 h-5 text-green-600" />
                                                 </div>
                                                 <div>
-                                                    <p className="font-semibold text-slate-900 dark:text-white mb-1">
+                                                    <p className="font-semibold text-slate-900 mb-1">
                                                         Monthly Contribution
                                                     </p>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                    <p className="text-sm text-slate-600">
                                                         {formatCurrency(plan.monthlyContribution)}
                                                     </p>
                                                 </div>
                                             </div>
 
                                             <div className="flex items-start gap-3">
-                                                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center shrink-0">
-                                                    <TrendingUp className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                                                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center shrink-0">
+                                                    <TrendingUp className="w-5 h-5 text-orange-600" />
                                                 </div>
                                                 <div>
-                                                    <p className="font-semibold text-slate-900 dark:text-white mb-1">
+                                                    <p className="font-semibold text-slate-900 mb-1">
                                                         Projected Interest
                                                     </p>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                    <p className="text-sm text-slate-600">
                                                         {formatCurrency((plan.balance * plan.interestRate) / 100)}
                                                     </p>
                                                 </div>
@@ -273,8 +273,8 @@ export default function MySavingsPage() {
                                         </div>
 
                                         {daysToMaturity > 0 && (
-                                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-                                                <p className="text-sm text-slate-900 dark:text-white">
+                                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                                <p className="text-sm text-slate-900">
                                                     💡 <strong>Tip:</strong> Your savings will mature in {daysToMaturity}{" "}
                                                     days. Continue contributing monthly to maximize your returns!
                                                 </p>
@@ -286,12 +286,12 @@ export default function MySavingsPage() {
                         })}
                     </div>
                 ) : (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-12 text-center">
+                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
                         <Wallet className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                        <h3 className="text-xl font-semibold text-slate-900 mb-2">
                             No Savings Plans Yet
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        <p className="text-slate-600 mb-6">
                             Start saving today and earn competitive interest rates
                         </p>
                         <Link

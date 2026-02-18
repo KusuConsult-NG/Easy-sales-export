@@ -189,59 +189,59 @@ export default function AdminSellersPage() {
     return (
         <div className="p-8">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     Seller Verifications
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Review and manage marketplace seller verification requests
                 </p>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                            <Store className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <Store className="w-5 h-5 text-blue-600" />
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Total Requests</p>
+                        <p className="text-sm text-slate-600">Total Requests</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.total}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                        <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                            <Clock className="w-5 h-5 text-yellow-600" />
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Pending Review</p>
+                        <p className="text-sm text-slate-600">Pending Review</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.pending}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stats.pending}</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                            <CheckCircle className="w-5 h-5 text-green-600" />
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Approved</p>
+                        <p className="text-sm text-slate-600">Approved</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.approved}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stats.approved}</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                            <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                            <XCircle className="w-5 h-5 text-red-600" />
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Rejected</p>
+                        <p className="text-sm text-slate-600">Rejected</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.rejected}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stats.rejected}</p>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg mb-6">
+            <div className="bg-white rounded-xl p-6 shadow-lg mb-6">
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className="flex-1">
                         <div className="relative">
@@ -251,7 +251,7 @@ export default function AdminSellersPage() {
                                 placeholder="Search by business name, email, or phone..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                             />
                         </div>
                     </div>
@@ -262,7 +262,7 @@ export default function AdminSellersPage() {
                                 onClick={() => setFilterStatus(status)}
                                 className={`px - 4 py - 2 rounded - lg font - medium transition - colors ${filterStatus === status
                                     ? "bg-primary text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600"
+                                    : "bg-slate-100 text-slate-900 hover:bg-slate-200"
                                     } `}
                             >
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -273,19 +273,19 @@ export default function AdminSellersPage() {
             </div>
 
             {/* Verifications Table */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 {isLoading ? (
                     <div className="p-12 text-center">
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                        <p className="text-slate-600 dark:text-slate-400">Loading verifications...</p>
+                        <p className="text-slate-600">Loading verifications...</p>
                     </div>
                 ) : filteredVerifications.length === 0 ? (
                     <div className="p-12 text-center">
-                        <Store className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                        <Store className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">
                             No Seller Verifications Found
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             {searchQuery || filterStatus !== "all"
                                 ? "Try adjusting your filters"
                                 : "No verification requests have been submitted yet"}
@@ -294,72 +294,72 @@ export default function AdminSellersPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+                            <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Business
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Contact
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Location
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Status
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Applied
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Actions
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                            <tbody className="divide-y divide-slate-200">
                                 {filteredVerifications.map((verification) => (
-                                    <tr key={verification.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                    <tr key={verification.id} className="hover:bg-slate-50">
                                         <td className="px-6 py-4">
                                             <div>
-                                                <p className="font-semibold text-slate-900 dark:text-white">
+                                                <p className="font-semibold text-slate-900">
                                                     {verification.businessName}
                                                 </p>
-                                                <p className="text-sm text-slate-500 dark:text-slate-400 capitalize">
+                                                <p className="text-sm text-slate-500 capitalize">
                                                     {verification.businessType}
                                                 </p>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div>
-                                                <p className="text-sm text-slate-900 dark:text-white">
+                                                <p className="text-sm text-slate-900">
                                                     {verification.phone}
                                                 </p>
-                                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                                <p className="text-sm text-slate-500">
                                                     {verification.email}
                                                 </p>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div>
-                                                <p className="text-sm text-slate-900 dark:text-white">
+                                                <p className="text-sm text-slate-900">
                                                     {verification.state}
                                                 </p>
-                                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                                <p className="text-sm text-slate-500">
                                                     {verification.lga}
                                                 </p>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${verification.status === "pending"
-                                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                                ? "bg-yellow-100 text-yellow-700"
                                                 : verification.status === "approved"
-                                                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                                    ? "bg-green-100 text-green-700"
+                                                    : "bg-red-100 text-red-700"
                                                 } `}>
                                                 {verification.status.charAt(0).toUpperCase() + verification.status.slice(1)}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                                        <td className="px-6 py-4 text-sm text-slate-600">
                                             {new Date(verification.createdAt).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4">
@@ -384,9 +384,9 @@ export default function AdminSellersPage() {
             {/* Details Modal */}
             {isDetailsModalOpen && selectedVerification && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-slate-200">
+                            <h2 className="text-2xl font-bold text-slate-900">
                                 Seller Verification Details
                             </h2>
                         </div>
@@ -394,26 +394,26 @@ export default function AdminSellersPage() {
                         <div className="p-6 space-y-6">
                             {/* Business Info */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                                <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
                                     <Store className="w-5 h-5" />
                                     Business Information
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Business Name</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Business Name</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedVerification.businessName}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Business Type</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white capitalize">
+                                        <p className="text-sm text-slate-600">Business Type</p>
+                                        <p className="font-semibold text-slate-900 capitalize">
                                             {selectedVerification.businessType}
                                         </p>
                                     </div>
                                     <div className="col-span-2">
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Description</p>
-                                        <p className="text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Description</p>
+                                        <p className="text-slate-900">
                                             {selectedVerification.businessDescription}
                                         </p>
                                     </div>
@@ -422,38 +422,38 @@ export default function AdminSellersPage() {
 
                             {/* Location */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                                <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
                                     <MapPin className="w-5 h-5" />
                                     Contact & Location
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Phone</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Phone</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedVerification.phone}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Email</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Email</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedVerification.email}
                                         </p>
                                     </div>
                                     <div className="col-span-2">
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Address</p>
-                                        <p className="text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Address</p>
+                                        <p className="text-slate-900">
                                             {selectedVerification.address}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">State</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">State</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedVerification.state}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">LGA</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">LGA</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedVerification.lga}
                                         </p>
                                     </div>
@@ -462,26 +462,26 @@ export default function AdminSellersPage() {
 
                             {/* Bank Details */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                                <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
                                     <CreditCard className="w-5 h-5" />
                                     Bank Details
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Bank Name</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Bank Name</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedVerification.bankDetails.bankName}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Account Number</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Account Number</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedVerification.bankDetails.accountNumber}
                                         </p>
                                     </div>
                                     <div className="col-span-2">
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Account Name</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Account Name</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedVerification.bankDetails.accountName}
                                         </p>
                                     </div>
@@ -490,18 +490,18 @@ export default function AdminSellersPage() {
 
                             {/* Documents */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                                <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
                                     <FileText className="w-5 h-5" />
                                     Uploaded Documents
                                 </h3>
                                 <div className="space-y-2">
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    <p className="text-sm text-slate-600">
                                         • Business Document: {selectedVerification.documents.businessDoc}
                                     </p>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    <p className="text-sm text-slate-600">
                                         • ID Document: {selectedVerification.documents.idDoc}
                                     </p>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    <p className="text-sm text-slate-600">
                                         • Address Proof: {selectedVerification.documents.addressProof}
                                     </p>
                                 </div>
@@ -509,11 +509,11 @@ export default function AdminSellersPage() {
 
                             {/* Status & Rejection Reason */}
                             {selectedVerification.rejectionReason && (
-                                <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                                    <p className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">
+                                <div className="p-4 bg-red-50 rounded-lg">
+                                    <p className="text-sm font-semibold text-red-900 mb-1">
                                         Rejection Reason:
                                     </p>
-                                    <p className="text-sm text-red-700 dark:text-red-300">
+                                    <p className="text-sm text-red-700">
                                         {selectedVerification.rejectionReason}
                                     </p>
                                 </div>
@@ -521,7 +521,7 @@ export default function AdminSellersPage() {
                         </div>
 
                         {/* Actions */}
-                        <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex gap-4">
+                        <div className="p-6 border-t border-slate-200 flex gap-4">
                             {selectedVerification.status === "pending" && (
                                 <>
                                     <button
@@ -554,7 +554,7 @@ export default function AdminSellersPage() {
                             )}
                             <button
                                 onClick={() => setIsDetailsModalOpen(false)}
-                                className="px-6 py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold rounded-xl transition-all"
+                                className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-xl transition-all"
                             >
                                 Close
                             </button>

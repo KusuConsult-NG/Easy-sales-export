@@ -117,7 +117,7 @@ export default function SessionActivityTracker() {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
                 {/* Header */}
                 <div className="bg-linear-to-r from-amber-500 to-orange-500 p-6 text-white">
                     <div className="flex items-center justify-between">
@@ -136,16 +136,16 @@ export default function SessionActivityTracker() {
                 {/* Content */}
                 <div className="p-6">
                     <div className="mb-6">
-                        <p className="text-slate-900 dark:text-white mb-4">
+                        <p className="text-slate-900 mb-4">
                             You've been inactive for a while. For your security, you'll be automatically
                             logged out soon.
                         </p>
 
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded">
-                            <p className="text-sm font-medium text-amber-800 dark:text-amber-400 mb-1">
+                        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded">
+                            <p className="text-sm font-medium text-amber-800 mb-1">
                                 Time Remaining
                             </p>
-                            <p className="text-3xl font-bold text-amber-600 dark:text-amber-500 tabular-nums">
+                            <p className="text-3xl font-bold text-amber-600 tabular-nums">
                                 {formatTime(timeRemaining)}
                             </p>
                         </div>
@@ -162,13 +162,13 @@ export default function SessionActivityTracker() {
 
                         <button
                             onClick={handleLogout}
-                            className="w-full flex items-center justify-center space-x-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-medium py-3 px-4 rounded-lg transition"
+                            className="w-full flex items-center justify-center space-x-2 bg-slate-200 hover:bg-slate-300 text-slate-900 font-medium py-3 px-4 rounded-lg transition"
                         >
                             <span>Logout Now</span>
                         </button>
                     </div>
 
-                    <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-4">
+                    <p className="text-xs text-slate-500 text-center mt-4">
                         Click anywhere or press any key to stay logged in
                     </p>
                 </div>

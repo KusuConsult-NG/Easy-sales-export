@@ -67,12 +67,12 @@ export function KYCVerificationStep({
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 md:p-8">
+        <div className="bg-white rounded-lg p-6 md:p-8">
             <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">
                     Identity Verification
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Verify your identity to ensure secure transactions
                 </p>
             </div>
@@ -80,7 +80,7 @@ export function KYCVerificationStep({
             <div className="space-y-8">
                 {/* KYC Form */}
                 <div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4">
                         Personal Information
                     </h3>
                     <KYCForm
@@ -92,7 +92,7 @@ export function KYCVerificationStep({
 
                 {/* Document Uploads */}
                 <div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4">
                         Document Verification
                     </h3>
                     <div className="space-y-6">
@@ -117,8 +117,8 @@ export function KYCVerificationStep({
                 </div>
 
                 {/* Info Banner */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                    <p className="text-sm text-blue-900 dark:text-blue-100">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-sm text-blue-900">
                         <strong>Why do we need this?</strong> Your information is used to comply with
                         financial regulations and protect you from fraud. All data is encrypted and
                         stored securely.
@@ -129,7 +129,7 @@ export function KYCVerificationStep({
                 <div className="flex justify-between pt-4">
                     <button
                         onClick={onBack}
-                        className="px-6 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors font-semibold"
+                        className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-lg hover:bg-slate-100 transition-colors font-semibold"
                     >
                         Back
                     </button>

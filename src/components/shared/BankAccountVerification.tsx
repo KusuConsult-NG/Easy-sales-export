@@ -98,19 +98,19 @@ export default function BankAccountVerification({
     };
 
     return (
-        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
             <div className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Building2 className="w-5 h-5 text-green-600" />
                 </div>
                 <div className="flex-1">
-                    <h4 className="font-semibold text-slate-900 dark:text-white mb-1">
+                    <h4 className="font-semibold text-slate-900 mb-1">
                         Bank Account Verification
                     </h4>
 
                     {verificationStatus === "idle" && (
                         <div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                            <p className="text-sm text-slate-600 mb-3">
                                 Verify your bank account details to enable withdrawals
                             </p>
                             <button
@@ -135,10 +135,10 @@ export default function BankAccountVerification({
                         <div className="flex items-start gap-2">
                             <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
                             <div>
-                                <p className="text-sm font-semibold text-green-700 dark:text-green-300">
+                                <p className="text-sm font-semibold text-green-700">
                                     Account Verified
                                 </p>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <p className="text-sm text-slate-600">
                                     {resolvedName}
                                 </p>
                                 <p className="text-xs text-slate-500 mt-1">
@@ -152,10 +152,10 @@ export default function BankAccountVerification({
                         <div className="flex items-start gap-2">
                             <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                             <div>
-                                <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                                <p className="text-sm font-semibold text-red-700">
                                     Verification Failed
                                 </p>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <p className="text-sm text-slate-600">
                                     Could not verify account. Please check your details and try again.
                                 </p>
                                 <button

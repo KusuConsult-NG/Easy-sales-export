@@ -83,7 +83,7 @@ export default function AcademyApplicationPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
             </div>
         );
@@ -220,7 +220,7 @@ export default function AcademyApplicationPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white py-12">
                 <div className="max-w-4xl mx-auto px-6 text-center">
@@ -236,7 +236,7 @@ export default function AcademyApplicationPage() {
 
             {/* Progress Steps */}
             <div className="max-w-4xl mx-auto px-6 -mt-8">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <div className="flex items-center justify-between">
                         {STEPS.map((step, index) => (
                             <div key={step.id} className="flex-1">
@@ -247,7 +247,7 @@ export default function AcademyApplicationPage() {
                                                 ? "bg-green-600 text-white"
                                                 : currentStep === step.id
                                                     ? "bg-blue-600 text-white"
-                                                    : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+                                                    : "bg-slate-200 text-slate-500"
                                                 }`}
                                         >
                                             {currentStep > step.id ? (
@@ -258,12 +258,12 @@ export default function AcademyApplicationPage() {
                                         </div>
                                         <div className="mt-2 text-center">
                                             <p className={`text-sm font-semibold ${currentStep >= step.id
-                                                ? "text-slate-900 dark:text-white"
+                                                ? "text-slate-900"
                                                 : "text-slate-500"
                                                 }`}>
                                                 {step.title}
                                             </p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 hidden md:block">
+                                            <p className="text-xs text-slate-500 hidden md:block">
                                                 {step.description}
                                             </p>
                                         </div>
@@ -272,7 +272,7 @@ export default function AcademyApplicationPage() {
                                         <div
                                             className={`h-1 flex-1 mx-2 rounded-full transition-all ${currentStep > step.id
                                                 ? "bg-green-600"
-                                                : "bg-slate-200 dark:bg-slate-700"
+                                                : "bg-slate-200"
                                                 }`}
                                         />
                                     )}
@@ -285,7 +285,7 @@ export default function AcademyApplicationPage() {
 
             {/* Form Content */}
             <div className="max-w-4xl mx-auto px-6 py-12">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-lg">
+                <div className="bg-white rounded-2xl p-8 shadow-lg">
                     {currentStep === 1 && (
                         <PersonalInfoStep
                             data={personalInfo}
@@ -319,12 +319,12 @@ export default function AcademyApplicationPage() {
                     )}
 
                     {/* Navigation Buttons */}
-                    <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
                         <button
                             type="button"
                             onClick={handlePrevious}
                             disabled={currentStep === 1}
-                            className="inline-flex items-center gap-2 px-6 py-3 text-slate-600 dark:text-slate-400 font-semibold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center gap-2 px-6 py-3 text-slate-600 font-semibold rounded-xl hover:bg-slate-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <ArrowLeft className="w-5 h-5" />
                             Previous

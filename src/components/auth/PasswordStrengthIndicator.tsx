@@ -63,21 +63,21 @@ export default function PasswordStrengthIndicator({ password }: PasswordStrength
             {/* Strength Bar */}
             <div>
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-900 dark:text-white">
+                    <span className="text-sm font-medium text-slate-900">
                         Password Strength
                     </span>
                     <span
                         className={`text-sm font-semibold ${strength === "strong"
-                                ? "text-emerald-600 dark:text-emerald-400"
+                                ? "text-emerald-600"
                                 : strength === "medium"
-                                    ? "text-amber-600 dark:text-amber-400"
-                                    : "text-red-600 dark:text-red-400"
+                                    ? "text-amber-600"
+                                    : "text-red-600"
                             }`}
                     >
                         {strengthLabel[strength]}
                     </span>
                 </div>
-                <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div
                         className={`h-full transition-all duration-300 ${strengthColor[strength]}`}
                         style={{
@@ -97,13 +97,13 @@ export default function PasswordStrengthIndicator({ password }: PasswordStrength
                         {req.met ? (
                             <Check className="w-4 h-4 text-emerald-500 shrink-0" />
                         ) : (
-                            <X className="w-4 h-4 text-slate-400 dark:text-slate-600 shrink-0" />
+                            <X className="w-4 h-4 text-slate-400 shrink-0" />
                         )}
                         <span
                             className={
                                 req.met
-                                    ? "text-emerald-600 dark:text-emerald-400"
-                                    : "text-slate-500 dark:text-slate-400"
+                                    ? "text-emerald-600"
+                                    : "text-slate-500"
                             }
                         >
                             {req.label}

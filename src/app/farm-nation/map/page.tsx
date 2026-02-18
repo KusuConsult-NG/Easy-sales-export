@@ -9,10 +9,10 @@ import { Filter, Grid, MapIcon, Search } from "lucide-react";
 const MapView = dynamic(() => import("@/components/farm-nation/MapView"), {
     ssr: false,
     loading: () => (
-        <div className="h-[600px] bg-slate-100 dark:bg-slate-900 rounded-xl flex items-center justify-center">
+        <div className="h-[600px] bg-slate-100 rounded-xl flex items-center justify-center">
             <div className="text-center">
                 <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-slate-600 dark:text-slate-400">Loading map...</p>
+                <p className="text-slate-600">Loading map...</p>
             </div>
         </div>
     )
@@ -152,27 +152,27 @@ export default function FarmNationMapPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         Explore Land Listings
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Discover verified agricultural land across Nigeria
                     </p>
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 mb-6">
+                <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Filter className="w-5 h-5 text-primary" />
-                        <h2 className="text-lg font-bold text-slate-900 dark:text-white">Filters</h2>
+                        <h2 className="text-lg font-bold text-slate-900">Filters</h2>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Search
                             </label>
                             <div className="relative">
@@ -181,20 +181,20 @@ export default function FarmNationMapPage() {
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                                     placeholder="Search by title, state..."
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 State
                             </label>
                             <select
                                 value={filters.state}
                                 onChange={(e) => setFilters({ ...filters, state: e.target.value })}
-                                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                             >
                                 <option value="">All States</option>
                                 {nigerianStates.map(state => (
@@ -204,13 +204,13 @@ export default function FarmNationMapPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Category
                             </label>
                             <select
                                 value={filters.category}
                                 onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                             >
                                 <option value="">All Categories</option>
                                 {landCategories.map(cat => (
@@ -222,7 +222,7 @@ export default function FarmNationMapPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Price Range (₦)
                             </label>
                             <div className="flex gap-2">
@@ -230,14 +230,14 @@ export default function FarmNationMapPage() {
                                     type="number"
                                     value={filters.minPrice || ""}
                                     onChange={(e) => setFilters({ ...filters, minPrice: Number(e.target.value) })}
-                                    className="w-1/2 px-2 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                    className="w-1/2 px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                                     placeholder="Min"
                                 />
                                 <input
                                     type="number"
                                     value={filters.maxPrice || ""}
                                     onChange={(e) => setFilters({ ...filters, maxPrice: Number(e.target.value) })}
-                                    className="w-1/2 px-2 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                    className="w-1/2 px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                                     placeholder="Max"
                                 />
                             </div>
@@ -245,7 +245,7 @@ export default function FarmNationMapPage() {
                     </div>
 
                     <div className="flex items-center justify-between">
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                        <p className="text-sm text-slate-600">
                             {filteredListings.length} listing{filteredListings.length !== 1 ? 's' : ''} found
                         </p>
                         <button
@@ -263,7 +263,7 @@ export default function FarmNationMapPage() {
                         onClick={() => setViewMode("map")}
                         className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${viewMode === "map"
                                 ? "bg-primary text-white"
-                                : "bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
+                                : "bg-white text-slate-900 hover:bg-slate-100"
                             }`}
                     >
                         <MapIcon className="w-4 h-4" />
@@ -273,7 +273,7 @@ export default function FarmNationMapPage() {
                         onClick={() => setViewMode("grid")}
                         className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${viewMode === "grid"
                                 ? "bg-primary text-white"
-                                : "bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700"
+                                : "bg-white text-slate-900 hover:bg-slate-100"
                             }`}
                     >
                         <Grid className="w-4 h-4" />
@@ -283,9 +283,9 @@ export default function FarmNationMapPage() {
 
                 {/* Content */}
                 {isLoading ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-12 text-center">
+                    <div className="bg-white rounded-xl shadow-lg p-12 text-center">
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                        <p className="text-slate-600 dark:text-slate-400">Loading listings...</p>
+                        <p className="text-slate-600">Loading listings...</p>
                     </div>
                 ) : viewMode === "map" ? (
                     <MapView listings={filteredListings} />
@@ -294,10 +294,10 @@ export default function FarmNationMapPage() {
                         {filteredListings.map(listing => (
                             <div
                                 key={listing.id}
-                                className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
+                                className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
                                 onClick={() => window.location.href = `/farm-nation/${listing.id}`}
                             >
-                                <div className="h-48 bg-slate-200 dark:bg-slate-700">
+                                <div className="h-48 bg-slate-200">
                                     {listing.images[0] && (
                                         <img
                                             src={listing.images[0]}
@@ -307,21 +307,21 @@ export default function FarmNationMapPage() {
                                     )}
                                 </div>
                                 <div className="p-4">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                                    <h3 className="text-lg font-bold text-slate-900 mb-2">
                                         {listing.title}
                                     </h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                                    <p className="text-sm text-slate-600 mb-3">
                                         {listing.state}, {listing.lga}
                                     </p>
                                     <div className="flex items-center justify-between">
                                         <div>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400">Size</p>
-                                            <p className="font-bold text-slate-900 dark:text-white">
+                                            <p className="text-xs text-slate-500">Size</p>
+                                            <p className="font-bold text-slate-900">
                                                 {listing.size} {listing.unit}
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-xs text-slate-500 dark:text-slate-400">Total Price</p>
+                                            <p className="text-xs text-slate-500">Total Price</p>
                                             <p className="font-bold text-green-600">
                                                 ₦{listing.totalPrice.toLocaleString()}
                                             </p>

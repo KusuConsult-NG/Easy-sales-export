@@ -62,12 +62,12 @@ export function InvestmentProfileStep({
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 md:p-8">
+        <div className="bg-white rounded-lg p-6 md:p-8">
             <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">
                     Investment Profile
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Help us customize your export opportunities
                 </p>
             </div>
@@ -75,12 +75,12 @@ export function InvestmentProfileStep({
             <div className="space-y-6">
                 {/* Investment Range */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
+                    <label className="block text-sm font-medium text-slate-900 mb-3">
                         Investment Range <span className="text-red-500">*</span>
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs text-slate-600 dark:text-slate-400 mb-2">
+                            <label className="block text-xs text-slate-600 mb-2">
                                 Minimum Amount
                             </label>
                             <div className="relative">
@@ -88,7 +88,7 @@ export function InvestmentProfileStep({
                                 <select
                                     value={minInvestment}
                                     onChange={(e) => setMinInvestment(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                                 >
                                     <option value="">Select minimum</option>
                                     <option value="50000">₦50,000</option>
@@ -100,7 +100,7 @@ export function InvestmentProfileStep({
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-600 dark:text-slate-400 mb-2">
+                            <label className="block text-xs text-slate-600 mb-2">
                                 Maximum Amount
                             </label>
                             <div className="relative">
@@ -108,7 +108,7 @@ export function InvestmentProfileStep({
                                 <select
                                     value={maxInvestment}
                                     onChange={(e) => setMaxInvestment(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                                 >
                                     <option value="">Select maximum</option>
                                     <option value="500000">₦500,000</option>
@@ -124,10 +124,10 @@ export function InvestmentProfileStep({
 
                 {/* Investment Goals */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
+                    <label className="block text-sm font-medium text-slate-900 mb-3">
                         Investment Goals <span className="text-red-500">*</span>
                     </label>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+                    <p className="text-xs text-slate-600 mb-3">
                         Select all that apply
                     </p>
                     <div className="space-y-2">
@@ -136,15 +136,15 @@ export function InvestmentProfileStep({
                                 key={goal}
                                 onClick={() => toggleGoal(goal)}
                                 className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${goals.includes(goal)
-                                    ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-orange-900 dark:text-orange-100"
-                                    : "border-slate-200 dark:border-slate-700 hover:border-orange-300 text-slate-900 dark:text-white"
+                                    ? "border-orange-500 bg-orange-50 text-orange-900"
+                                    : "border-slate-200 hover:border-orange-300 text-slate-900"
                                     }`}
                             >
                                 <div className="flex items-center gap-2">
                                     <div
                                         className={`w-5 h-5 rounded border-2 flex items-center justify-center ${goals.includes(goal)
                                             ? "border-orange-500 bg-orange-500"
-                                            : "border-slate-300 dark:border-slate-600"
+                                            : "border-slate-300"
                                             }`}
                                     >
                                         {goals.includes(goal) && (
@@ -172,7 +172,7 @@ export function InvestmentProfileStep({
 
                 {/* Risk Tolerance */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
+                    <label className="block text-sm font-medium text-slate-900 mb-3">
                         Risk Tolerance <span className="text-red-500">*</span>
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -181,8 +181,8 @@ export function InvestmentProfileStep({
                                 key={risk}
                                 onClick={() => setRiskTolerance(risk)}
                                 className={`p-4 rounded-lg border-2 transition-all ${riskTolerance === risk
-                                    ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
-                                    : "border-slate-200 dark:border-slate-700 hover:border-orange-300"
+                                    ? "border-orange-500 bg-orange-50"
+                                    : "border-slate-200 hover:border-orange-300"
                                     }`}
                             >
                                 <div className="text-center">
@@ -194,13 +194,13 @@ export function InvestmentProfileStep({
                                     />
                                     <p
                                         className={`font-semibold capitalize ${riskTolerance === risk
-                                            ? "text-orange-900 dark:text-orange-100"
-                                            : "text-slate-900 dark:text-white"
+                                            ? "text-orange-900"
+                                            : "text-slate-900"
                                             }`}
                                     >
                                         {risk}
                                     </p>
-                                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                    <p className="text-xs text-slate-600 mt-1">
                                         {risk === "low" && "Conservative, stable returns"}
                                         {risk === "medium" && "Balanced risk/reward"}
                                         {risk === "high" && "Higher risk, higher potential"}

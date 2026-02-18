@@ -73,25 +73,25 @@ export default function WAVECompliancePage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading compliance data...</p>
+                    <p className="text-slate-600">Loading compliance data...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h1 className="text-3xl font-bold text-slate-900 mb-2">
                             WAVE Program Compliance
                         </h1>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Monitor application statistics and program metrics
                         </p>
                     </div>
@@ -101,7 +101,7 @@ export default function WAVECompliancePage() {
                         <select
                             value={timeframe}
                             onChange={(e) => setTimeframe(e.target.value)}
-                            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                            className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                             <option value="all">All Time</option>
                             <option value="month">This Month</option>
@@ -112,7 +112,7 @@ export default function WAVECompliancePage() {
                         {/* Export Buttons */}
                         <button
                             onClick={() => exportReport("pdf")}
-                            className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-semibold rounded-lg transition-all flex items-center gap-2"
+                            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-900 font-semibold rounded-lg transition-all flex items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
                             PDF
@@ -130,58 +130,58 @@ export default function WAVECompliancePage() {
                 {/* Stats Cards */}
                 {stats && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                        <div className="bg-white rounded-xl shadow-lg p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                                    <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <Users className="w-6 h-6 text-blue-600" />
                                 </div>
-                                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                                <span className="text-2xl font-bold text-slate-900">
                                     {stats.totalApplications}
                                 </span>
                             </div>
-                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                            <p className="text-sm font-semibold text-slate-600">
                                 Total Applications
                             </p>
                         </div>
 
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                        <div className="bg-white rounded-xl shadow-lg p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                                    <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+                                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                                    <CheckCircle className="w-6 h-6 text-green-600" />
                                 </div>
-                                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                                <span className="text-2xl font-bold text-slate-900">
                                     {stats.approved}
                                 </span>
                             </div>
-                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                            <p className="text-sm font-semibold text-slate-600">
                                 Approved ({Math.round((stats.approved / stats.totalApplications) * 100)}%)
                             </p>
                         </div>
 
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                        <div className="bg-white rounded-xl shadow-lg p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                                    <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+                                <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                                    <Clock className="w-6 h-6 text-yellow-600" />
                                 </div>
-                                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                                <span className="text-2xl font-bold text-slate-900">
                                     {stats.pending}
                                 </span>
                             </div>
-                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                            <p className="text-sm font-semibold text-slate-600">
                                 Pending Review
                             </p>
                         </div>
 
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
+                        <div className="bg-white rounded-xl shadow-lg p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                                    <XCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                                    <XCircle className="w-6 h-6 text-red-600" />
                                 </div>
-                                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                                <span className="text-2xl font-bold text-slate-900">
                                     {stats.rejected}
                                 </span>
                             </div>
-                            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                            <p className="text-sm font-semibold text-slate-600">
                                 Rejected ({Math.round((stats.rejected / stats.totalApplications) * 100)}%)
                             </p>
                         </div>
@@ -227,8 +227,8 @@ export default function WAVECompliancePage() {
                 {demographics && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Age Groups */}
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                        <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <Users className="w-5 h-5 text-primary" />
                                 Age Distribution
                             </h3>
@@ -236,10 +236,10 @@ export default function WAVECompliancePage() {
                                 {Object.entries(demographics.ageGroups).map(([age, count]) => (
                                     <div key={age}>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-semibold text-slate-900 dark:text-white">{age}</span>
+                                            <span className="text-sm font-semibold text-slate-900">{age}</span>
                                             <span className="text-sm font-bold text-primary">{count}</span>
                                         </div>
-                                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                        <div className="w-full bg-slate-200 rounded-full h-2">
                                             <div
                                                 className="bg-primary h-2 rounded-full transition-all"
                                                 style={{ width: `${(count / stats!.totalApplications) * 100}%` }}
@@ -251,8 +251,8 @@ export default function WAVECompliancePage() {
                         </div>
 
                         {/* States */}
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                        <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <BarChart3 className="w-5 h-5 text-primary" />
                                 Top States
                             </h3>
@@ -263,10 +263,10 @@ export default function WAVECompliancePage() {
                                     .map(([state, count]) => (
                                         <div key={state}>
                                             <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-semibold text-slate-900 dark:text-white">{state}</span>
+                                                <span className="text-sm font-semibold text-slate-900">{state}</span>
                                                 <span className="text-sm font-bold text-primary">{count}</span>
                                             </div>
-                                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                            <div className="w-full bg-slate-200 rounded-full h-2">
                                                 <div
                                                     className="bg-primary h-2 rounded-full transition-all"
                                                     style={{ width: `${(count / stats!.totalApplications) * 100}%` }}
@@ -278,8 +278,8 @@ export default function WAVECompliancePage() {
                         </div>
 
                         {/* Business Types */}
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                        <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <TrendingUp className="w-5 h-5 text-primary" />
                                 Business Types
                             </h3>
@@ -287,10 +287,10 @@ export default function WAVECompliancePage() {
                                 {Object.entries(demographics.businessTypes).map(([type, count]) => (
                                     <div key={type}>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-semibold text-slate-900 dark:text-white capitalize">{type}</span>
+                                            <span className="text-sm font-semibold text-slate-900 capitalize">{type}</span>
                                             <span className="text-sm font-bold text-primary">{count}</span>
                                         </div>
-                                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                        <div className="w-full bg-slate-200 rounded-full h-2">
                                             <div
                                                 className="bg-primary h-2 rounded-full transition-all"
                                                 style={{ width: `${(count / stats!.totalApplications) * 100}%` }}

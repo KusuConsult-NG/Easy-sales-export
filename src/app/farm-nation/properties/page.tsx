@@ -113,7 +113,7 @@ function PropertiesContent() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-linear-to-r from-teal-600 to-cyan-600 text-white py-16">
                 <div className="max-w-7xl mx-auto px-8">
@@ -129,7 +129,7 @@ function PropertiesContent() {
 
             {/* Filters & Search */}
             <div className="max-w-7xl mx-auto px-8 py-8">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg mb-8">
+                <div className="bg-white rounded-2xl p-6 shadow-lg mb-8">
                     <div className="flex flex-col md:flex-row gap-4">
                         {/* Search */}
                         <div className="flex-1">
@@ -140,7 +140,7 @@ function PropertiesContent() {
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     placeholder="Search farms by keyword..."
-                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
                                 />
                             </div>
                         </div>
@@ -149,7 +149,7 @@ function PropertiesContent() {
                         <select
                             value={filters.propertyType}
                             onChange={(e) => handleFilterChange("propertyType", e.target.value)}
-                            className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+                            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
                         >
                             <option value="">All Types</option>
                             <option value="farmland">Farmland</option>
@@ -164,7 +164,7 @@ function PropertiesContent() {
                         <select
                             value={filters.location}
                             onChange={(e) => handleFilterChange("location", e.target.value)}
-                            className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+                            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
                         >
                             <option value="">All Locations</option>
                             {nigerianStates.map(state => (
@@ -176,7 +176,7 @@ function PropertiesContent() {
                         <select
                             value={filters.priceRange}
                             onChange={(e) => handleFilterChange("priceRange", e.target.value)}
-                            className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+                            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
                         >
                             <option value="">Any Price</option>
                             <option value="under-20m">Under ₦20M</option>
@@ -189,8 +189,8 @@ function PropertiesContent() {
 
                 {/* Results Header */}
                 <div className="flex items-center justify-between mb-6">
-                    <p className="text-slate-600 dark:text-slate-400">
-                        Showing <span className="font-bold text-slate-900 dark:text-white">{properties.length}</span> verified farms
+                    <p className="text-slate-600">
+                        Showing <span className="font-bold text-slate-900">{properties.length}</span> verified farms
                     </p>
                     <Link href="/farm-nation/list-land" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
                         + List Your Land
@@ -203,10 +203,10 @@ function PropertiesContent() {
                         <Loader2 className="w-12 h-12 animate-spin text-teal-600" />
                     </div>
                 ) : properties.length === 0 ? (
-                    <div className="text-center py-16 bg-slate-50 dark:bg-slate-900 rounded-2xl">
-                        <Home className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">No properties found</h3>
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                    <div className="text-center py-16 bg-slate-50 rounded-2xl">
+                        <Home className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">No properties found</h3>
+                        <p className="text-slate-600 mb-6">
                             Try adjusting your filters or search term to find what you're looking for.
                         </p>
                         <button
@@ -225,10 +225,10 @@ function PropertiesContent() {
                             {properties.map((property) => (
                                 <div
                                     key={property.id}
-                                    className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 group"
+                                    className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 group"
                                 >
                                     {/* Property Image */}
-                                    <div className="relative h-48 bg-slate-200 dark:bg-slate-700">
+                                    <div className="relative h-48 bg-slate-200">
                                         <Image
                                             src={property.images[0] || "/placeholder-land.jpg"}
                                             alt={property.title}
@@ -249,10 +249,10 @@ function PropertiesContent() {
 
                                     {/* Property Details */}
                                     <div className="p-6">
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">
+                                        <h3 className="text-xl font-bold text-slate-900 mb-2 line-clamp-1">
                                             {property.title}
                                         </h3>
-                                        <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-4">
+                                        <div className="flex items-center gap-2 text-slate-600 mb-4">
                                             <MapPin className="w-4 h-4 shrink-0" />
                                             <span className="text-sm line-clamp-1">
                                                 {property.location.address}, {property.location.state}
@@ -262,28 +262,28 @@ function PropertiesContent() {
                                         {/* Features / Details */}
                                         <div className="flex flex-wrap gap-2 mb-4">
                                             {property.soilType && (
-                                                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-white rounded">
+                                                <span className="px-2 py-1 bg-slate-100 text-xs text-slate-600 rounded">
                                                     {property.soilType}
                                                 </span>
                                             )}
                                             {property.waterSource && (
-                                                <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-xs text-slate-600 dark:text-white rounded">
+                                                <span className="px-2 py-1 bg-slate-100 text-xs text-slate-600 rounded">
                                                     {property.waterSource}
                                                 </span>
                                             )}
                                         </div>
 
                                         {/* Price & Size */}
-                                        <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700 mb-4">
+                                        <div className="flex items-center justify-between pt-4 border-t border-slate-200 mb-4">
                                             <div>
-                                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Size</p>
-                                                <p className="font-semibold text-slate-900 dark:text-white flex items-center gap-1">
+                                                <p className="text-xs text-slate-500 mb-1">Size</p>
+                                                <p className="font-semibold text-slate-900 flex items-center gap-1">
                                                     <Layers className="w-4 h-4" />
                                                     {property.size}
                                                 </p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Price</p>
+                                                <p className="text-xs text-slate-500 mb-1">Price</p>
                                                 <p className="text-xl font-bold text-teal-600">
                                                     ₦{(property.price / 1000000).toFixed(1)}M
                                                 </p>
@@ -308,7 +308,7 @@ function PropertiesContent() {
                                 <button
                                     onClick={handleLoadMore}
                                     disabled={loadingMore}
-                                    className="flex items-center gap-2 px-8 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-all"
+                                    className="flex items-center gap-2 px-8 py-4 bg-white text-slate-900 font-semibold rounded-xl shadow-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-all"
                                 >
                                     {loadingMore ? (
                                         <>
@@ -349,7 +349,7 @@ function PropertiesContent() {
 export default function FarmNationPropertiesPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-teal-600" />
             </div>
         }>

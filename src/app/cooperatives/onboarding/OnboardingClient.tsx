@@ -137,21 +137,21 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
-            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+            <div className="bg-white border-b border-slate-200">
                 <div className="max-w-4xl mx-auto px-8 py-6">
                     <Link
                         href="/cooperatives"
-                        className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-purple-600 mb-4"
+                        className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600 mb-4"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Cooperatives
                     </Link>
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <h1 className="text-2xl font-bold text-slate-900">
                         Cooperative Membership Application
                     </h1>
-                    <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400">
+                    <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 text-xs font-medium text-slate-600">
                         <span>Powered by</span>
                         <span className="font-bold text-purple-600">Easy Sales Export</span>
                     </div>
@@ -159,7 +159,7 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
             </div>
 
             {/* Progress Indicator */}
-            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+            <div className="bg-white border-b border-slate-200">
                 <div className="max-w-4xl mx-auto px-8 py-6">
                     <div className="flex items-center justify-between mb-4">
                         {steps.map((step, index) => (
@@ -168,14 +168,14 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${currentStep > step.number
                                         ? "bg-purple-600 text-white"
                                         : currentStep === step.number
-                                            ? "bg-purple-600 text-white ring-4 ring-purple-200 dark:ring-purple-900/30"
-                                            : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+                                            ? "bg-purple-600 text-white ring-4 ring-purple-200"
+                                            : "bg-slate-200 text-slate-600"
                                         }`}>
                                         {step.number}
                                     </div>
                                     <span className={`text-xs mt-2 font-medium ${currentStep === step.number
                                         ? "text-purple-600"
-                                        : "text-slate-600 dark:text-slate-400"
+                                        : "text-slate-600"
                                         }`}>
                                         {step.name}
                                     </span>
@@ -183,14 +183,14 @@ function CooperativeOnboardingContent({ initialTier }: { initialTier: "basic" | 
                                 {index < steps.length - 1 && (
                                     <div className={`h-0.5 flex-1 mx-2 ${currentStep > step.number
                                         ? "bg-purple-600"
-                                        : "bg-slate-200 dark:bg-slate-700"
+                                        : "bg-slate-200"
                                         }`} />
                                 )}
                             </div>
                         ))}
                     </div>
                     <div className="text-center">
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                        <p className="text-sm text-slate-600">
                             Step {currentStep} of {totalSteps}
                         </p>
                     </div>

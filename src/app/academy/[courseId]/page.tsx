@@ -120,7 +120,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
             </div>
         );
@@ -128,9 +128,9 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
     if (!course) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center">
                 <div className="text-center">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">
                         Course Not Found
                     </h2>
                     <button
@@ -150,10 +150,10 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
     const progressPercent = progress?.overallProgress || 0;
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 py-12 px-4">
             <div className="max-w-6xl mx-auto">
                 {/* Header Section */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden mb-8">
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden mb-8">
                     <div className="bg-linear-to-r from-blue-600 to-cyan-600 p-8 text-white">
                         <button
                             onClick={() => router.push("/academy")}
@@ -189,25 +189,25 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                     </div>
 
                     {/* Enrollment/Progress Section */}
-                    <div className="p-8 border-t border-slate-200 dark:border-slate-700">
+                    <div className="p-8 border-t border-slate-200">
                         {isEnrolled ? (
                             <div>
                                 <div className="mb-4">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                        <span className="text-sm font-medium text-slate-600">
                                             Course Progress
                                         </span>
                                         <span className="text-sm font-bold text-blue-600">
                                             {progressPercent}%
                                         </span>
                                     </div>
-                                    <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                    <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
                                         <div
                                             className="h-full bg-linear-to-r from-blue-500 to-cyan-500 transition-all duration-500"
                                             style={{ width: `${progressPercent}%` }}
                                         />
                                     </div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                                    <p className="text-xs text-slate-500 mt-2">
                                         {completedLessons} of {totalLessons} lessons completed
                                     </p>
                                 </div>
@@ -223,10 +223,10 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                         ) : (
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
+                                    <h3 className="font-semibold text-slate-900 mb-1">
                                         Start your learning journey
                                     </h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    <p className="text-sm text-slate-600">
                                         Enroll now to access all course materials
                                     </p>
                                 </div>
@@ -253,8 +253,8 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                 </div>
 
                 {/* Course Modules */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                <div className="bg-white rounded-2xl shadow-xl p-8">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-6">
                         Course Modules
                     </h2>
 
@@ -267,27 +267,27 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                                 <div
                                     key={module.id}
                                     className={`border-2 rounded-xl p-6 ${moduleCompleted
-                                        ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
-                                        : "border-slate-200 dark:border-slate-700"
+                                        ? "border-green-200 bg-green-50"
+                                        : "border-slate-200"
                                         }`}
                                 >
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-2">
-                                                <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                                <span className="text-sm font-bold text-blue-600">
                                                     Module {moduleIndex + 1}
                                                 </span>
                                                 {moduleCompleted && (
-                                                    <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                                                    <div className="flex items-center gap-1 text-green-600">
                                                         <CheckCircle className="w-4 h-4" />
                                                         <span className="text-xs font-medium">Completed</span>
                                                     </div>
                                                 )}
                                             </div>
-                                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                                            <h3 className="text-lg font-bold text-slate-900 mb-2">
                                                 {module.title}
                                             </h3>
-                                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                            <p className="text-sm text-slate-600">
                                                 {module.description}
                                             </p>
                                         </div>
@@ -304,7 +304,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                                                     onClick={() => isEnrolled && router.push(`/academy/${courseId}/lesson/${lesson.id}`)}
                                                     disabled={!isEnrolled}
                                                     className={`w-full flex items-center justify-between p-4 rounded-lg transition ${isEnrolled
-                                                        ? "hover:bg-slate-50 dark:hover:bg-slate-700"
+                                                        ? "hover:bg-slate-50"
                                                         : "opacity-50 cursor-not-allowed"
                                                         }`}
                                                 >
@@ -315,10 +315,10 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                                                             <PlayCircle className="w-5 h-5 text-slate-400" />
                                                         )}
                                                         <div className="text-left">
-                                                            <p className="text-sm font-medium text-slate-900 dark:text-white">
+                                                            <p className="text-sm font-medium text-slate-900">
                                                                 {lesson.title}
                                                             </p>
-                                                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                                            <p className="text-xs text-slate-500">
                                                                 {lesson.duration}
                                                             </p>
                                                         </div>
@@ -331,20 +331,20 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
                                     {/* Quiz Info */}
                                     {module.quiz && (
-                                        <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                                        <div className="pt-4 border-t border-slate-200">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="text-sm font-medium text-slate-900 dark:text-white">
+                                                    <p className="text-sm font-medium text-slate-900">
                                                         Module Quiz
                                                     </p>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                                    <p className="text-xs text-slate-500">
                                                         {module.quiz.questions.length} questions • Passing score: {module.quiz.passingScore}%
                                                     </p>
                                                 </div>
                                                 {quizScore !== undefined && (
                                                     <div className={`px-3 py-1 rounded-full text-xs font-bold ${quizScore >= module.quiz.passingScore
-                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                        : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                                                        ? "bg-green-100 text-green-700"
+                                                        : "bg-red-100 text-red-700"
                                                         }`}>
                                                         Score: {quizScore}%
                                                     </div>

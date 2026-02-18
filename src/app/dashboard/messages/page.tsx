@@ -174,17 +174,17 @@ function MessagesPageContent() {
 
     if (!userId) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <p className="text-gray-500">Please sign in to view messages</p>
             </div>
         );
     }
 
     return (
-        <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+        <div className="h-screen bg-gray-50 flex flex-col">
             {/* Header */}
-            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <div className="bg-white border-b border-gray-200 px-6 py-4">
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                     <MessageCircle className="w-7 h-7 text-primary" />
                     Messages
                 </h1>
@@ -192,9 +192,9 @@ function MessagesPageContent() {
 
             <div className="flex-1 flex overflow-hidden">
                 {/* Conversations Sidebar */}
-                <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+                <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
                     {/* Search */}
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                    <div className="p-4 border-b border-gray-200">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
@@ -202,7 +202,7 @@ function MessagesPageContent() {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search conversations..."
-                                className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-primary"
+                                className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:ring-2 focus:ring-primary"
                             />
                         </div>
                     </div>
@@ -222,7 +222,7 @@ function MessagesPageContent() {
                                     <button
                                         key={conversation.id}
                                         onClick={() => setActiveConversationId(conversation.id)}
-                                        className={`w-full p-4 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-left ${isActive ? "bg-primary/5 border-l-4 border-l-primary" : ""
+                                        className={`w-full p-4 border-b border-gray-200 hover:bg-gray-50 transition text-left ${isActive ? "bg-primary/5 border-l-4 border-l-primary" : ""
                                             }`}
                                     >
                                         <div className="flex items-start gap-3">
@@ -231,7 +231,7 @@ function MessagesPageContent() {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-1">
-                                                    <p className="font-semibold text-gray-900 dark:text-white truncate">
+                                                    <p className="font-semibold text-gray-900 truncate">
                                                         {conversation.productId ? "Product Inquiry" : "Order Support"}
                                                     </p>
                                                     {unreadCount > 0 && (
@@ -240,7 +240,7 @@ function MessagesPageContent() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 truncate mb-1">
+                                                <p className="text-sm text-gray-600 truncate mb-1">
                                                     {conversation.lastMessage || "No messages yet"}
                                                 </p>
                                                 <p className="text-xs text-gray-500">
@@ -261,16 +261,16 @@ function MessagesPageContent() {
                 </div>
 
                 {/* Messages Area */}
-                <div className="flex-1 flex flex-col bg-white dark:bg-gray-800">
+                <div className="flex-1 flex flex-col bg-white">
                     {activeConversationId ? (
                         <>
                             {/* Conversation Header */}
-                            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+                            <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                                     <User className="w-5 h-5 text-primary" />
                                 </div>
                                 <div className="flex-1">
-                                    <h2 className="font-bold text-gray-900 dark:text-white">
+                                    <h2 className="font-bold text-gray-900">
                                         {activeConversation?.productId ? "Product Inquiry" : "Order Support"}
                                     </h2>
                                     {activeConversation?.productId && (
@@ -300,7 +300,7 @@ function MessagesPageContent() {
                                             <div
                                                 className={`max-w-[70%] rounded-2xl px-4 py-2 ${isOwnMessage
                                                     ? "bg-primary text-white"
-                                                    : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
+                                                    : "bg-gray-100 text-gray-900"
                                                     }`}
                                             >
                                                 <p className="whitespace-pre-wrap wrap-break-word">{message.content}</p>
@@ -319,7 +319,7 @@ function MessagesPageContent() {
                             </div>
 
                             {/* Message Input */}
-                            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                            <div className="p-4 border-t border-gray-200">
                                 <div className="flex items-center gap-3">
                                     <input
                                         type="text"
@@ -332,7 +332,7 @@ function MessagesPageContent() {
                                             }
                                         }}
                                         placeholder="Type a message..."
-                                        className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="flex-1 px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
                                     <button
                                         onClick={handleSendMessage}
@@ -365,7 +365,7 @@ function MessagesPageContent() {
 export default function MessagesPagePage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
             </div>
         }>

@@ -35,33 +35,33 @@ export default function MaintenancePage() {
     return (
         <div className="p-8 max-w-4xl mx-auto">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     System Maintenance
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Perform system cleanup and optimization tasks
                 </p>
             </div>
 
             <div className="grid grid-cols-1 gap-6">
                 {/* Garbage Collection Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
                     <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center shrink-0">
-                            <Trash2 className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                        <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+                            <Trash2 className="w-6 h-6 text-orange-600" />
                         </div>
                         <div className="flex-1">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+                            <h3 className="text-lg font-bold text-slate-900 mb-1">
                                 Garbage Collection
                             </h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                            <p className="text-sm text-slate-500 mb-4">
                                 Remove abandoned draft land listings that haven't been updated in over 30 days to save database space.
                             </p>
 
                             {result && (
-                                <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl flex items-center gap-3">
+                                <div className="mb-4 p-4 bg-green-50 rounded-xl flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-green-600" />
-                                    <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                                    <p className="text-sm font-medium text-green-700">
                                         Cleanup complete! Removed {result.count} items.
                                     </p>
                                 </div>
@@ -70,7 +70,7 @@ export default function MaintenancePage() {
                             <button
                                 onClick={handleCleanup}
                                 disabled={loading}
-                                className="px-4 py-2 bg-slate-900 dark:bg-slate-700 text-white rounded-lg font-medium hover:bg-slate-800 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 flex items-center gap-2"
                             >
                                 {loading ? (
                                     <>

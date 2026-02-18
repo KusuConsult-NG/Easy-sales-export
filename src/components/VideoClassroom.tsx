@@ -152,13 +152,13 @@ export default function VideoClassroom({
 
     if (error) {
         return (
-            <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-900 rounded-xl">
+            <div className="flex items-center justify-center h-full bg-slate-100 rounded-xl">
                 <div className="text-center p-8">
                     <VideoOff className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">
                         Connection Error
                     </h3>
-                    <p className="text-slate-600 dark:text-slate-400">{error}</p>
+                    <p className="text-slate-600">{error}</p>
                     <button
                         onClick={() => window.location.reload()}
                         className="mt-4 px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"

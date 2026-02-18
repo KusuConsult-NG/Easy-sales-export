@@ -52,17 +52,17 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
                 Section E: Financial & Cooperative Details
             </h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-8">
+            <p className="text-slate-600 mb-8">
                 Provide your banking and cooperative membership information
             </p>
 
             <div className="space-y-6">
                 {/* Do you have a bank account? */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Do you have a bank account? *
                     </label>
                     <div className="flex gap-4">
@@ -73,8 +73,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.hasBankAccount === option.value
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -92,16 +92,16 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
 
                 {/* If YES, Bank Details */}
                 {data.hasBankAccount && (
-                    <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 space-y-6">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 space-y-6">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Bank Name *
                             </label>
                             <input
                                 type="text"
                                 value={data.bankName}
                                 onChange={(e) => updateData({ bankName: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                 placeholder="e.g., First Bank, GT Bank"
                             />
                             {errors.bankName && (
@@ -113,7 +113,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Account Number *
                             </label>
                             <input
@@ -121,7 +121,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                 value={data.accountNumber}
                                 onChange={(e) => updateData({ accountNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })}
                                 maxLength={10}
-                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                 placeholder="10-digit account number"
                             />
                             {errors.accountNumber && (
@@ -133,7 +133,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 BVN (Optional but recommended)
                             </label>
                             <input
@@ -141,7 +141,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                 value={data.bvn}
                                 onChange={(e) => updateData({ bvn: e.target.value.replace(/\D/g, "").slice(0, 11) })}
                                 maxLength={11}
-                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                 placeholder="11-digit BVN (optional)"
                             />
                         </div>
@@ -150,7 +150,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
 
                 {/* Cooperative Membership */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Are you currently a member of any cooperative? *
                     </label>
                     <div className="flex gap-4">
@@ -161,8 +161,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.isMemberOfCooperative === option.value
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -181,14 +181,14 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                 {/* If YES, Cooperative Name */}
                 {data.isMemberOfCooperative && (
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             If YES, Cooperative Name *
                         </label>
                         <input
                             type="text"
                             value={data.cooperativeName}
                             onChange={(e) => updateData({ cooperativeName: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Name of your cooperative"
                         />
                         {errors.cooperativeName && (
@@ -202,7 +202,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
 
                 {/* Willing to join EASY SALES cooperative */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Are you willing to join a EASY SALES-registered cooperative? *
                     </label>
                     <div className="flex gap-4">
@@ -213,8 +213,8 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToJoinCooperative === option.value
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -235,7 +235,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

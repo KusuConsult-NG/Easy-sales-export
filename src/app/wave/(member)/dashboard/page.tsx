@@ -67,14 +67,14 @@ export default function WaveDashboardPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900">
+        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50">
             <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* Hero Welcome Section */}
                 <div className="bg-linear-to-r from-emerald-700 to-emerald-700 rounded-3xl p-8 mb-8 text-white relative overflow-hidden">
@@ -113,64 +113,64 @@ export default function WaveDashboardPage() {
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                                <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                                <BookOpen className="w-6 h-6 text-blue-600" />
                             </div>
                             <TrendingUp className="w-5 h-5 text-green-500" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                        <p className="text-3xl font-bold text-gray-900 mb-1">
                             {stats.resourcesAccessed}
                         </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Resources Accessed</p>
+                        <p className="text-sm text-gray-600">Resources Accessed</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
-                                <Calendar className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
+                            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                                <Calendar className="w-6 h-6 text-emerald-700" />
                             </div>
                             <Sparkles className="w-5 h-5 text-emerald-600" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                        <p className="text-3xl font-bold text-gray-900 mb-1">
                             {stats.trainingsRegistered}
                         </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Trainings Registered</p>
+                        <p className="text-sm text-gray-600">Trainings Registered</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
-                                <Award className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
+                            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                                <Award className="w-6 h-6 text-emerald-700" />
                             </div>
                             <TrendingUp className="w-5 h-5 text-green-500" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                        <p className="text-3xl font-bold text-gray-900 mb-1">
                             {stats.trainingsCompleted}
                         </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Trainings Completed</p>
+                        <p className="text-sm text-gray-600">Trainings Completed</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-4">
-                            <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center">
-                                <Heart className="w-6 h-6 text-emerald-700 dark:text-emerald-500" />
+                            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                                <Heart className="w-6 h-6 text-emerald-700" />
                             </div>
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                        <p className="text-3xl font-bold text-gray-900 mb-1">
                             {stats.daysActive}
                         </p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Days Active</p>
+                        <p className="text-sm text-gray-600">Days Active</p>
                     </div>
                 </div>
 
                 {/* Main Content Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Recent Resources */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                                 <BookOpen className="w-5 h-5 text-emerald-700" />
                                 Recent Resources
                             </h2>
@@ -188,17 +188,17 @@ export default function WaveDashboardPage() {
                                 {recentResources.map((resource) => (
                                     <div
                                         key={resource.id}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+                                        className="p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition cursor-pointer"
                                         onClick={() => router.push(`/wave/resources`)}
                                     >
-                                        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                                        <h3 className="font-semibold text-gray-900 mb-1">
                                             {resource.title}
                                         </h3>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">
+                                        <p className="text-sm text-gray-600 mb-2 line-clamp-2">
                                             {resource.description}
                                         </p>
-                                        <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                                            <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full">
+                                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full">
                                                 {resource.category}
                                             </span>
                                             <span className="flex items-center gap-1">
@@ -210,16 +210,16 @@ export default function WaveDashboardPage() {
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                            <p className="text-center text-gray-500 py-8">
                                 No resources available yet
                             </p>
                         )}
                     </div>
 
                     {/* Upcoming Events */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                                 <Calendar className="w-5 h-5 text-emerald-700" />
                                 Upcoming Training
                             </h2>
@@ -237,16 +237,16 @@ export default function WaveDashboardPage() {
                                 {upcomingEvents.map((event) => (
                                     <div
                                         key={event.id}
-                                        className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer"
+                                        className="p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition cursor-pointer"
                                         onClick={() => router.push(`/wave/training`)}
                                     >
-                                        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                                        <h3 className="font-semibold text-gray-900 mb-1">
                                             {event.title}
                                         </h3>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                        <p className="text-sm text-gray-600 mb-2">
                                             {event.description}
                                         </p>
-                                        <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                                        <div className="flex items-center gap-4 text-xs text-gray-500">
                                             <span className="flex items-center gap-1">
                                                 <Calendar className="w-3 h-3" />
                                                 {new Date(event.date).toLocaleDateString()}
@@ -260,7 +260,7 @@ export default function WaveDashboardPage() {
                                 ))}
                             </div>
                         ) : (
-                            <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                            <p className="text-center text-gray-500 py-8">
                                 No upcoming training events
                             </p>
                         )}
@@ -268,38 +268,38 @@ export default function WaveDashboardPage() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="mt-8 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
+                <div className="mt-8 bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
+                    <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <button
                             onClick={() => router.push("/wave/profile")}
-                            className="p-4 bg-linear-to-br from-emerald-50 to-emerald-50 dark:from-emerald-900/20 dark:to-emerald-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-emerald-50 to-emerald-50 rounded-xl hover:shadow-md transition text-left"
                         >
                             <Heart className="w-8 h-8 text-emerald-700 mb-2" />
-                            <h3 className="font-semibold text-gray-900 dark:text-white">My Profile</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <h3 className="font-semibold text-gray-900">My Profile</h3>
+                            <p className="text-sm text-gray-600">
                                 View and update your information
                             </p>
                         </button>
 
                         <button
                             onClick={() => router.push("/wave/resources")}
-                            className="p-4 bg-linear-to-br from-blue-50 to-emerald-50 dark:from-blue-900/20 dark:to-emerald-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-blue-50 to-emerald-50 rounded-xl hover:shadow-md transition text-left"
                         >
                             <BookOpen className="w-8 h-8 text-blue-600 mb-2" />
-                            <h3 className="font-semibold text-gray-900 dark:text-white">Learning Resources</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <h3 className="font-semibold text-gray-900">Learning Resources</h3>
+                            <p className="text-sm text-gray-600">
                                 Access guides, templates & videos
                             </p>
                         </button>
 
                         <button
                             onClick={() => router.push("/wave/training")}
-                            className="p-4 bg-linear-to-br from-emerald-50 to-emerald-50 dark:from-emerald-900/20 dark:to-emerald-900/20 rounded-xl hover:shadow-md transition text-left"
+                            className="p-4 bg-linear-to-br from-emerald-50 to-emerald-50 rounded-xl hover:shadow-md transition text-left"
                         >
                             <Calendar className="w-8 h-8 text-emerald-700 mb-2" />
-                            <h3 className="font-semibold text-gray-900 dark:text-white">Training Events</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <h3 className="font-semibold text-gray-900">Training Events</h3>
+                            <p className="text-sm text-gray-600">
                                 Register for workshops & webinars
                             </p>
                         </button>

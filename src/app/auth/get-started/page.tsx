@@ -96,14 +96,14 @@ export default function GetStartedPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-12">
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
+                    <h1 className="text-4xl font-bold text-slate-900 mb-4">
                         Choose Your Module
                     </h1>
-                    <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+                    <p className="text-lg text-slate-600 max-w-2xl mx-auto">
                         Select which platform you'd like to join. You'll need to complete an onboarding
                         application and wait for admin approval before accessing your dashboard.
                     </p>
@@ -117,7 +117,7 @@ export default function GetStartedPage() {
                             <button
                                 key={module.id}
                                 onClick={() => router.push(module.onboardingUrl)}
-                                className="group relative bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 text-left border border-slate-200 dark:border-slate-700"
+                                className="group relative bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 text-left border border-slate-200"
                             >
                                 {/* Icon */}
                                 <div className={`w-16 h-16 rounded-xl bg-linear-to-br ${module.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
@@ -125,15 +125,15 @@ export default function GetStartedPage() {
                                 </div>
 
                                 {/* Content */}
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                <h3 className="text-xl font-bold text-slate-900 mb-2">
                                     {module.name}
                                 </h3>
-                                <p className="text-slate-600 dark:text-slate-400 mb-4">
+                                <p className="text-slate-600 mb-4">
                                     {module.description}
                                 </p>
 
                                 {/* Eligibility */}
-                                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-500">
+                                <div className="flex items-center gap-2 text-sm text-slate-500">
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
@@ -153,9 +153,9 @@ export default function GetStartedPage() {
 
                 {/* Help text */}
                 <div className="mt-12 text-center">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-sm text-slate-500">
                         Need help deciding?{" "}
-                        <a href="/help" className="text-blue-600 dark:text-blue-400 hover:underline">
+                        <a href="/help" className="text-blue-600 hover:underline">
                             Learn more about each module
                         </a>
                     </p>

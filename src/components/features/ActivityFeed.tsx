@@ -70,21 +70,21 @@ const getActivityIcon = (type: Activity["type"]) => {
 const getActivityColor = (type: Activity["type"]) => {
     switch (type) {
         case "investment":
-            return "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400";
+            return "bg-green-100 text-green-600";
         case "withdrawal":
-            return "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400";
+            return "bg-purple-100 text-purple-600";
         case "enrollment":
-            return "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400";
+            return "bg-blue-100 text-blue-600";
         case "order":
-            return "bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400";
+            return "bg-orange-100 text-orange-600";
     }
 };
 
 export default function ActivityFeed() {
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
+        <div className="bg-white rounded-2xl p-6 elevation-2">
             <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                <h3 className="text-lg font-bold text-slate-900">
                     Recent Activity
                 </h3>
                 <a
@@ -100,12 +100,12 @@ export default function ActivityFeed() {
                 {mockActivities.map((activity, index) => (
                     <div
                         key={activity.id}
-                        className="relative flex items-start gap-4 pb-4 last:pb-0 border-b border-slate-100 dark:border-slate-700 last:border-0 animate-[slideInUp_0.5s_ease-out]"
+                        className="relative flex items-start gap-4 pb-4 last:pb-0 border-b border-slate-100 last:border-0 animate-[slideInUp_0.5s_ease-out]"
                         style={{ animationDelay: `${index * 50}ms` }}
                     >
                         {/* Timeline Connector */}
                         {index < mockActivities.length - 1 && (
-                            <div className="absolute left-5 top-12 w-0.5 h-full bg-slate-200 dark:bg-slate-700" />
+                            <div className="absolute left-5 top-12 w-0.5 h-full bg-slate-200" />
                         )}
 
                         {/* Icon */}
@@ -119,7 +119,7 @@ export default function ActivityFeed() {
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-900 dark:text-white text-sm">
+                            <p className="font-semibold text-slate-900 text-sm">
                                 {activity.title}
                             </p>
                             {activity.amount && (
@@ -127,7 +127,7 @@ export default function ActivityFeed() {
                                     ₦{activity.amount.toLocaleString()}
                                 </p>
                             )}
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            <p className="text-xs text-slate-500 mt-1">
                                 {formatDistanceToNow(activity.timestamp, { addSuffix: true })}
                             </p>
                         </div>

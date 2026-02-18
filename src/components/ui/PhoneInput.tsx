@@ -62,7 +62,7 @@ const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
         return (
             <div className="w-full">
                 {label && (
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         {label}
                     </label>
                 )}
@@ -77,10 +77,10 @@ const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
                     onKeyDown={handleKeyDown}
                     className={`
                         w-full px-4 py-3 
-                        bg-slate-50 dark:bg-slate-900 
-                        border ${error ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}
+                        bg-slate-50 
+                        border ${error ? 'border-red-500' : 'border-slate-200'}
                         rounded-xl 
-                        text-slate-900 dark:text-white 
+                        text-slate-900 
                         placeholder:text-slate-400 
                         focus:outline-none focus:ring-2 
                         ${error ? 'focus:ring-red-500' : 'focus:ring-primary'}
@@ -92,7 +92,7 @@ const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
                 {error && (
                     <div className="mt-2 flex items-start gap-2">
                         <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                        <p className="text-sm text-red-600">{error}</p>
                     </div>
                 )}
             </div>

@@ -85,10 +85,10 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
                 Section A: Personal Identification
             </h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-8">
+            <p className="text-slate-600 mb-8">
                 Please provide your personal details as they appear on your National ID (NIN)
             </p>
 
@@ -96,14 +96,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* Name Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Surname (as on NIN) *
                         </label>
                         <input
                             type="text"
                             value={data.surname}
                             onChange={(e) => updateData({ surname: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Surname"
                         />
                         {errors.surname && (
@@ -115,14 +115,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             First Name (as on NIN) *
                         </label>
                         <input
                             type="text"
                             value={data.firstName}
                             onChange={(e) => updateData({ firstName: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="First Name"
                         />
                         {errors.firstName && (
@@ -134,14 +134,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Other Names
                         </label>
                         <input
                             type="text"
                             value={data.otherNames}
                             onChange={(e) => updateData({ otherNames: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Middle name (optional)"
                         />
                     </div>
@@ -150,14 +150,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* Date of Birth & Age */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Date of Birth *
                         </label>
                         <input
                             type="date"
                             value={data.dateOfBirth}
                             onChange={(e) => handleDateChange(e.target.value)}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         />
                         {errors.dateOfBirth && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
@@ -168,14 +168,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Age
                         </label>
                         <input
                             type="number"
                             value={data.age || ""}
                             readOnly
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-slate-100 dark:bg-slate-800 dark:text-white cursor-not-allowed"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-slate-100 cursor-not-allowed"
                             placeholder="Auto-calculated"
                         />
                     </div>
@@ -184,14 +184,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* Contact Information */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Phone Number (Primary) *
                         </label>
                         <input
                             type="tel"
                             value={data.phone}
                             onChange={(e) => updateData({ phone: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="08012345678"
                         />
                         {errors.phone && (
@@ -203,14 +203,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Alternative Phone Number
                         </label>
                         <input
                             type="tel"
                             value={data.alternativePhone}
                             onChange={(e) => updateData({ alternativePhone: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="08098765432 (optional)"
                         />
                     </div>
@@ -218,28 +218,28 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
 
                 {/* Email Address */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Email Address (if available)
                     </label>
                     <input
                         type="email"
                         value={data.email}
                         onChange={(e) => updateData({ email: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="youremail@example.com (optional)"
                     />
                 </div>
 
                 {/* Residential Address */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Residential Address *
                     </label>
                     <textarea
                         value={data.residentialAddress}
                         onChange={(e) => updateData({ residentialAddress: e.target.value })}
                         rows={3}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white resize-none"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 resize-none"
                         placeholder="Your current residential address"
                     />
                     {errors.residentialAddress && (
@@ -253,13 +253,13 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* State of Origin & LGA */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             State of Origin *
                         </label>
                         <select
                             value={data.stateOfOrigin}
                             onChange={(e) => updateData({ stateOfOrigin: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         >
                             <option value="">Select state</option>
                             {NIGERIAN_STATES.map((state) => (
@@ -277,14 +277,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Local Government Area (LGA) *
                         </label>
                         <input
                             type="text"
                             value={data.lgaOfOrigin}
                             onChange={(e) => updateData({ lgaOfOrigin: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Your LGA"
                         />
                         {errors.lgaOfOrigin && (
@@ -299,13 +299,13 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 {/* State of Residence & LGA */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             State of Residence *
                         </label>
                         <select
                             value={data.stateOfResidence}
                             onChange={(e) => updateData({ stateOfResidence: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         >
                             <option value="">Select state</option>
                             {NIGERIAN_STATES.map((state) => (
@@ -323,14 +323,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Local Government of Residence *
                         </label>
                         <input
                             type="text"
                             value={data.lgaOfResidence}
                             onChange={(e) => updateData({ lgaOfResidence: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Your current LGA"
                         />
                         {errors.lgaOfResidence && (
@@ -344,7 +344,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
 
                 {/* Marital Status */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Marital Status *
                     </label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -357,8 +357,8 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             <label
                                 key={status.value}
                                 className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.maritalStatus === status.value
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -382,20 +382,20 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 </div>
 
                 {/* Next of Kin Details */}
-                <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4">
                         Next of Kin Information
                     </h3>
                     <div className="space-y-6">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Next of Kin Name *
                             </label>
                             <input
                                 type="text"
                                 value={data.nextOfKinName}
                                 onChange={(e) => updateData({ nextOfKinName: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                 placeholder="Full name of next of kin"
                             />
                             {errors.nextOfKinName && (
@@ -408,14 +408,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Next of Kin Phone Number *
                                 </label>
                                 <input
                                     type="tel"
                                     value={data.nextOfKinPhone}
                                     onChange={(e) => updateData({ nextOfKinPhone: e.target.value })}
-                                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                     placeholder="08012345678"
                                 />
                                 {errors.nextOfKinPhone && (
@@ -427,14 +427,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Relationship with Next of Kin *
                                 </label>
                                 <input
                                     type="text"
                                     value={data.nextOfKinRelationship}
                                     onChange={(e) => updateData({ nextOfKinRelationship: e.target.value })}
-                                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                     placeholder="e.g., Spouse, Parent, Sibling"
                                 />
                                 {errors.nextOfKinRelationship && (

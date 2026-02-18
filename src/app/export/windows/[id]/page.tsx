@@ -72,7 +72,7 @@ export default function ExportWindowDetailPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
             </div>
         );
@@ -80,10 +80,10 @@ export default function ExportWindowDetailPage() {
 
     if (!windowData) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-8">
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
                 <AlertCircle className="w-16 h-16 text-slate-400 mb-4" />
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Export Window Not Found</h1>
-                <p className="text-slate-600 dark:text-slate-400 mb-6">The export opportunity you are looking for does not exist or is unavailable.</p>
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">Export Window Not Found</h1>
+                <p className="text-slate-600 mb-6">The export opportunity you are looking for does not exist or is unavailable.</p>
                 <Link href="/export/windows" className="px-6 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition">
                     Back to Export Windows
                 </Link>
@@ -145,7 +145,7 @@ export default function ExportWindowDetailPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-linear-to-r from-purple-600 to-pink-600 text-white py-8">
                 <div className="max-w-7xl mx-auto px-8">
@@ -183,7 +183,7 @@ export default function ExportWindowDetailPage() {
                     {/* Main Content */}
                     <div className="lg:col-span-2 space-y-8">
                         {/* Commodity Image */}
-                        <div className="relative h-96 bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                        <div className="relative h-96 bg-white rounded-2xl overflow-hidden shadow-xl">
                             <Image
                                 src={window.image}
                                 alt={window.commodity}
@@ -193,29 +193,29 @@ export default function ExportWindowDetailPage() {
                         </div>
 
                         {/* Description */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl p-6 shadow-lg">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                 About This Opportunity
                             </h2>
-                            <p className="text-lg text-slate-900 dark:text-white leading-relaxed">
+                            <p className="text-lg text-slate-900 leading-relaxed">
                                 {window.description}
                             </p>
                         </div>
 
                         {/* Specifications */}
                         {Object.keys(window.specifications).length > 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                            <div className="bg-white rounded-2xl p-6 shadow-lg">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                     Specifications
                                 </h2>
                                 <dl className="space-y-3">
                                     {Object.entries(window.specifications).map(([key, value]) => (
                                         <div
                                             key={key}
-                                            className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2"
+                                            className="flex justify-between border-b border-slate-200 pb-2"
                                         >
-                                            <dt className="font-semibold text-slate-900 dark:text-white">{key}</dt>
-                                            <dd className="text-slate-600 dark:text-slate-400">{String(value)}</dd>
+                                            <dt className="font-semibold text-slate-900">{key}</dt>
+                                            <dd className="text-slate-600">{String(value)}</dd>
                                         </div>
                                     ))}
                                 </dl>
@@ -224,33 +224,33 @@ export default function ExportWindowDetailPage() {
 
                         {/* Timeline */}
                         {window.timeline.length > 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                            <div className="bg-white rounded-2xl p-6 shadow-lg">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                     Investment Timeline
                                 </h2>
                                 <div className="space-y-4">
                                     {window.timeline.map((phase, index) => (
                                         <div key={index} className="flex gap-4">
                                             <div className="flex flex-col items-center">
-                                                <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                                                    <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+                                                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                                                    <span className="text-sm font-bold text-purple-600">
                                                         {index + 1}
                                                     </span>
                                                 </div>
                                                 {index < window.timeline.length - 1 && (
-                                                    <div className="w-0.5 h-16 bg-purple-200 dark:bg-purple-900/30 my-2"></div>
+                                                    <div className="w-0.5 h-16 bg-purple-200 my-2"></div>
                                                 )}
                                             </div>
                                             <div className="flex-1 pb-8">
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <h3 className="font-bold text-slate-900 dark:text-white">
+                                                    <h3 className="font-bold text-slate-900">
                                                         {phase.phase}
                                                     </h3>
-                                                    <span className="text-sm text-purple-600 dark:text-purple-400">
+                                                    <span className="text-sm text-purple-600">
                                                         ({phase.duration})
                                                     </span>
                                                 </div>
-                                                <p className="text-slate-600 dark:text-slate-400">{phase.description}</p>
+                                                <p className="text-slate-600">{phase.description}</p>
                                             </div>
                                         </div>
                                     ))}
@@ -260,15 +260,15 @@ export default function ExportWindowDetailPage() {
 
                         {/* Documents */}
                         {window.documents.length > 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                            <div className="bg-white rounded-2xl p-6 shadow-lg">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                     Required Documents
                                 </h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {window.documents.map((doc, index) => (
                                         <div
                                             key={index}
-                                            className="flex items-center gap-2 text-slate-900 dark:text-white"
+                                            className="flex items-center gap-2 text-slate-900"
                                         >
                                             <FileText className="w-4 h-4 text-purple-600" />
                                             {doc}
@@ -282,13 +282,13 @@ export default function ExportWindowDetailPage() {
                     {/* Sidebar */}
                     <div className="space-y-6">
                         {/* Investment Card */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg sticky top-8">
+                        <div className="bg-white rounded-2xl p-6 shadow-lg sticky top-8">
                             <div className="text-center mb-6">
-                                <div className="text-sm text-slate-600 dark:text-slate-400 mb-2">Minimum Investment</div>
-                                <div className="text-4xl font-bold text-purple-600 dark:text-purple-400 mb-4">
+                                <div className="text-sm text-slate-600 mb-2">Minimum Investment</div>
+                                <div className="text-4xl font-bold text-purple-600 mb-4">
                                     {window.minInvestment}
                                 </div>
-                                <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400 mb-4">
+                                <div className="flex items-center justify-center gap-2 text-green-600 mb-4">
                                     <TrendingUp className="w-5 h-5" />
                                     <span className="text-2xl font-bold">{window.projectedROI}</span>
                                     <span className="text-sm">Projected ROI</span>
@@ -296,14 +296,14 @@ export default function ExportWindowDetailPage() {
                             </div>
 
                             {/* Availability */}
-                            <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4 mb-6">
+                            <div className="bg-slate-50 rounded-xl p-4 mb-6">
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm text-slate-600 dark:text-slate-400">Available Spots</span>
-                                    <span className="font-bold text-slate-900 dark:text-white">
+                                    <span className="text-sm text-slate-600">Available Spots</span>
+                                    <span className="font-bold text-slate-900">
                                         {window.spotsLeft}/{window.totalSpots}
                                     </span>
                                 </div>
-                                <div className="w-full bg-slate-200 dark:bg-slate-600 rounded-full h-2">
+                                <div className="w-full bg-slate-200 rounded-full h-2">
                                     <div
                                         className="bg-purple-600 h-2 rounded-full"
                                         style={{ width: `${(window.spotsLeft / window.totalSpots) * 100}%` }}
@@ -315,19 +315,19 @@ export default function ExportWindowDetailPage() {
                             <div className="space-y-3 mb-6">
                                 <div className="flex items-center gap-2 text-sm">
                                     <Calendar className="w-4 h-4 text-slate-400" />
-                                    <span className="text-slate-600 dark:text-slate-400">Opens:</span>
-                                    <span className="font-semibold text-slate-900 dark:text-white">{window.openDate}</span>
+                                    <span className="text-slate-600">Opens:</span>
+                                    <span className="font-semibold text-slate-900">{window.openDate}</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm">
                                     <Clock className="w-4 h-4 text-slate-400" />
-                                    <span className="text-slate-600 dark:text-slate-400">Closes:</span>
-                                    <span className="font-semibold text-slate-900 dark:text-white">{window.closeDate}</span>
+                                    <span className="text-slate-600">Closes:</span>
+                                    <span className="font-semibold text-slate-900">{window.closeDate}</span>
                                 </div>
                             </div>
 
                             {/* Investment Amount Input */}
                             <div className="mb-4">
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Investment Amount (₦)
                                 </label>
                                 <input
@@ -335,14 +335,14 @@ export default function ExportWindowDetailPage() {
                                     value={investmentAmount}
                                     onChange={(e) => setInvestmentAmount(Number(e.target.value))}
                                     min={windowData.minInvestment}
-                                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-purple-600"
+                                    className="w-full px-4 py-3 border border-slate-300 bg-white text-slate-900 rounded-xl focus:ring-2 focus:ring-purple-600"
                                 />
                             </div>
 
                             {/* Error Display */}
                             {error && (
-                                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
-                                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+                                    <p className="text-sm text-red-600">{error}</p>
                                 </div>
                             )}
 
@@ -362,7 +362,7 @@ export default function ExportWindowDetailPage() {
                                         "Invest Now"
                                     )}
                                 </button>
-                                <button className="w-full px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+                                <button className="w-full px-6 py-3 bg-slate-100 text-slate-900 font-semibold rounded-xl hover:bg-slate-200 transition">
                                     Save for Later
                                 </button>
                             </div>
@@ -370,13 +370,13 @@ export default function ExportWindowDetailPage() {
 
                         {/* Benefits */}
                         {window.benefits.length > 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                            <div className="bg-white rounded-2xl p-6 shadow-lg">
+                                <h3 className="text-xl font-bold text-slate-900 mb-4">
                                     Investment Benefits
                                 </h3>
                                 <ul className="space-y-3">
                                     {window.benefits.map((benefit, index) => (
-                                        <li key={index} className="flex items-start gap-2 text-sm text-slate-900 dark:text-white">
+                                        <li key={index} className="flex items-start gap-2 text-sm text-slate-900">
                                             <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
                                             {benefit}
                                         </li>
@@ -386,12 +386,12 @@ export default function ExportWindowDetailPage() {
                         )}
 
                         {/* Risk Info */}
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-6">
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6">
                             <div className="flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="font-bold text-amber-900 dark:text-amber-300 mb-2">Investment Notice</h4>
-                                    <p className="text-sm text-amber-800 dark:text-amber-400">
+                                    <h4 className="font-bold text-amber-900 mb-2">Investment Notice</h4>
+                                    <p className="text-sm text-amber-800">
                                         All investments carry risk. Past performance does not guarantee future results. Please review all documentation before investing.
                                     </p>
                                 </div>

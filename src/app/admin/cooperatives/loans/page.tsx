@@ -178,59 +178,59 @@ export default function AdminLoansPage() {
     return (
         <div className="p-8">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     Loan Applications
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Review and manage cooperative loan applications
                 </p>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-blue-600" />
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Total Applications</p>
+                        <p className="text-sm text-slate-600">Total Applications</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.total}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                        <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                            <Clock className="w-5 h-5 text-yellow-600" />
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Pending Review</p>
+                        <p className="text-sm text-slate-600">Pending Review</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.pending}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stats.pending}</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                            <CheckCircle className="w-5 h-5 text-green-600" />
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Approved</p>
+                        <p className="text-sm text-slate-600">Approved</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.approved}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stats.approved}</p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+                <div className="bg-white rounded-xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                            <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                            <XCircle className="w-5 h-5 text-red-600" />
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Rejected</p>
+                        <p className="text-sm text-slate-600">Rejected</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.rejected}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stats.rejected}</p>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg mb-6">
+            <div className="bg-white rounded-xl p-6 shadow-lg mb-6">
                 <div className="flex flex-col md:flex-row gap-4">
                     <div className="flex-1">
                         <div className="relative">
@@ -240,7 +240,7 @@ export default function AdminLoansPage() {
                                 placeholder="Search by name, email, product, or purpose..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                             />
                         </div>
                     </div>
@@ -251,7 +251,7 @@ export default function AdminLoansPage() {
                                 onClick={() => setFilterStatus(status)}
                                 className={`px - 4 py - 2 rounded - lg font - medium transition - colors ${filterStatus === status
                                     ? "bg-primary text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600"
+                                    : "bg-slate-100 text-slate-900 hover:bg-slate-200"
                                     } `}
                             >
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -262,19 +262,19 @@ export default function AdminLoansPage() {
             </div>
 
             {/* Applications Table */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                 {isLoading ? (
                     <div className="p-12 text-center">
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                        <p className="text-slate-600 dark:text-slate-400">Loading applications...</p>
+                        <p className="text-slate-600">Loading applications...</p>
                     </div>
                 ) : filteredApplications.length === 0 ? (
                     <div className="p-12 text-center">
-                        <FileText className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                        <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">
                             No Loan Applications Found
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             {searchQuery || filterStatus !== "all"
                                 ? "Try adjusting your filters"
                                 : "No loan applications have been submitted yet"}
@@ -283,78 +283,78 @@ export default function AdminLoansPage() {
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+                            <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Applicant
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Loan Product
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Amount
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Duration
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Status
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Applied
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         Actions
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                            <tbody className="divide-y divide-slate-200">
                                 {filteredApplications.map((app) => (
-                                    <tr key={app.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                    <tr key={app.id} className="hover:bg-slate-50">
                                         <td className="px-6 py-4">
                                             <div>
-                                                <p className="font-semibold text-slate-900 dark:text-white">
+                                                <p className="font-semibold text-slate-900">
                                                     {app.userName || "Unknown"}
                                                 </p>
-                                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                                <p className="text-sm text-slate-500">
                                                     {app.userEmail}
                                                 </p>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <p className="font-medium text-slate-900 dark:text-white">
+                                            <p className="font-medium text-slate-900">
                                                 {app.productName}
                                             </p>
-                                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                                            <p className="text-sm text-slate-500">
                                                 {app.interestRate}% APR
                                             </p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <p className="font-bold text-slate-900 dark:text-white">
+                                            <p className="font-bold text-slate-900">
                                                 {formatCurrency(app.amount)}
                                             </p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                                            <p className="text-xs text-slate-500">
                                                 {formatCurrency(app.monthlyPayment)}/month
                                             </p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <p className="text-slate-900 dark:text-white">
+                                            <p className="text-slate-900">
                                                 {app.durationMonths} months
                                             </p>
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${app.status === "pending"
-                                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                                ? "bg-yellow-100 text-yellow-700"
                                                 : app.status === "approved" || app.status === "disbursed" || app.status === "active"
-                                                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                                    ? "bg-green-100 text-green-700"
                                                     : app.status === "rejected"
-                                                        ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                                        : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                                                        ? "bg-red-100 text-red-700"
+                                                        : "bg-blue-100 text-blue-700"
                                                 } `}>
                                                 {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                                        <td className="px-6 py-4 text-sm text-slate-600">
                                             {new Date(app.appliedAt).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4">
@@ -379,9 +379,9 @@ export default function AdminLoansPage() {
             {/* Details Modal */}
             {isDetailsModalOpen && selectedApplication && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-slate-200">
+                            <h2 className="text-2xl font-bold text-slate-900">
                                 Loan Application Details
                             </h2>
                         </div>
@@ -389,19 +389,19 @@ export default function AdminLoansPage() {
                         <div className="p-6 space-y-6">
                             {/* Applicant Info */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3">
+                                <h3 className="text-lg font-bold text-slate-900 mb-3">
                                     Applicant Information
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Name</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Name</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedApplication.userName || "Unknown"}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Email</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Email</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedApplication.userEmail}
                                         </p>
                                     </div>
@@ -410,43 +410,43 @@ export default function AdminLoansPage() {
 
                             {/* Loan Details */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-3">
+                                <h3 className="text-lg font-bold text-slate-900 mb-3">
                                     Loan Details
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Product</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Product</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedApplication.productName}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Amount</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Amount</p>
+                                        <p className="font-semibold text-slate-900">
                                             {formatCurrency(selectedApplication.amount)}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Interest Rate</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Interest Rate</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedApplication.interestRate}% APR
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Duration</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Duration</p>
+                                        <p className="font-semibold text-slate-900">
                                             {selectedApplication.durationMonths} months
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Monthly Payment</p>
-                                        <p className="font-semibold text-green-600 dark:text-green-400">
+                                        <p className="text-sm text-slate-600">Monthly Payment</p>
+                                        <p className="font-semibold text-green-600">
                                             {formatCurrency(selectedApplication.monthlyPayment)}
                                         </p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">Application Date</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="text-sm text-slate-600">Application Date</p>
+                                        <p className="font-semibold text-slate-900">
                                             {new Date(selectedApplication.appliedAt).toLocaleDateString()}
                                         </p>
                                     </div>
@@ -455,33 +455,33 @@ export default function AdminLoansPage() {
 
                             {/* Purpose */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">
                                     Purpose
                                 </h3>
-                                <p className="text-slate-600 dark:text-slate-400">
+                                <p className="text-slate-600">
                                     {selectedApplication.purpose}
                                 </p>
                             </div>
 
                             {/* Status & Rejection Reason */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">
                                     Status
                                 </h3>
                                 <span className={`inline-flex px-3 py-1 rounded-full text-sm font-bold ${selectedApplication.status === "pending"
-                                    ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
+                                    ? "bg-yellow-100 text-yellow-700"
                                     : selectedApplication.status === "approved" || selectedApplication.status === "disbursed" || selectedApplication.status === "active"
-                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                        ? "bg-green-100 text-green-700"
+                                        : "bg-red-100 text-red-700"
                                     } `}>
                                     {selectedApplication.status.charAt(0).toUpperCase() + selectedApplication.status.slice(1)}
                                 </span>
                                 {selectedApplication.rejectionReason && (
-                                    <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                                        <p className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">
+                                    <div className="mt-2 p-3 bg-red-50 rounded-lg">
+                                        <p className="text-sm font-semibold text-red-900 mb-1">
                                             Rejection Reason:
                                         </p>
-                                        <p className="text-sm text-red-700 dark:text-red-300">
+                                        <p className="text-sm text-red-700">
                                             {selectedApplication.rejectionReason}
                                         </p>
                                     </div>
@@ -490,7 +490,7 @@ export default function AdminLoansPage() {
                         </div>
 
                         {/* Actions */}
-                        <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex gap-4">
+                        <div className="p-6 border-t border-slate-200 flex gap-4">
                             {selectedApplication.status === "pending" && (
                                 <>
                                     <button
@@ -523,7 +523,7 @@ export default function AdminLoansPage() {
                             )}
                             <button
                                 onClick={() => setIsDetailsModalOpen(false)}
-                                className="px-6 py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold rounded-xl transition-all"
+                                className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-xl transition-all"
                             >
                                 Close
                             </button>

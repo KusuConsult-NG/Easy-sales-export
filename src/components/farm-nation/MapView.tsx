@@ -134,7 +134,7 @@ export default function MapView({ listings }: { listings: LandListing[] }) {
     }, [listings]);
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
             <div
                 ref={mapContainerRef}
                 className="h-[600px] w-full"
@@ -142,8 +142,8 @@ export default function MapView({ listings }: { listings: LandListing[] }) {
             />
 
             {/* Legend */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Land Categories:</p>
+            <div className="p-4 border-t border-slate-200">
+                <p className="text-sm font-semibold text-slate-900 mb-3">Land Categories:</p>
                 <div className="flex flex-wrap gap-3">
                     {[
                         { name: "Farmland", color: "#10b981", icon: "🌾" },
@@ -158,7 +158,7 @@ export default function MapView({ listings }: { listings: LandListing[] }) {
                                 className="w-4 h-4 rounded-full border-2 border-white shadow"
                                 style={{ backgroundColor: cat.color }}
                             />
-                            <span className="text-xs text-slate-600 dark:text-slate-400">
+                            <span className="text-xs text-slate-600">
                                 {cat.icon} {cat.name}
                             </span>
                         </div>

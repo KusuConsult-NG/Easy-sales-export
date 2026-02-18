@@ -20,7 +20,7 @@ export default async function MarketplaceLandingPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
 
 
             {/* Hero Section */}
@@ -70,31 +70,31 @@ export default async function MarketplaceLandingPage() {
             {/* Stats Section */}
             <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-16 relative z-10">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-12 md:mb-16">
-                    <div className="bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                    <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">5,000+</div>
-                        <div className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-medium">Products Listed</div>
+                        <div className="text-xs md:text-base text-slate-600 font-medium">Products Listed</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                    <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">12,000+</div>
-                        <div className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-medium">Active Traders</div>
+                        <div className="text-xs md:text-base text-slate-600 font-medium">Active Traders</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                    <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">₦2.5B+</div>
-                        <div className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-medium">Total Traded</div>
+                        <div className="text-xs md:text-base text-slate-600 font-medium">Total Traded</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
+                    <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">4.7/5</div>
-                        <div className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-medium">Seller Rating</div>
+                        <div className="text-xs md:text-base text-slate-600 font-medium">Seller Rating</div>
                     </div>
                 </div>
             </div>
 
             {/* Featured Products */}
             <div className="max-w-7xl mx-auto px-8 py-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-4">
+                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-4">
                     Featured Products
                 </h2>
-                <p className="text-center text-slate-600 dark:text-slate-400 mb-12 max-w-2xl mx-auto">
+                <p className="text-center text-slate-600 mb-12 max-w-2xl mx-auto">
                     Premium agricultural commodities from verified sellers across Nigeria
                 </p>
 
@@ -102,8 +102,8 @@ export default async function MarketplaceLandingPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
                         {products.map((product) => (
                             <Link href={`/marketplace/products/${product.id}`} key={product.id} className="block group">
-                                <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift transition-all duration-300">
-                                    <div className="relative h-56 bg-slate-200 dark:bg-slate-700">
+                                <div className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift transition-all duration-300">
+                                    <div className="relative h-56 bg-slate-200">
                                         {product.images && product.images[0] ? (
                                             <Image
                                                 src={product.images[0]}
@@ -125,10 +125,10 @@ export default async function MarketplaceLandingPage() {
                                         )}
                                     </div>
                                     <div className="p-6">
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">
+                                        <h3 className="text-xl font-bold text-slate-900 mb-2 line-clamp-1">
                                             {product.title}
                                         </h3>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 flex items-center gap-1">
+                                        <p className="text-sm text-slate-600 mb-4 flex items-center gap-1">
                                             📍 {product.location?.state || "Nigeria"}, {product.location?.lga || ""}
                                         </p>
                                         <div className="flex items-center gap-2 mb-4">
@@ -139,7 +139,7 @@ export default async function MarketplaceLandingPage() {
                                             <span className="text-slate-400 text-sm">•</span>
                                             <span className="text-sm text-slate-500">{product.sellerName || "Verified Seller"}</span>
                                         </div>
-                                        <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                                        <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
                                             <div>
                                                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Price</p>
                                                 <span className="text-xl font-bold text-green-600">
@@ -147,7 +147,7 @@ export default async function MarketplaceLandingPage() {
                                                 </span>
                                                 <span className="text-sm text-slate-500 font-medium">/{product.unit}</span>
                                             </div>
-                                            <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-colors duration-300">
+                                            <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-colors duration-300">
                                                 <ArrowRight className="w-5 h-5 text-green-600 group-hover:text-white" />
                                             </div>
                                         </div>
@@ -157,9 +157,9 @@ export default async function MarketplaceLandingPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center py-12 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
                         <Package className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-1">No products yet</h3>
+                        <h3 className="text-lg font-medium text-slate-900 mb-1">No products yet</h3>
                         <p className="text-slate-500 mb-6">Be the first to list your agricultural products</p>
                         <Link
                             href="/marketplace/onboarding"
@@ -186,35 +186,35 @@ export default async function MarketplaceLandingPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
                     {/* Buyer Benefits */}
                     <div>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-8">
+                        <h3 className="text-2xl font-bold text-slate-900 mb-8">
                             For Buyers
                         </h3>
                         <div className="space-y-6">
                             <div className="flex items-start gap-4">
-                                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center shrink-0">
+                                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
                                     <Shield className="w-6 h-6 text-green-600" />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-slate-900 dark:text-white mb-2">Verified Sellers</h4>
-                                    <p className="text-slate-600 dark:text-slate-400">All sellers are verified with quality guarantees and secure payment protection.</p>
+                                    <h4 className="font-bold text-slate-900 mb-2">Verified Sellers</h4>
+                                    <p className="text-slate-600">All sellers are verified with quality guarantees and secure payment protection.</p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
-                                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center shrink-0">
+                                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
                                     <Package className="w-6 h-6 text-green-600" />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-slate-900 dark:text-white mb-2">Quality Products</h4>
-                                    <p className="text-slate-600 dark:text-slate-400">Access premium agricultural commodities with detailed certifications and specifications.</p>
+                                    <h4 className="font-bold text-slate-900 mb-2">Quality Products</h4>
+                                    <p className="text-slate-600">Access premium agricultural commodities with detailed certifications and specifications.</p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
-                                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center shrink-0">
+                                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
                                     <TrendingUp className="w-6 h-6 text-green-600" />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-slate-900 dark:text-white mb-2">Bulk Pricing</h4>
-                                    <p className="text-slate-600 dark:text-slate-400">Competitive prices with special discounts for bulk orders and regular customers.</p>
+                                    <h4 className="font-bold text-slate-900 mb-2">Bulk Pricing</h4>
+                                    <p className="text-slate-600">Competitive prices with special discounts for bulk orders and regular customers.</p>
                                 </div>
                             </div>
                         </div>
@@ -222,36 +222,36 @@ export default async function MarketplaceLandingPage() {
 
                     {/* Seller Benefits */}
                     <div>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-8">
+                        <h3 className="text-2xl font-bold text-slate-900 mb-8">
                             For Sellers
                         </h3>
                         <div className="space-y-6">
                             <div className="flex items-start gap-4">
                                 <CheckCircle className="w-6 h-6 text-green-600 shrink-0 mt-1" />
                                 <div>
-                                    <h4 className="font-bold text-slate-900 dark:text-white mb-1">Nationwide Reach</h4>
-                                    <p className="text-slate-600 dark:text-slate-400">Connect with buyers across all 36 states and FCT</p>
+                                    <h4 className="font-bold text-slate-900 mb-1">Nationwide Reach</h4>
+                                    <p className="text-slate-600">Connect with buyers across all 36 states and FCT</p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
                                 <CheckCircle className="w-6 h-6 text-green-600 shrink-0 mt-1" />
                                 <div>
-                                    <h4 className="font-bold text-slate-900 dark:text-white mb-1">Secure Payments</h4>
-                                    <p className="text-slate-600 dark:text-slate-400">Escrow protection ensures you get paid for every sale</p>
+                                    <h4 className="font-bold text-slate-900 mb-1">Secure Payments</h4>
+                                    <p className="text-slate-600">Escrow protection ensures you get paid for every sale</p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
                                 <CheckCircle className="w-6 h-6 text-green-600 shrink-0 mt-1" />
                                 <div>
-                                    <h4 className="font-bold text-slate-900 dark:text-white mb-1">Marketing Support</h4>
-                                    <p className="text-slate-600 dark:text-slate-400">Featured listings and promotional opportunities</p>
+                                    <h4 className="font-bold text-slate-900 mb-1">Marketing Support</h4>
+                                    <p className="text-slate-600">Featured listings and promotional opportunities</p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
                                 <CheckCircle className="w-6 h-6 text-green-600 shrink-0 mt-1" />
                                 <div>
-                                    <h4 className="font-bold text-slate-900 dark:text-white mb-1">Analytics Dashboard</h4>
-                                    <p className="text-slate-600 dark:text-slate-400">Track sales, views, and customer insights</p>
+                                    <h4 className="font-bold text-slate-900 mb-1">Analytics Dashboard</h4>
+                                    <p className="text-slate-600">Track sales, views, and customer insights</p>
                                 </div>
                             </div>
                         </div>

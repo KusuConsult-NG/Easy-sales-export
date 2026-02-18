@@ -39,7 +39,7 @@ export default function OnboardingGuide({
     return (
         <div className="min-h-[60vh] flex items-center justify-center p-8">
             <div className="max-w-4xl w-full">
-                <div className="bg-linear-to-br from-primary/5 to-primary/10 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-8 md:p-12 border border-primary/20 dark:border-slate-700 shadow-2xl">
+                <div className="bg-linear-to-br from-primary/5 to-primary/10 rounded-3xl p-8 md:p-12 border border-primary/20 shadow-2xl">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
                         {/* Left: Content */}
                         <div>
@@ -49,7 +49,7 @@ export default function OnboardingGuide({
                                     {icon}
                                 </div>
                                 <div>
-                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+                                    <h1 className="text-3xl font-bold text-slate-900">
                                         {title}
                                     </h1>
                                     {steps.length > 0 && (
@@ -61,7 +61,7 @@ export default function OnboardingGuide({
                             </div>
 
                             {/* Description */}
-                            <p className="text-slate-600 dark:text-white mb-8 text-lg">
+                            <p className="text-slate-600 mb-8 text-lg">
                                 {description}
                             </p>
 
@@ -72,27 +72,27 @@ export default function OnboardingGuide({
                                         <div
                                             key={index}
                                             className={`flex items-start gap-3 p-4 rounded-xl transition-all ${step.completed
-                                                ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
-                                                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                                                ? "bg-green-50 border border-green-200"
+                                                : "bg-white border border-slate-200"
                                                 }`}
                                         >
                                             <div
                                                 className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${step.completed
-                                                    ? "bg-green-600 dark:bg-green-500"
-                                                    : "bg-slate-200 dark:bg-slate-700"
+                                                    ? "bg-green-600"
+                                                    : "bg-slate-200"
                                                     }`}
                                             >
                                                 {step.completed ? (
                                                     <CheckCircle className="w-5 h-5 text-white" />
                                                 ) : (
-                                                    <Lock className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                                                    <Lock className="w-5 h-5 text-slate-500" />
                                                 )}
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="font-bold text-slate-900 dark:text-white mb-1">
+                                                <h3 className="font-bold text-slate-900 mb-1">
                                                     {step.title}
                                                 </h3>
-                                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                <p className="text-sm text-slate-600">
                                                     {step.description}
                                                 </p>
                                                 {!step.completed && step.action && (
@@ -122,13 +122,13 @@ export default function OnboardingGuide({
                             )}
 
                             {allStepsCompleted && (
-                                <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
-                                    <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400 shrink-0" />
+                                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+                                    <CheckCircle className="w-6 h-6 text-green-600 shrink-0" />
                                     <div>
-                                        <h3 className="font-bold text-green-900 dark:text-green-100">
+                                        <h3 className="font-bold text-green-900">
                                             You're all set!
                                         </h3>
-                                        <p className="text-sm text-green-700 dark:text-green-300">
+                                        <p className="text-sm text-green-700">
                                             You can now access all features of this service.
                                         </p>
                                     </div>

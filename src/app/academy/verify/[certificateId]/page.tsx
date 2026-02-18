@@ -49,28 +49,28 @@ export default function CertificateVerificationPage(props: CertificateVerificati
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Verifying certificate...</p>
+                    <p className="text-slate-600">Verifying certificate...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12">
+        <div className="min-h-screen bg-slate-50 py-12">
             <div className="max-w-2xl mx-auto px-4">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
                     {error || !verification ? (
                         <div className="p-12 text-center">
-                            <div className="w-24 h-24 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
                                 <XCircle className="w-16 h-16 text-red-600" />
                             </div>
-                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                            <h1 className="text-3xl font-bold text-slate-900 mb-4">
                                 Certificate Not Found
                             </h1>
-                            <p className="text-slate-600 dark:text-slate-400 mb-8">
+                            <p className="text-slate-600 mb-8">
                                 {error || "This certificate ID does not exist in our records."}
                             </p>
                             <Link
@@ -94,43 +94,43 @@ export default function CertificateVerificationPage(props: CertificateVerificati
                             {/* Certificate Details */}
                             <div className="p-8 space-y-6">
                                 <div>
-                                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6 text-center">
+                                    <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">
                                         Certificate Details
                                     </h2>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                    <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-lg">
                                         <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                             <User className="w-5 h-5 text-primary" />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Recipient</p>
-                                            <p className="font-bold text-lg text-slate-900 dark:text-white">
+                                            <p className="text-sm text-slate-600 mb-1">Recipient</p>
+                                            <p className="font-bold text-lg text-slate-900">
                                                 {verification.userName}
                                             </p>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                    <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-lg">
                                         <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                             <BookOpen className="w-5 h-5 text-primary" />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Course</p>
-                                            <p className="font-bold text-lg text-slate-900 dark:text-white">
+                                            <p className="text-sm text-slate-600 mb-1">Course</p>
+                                            <p className="font-bold text-lg text-slate-900">
                                                 {verification.courseTitle}
                                             </p>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                    <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-lg">
                                         <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                             <Calendar className="w-5 h-5 text-primary" />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Completion Date</p>
-                                            <p className="font-bold text-lg text-slate-900 dark:text-white">
+                                            <p className="text-sm text-slate-600 mb-1">Completion Date</p>
+                                            <p className="font-bold text-lg text-slate-900">
                                                 {new Date(verification.completionDate).toLocaleDateString('en-US', {
                                                     year: 'numeric',
                                                     month: 'long',
@@ -141,12 +141,12 @@ export default function CertificateVerificationPage(props: CertificateVerificati
                                     </div>
 
                                     {verification.grade && (
-                                        <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                        <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-lg">
                                             <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                                 <Award className="w-5 h-5 text-primary" />
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Final Grade</p>
+                                                <p className="text-sm text-slate-600 mb-1">Final Grade</p>
                                                 <p className="font-bold text-lg text-green-600">
                                                     {verification.grade}%
                                                 </p>
@@ -154,13 +154,13 @@ export default function CertificateVerificationPage(props: CertificateVerificati
                                         </div>
                                     )}
 
-                                    <div className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                    <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-lg">
                                         <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
                                             <CheckCircle className="w-5 h-5 text-primary" />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Certificate ID</p>
-                                            <p className="font-mono text-sm font-semibold text-slate-900 dark:text-white">
+                                            <p className="text-sm text-slate-600 mb-1">Certificate ID</p>
+                                            <p className="font-mono text-sm font-semibold text-slate-900">
                                                 {verification.id.toUpperCase()}
                                             </p>
                                         </div>
@@ -168,12 +168,12 @@ export default function CertificateVerificationPage(props: CertificateVerificati
                                 </div>
 
                                 {/* Issued By */}
-                                <div className="pt-6 border-t border-slate-200 dark:border-slate-700 text-center">
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Issued by</p>
-                                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                                <div className="pt-6 border-t border-slate-200 text-center">
+                                    <p className="text-sm text-slate-600 mb-1">Issued by</p>
+                                    <p className="text-lg font-bold text-slate-900">
                                         Easy Sales Export Academy
                                     </p>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                                    <p className="text-sm text-slate-500">
                                         Empowering African Exporters
                                     </p>
                                 </div>
@@ -188,7 +188,7 @@ export default function CertificateVerificationPage(props: CertificateVerificati
                                     </Link>
                                     <Link
                                         href="/academy"
-                                        className="flex-1 px-6 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold rounded-lg transition-all text-center"
+                                        className="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold rounded-lg transition-all text-center"
                                     >
                                         Explore Academy
                                     </Link>
@@ -200,7 +200,7 @@ export default function CertificateVerificationPage(props: CertificateVerificati
 
                 {/* Security Notice */}
                 <div className="mt-8 text-center">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-sm text-slate-500">
                         🔒 This verification was performed securely using blockchain-verified records
                     </p>
                 </div>

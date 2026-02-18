@@ -96,32 +96,32 @@ export default function OrdersPage() {
     const getStatusConfig = (status: string) => {
         const configs = {
             pending_payment: {
-                bg: "bg-yellow-100 dark:bg-yellow-900/30",
-                text: "text-yellow-700 dark:text-yellow-300",
+                bg: "bg-yellow-100",
+                text: "text-yellow-700",
                 label: "Pending Payment",
                 icon: Clock
             },
             processing: {
-                bg: "bg-blue-100 dark:bg-blue-900/30",
-                text: "text-blue-700 dark:text-blue-300",
+                bg: "bg-blue-100",
+                text: "text-blue-700",
                 label: "Processing",
                 icon: Clock
             },
             in_transit: {
-                bg: "bg-orange-100 dark:bg-orange-900/30",
-                text: "text-orange-700 dark:text-orange-300",
+                bg: "bg-orange-100",
+                text: "text-orange-700",
                 label: "In Transit",
                 icon: Truck
             },
             delivered: {
-                bg: "bg-green-100 dark:bg-green-900/30",
-                text: "text-green-700 dark:text-green-300",
+                bg: "bg-green-100",
+                text: "text-green-700",
                 label: "Delivered",
                 icon: CheckCircle
             },
             cancelled: {
-                bg: "bg-red-100 dark:bg-red-900/30",
-                text: "text-red-700 dark:text-red-300",
+                bg: "bg-red-100",
+                text: "text-red-700",
                 label: "Cancelled",
                 icon: XCircle
             }
@@ -137,14 +137,14 @@ export default function OrdersPage() {
     });
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
-            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+            <div className="bg-white border-b border-slate-200">
                 <div className="max-w-7xl mx-auto px-8 py-6">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         My Orders
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Track and manage all your marketplace orders. All payments are held in <span className="font-bold text-primary">Escrow</span> until you confirm receipt.
                     </p>
                 </div>
@@ -152,7 +152,7 @@ export default function OrdersPage() {
 
             <div className="max-w-7xl mx-auto px-8 py-8">
                 {/* Filters Bar */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-8">
+                <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Search */}
                         <div className="relative">
@@ -162,7 +162,7 @@ export default function OrdersPage() {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search by Order ID..."
-                                className="w-full pl-12 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
                             />
                         </div>
 
@@ -174,7 +174,7 @@ export default function OrdersPage() {
                                     onClick={() => setFilterStatus(status)}
                                     className={`px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition-colors ${filterStatus === status
                                         ? "bg-green-600 text-white"
-                                        : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-600"
+                                        : "bg-slate-100 text-slate-900 hover:bg-slate-200"
                                         }`}
                                 >
                                     {status === "all" ? "All" : status.replace("_", " ")}
@@ -191,9 +191,9 @@ export default function OrdersPage() {
                             <Loader2 className="w-12 h-12 animate-spin text-primary" />
                         </div>
                     ) : visibleOrders.length === 0 ? (
-                        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-12 text-center">
-                            <Package className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+                            <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 No orders found
                             </h3>
                             <Link
@@ -215,7 +215,7 @@ export default function OrdersPage() {
                             return (
                                 <div
                                     key={order.orderId}
-                                    className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 hover:shadow-md transition-shadow"
+                                    className="bg-white rounded-xl border border-slate-200 p-6 hover:shadow-md transition-shadow"
                                 >
                                     {/* Header */}
                                     <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
@@ -224,17 +224,17 @@ export default function OrdersPage() {
                                                 <StatusIcon className={`w-6 h-6 ${statusConfig.text}`} />
                                             </div>
                                             <div>
-                                                <h3 className="font-bold text-lg text-slate-900 dark:text-white">
+                                                <h3 className="font-bold text-lg text-slate-900">
                                                     {displayTitle}
                                                 </h3>
-                                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                <p className="text-sm text-slate-600">
                                                     Order {order.orderId} • {order.date}
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             {order.paymentStatus === "escrow_held" && (
-                                                <div className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-full flex items-center gap-1">
+                                                <div className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full flex items-center gap-1">
                                                     <ShieldCheck className="w-3 h-3" />
                                                     Escrow Secured
                                                 </div>
@@ -248,24 +248,24 @@ export default function OrdersPage() {
                                     {/* Details Grid */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                                         <div>
-                                            <span className="text-sm text-slate-500 dark:text-slate-400">Total Amount</span>
-                                            <p className="font-semibold text-slate-900 dark:text-white">{formatCurrency(order.totalAmount)}</p>
+                                            <span className="text-sm text-slate-500">Total Amount</span>
+                                            <p className="font-semibold text-slate-900">{formatCurrency(order.totalAmount)}</p>
                                         </div>
                                         <div>
-                                            <span className="text-sm text-slate-500 dark:text-slate-400">Items</span>
-                                            <p className="font-semibold text-slate-900 dark:text-white">{order.items?.length || 0}</p>
+                                            <span className="text-sm text-slate-500">Items</span>
+                                            <p className="font-semibold text-slate-900">{order.items?.length || 0}</p>
                                         </div>
                                         <div>
-                                            <span className="text-sm text-slate-500 dark:text-slate-400">Payment Status</span>
-                                            <p className="font-semibold text-slate-900 dark:text-white capitalize">{order.paymentStatus.replace("_", " ")}</p>
+                                            <span className="text-sm text-slate-500">Payment Status</span>
+                                            <p className="font-semibold text-slate-900 capitalize">{order.paymentStatus.replace("_", " ")}</p>
                                         </div>
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                                    <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                         <Link
                                             href={`/marketplace/orders/${order.orderId}`}
-                                            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:hover:text-white font-semibold text-sm"
+                                            className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-semibold text-sm"
                                         >
                                             <Eye className="w-4 h-4" />
                                             View Details
@@ -305,7 +305,7 @@ export default function OrdersPage() {
                         <button
                             onClick={handleLoadMore}
                             disabled={loadingMore}
-                            className="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition flex items-center gap-2 disabled:opacity-50"
+                            className="px-6 py-3 bg-white border border-slate-300 rounded-xl text-slate-700 font-semibold hover:bg-slate-50 transition flex items-center gap-2 disabled:opacity-50"
                         >
                             {loadingMore ? (
                                 <>

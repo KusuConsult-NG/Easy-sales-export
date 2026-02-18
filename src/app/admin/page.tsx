@@ -39,10 +39,10 @@ export default function AdminDashboardPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading dashboard...</p>
+                    <p className="text-slate-600">Loading dashboard...</p>
                 </div>
             </div>
         );
@@ -50,13 +50,13 @@ export default function AdminDashboardPage() {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="bg-red-100 p-4 rounded-full inline-block mb-4">
                         <AlertCircle className="w-8 h-8 text-red-600" />
                     </div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Error Loading Dashboard</h2>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">{error}</p>
+                    <h2 className="text-xl font-bold text-slate-900 mb-2">Error Loading Dashboard</h2>
+                    <p className="text-slate-600 mb-6">{error}</p>
                     <button
                         onClick={() => window.location.reload()}
                         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -124,14 +124,14 @@ export default function AdminDashboardPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 p-8">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-4xl font-bold text-slate-900 mb-2">
                         Admin Dashboard
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Platform overview and key metrics
                     </p>
                 </div>
@@ -153,7 +153,7 @@ export default function AdminDashboardPage() {
                         return (
                             <div
                                 key={index}
-                                className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-sm hover:shadow-md transition"
+                                className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition"
                             >
                                 <div className="flex items-center justify-between mb-4">
                                     <div
@@ -179,13 +179,13 @@ export default function AdminDashboardPage() {
                                     </div>
                                 </div>
 
-                                <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                                <p className="text-sm text-slate-600 mb-1">
                                     {stat.label}
                                 </p>
-                                <p className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                                <p className="text-3xl font-bold text-slate-900 mb-2">
                                     {stat.value}
                                 </p>
-                                <p className="text-xs text-slate-500 dark:text-slate-500">
+                                <p className="text-xs text-slate-500">
                                     {stat.change}
                                 </p>
                             </div>
@@ -197,24 +197,24 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <a
                         href="/admin/loans"
-                        className="bg-white dark:bg-slate-800 rounded-lg p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm"
+                        className="bg-white rounded-lg p-6 hover:bg-slate-50 transition shadow-sm"
                     >
-                        <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
+                        <h3 className="font-semibold text-slate-900 mb-2">
                             Review Loans
                         </h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                        <p className="text-sm text-slate-600">
                             {stats.counts.pendingLoans} pending applications
                         </p>
                     </a>
 
                     <a
                         href="/admin/land-verification"
-                        className="bg-white dark:bg-slate-800 rounded-lg p-6 hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm"
+                        className="bg-white rounded-lg p-6 hover:bg-slate-50 transition shadow-sm"
                     >
-                        <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
+                        <h3 className="font-semibold text-slate-900 mb-2">
                             Verify Land Listings
                         </h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                        <p className="text-sm text-slate-600">
                             Review pending submissions
                         </p>
                     </a>

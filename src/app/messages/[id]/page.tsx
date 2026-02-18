@@ -85,39 +85,39 @@ export default function ChatPage() {
     if (loading) {
         return (
             <div className="h-full flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900 dark:border-white"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950">
-            <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center shadow-sm z-10">
+        <div className="flex flex-col h-full bg-slate-50">
+            <div className="p-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm z-10">
                 <div className="flex items-center gap-3">
-                    <Link href="/messages" className="md:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
+                    <Link href="/messages" className="md:hidden p-2 hover:bg-slate-100 rounded-full">
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
                         U
                     </div>
                     <div>
-                        <h2 className="font-bold text-slate-900 dark:text-white leading-tight">
+                        <h2 className="font-bold text-slate-900 leading-tight">
                             User
                         </h2>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="text-xs text-slate-500">
                             Online
                         </p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2 text-slate-500">
-                    <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                    <button className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                         <Phone className="w-5 h-5" />
                     </button>
-                    <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                    <button className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                         <Video className="w-5 h-5" />
                     </button>
-                    <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                    <button className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                         <MoreVertical className="w-5 h-5" />
                     </button>
                 </div>
@@ -125,7 +125,7 @@ export default function ChatPage() {
 
             <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50 dark:bg-slate-950"
+                className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50"
             >
                 {messages.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-slate-400">
@@ -134,7 +134,7 @@ export default function ChatPage() {
                 ) : (
                     <>
                         <div className="flex justify-center my-4">
-                            <span className="bg-slate-200 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-400 px-3 py-1 rounded-full">
+                            <span className="bg-slate-200 text-xs text-slate-600 px-3 py-1 rounded-full">
                                 Today
                             </span>
                         </div>
@@ -148,7 +148,7 @@ export default function ChatPage() {
                                         max-w-[75%] md:max-w-[60%] rounded-2xl px-4 py-3 shadow-sm
                                         ${isMe
                                             ? "bg-blue-600 text-white rounded-tr-sm"
-                                            : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm border border-slate-100 dark:border-slate-700"
+                                            : "bg-white text-slate-800 rounded-tl-sm border border-slate-100"
                                         }
                                     `}>
                                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
@@ -166,22 +166,22 @@ export default function ChatPage() {
                 )}
             </div>
 
-            <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+            <div className="p-4 bg-white border-t border-slate-200">
                 <form onSubmit={handleSendMessage} className="flex items-end gap-2 max-w-4xl mx-auto">
                     <button
                         type="button"
-                        className="p-3 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                        className="p-3 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
                     >
                         <Paperclip className="w-5 h-5" />
                     </button>
 
-                    <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center px-4 py-2">
+                    <div className="flex-1 bg-slate-100 rounded-2xl flex items-center px-4 py-2">
                         <input
                             type="text"
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
                             placeholder="Type a message..."
-                            className="flex-1 bg-transparent border-none outline-none text-slate-900 dark:text-white placeholder-slate-500"
+                            className="flex-1 bg-transparent border-none outline-none text-slate-900 placeholder-slate-500"
                         />
                     </div>
 

@@ -56,26 +56,26 @@ export function TermsAcceptanceStep({
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 md:p-8">
+        <div className="bg-white rounded-lg p-6 md:p-8">
             <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">
                     Terms & Agreement
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Please review and accept our terms to complete your onboarding
                 </p>
             </div>
 
             <div className="space-y-6">
                 {/* Risk Disclosure */}
-                <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
                     <div className="flex items-start gap-3">
                         <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                            <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">
+                            <h4 className="font-semibold text-amber-900 mb-2">
                                 Investment Risk Disclosure
                             </h4>
-                            <p className="text-sm text-amber-800 dark:text-amber-200">
+                            <p className="text-sm text-amber-800">
                                 Agricultural export investments carry inherent risks including market
                                 fluctuations, currency exchange rates, and commodity pricing. Past
                                 performance does not guarantee future results. Please invest responsibly
@@ -88,7 +88,7 @@ export function TermsAcceptanceStep({
                 {/* Terms Checkboxes */}
                 <div className="space-y-4">
                     {/* Investment Agreement */}
-                    <label className="flex items-start gap-3 p-4 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-orange-300 transition-colors">
+                    <label className="flex items-start gap-3 p-4 border-2 border-slate-200 rounded-lg cursor-pointer hover:border-orange-300 transition-colors">
                         <input
                             type="checkbox"
                             checked={acceptedInvestment}
@@ -98,11 +98,11 @@ export function TermsAcceptanceStep({
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                                 <FileText className="w-4 h-4 text-slate-600" />
-                                <span className="font-semibold text-slate-900 dark:text-white">
+                                <span className="font-semibold text-slate-900">
                                     Investment Agreement
                                 </span>
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 I have read and agree to the{" "}
                                 <a href="#" className="text-orange-600 hover:underline">
                                     Investment Terms and Conditions
@@ -112,7 +112,7 @@ export function TermsAcceptanceStep({
                     </label>
 
                     {/* Risk Disclosure */}
-                    <label className="flex items-start gap-3 p-4 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-orange-300 transition-colors">
+                    <label className="flex items-start gap-3 p-4 border-2 border-slate-200 rounded-lg cursor-pointer hover:border-orange-300 transition-colors">
                         <input
                             type="checkbox"
                             checked={acceptedRisk}
@@ -122,11 +122,11 @@ export function TermsAcceptanceStep({
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                                 <AlertCircle className="w-4 h-4 text-slate-600" />
-                                <span className="font-semibold text-slate-900 dark:text-white">
+                                <span className="font-semibold text-slate-900">
                                     Risk Disclosure
                                 </span>
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 I understand the risks associated with agricultural export investments and
                                 accept full responsibility for my investment decisions
                             </p>
@@ -134,7 +134,7 @@ export function TermsAcceptanceStep({
                     </label>
 
                     {/* Escrow Terms */}
-                    <label className="flex items-start gap-3 p-4 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-orange-300 transition-colors">
+                    <label className="flex items-start gap-3 p-4 border-2 border-slate-200 rounded-lg cursor-pointer hover:border-orange-300 transition-colors">
                         <input
                             type="checkbox"
                             checked={acceptedEscrow}
@@ -144,11 +144,11 @@ export function TermsAcceptanceStep({
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                                 <Shield className="w-4 h-4 text-slate-600" />
-                                <span className="font-semibold text-slate-900 dark:text-white">
+                                <span className="font-semibold text-slate-900">
                                     Escrow Agreement
                                 </span>
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 I agree to the{" "}
                                 <a href="#" className="text-orange-600 hover:underline">
                                     Escrow Service Terms
@@ -159,7 +159,7 @@ export function TermsAcceptanceStep({
                     </label>
 
                     {/* Privacy Policy */}
-                    <label className="flex items-start gap-3 p-4 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-orange-300 transition-colors">
+                    <label className="flex items-start gap-3 p-4 border-2 border-slate-200 rounded-lg cursor-pointer hover:border-orange-300 transition-colors">
                         <input
                             type="checkbox"
                             checked={acceptedPrivacy}
@@ -169,11 +169,11 @@ export function TermsAcceptanceStep({
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                                 <FileText className="w-4 h-4 text-slate-600" />
-                                <span className="font-semibold text-slate-900 dark:text-white">
+                                <span className="font-semibold text-slate-900">
                                     Privacy Policy
                                 </span>
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 I have read and agree to the{" "}
                                 <a href="#" className="text-orange-600 hover:underline">
                                     Privacy Policy
@@ -188,7 +188,7 @@ export function TermsAcceptanceStep({
                 <div className="flex justify-between pt-6">
                     <button
                         onClick={onBack}
-                        className="px-6 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors font-semibold"
+                        className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-lg hover:bg-slate-100 transition-colors font-semibold"
                     >
                         Back
                     </button>

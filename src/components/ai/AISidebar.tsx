@@ -138,10 +138,10 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                             animate={{ x: 0 }}
                             exit={{ x: '100%' }}
                             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                            className="fixed top-0 right-0 h-full w-full md:w-[480px] bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col"
+                            className="fixed top-0 right-0 h-full w-full md:w-[480px] bg-white shadow-2xl z-50 flex flex-col"
                         >
                             {/* Header */}
-                            <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-linear-to-r from-[#1358ec] to-[#0d47b8] text-white">
+                            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-linear-to-r from-[#1358ec] to-[#0d47b8] text-white">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
                                         <Sparkles className="w-6 h-6" />
@@ -161,8 +161,8 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
 
                             {/* Suggestions */}
                             {messages.length === 0 && suggestions.length > 0 && (
-                                <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-                                    <p className="text-sm font-medium text-slate-900 dark:text-white mb-3">
+                                <div className="p-6 border-b border-slate-200">
+                                    <p className="text-sm font-medium text-slate-900 mb-3">
                                         Suggested questions:
                                     </p>
                                     <div className="space-y-2">
@@ -173,7 +173,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                                                 animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: i * 0.1 }}
                                                 onClick={() => handleSuggestionClick(suggestion)}
-                                                className="w-full text-left px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-[#1358ec]/10 dark:hover:bg-[#1358ec]/20 transition-colors text-sm text-slate-900 dark:text-white flex items-center justify-between group"
+                                                className="w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-[#1358ec]/10#1358ec]/20 transition-colors text-sm text-slate-900 flex items-center justify-between group"
                                             >
                                                 <span>{suggestion}</span>
                                                 <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -190,10 +190,10 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                                         <div className="w-20 h-20 bg-linear-to-br from-[#1358ec]/10 to-[#0d47b8]/10 rounded-full flex items-center justify-center mx-auto mb-4">
                                             <MessageCircle className="w-10 h-10 text-[#1358ec]" />
                                         </div>
-                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+                                        <h3 className="text-lg font-bold text-slate-900 mb-2">
                                             How can I help you today?
                                         </h3>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        <p className="text-sm text-slate-600">
                                             Ask me anything about Easy Sales Export
                                         </p>
                                     </div>
@@ -219,7 +219,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                                                 animate={{ opacity: 1, y: 0 }}
                                                 className="flex justify-start"
                                             >
-                                                <div className="max-w-[80%] bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-2xl rounded-tl-sm px-4 py-3">
+                                                <div className="max-w-[80%] bg-slate-100 text-slate-900 rounded-2xl rounded-tl-sm px-4 py-3">
                                                     <p className="text-sm whitespace-pre-wrap">{msg.response}</p>
                                                 </div>
                                             </motion.div>
@@ -233,9 +233,9 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                                         animate={{ opacity: 1 }}
                                         className="flex justify-start"
                                     >
-                                        <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl px-4 py-3 flex items-center gap-2">
+                                        <div className="bg-slate-100 rounded-2xl px-4 py-3 flex items-center gap-2">
                                             <Loader2 className="w-4 h-4 animate-spin text-[#1358ec]" />
-                                            <span className="text-sm text-slate-600 dark:text-slate-400">Thinking...</span>
+                                            <span className="text-sm text-slate-600">Thinking...</span>
                                         </div>
                                     </motion.div>
                                 )}
@@ -244,7 +244,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                             </div>
 
                             {/* Input */}
-                            <div className="p-6 border-t border-slate-200 dark:border-slate-700">
+                            <div className="p-6 border-t border-slate-200">
                                 <form
                                     onSubmit={(e) => {
                                         e.preventDefault();
@@ -265,7 +265,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                                             placeholder="Ask me anything..."
                                             rows={1}
                                             disabled={loading}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#1358ec] focus:border-transparent resize-none disabled:opacity-50"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-[#1358ec] focus:border-transparent resize-none disabled:opacity-50"
                                         />
                                     </div>
                                     <button
@@ -276,7 +276,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                                         <Send className="w-5 h-5" />
                                     </button>
                                 </form>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
+                                <p className="text-xs text-slate-500 mt-2 text-center">
                                     Press Enter to send, Shift+Enter for new line
                                 </p>
                             </div>

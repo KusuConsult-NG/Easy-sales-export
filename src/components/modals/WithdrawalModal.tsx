@@ -68,9 +68,9 @@ export default function WithdrawalModal({
                 )}
 
                 {/* Available Balance Display */}
-                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Available Balance</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                <div className="p-4 bg-slate-50 rounded-xl">
+                    <p className="text-xs text-slate-500 mb-1">Available Balance</p>
+                    <p className="text-2xl font-bold text-slate-900">
                         {formatCurrency(availableBalance)}
                     </p>
                 </div>
@@ -89,7 +89,7 @@ export default function WithdrawalModal({
 
                 {/* Withdrawal Amount */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
                         <Wallet className="w-4 h-4 inline mr-2" />
                         Withdrawal Amount (NGN) *
                     </label>
@@ -101,42 +101,42 @@ export default function WithdrawalModal({
                         step="0.01"
                         required
                         placeholder="0.00"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    <p className="text-xs text-slate-500 mt-2">
                         Maximum: {formatCurrency(availableBalance)}
                     </p>
                 </div>
 
                 {/* Bank Account Selection */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
                         Bank Account *
                     </label>
                     <select
                         name="bankAccount"
                         required
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent"
                     >
                         <option value="">Select bank account</option>
                         <option value="primary">Primary Account (****1234)</option>
                         <option value="secondary">Secondary Account (****5678)</option>
                     </select>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    <p className="text-xs text-slate-500 mt-2">
                         Select the account to receive funds
                     </p>
                 </div>
 
                 {/* Reason (Optional) */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
                         Reason (Optional)
                     </label>
                     <textarea
                         name="reason"
                         rows={3}
                         placeholder="Briefly explain why you need this withdrawal..."
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
                     />
                 </div>
 
@@ -146,7 +146,7 @@ export default function WithdrawalModal({
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 text-slate-900 font-semibold hover:bg-slate-50 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

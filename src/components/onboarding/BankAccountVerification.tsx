@@ -128,20 +128,20 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         <div className="space-y-4">
             {/* Bank Selection */}
             <div>
-                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                <label className="block text-sm font-medium text-slate-900 mb-2">
                     Bank Name <span className="text-red-500">*</span>
                 </label>
 
                 {/* Banks loading error alert */}
                 {banksError && (
-                    <div className="mb-3 flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-yellow-700 dark:text-yellow-300">
+                    <div className="mb-3 flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-700">
                         <AlertCircle className="w-5 h-5" />
                         <div className="flex-1">
                             <span className="text-sm">{banksError}</span>
                         </div>
                         <button
                             onClick={loadBankList}
-                            className="p-1 hover:bg-yellow-100 dark:hover:bg-yellow-800 rounded"
+                            className="p-1 hover:bg-yellow-100 rounded"
                             title="Retry loading banks"
                         >
                             <RefreshCw className="w-4 h-4" />
@@ -155,7 +155,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                         value={bankName}
                         onChange={(e) => setBankName(e.target.value)}
                         disabled={verified || loadingBanks}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <option value="">
                             {loadingBanks ? 'Loading banks...' : 'Select your bank'}
@@ -177,7 +177,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
 
             {/* Account Number */}
             <div>
-                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                <label className="block text-sm font-medium text-slate-900 mb-2">
                     Account Number <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -190,7 +190,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                     disabled={verified}
                     placeholder="0123456789"
                     maxLength={10}
-                    className="w-full px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <p className="text-xs text-slate-500 mt-1">
                     Enter your 10-digit account number
@@ -200,12 +200,12 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             {/* Account Name (Auto-filled after verification) */}
             {accountName && (
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
                         Account Name
                     </label>
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 border border-green-200 rounded-lg">
                         <CheckCircle className="w-5 h-5 text-green-600" />
-                        <span className="font-medium text-green-900 dark:text-green-100">
+                        <span className="font-medium text-green-900">
                             {accountName}
                         </span>
                     </div>
@@ -214,7 +214,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
 
             {/* Error Message */}
             {error && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300">
+                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
                     <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
                     <div className="flex-1">
                         <span className="text-sm block">{error}</span>
@@ -253,13 +253,13 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
 
             {/* Success Message */}
             {verified && (
-                <div className="flex items-center gap-2 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 rounded-lg">
                     <CheckCircle className="w-6 h-6 text-green-600" />
                     <div>
-                        <p className="font-medium text-green-900 dark:text-green-100">
+                        <p className="font-medium text-green-900">
                             Account Verified
                         </p>
-                        <p className="text-sm text-green-700 dark:text-green-300">
+                        <p className="text-sm text-green-700">
                             Your bank account has been successfully verified
                         </p>
                     </div>

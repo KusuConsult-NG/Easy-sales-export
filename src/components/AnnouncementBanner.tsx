@@ -49,10 +49,10 @@ export default function AnnouncementBanner() {
 
     const getTypeStyles = (type: string) => {
         const styles = {
-            info: "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800",
-            warning: "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800",
-            success: "bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800",
-            emergency: "bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800",
+            info: "bg-blue-50 border-blue-200",
+            warning: "bg-amber-50 border-amber-200",
+            success: "bg-emerald-50 border-emerald-200",
+            emergency: "bg-red-50 border-red-200",
         };
         return styles[type as keyof typeof styles] || styles.info;
     };
@@ -78,17 +78,17 @@ export default function AnnouncementBanner() {
                         <div className="flex items-start space-x-3 flex-1">
                             <Bell className={`w-5 h-5 mt-0.5 ${getIconColor(announcement.type)}`} />
                             <div className="flex-1">
-                                <h3 className="font-semibold text-slate-900 dark:text-white">
+                                <h3 className="font-semibold text-slate-900">
                                     {announcement.title}
                                 </h3>
-                                <p className="text-sm text-slate-600 dark:text-white mt-1">
+                                <p className="text-sm text-slate-600 mt-1">
                                     {announcement.content}
                                 </p>
                             </div>
                         </div>
                         <button
                             onClick={() => handleDismiss(announcement.id!)}
-                            className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded transition"
+                            className="p-1 hover:bg-black/5 rounded transition"
                         >
                             <X className="w-5 h-5 text-slate-500" />
                         </button>

@@ -70,7 +70,7 @@ export default function HubPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Navigation */}
             <HubNavigation />
 
@@ -84,10 +84,10 @@ export default function HubPage() {
             <section className="py-20">
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="text-center mb-12">
-                        <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
+                        <h2 className="text-4xl font-bold text-slate-900 mb-4">
                             Explore Our Platform
                         </h2>
-                        <p className="text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+                        <p className="text-xl text-slate-600 max-w-2xl mx-auto">
                             Comprehensive solutions for modern agricultural business -
                             from exports to education
                         </p>
@@ -108,30 +108,30 @@ export default function HubPage() {
             </section>
 
             {/* About Section */}
-            <section className="py-20 bg-white dark:bg-slate-900">
+            <section className="py-20 bg-white">
                 <div className="max-w-7xl mx-auto px-4">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                         <div>
-                            <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-6">
+                            <h2 className="text-4xl font-bold text-slate-900 mb-6">
                                 About Us
                             </h2>
-                            <p className="text-lg text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
-                                <strong className="text-slate-900 dark:text-white">Easy Sales Export Nigeria Limited</strong> is a strategic agro-export and trade infrastructure company connecting African producers to global markets.
+                            <p className="text-lg text-slate-600 mb-6 leading-relaxed">
+                                <strong className="text-slate-900">Easy Sales Export Nigeria Limited</strong> is a strategic agro-export and trade infrastructure company connecting African producers to global markets.
                             </p>
-                            <p className="text-lg text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+                            <p className="text-lg text-slate-600 mb-6 leading-relaxed">
                                 We build structured systems that organize farmers, coordinate production, ensure quality, and deliver commodities to international buyers with reliability and scale.
                             </p>
-                            <p className="text-lg text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
+                            <p className="text-lg text-slate-600 mb-6 leading-relaxed">
                                 Our work spans commodity export, cooperative development, farm production structuring, export training, and global market access facilitation.
                             </p>
-                            <p className="text-lg text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
-                                As a strategic implementing partner in national and private agricultural initiatives, including the <strong className="text-slate-900 dark:text-white">Women Agro Value Expansion (WAVE) Program</strong>, Easy Sales Export plays a critical role in empowering producers and unlocking large-scale export opportunities.
+                            <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                                As a strategic implementing partner in national and private agricultural initiatives, including the <strong className="text-slate-900">Women Agro Value Expansion (WAVE) Program</strong>, Easy Sales Export plays a critical role in empowering producers and unlocking large-scale export opportunities.
                             </p>
-                            <div className="bg-emerald-50 dark:bg-emerald-900/20 border-l-4 border-emerald-600 p-6 mb-8 rounded-r-xl">
-                                <p className="text-base italic text-slate-900 dark:text-white mb-3">
+                            <div className="bg-emerald-50 border-l-4 border-emerald-600 p-6 mb-8 rounded-r-xl">
+                                <p className="text-base italic text-slate-900 mb-3">
                                     We don't just export products.
                                 </p>
-                                <p className="text-base font-semibold text-emerald-800 dark:text-emerald-300">
+                                <p className="text-base font-semibold text-emerald-800">
                                     We build the systems that turn production into predictable wealth, empower communities, and position Africa as a global trade force.
                                 </p>
                             </div>
@@ -144,27 +144,27 @@ export default function HubPage() {
                             </Link>
                         </div>
                         <div className="grid grid-cols-2 gap-6">
-                            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 text-center">
+                            <div className="bg-slate-50 rounded-2xl p-6 text-center">
                                 <div className="text-4xl font-bold text-primary mb-2">15,420+</div>
-                                <div className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                                <div className="text-sm font-semibold text-slate-600">
                                     Registered Users
                                 </div>
                             </div>
-                            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 text-center">
+                            <div className="bg-slate-50 rounded-2xl p-6 text-center">
                                 <div className="text-4xl font-bold text-primary mb-2">₦2.5B+</div>
-                                <div className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                                <div className="text-sm font-semibold text-slate-600">
                                     Total Exports
                                 </div>
                             </div>
-                            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 text-center">
+                            <div className="bg-slate-50 rounded-2xl p-6 text-center">
                                 <div className="text-4xl font-bold text-primary mb-2">24</div>
-                                <div className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                                <div className="text-sm font-semibold text-slate-600">
                                     States Covered
                                 </div>
                             </div>
-                            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-6 text-center">
+                            <div className="bg-slate-50 rounded-2xl p-6 text-center">
                                 <div className="text-4xl font-bold text-primary mb-2">98%</div>
-                                <div className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                                <div className="text-sm font-semibold text-slate-600">
                                     Success Rate
                                 </div>
                             </div>

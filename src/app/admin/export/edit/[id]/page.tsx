@@ -80,19 +80,19 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8">
+        <div className="min-h-screen bg-slate-50 p-8">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-4">
                         <Link
                             href="/admin/export"
-                            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition"
+                            className="p-2 hover:bg-slate-200 rounded-lg transition"
                         >
-                            <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                            <ArrowLeft className="w-5 h-5 text-slate-600" />
                         </Link>
                         <div>
-                            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                            <h1 className="text-2xl font-bold text-slate-900">
                                 Edit Export Window
                             </h1>
                             <p className="text-slate-500 text-sm">
@@ -112,8 +112,8 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
 
                 <div className="space-y-6">
                     {/* Basic Info */}
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                             <List className="w-5 h-5 text-blue-500" />
                             Core Details
                         </h3>
@@ -125,7 +125,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                     value={windowData.title || ""}
                                     onChange={e => updateField("title", e.target.value)}
                                     placeholder="e.g. Q1 2026 Yam Export"
-                                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
                                 />
                             </div>
                             <div>
@@ -135,7 +135,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                     value={windowData.duration || ""}
                                     onChange={e => updateField("duration", e.target.value)}
                                     placeholder="e.g. 6 Months"
-                                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
                                 />
                             </div>
                             <div>
@@ -145,7 +145,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                     value={windowData.roi || ""}
                                     onChange={e => updateField("roi", e.target.value)}
                                     placeholder="e.g. 15-25%"
-                                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
                                 />
                             </div>
                             <div>
@@ -154,7 +154,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                     type="number"
                                     value={windowData.amount || 0}
                                     onChange={e => updateField("amount", Number(e.target.value))}
-                                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
                                 />
                             </div>
                             <div className="col-span-2">
@@ -163,16 +163,16 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                     value={windowData.description || ""}
                                     onChange={e => updateField("description", e.target.value)}
                                     rows={4}
-                                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
+                                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg"
                                 />
                             </div>
                         </div>
                     </div>
 
                     {/* Timeline */}
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                                 <Calendar className="w-5 h-5 text-purple-500" />
                                 Project Timeline
                             </h3>
@@ -195,7 +195,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                                 newTimeline[idx].phase = e.target.value;
                                                 setTimeline(newTimeline);
                                             }}
-                                            className="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                            className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
                                         />
                                         <input
                                             placeholder="Date/Duration (e.g. 2 Weeks)"
@@ -205,7 +205,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                                 newTimeline[idx].date = e.target.value;
                                                 setTimeline(newTimeline);
                                             }}
-                                            className="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                            className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
                                         />
                                         <select
                                             value={phase.status}
@@ -214,7 +214,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                                 newTimeline[idx].status = e.target.value;
                                                 setTimeline(newTimeline);
                                             }}
-                                            className="p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                            className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
                                         >
                                             <option value="pending">Pending</option>
                                             <option value="active">Active</option>
@@ -228,7 +228,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                                 newTimeline[idx].description = e.target.value;
                                                 setTimeline(newTimeline);
                                             }}
-                                            className="md:col-span-3 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm h-16 resize-none"
+                                            className="md:col-span-3 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm h-16 resize-none"
                                         />
                                     </div>
                                     <button
@@ -243,9 +243,9 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                     </div>
 
                     {/* Specifications */}
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                                 <List className="w-5 h-5 text-emerald-500" />
                                 Specifications
                             </h3>
@@ -267,7 +267,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                             newSpecs[idx] = e.target.value;
                                             setSpecs(newSpecs);
                                         }}
-                                        className="flex-1 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                        className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
                                     />
                                     <button
                                         onClick={() => setSpecs(specs.filter((_, i) => i !== idx))}
@@ -281,9 +281,9 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                     </div>
 
                     {/* Benefits */}
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                                 <List className="w-5 h-5 text-amber-500" />
                                 Benefits & ROI
                             </h3>
@@ -305,7 +305,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                             newBenefits[idx] = e.target.value;
                                             setBenefits(newBenefits);
                                         }}
-                                        className="flex-1 p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                        className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
                                     />
                                     <button
                                         onClick={() => setBenefits(benefits.filter((_, i) => i !== idx))}
@@ -319,9 +319,9 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                     </div>
 
                     {/* Requirements / Documents */}
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                                 <FileText className="w-5 h-5 text-amber-500" />
                                 Required Documents
                             </h3>
@@ -344,7 +344,7 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
                                                 newDocs[idx].name = e.target.value;
                                                 setDocuments(newDocs);
                                             }}
-                                            className="w-full p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
                                         />
                                     </div>
                                     <label className="flex items-center gap-2 text-sm text-slate-600">

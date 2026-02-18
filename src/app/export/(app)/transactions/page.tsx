@@ -76,9 +76,9 @@ export default function ExportTransactionsPage() {
 
     const getStatusBadge = (status: string) => {
         const styles = {
-            completed: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
-            pending: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
-            processing: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300",
+            completed: "bg-green-100 text-green-700",
+            pending: "bg-amber-100 text-amber-700",
+            processing: "bg-blue-100 text-blue-700",
         };
 
         return (
@@ -92,39 +92,39 @@ export default function ExportTransactionsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+        <div className="min-h-screen bg-slate-50">
             <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         Transaction History
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         View all your export investment transactions
                     </p>
                 </div>
 
                 {/* Transactions */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                <div className="bg-white rounded-xl border border-slate-200">
+                    <div className="divide-y divide-slate-200">
                         {transactions.map((transaction) => (
                             <div
                                 key={transaction.id}
-                                className="p-6 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                                className="p-6 hover:bg-slate-50 transition-colors"
                             >
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-start gap-4 flex-1">
                                         {/* Icon */}
-                                        <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                                        <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
                                             {getTransactionIcon(transaction.type)}
                                         </div>
 
                                         {/* Details */}
                                         <div className="flex-1">
-                                            <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
+                                            <h3 className="font-semibold text-slate-900 mb-1">
                                                 {transaction.description}
                                             </h3>
-                                            <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+                                            <div className="flex items-center gap-4 text-sm text-slate-600">
                                                 <div className="flex items-center gap-1">
                                                     <Calendar className="w-4 h-4" />
                                                     {new Date(transaction.date).toLocaleDateString("en-US", {
@@ -159,12 +159,12 @@ export default function ExportTransactionsPage() {
 
                 {/* Empty State (if no transactions) */}
                 {transactions.length === 0 && (
-                    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-12 text-center">
-                        <Clock className="w-16 h-16 mx-auto mb-4 text-slate-300 dark:text-slate-600" />
-                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                    <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+                        <Clock className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">
                             No Transactions Yet
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Your transaction history will appear here once you start investing
                         </p>
                     </div>

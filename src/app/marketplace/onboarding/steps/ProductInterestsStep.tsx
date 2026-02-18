@@ -85,10 +85,10 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
         <div className="space-y-8">
             {/* Header */}
             <div className="text-center">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
+                <h2 className="text-3xl font-bold text-slate-900 mb-3">
                     Product Interests
                 </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400">
+                <p className="text-lg text-slate-600">
                     {isBuyer && isSeller
                         ? "Select categories for buying and selling"
                         : isBuyer
@@ -101,13 +101,13 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
                 {/* Buyer Section */}
                 {isBuyer && (
                     <div className="space-y-4">
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                        <h3 className="text-xl font-bold text-slate-900">
                             Buying Interests
                         </h3>
 
                         {/* Product Categories */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 mb-3">
                                 Product Categories of Interest *
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -116,8 +116,8 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
                                         key={category}
                                         onClick={() => toggleCategory(category, "buyerInterests")}
                                         className={`px-4 py-3 border-2 rounded-xl text-sm font-medium transition-all ${data.buyerInterests?.includes(category)
-                                                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
-                                                : "border-slate-300 dark:border-slate-600 hover:border-blue-300"
+                                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                : "border-slate-300 hover:border-blue-300"
                                             }`}
                                     >
                                         {category}
@@ -131,7 +131,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
 
                         {/* Order Volume */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 mb-3">
                                 Typical Order Volume
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -140,8 +140,8 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
                                         key={volume}
                                         onClick={() => onChange({ orderVolume: volume })}
                                         className={`px-4 py-3 border-2 rounded-xl text-sm font-medium transition-all ${data.orderVolume === volume
-                                                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
-                                                : "border-slate-300 dark:border-slate-600 hover:border-blue-300"
+                                                ? "border-blue-500 bg-blue-50 text-blue-700"
+                                                : "border-slate-300 hover:border-blue-300"
                                             }`}
                                     >
                                         {volume}
@@ -155,13 +155,13 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
                 {/* Seller Section */}
                 {isSeller && (
                     <div className="space-y-4">
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                        <h3 className="text-xl font-bold text-slate-900">
                             Selling Details
                         </h3>
 
                         {/* Product Categories */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 mb-3">
                                 Product Categories to Sell *
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -170,8 +170,8 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
                                         key={category}
                                         onClick={() => toggleCategory(category, "sellerCategories")}
                                         className={`px-4 py-3 border-2 rounded-xl text-sm font-medium transition-all ${data.sellerCategories?.includes(category)
-                                                ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300"
-                                                : "border-slate-300 dark:border-slate-600 hover:border-green-300"
+                                                ? "border-green-500 bg-green-50 text-green-700"
+                                                : "border-slate-300 hover:border-green-300"
                                             }`}
                                     >
                                         {category}
@@ -185,7 +185,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
 
                         {/* Production Capacity */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 mb-3">
                                 Monthly Production Capacity
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -194,8 +194,8 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
                                         key={capacity}
                                         onClick={() => onChange({ productionCapacity: capacity })}
                                         className={`px-4 py-3 border-2 rounded-xl text-sm font-medium transition-all ${data.productionCapacity === capacity
-                                                ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300"
-                                                : "border-slate-300 dark:border-slate-600 hover:border-green-300"
+                                                ? "border-green-500 bg-green-50 text-green-700"
+                                                : "border-slate-300 hover:border-green-300"
                                             }`}
                                     >
                                         {capacity}
@@ -206,7 +206,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
 
                         {/* Certifications */}
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                            <label className="block text-sm font-semibold text-slate-900 mb-3">
                                 Certifications (if any)
                             </label>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -215,8 +215,8 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
                                         key={cert}
                                         onClick={() => toggleCertification(cert)}
                                         className={`px-4 py-3 border-2 rounded-xl text-sm font-medium text-left transition-all ${data.certifications?.includes(cert)
-                                                ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300"
-                                                : "border-slate-300 dark:border-slate-600 hover:border-green-300"
+                                                ? "border-green-500 bg-green-50 text-green-700"
+                                                : "border-slate-300 hover:border-green-300"
                                             }`}
                                     >
                                         {cert}
@@ -232,7 +232,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
                 >
                     Back
                 </button>

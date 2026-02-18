@@ -20,17 +20,17 @@ export default function GlobalError({
     return (
         <html>
             <body>
-                <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-                    <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-xl text-center">
-                        <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <AlertTriangle className="w-10 h-10 text-red-600 dark:text-red-400" />
+                <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                    <div className="max-w-md w-full bg-white rounded-2xl p-8 shadow-xl text-center">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <AlertTriangle className="w-10 h-10 text-red-600" />
                         </div>
 
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h1 className="text-2xl font-bold text-slate-900 mb-2">
                             Something Went Wrong
                         </h1>
 
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        <p className="text-slate-600 mb-6">
                             {error.message || "An unexpected error occurred. Please try again."}
                         </p>
 
@@ -44,7 +44,7 @@ export default function GlobalError({
                             </button>
                             <Link
                                 href="/"
-                                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
                             >
                                 <Home className="w-4 h-4" />
                                 Go Home
@@ -52,7 +52,7 @@ export default function GlobalError({
                         </div>
 
                         {error.digest && (
-                            <p className="mt-4 text-xs text-slate-500 dark:text-slate-500">
+                            <p className="mt-4 text-xs text-slate-500">
                                 Error ID: {error.digest}
                             </p>
                         )}

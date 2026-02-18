@@ -148,29 +148,29 @@ export default function JoinCooperativeModal({
                             <Users className="w-6 h-6 text-primary" />
                         </div>
                         <div>
-                            <h3 className="font-bold text-slate-900 dark:text-white">{cooperativeName}</h3>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">Agricultural Cooperative</p>
+                            <h3 className="font-bold text-slate-900">{cooperativeName}</h3>
+                            <p className="text-xs text-slate-500">Agricultural Cooperative</p>
                         </div>
                     </div>
                     <div className="space-y-2 text-sm">
                         <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-slate-900 dark:text-white">Earn interest on savings</span>
+                            <span className="text-slate-900">Earn interest on savings</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-slate-900 dark:text-white">Access to low-interest loans</span>
+                            <span className="text-slate-900">Access to low-interest loans</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-slate-900 dark:text-white">Share profits from collective sales</span>
+                            <span className="text-slate-900">Share profits from collective sales</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Initial Contribution */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
                         <DollarSign className="w-4 h-4 inline mr-2" />
                         Initial Contribution (Optional)
                     </label>
@@ -180,16 +180,16 @@ export default function JoinCooperativeModal({
                         min="0"
                         step="0.01"
                         placeholder="0.00"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    <p className="text-xs text-slate-500 mt-2">
                         You can make an initial savings contribution when joining. This is optional.
                     </p>
                 </div>
 
                 {/* Monthly Target */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
                         Monthly Savings Target (NGN) *
                     </label>
                     <input
@@ -199,9 +199,9 @@ export default function JoinCooperativeModal({
                         step="100"
                         defaultValue="5000"
                         required
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    <p className="text-xs text-slate-500 mt-2">
                         Set your personal monthly savings goal (minimum ₦1,000)
                     </p>
                 </div>
@@ -214,7 +214,7 @@ export default function JoinCooperativeModal({
                         required
                         className="mt-1 text-primary focus:ring-primary"
                     />
-                    <label className="text-sm text-slate-900 dark:text-white">
+                    <label className="text-sm text-slate-900">
                         I agree to the cooperative terms and conditions, including the savings requirements and profit-sharing structure
                     </label>
                 </div>
@@ -225,7 +225,7 @@ export default function JoinCooperativeModal({
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 text-slate-900 font-semibold hover:bg-slate-50 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

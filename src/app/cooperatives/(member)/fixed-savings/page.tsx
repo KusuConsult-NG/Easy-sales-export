@@ -138,7 +138,7 @@ export default function FixedSavingsPage() {
     // Show onboarding if not a member or pending approval
     if (membershipStatus === "not_member" || membershipStatus === "pending") {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+            <div className="min-h-screen bg-slate-50 py-8">
                 <div className="max-w-7xl mx-auto px-4">
                     <Link
                         href="/cooperatives"
@@ -192,7 +192,7 @@ export default function FixedSavingsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8"
@@ -206,10 +206,10 @@ export default function FixedSavingsPage() {
                     </Link>
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                            <h1 className="text-3xl font-bold text-slate-900 mb-2">
                                 Fixed Savings Plans
                             </h1>
-                            <p className="text-slate-600 dark:text-slate-400">
+                            <p className="text-slate-600">
                                 Lock your savings for guaranteed returns at {interestRate}% annual interest
                             </p>
                         </div>
@@ -225,38 +225,38 @@ export default function FixedSavingsPage() {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
+                    <div className="bg-white rounded-2xl p-6 shadow-xl">
                         <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                                <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <DollarSign className="w-5 h-5 text-blue-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Total Invested</p>
+                            <p className="text-sm text-slate-600">Total Invested</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-3xl font-bold text-slate-900">
                             {formatCurrency(totalInvested)}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
+                    <div className="bg-white rounded-2xl p-6 shadow-xl">
                         <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                                <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                <TrendingUp className="w-5 h-5 text-green-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Projected Returns</p>
+                            <p className="text-sm text-slate-600">Projected Returns</p>
                         </div>
-                        <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                        <p className="text-3xl font-bold text-green-600">
                             {formatCurrency(totalProjectedReturns)}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
+                    <div className="bg-white rounded-2xl p-6 shadow-xl">
                         <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                                <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <Calendar className="w-5 h-5 text-purple-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Active Plans</p>
+                            <p className="text-sm text-slate-600">Active Plans</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-3xl font-bold text-slate-900">
                             {activePlans.length}
                         </p>
                     </div>
@@ -264,16 +264,16 @@ export default function FixedSavingsPage() {
 
                 {/* Calculator/Create Form */}
                 {showCalculator && (
-                    <div className="bg-linear-to-br from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl p-8 mb-8 border border-green-200 dark:border-slate-700 shadow-xl">
+                    <div className="bg-linear-to-br from-green-50 to-emerald-50 rounded-2xl p-8 mb-8 border border-green-200 shadow-xl">
                         <div className="flex items-center gap-3 mb-6">
                             <div className="w-12 h-12 bg-linear-to-br from-green-600 to-emerald-600 rounded-xl flex items-center justify-center">
                                 <Calculator className="w-6 h-6 text-white" />
                             </div>
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                <h2 className="text-2xl font-bold text-slate-900">
                                     Create Fixed Savings Plan
                                 </h2>
-                                <p className="text-slate-600 dark:text-slate-400">
+                                <p className="text-slate-600">
                                     Calculate your returns and create a plan
                                 </p>
                             </div>
@@ -283,7 +283,7 @@ export default function FixedSavingsPage() {
                             {/* Input Section */}
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Amount to Save
                                     </label>
                                     <div className="relative">
@@ -294,16 +294,16 @@ export default function FixedSavingsPage() {
                                             onChange={(e) => setAmount(Number(e.target.value))}
                                             min={50000}
                                             step={10000}
-                                            className="w-full pl-8 pr-4 py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-lg font-bold focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="w-full pl-8 pr-4 py-4 bg-white border border-slate-200 rounded-xl text-slate-900 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-green-500"
                                         />
                                     </div>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    <p className="text-xs text-slate-500 mt-1">
                                         Minimum: ₦50,000
                                     </p>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Duration (Months)
                                     </label>
                                     <input
@@ -312,21 +312,21 @@ export default function FixedSavingsPage() {
                                         onChange={(e) => setDuration(Number(e.target.value))}
                                         min={1}
                                         max={12}
-                                        className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-green-600"
+                                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-green-600"
                                     />
                                     <div className="flex justify-between items-center mt-2">
-                                        <span className="text-sm text-slate-500 dark:text-slate-400">1 month</span>
-                                        <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                        <span className="text-sm text-slate-500">1 month</span>
+                                        <span className="text-2xl font-bold text-green-600">
                                             {duration} {duration === 1 ? "month" : "months"}
                                         </span>
-                                        <span className="text-sm text-slate-500 dark:text-slate-400">12 months</span>
+                                        <span className="text-sm text-slate-500">12 months</span>
                                     </div>
                                 </div>
 
-                                <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-green-200 dark:border-slate-700">
+                                <div className="bg-white rounded-xl p-4 border border-green-200">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm text-slate-600 dark:text-slate-400">Interest Rate</span>
-                                        <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                                        <span className="text-sm text-slate-600">Interest Rate</span>
+                                        <span className="text-lg font-bold text-green-600">
                                             {interestRate}% p.a.
                                         </span>
                                     </div>
@@ -334,43 +334,43 @@ export default function FixedSavingsPage() {
                             </div>
 
                             {/* Results Section */}
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-green-200 dark:border-slate-700">
-                                <h3 className="font-bold text-slate-900 dark:text-white mb-4">
+                            <div className="bg-white rounded-2xl p-6 border border-green-200">
+                                <h3 className="font-bold text-slate-900 mb-4">
                                     Projected Returns
                                 </h3>
 
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-700">
-                                        <span className="text-slate-600 dark:text-slate-400">Principal Amount</span>
-                                        <span className="font-bold text-slate-900 dark:text-white">
+                                    <div className="flex items-center justify-between py-3 border-b border-slate-200">
+                                        <span className="text-slate-600">Principal Amount</span>
+                                        <span className="font-bold text-slate-900">
                                             {formatCurrency(amount)}
                                         </span>
                                     </div>
 
-                                    <div className="flex items-center justify-between py-3 border-b border-slate-200 dark:border-slate-700">
-                                        <span className="text-slate-600 dark:text-slate-400">Interest Earned</span>
-                                        <span className="font-bold text-green-600 dark:text-green-400">
+                                    <div className="flex items-center justify-between py-3 border-b border-slate-200">
+                                        <span className="text-slate-600">Interest Earned</span>
+                                        <span className="font-bold text-green-600">
                                             +{formatCurrency(projectedProfit)}
                                         </span>
                                     </div>
 
                                     <div className="flex items-center justify-between py-3">
-                                        <span className="text-lg font-semibold text-slate-900 dark:text-white">
+                                        <span className="text-lg font-semibold text-slate-900">
                                             Total at Maturity
                                         </span>
-                                        <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                        <span className="text-2xl font-bold text-green-600">
                                             {formatCurrency(totalReturn)}
                                         </span>
                                     </div>
 
-                                    <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 mt-4">
+                                    <div className="bg-green-50 rounded-xl p-4 mt-4">
                                         <div className="flex items-start gap-2">
-                                            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
+                                            <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
                                             <div>
-                                                <p className="text-sm font-semibold text-green-900 dark:text-green-100 mb-1">
+                                                <p className="text-sm font-semibold text-green-900 mb-1">
                                                     Maturity Date
                                                 </p>
-                                                <p className="text-sm text-green-700 dark:text-green-300">
+                                                <p className="text-sm text-green-700">
                                                     {new Date(Date.now() + duration * 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", {
                                                         year: "numeric",
                                                         month: "long",
@@ -406,16 +406,16 @@ export default function FixedSavingsPage() {
 
                 {/* Active Plans */}
                 {isLoading ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center shadow-xl">
+                    <div className="bg-white rounded-2xl p-12 text-center shadow-xl">
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                        <p className="text-slate-600 dark:text-slate-400">Loading plans...</p>
+                        <p className="text-slate-600">Loading plans...</p>
                     </div>
                 ) : (
                     <>
                         {/* Active Plans Section */}
                         {activePlans.length > 0 && (
                             <div className="mb-8">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                     Active Plans
                                 </h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -426,19 +426,19 @@ export default function FixedSavingsPage() {
                                         return (
                                             <div
                                                 key={plan.id}
-                                                className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl border border-green-200 dark:border-green-800"
+                                                className="bg-white rounded-2xl p-6 shadow-xl border border-green-200"
                                             >
                                                 <div className="flex items-start justify-between mb-4">
                                                     <div>
-                                                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                                                        <p className="text-sm text-slate-600 mb-1">
                                                             Principal Amount
                                                         </p>
-                                                        <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                                        <p className="text-2xl font-bold text-slate-900">
                                                             {formatCurrency(plan.amount)}
                                                         </p>
                                                     </div>
-                                                    <div className="px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-full">
-                                                        <span className="text-xs font-bold text-green-700 dark:text-green-400">
+                                                    <div className="px-3 py-1 bg-green-100 rounded-full">
+                                                        <span className="text-xs font-bold text-green-700">
                                                             Active
                                                         </span>
                                                     </div>
@@ -446,31 +446,31 @@ export default function FixedSavingsPage() {
 
                                                 <div className="grid grid-cols-2 gap-4 mb-4">
                                                     <div>
-                                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                                        <p className="text-xs text-slate-500 mb-1">
                                                             Interest Rate
                                                         </p>
-                                                        <p className="font-semibold text-green-600 dark:text-green-400">
+                                                        <p className="font-semibold text-green-600">
                                                             {plan.interestRate}% p.a.
                                                         </p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                                        <p className="text-xs text-slate-500 mb-1">
                                                             Projected Profit
                                                         </p>
-                                                        <p className="font-semibold text-green-600 dark:text-green-400">
+                                                        <p className="font-semibold text-green-600">
                                                             +{formatCurrency(plan.projectedProfit)}
                                                         </p>
                                                     </div>
                                                 </div>
 
-                                                <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 mb-4">
+                                                <div className="bg-slate-50 rounded-xl p-4 mb-4">
                                                     <div className="flex items-center gap-2 mb-2">
                                                         <Clock className="w-4 h-4 text-slate-500" />
-                                                        <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                        <span className="text-sm font-semibold text-slate-900">
                                                             {daysRemaining > 0 ? `${daysRemaining} days remaining` : "Matured"}
                                                         </span>
                                                     </div>
-                                                    <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                                                         <div
                                                             className="h-full bg-linear-to-r from-green-600 to-emerald-600 transition-all"
                                                             style={{ width: `${Math.min(progress, 100)}%` }}
@@ -480,25 +480,25 @@ export default function FixedSavingsPage() {
 
                                                 <div className="flex items-center justify-between text-sm">
                                                     <div>
-                                                        <p className="text-slate-500 dark:text-slate-400">Start Date</p>
-                                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                                        <p className="text-slate-500">Start Date</p>
+                                                        <p className="font-semibold text-slate-900">
                                                             {new Date(plan.startDate).toLocaleDateString()}
                                                         </p>
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-slate-500 dark:text-slate-400">Maturity Date</p>
-                                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                                        <p className="text-slate-500">Maturity Date</p>
+                                                        <p className="font-semibold text-slate-900">
                                                             {new Date(plan.maturityDate).toLocaleDateString()}
                                                         </p>
                                                     </div>
                                                 </div>
 
-                                                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                                <div className="mt-4 pt-4 border-t border-slate-200">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-sm text-slate-600 dark:text-slate-400">
+                                                        <span className="text-sm text-slate-600">
                                                             Total at Maturity
                                                         </span>
-                                                        <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                                                        <span className="text-xl font-bold text-green-600">
                                                             {formatCurrency(plan.amount + plan.projectedProfit)}
                                                         </span>
                                                     </div>
@@ -513,31 +513,31 @@ export default function FixedSavingsPage() {
                         {/* Matured Plans Section */}
                         {maturedPlans.length > 0 && (
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                     Matured Plans
                                 </h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {maturedPlans.map((plan) => (
                                         <div
                                             key={plan.id}
-                                            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl border border-slate-200 dark:border-slate-700 opacity-75"
+                                            className="bg-white rounded-2xl p-6 shadow-xl border border-slate-200 opacity-75"
                                         >
                                             <div className="flex items-start justify-between mb-4">
                                                 <div>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                                                    <p className="text-sm text-slate-600 mb-1">
                                                         Final Amount
                                                     </p>
-                                                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                                    <p className="text-2xl font-bold text-slate-900">
                                                         {formatCurrency(plan.amount + plan.projectedProfit)}
                                                     </p>
                                                 </div>
-                                                <div className="px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-full">
-                                                    <span className="text-xs font-bold text-slate-900 dark:text-slate-400">
+                                                <div className="px-3 py-1 bg-slate-100 rounded-full">
+                                                    <span className="text-xs font-bold text-slate-900">
                                                         Matured
                                                     </span>
                                                 </div>
                                             </div>
-                                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                                            <p className="text-sm text-slate-500">
                                                 Matured on {new Date(plan.maturityDate).toLocaleDateString()}
                                             </p>
                                         </div>
@@ -548,12 +548,12 @@ export default function FixedSavingsPage() {
 
                         {/* Empty State */}
                         {plans.length === 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center shadow-xl">
-                                <TrendingUp className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                            <div className="bg-white rounded-2xl p-12 text-center shadow-xl">
+                                <TrendingUp className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                                <h3 className="text-xl font-bold text-slate-900 mb-2">
                                     No Fixed Savings Plans Yet
                                 </h3>
-                                <p className="text-slate-600 dark:text-slate-400 mb-6">
+                                <p className="text-slate-600 mb-6">
                                     Create your first fixed savings plan to start earning guaranteed returns
                                 </p>
                                 <button

@@ -42,22 +42,22 @@ export default function ExportWindowsPage() {
     const [selectedWindow, setSelectedWindow] = useState<ExportWindow | null>(null);
 
     if (loading) {
-        return <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        return <div className="min-h-screen bg-slate-50 flex items-center justify-center">
             <div className="text-center">
                 <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-slate-600 dark:text-slate-400">Loading export windows...</p>
+                <p className="text-slate-600">Loading export windows...</p>
             </div>
         </div>;
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 py-12 px-4">
             <div className="max-w-7xl mx-auto">
                 <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-4xl font-bold text-slate-900 mb-2">
                         Export Aggregation Windows
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Join active export windows and boost your volume
                     </p>
                 </div>
@@ -70,7 +70,7 @@ export default function ExportWindowsPage() {
                         return (
                             <div
                                 key={window.id}
-                                className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden"
+                                className="bg-white rounded-2xl shadow-lg overflow-hidden"
                             >
                                 <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white p-6">
                                     <div className="flex items-start justify-between mb-4">
@@ -96,7 +96,7 @@ export default function ExportWindowsPage() {
                                 <div className="p-6 space-y-6">
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                            <span className="text-sm font-medium text-slate-900">
                                                 Volume Progress
                                             </span>
                                             <span className="text-sm font-bold text-blue-600">
@@ -104,7 +104,7 @@ export default function ExportWindowsPage() {
                                             </span>
                                         </div>
 
-                                        <div className="w-full h-4 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden">
                                             <div
                                                 className="h-full bg-linear-to-r from-blue-500 to-emerald-500 transition-all duration-300"
                                                 style={{ width: `${progressPercent}%` }}

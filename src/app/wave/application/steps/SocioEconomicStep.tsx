@@ -61,23 +61,23 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
                 Section C: Socio-Economic Profile
             </h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-8">
+            <p className="text-slate-600 mb-8">
                 Help us understand your educational background and economic situation
             </p>
 
             <div className="space-y-6">
                 {/* Highest Level of Education */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Highest Level of Education *
                     </label>
                     <select
                         value={data.highestEducation}
                         onChange={(e) => updateData({ highestEducation: e.target.value as any })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     >
                         <option value="">Select education level</option>
                         <option value="none">No Formal Education</option>
@@ -96,14 +96,14 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
 
                 {/* Current Occupation */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Current Occupation *
                     </label>
                     <input
                         type="text"
                         value={data.currentOccupation}
                         onChange={(e) => updateData({ currentOccupation: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="e.g., Farmer, Trader, Processor"
                     />
                     {errors.currentOccupation && (
@@ -116,13 +116,13 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
 
                 {/* Average Monthly Income */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Average Monthly Income *
                     </label>
                     <select
                         value={data.averageMonthlyIncome}
                         onChange={(e) => updateData({ averageMonthlyIncome: e.target.value as any })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     >
                         <option value="">Select income range</option>
                         <option value="below_50k">Below ₦50,000</option>
@@ -140,7 +140,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
 
                 {/* Currently Involved in Agriculture */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Are you currently involved in any agricultural activity? *
                     </label>
                     <div className="flex gap-4">
@@ -151,8 +151,8 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.involvedInAgriculture === option.value
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -171,7 +171,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                 {/* If YES, specify the type */}
                 {data.involvedInAgriculture && (
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             If YES, specify the type (Select all that apply) *
                         </label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -185,8 +185,8 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                                 <label
                                     key={type.value}
                                     className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.agricultureTypes.includes(type.value)
-                                        ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                        ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                        : "border-slate-300 hover:bg-slate-50"
                                         }`}
                                 >
                                     <input
@@ -214,7 +214,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

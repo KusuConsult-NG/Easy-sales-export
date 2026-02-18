@@ -58,14 +58,14 @@ export default function DocumentUpload({
 
     return (
         <div>
-            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+            <label className="block text-sm font-semibold text-slate-900 mb-2">
                 {label} {required && <span className="text-red-500">*</span>}
             </label>
 
             {!file ? (
                 <label className={`block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${error
-                    ? "border-red-500 bg-red-50 dark:bg-red-950/30"
-                    : "border-slate-300 dark:border-slate-600 hover:border-green-500 dark:hover:border-green-500"
+                    ? "border-red-500 bg-red-50"
+                    : "border-slate-300 hover:border-green-500"
                     }`}>
                     <input
                         type="file"
@@ -74,7 +74,7 @@ export default function DocumentUpload({
                         className="hidden"
                     />
                     <Upload className="w-12 h-12 mx-auto mb-2 text-slate-400" />
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                    <p className="text-sm text-slate-600">
                         Click to upload or drag and drop
                     </p>
                     <p className="text-xs text-slate-500 mt-1">
@@ -82,7 +82,7 @@ export default function DocumentUpload({
                     </p>
                 </label>
             ) : (
-                <div className="border-2 border-slate-300 dark:border-slate-600 rounded-xl p-4">
+                <div className="border-2 border-slate-300 rounded-xl p-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             {preview ? (
@@ -93,7 +93,7 @@ export default function DocumentUpload({
                                 <FileText className="w-12 h-12 text-slate-400" />
                             )}
                             <div>
-                                <p className="font-semibold text-slate-900 dark:text-white">{file.name}</p>
+                                <p className="font-semibold text-slate-900">{file.name}</p>
                                 <p className="text-sm text-slate-500">
                                     {(file.size / 1024 / 1024).toFixed(2)} MB
                                 </p>
@@ -102,7 +102,7 @@ export default function DocumentUpload({
                         <button
                             type="button"
                             onClick={handleRemove}
-                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                         >
                             <X className="w-5 h-5 text-slate-500" />
                         </button>

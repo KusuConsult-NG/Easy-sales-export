@@ -66,16 +66,16 @@ export default function ContributionModal({
                 )}
 
                 {/* Current Balances Display */}
-                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl">
                     <div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Savings Balance</p>
-                        <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                        <p className="text-xs text-slate-500 mb-1">Savings Balance</p>
+                        <p className="text-lg font-bold text-green-600">
                             ₦{currentBalance.toLocaleString()}
                         </p>
                     </div>
                     <div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Loan Balance</p>
-                        <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                        <p className="text-xs text-slate-500 mb-1">Loan Balance</p>
+                        <p className="text-lg font-bold text-red-600">
                             ₦{loanBalance.toLocaleString()}
                         </p>
                     </div>
@@ -83,7 +83,7 @@ export default function ContributionModal({
 
                 {/* Contribution Type Selection */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
                         Contribution Type
                     </label>
                     <div className="grid grid-cols-2 gap-3">
@@ -91,8 +91,8 @@ export default function ContributionModal({
                             type="button"
                             onClick={() => setContributionType("savings")}
                             className={`px-4 py-3 rounded-xl border-2 font-semibold transition ${contributionType === "savings"
-                                ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400"
-                                : "border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
+                                ? "border-green-500 bg-green-500/10 text-green-700"
+                                : "border-slate-300 text-slate-900"
                                 }`}
                         >
                             <TrendingUp className="w-5 h-5 mx-auto mb-1" />
@@ -103,8 +103,8 @@ export default function ContributionModal({
                             onClick={() => setContributionType("loan_repayment")}
                             disabled={loanBalance === 0}
                             className={`px-4 py-3 rounded-xl border-2 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${contributionType === "loan_repayment"
-                                ? "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-400"
-                                : "border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
+                                ? "border-blue-500 bg-blue-500/10 text-blue-700"
+                                : "border-slate-300 text-slate-900"
                                 }`}
                         >
                             <TrendingDown className="w-5 h-5 mx-auto mb-1" />
@@ -116,7 +116,7 @@ export default function ContributionModal({
 
                 {/* Amount Input */}
                 <div>
-                    <label htmlFor="amount" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                    <label htmlFor="amount" className="block text-sm font-medium text-slate-900 mb-2">
                         <DollarSign className="w-4 h-4 inline mr-2" />
                         Amount (₦)
                     </label>
@@ -128,9 +128,9 @@ export default function ContributionModal({
                         min="100"
                         step="100"
                         placeholder="e.g., 50000"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
                     />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                         {contributionType === "savings"
                             ? "Minimum: ₦100"
                             : `Maximum: ₦${loanBalance.toLocaleString()} (current loan balance)`
@@ -144,7 +144,7 @@ export default function ContributionModal({
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 text-slate-900 font-semibold hover:bg-slate-50 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

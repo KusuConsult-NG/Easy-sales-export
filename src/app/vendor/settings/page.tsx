@@ -153,7 +153,7 @@ export default function VendorSettingsPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
         );
@@ -167,15 +167,15 @@ export default function VendorSettingsPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 px-4">
+        <div className="min-h-screen bg-slate-50 py-8 px-4">
             <div className="max-w-5xl mx-auto">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
+                <h1 className="text-3xl font-bold text-slate-900 mb-8">
                     Vendor Settings
                 </h1>
 
                 {/* Tabs */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden">
-                    <div className="border-b border-slate-200 dark:border-slate-700">
+                <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                    <div className="border-b border-slate-200">
                         <div className="flex overflow-x-auto">
                             {tabs.map((tab) => {
                                 const Icon = tab.icon;
@@ -188,7 +188,7 @@ export default function VendorSettingsPage() {
                                         }}
                                         className={`flex items-center gap-2 px-6 py-4 font-semibold border-b-2 transition whitespace-nowrap ${activeTab === tab.id
                                                 ? "border-primary text-primary"
-                                                : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                                                : "border-transparent text-slate-600 hover:text-slate-900"
                                             }`}
                                     >
                                         <Icon className="w-5 h-5" />
@@ -202,8 +202,8 @@ export default function VendorSettingsPage() {
                     {/* Message */}
                     {message && (
                         <div className={`mx-6 mt-6 p-4 rounded-xl ${message.type === "success"
-                                ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
-                                : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"
+                                ? "bg-green-50 text-green-700"
+                                : "bg-red-50 text-red-700"
                             }`}>
                             {message.text}
                         </div>
@@ -214,40 +214,40 @@ export default function VendorSettingsPage() {
                         {activeTab === "profile" && (
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">
                                         Store Name *
                                     </label>
                                     <input
                                         type="text"
                                         value={profileForm.storeName}
                                         onChange={(e) => setProfileForm({ ...profileForm, storeName: e.target.value })}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         placeholder="Your Store Name"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">
                                         Description
                                     </label>
                                     <textarea
                                         value={profileForm.description}
                                         onChange={(e) => setProfileForm({ ...profileForm, description: e.target.value })}
                                         rows={4}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         placeholder="Tell customers about your store..."
                                     />
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Category *
                                         </label>
                                         <select
                                             value={profileForm.category}
                                             onChange={(e) => setProfileForm({ ...profileForm, category: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         >
                                             <option value="">Select category</option>
                                             <option value="agriculture">Agriculture</option>
@@ -259,28 +259,28 @@ export default function VendorSettingsPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Contact Email *
                                         </label>
                                         <input
                                             type="email"
                                             value={profileForm.contactEmail}
                                             onChange={(e) => setProfileForm({ ...profileForm, contactEmail: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                             placeholder="contact@store.com"
                                         />
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">
                                         Phone Number
                                     </label>
                                     <input
                                         type="tel"
                                         value={profileForm.phone}
                                         onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         placeholder="+234 XXX XXX XXXX"
                                     />
                                 </div>
@@ -300,54 +300,54 @@ export default function VendorSettingsPage() {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Bank Name *
                                         </label>
                                         <input
                                             type="text"
                                             value={paymentForm.bankName}
                                             onChange={(e) => setPaymentForm({ ...paymentForm, bankName: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                             placeholder="First Bank of Nigeria"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Account Number *
                                         </label>
                                         <input
                                             type="text"
                                             value={paymentForm.accountNumber}
                                             onChange={(e) => setPaymentForm({ ...paymentForm, accountNumber: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                             placeholder="0123456789"
                                         />
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">
                                         Account Name *
                                     </label>
                                     <input
                                         type="text"
                                         value={paymentForm.accountName}
                                         onChange={(e) => setPaymentForm({ ...paymentForm, accountName: e.target.value })}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         placeholder="Account holder name"
                                     />
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Payment Schedule
                                         </label>
                                         <select
                                             value={paymentForm.paymentSchedule}
                                             onChange={(e) => setPaymentForm({ ...paymentForm, paymentSchedule: e.target.value as "weekly" | "monthly" })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         >
                                             <option value="weekly">Weekly</option>
                                             <option value="monthly">Monthly</option>
@@ -355,27 +355,27 @@ export default function VendorSettingsPage() {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                        <label className="block text-sm font-medium text-slate-900 mb-2">
                                             Min Payout Threshold (₦)
                                         </label>
                                         <input
                                             type="number"
                                             value={paymentForm.minPayoutThreshold}
                                             onChange={(e) => setPaymentForm({ ...paymentForm, minPayoutThreshold: parseInt(e.target.value) })}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         />
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">
                                         Tax ID (Optional)
                                     </label>
                                     <input
                                         type="text"
                                         value={paymentForm.taxId}
                                         onChange={(e) => setPaymentForm({ ...paymentForm, taxId: e.target.value })}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         placeholder="Tax identification number"
                                     />
                                 </div>
@@ -393,7 +393,7 @@ export default function VendorSettingsPage() {
 
                         {activeTab === "notifications" && (
                             <div className="space-y-6">
-                                <p className="text-slate-600 dark:text-slate-400">
+                                <p className="text-slate-600">
                                     Choose which notifications you'd like to receive
                                 </p>
 
@@ -404,16 +404,16 @@ export default function VendorSettingsPage() {
                                     { key: "reviews", label: "Product Reviews", desc: "Notifications for new customer reviews" },
                                     { key: "marketing", label: "Marketing Updates", desc: "Platform news and promotional opportunities" },
                                 ].map((notif) => (
-                                    <div key={notif.key} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl">
+                                    <div key={notif.key} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
                                         <div>
-                                            <p className="font-semibold text-slate-900 dark:text-white">{notif.label}</p>
-                                            <p className="text-sm text-slate-600 dark:text-slate-400">{notif.desc}</p>
+                                            <p className="font-semibold text-slate-900">{notif.label}</p>
+                                            <p className="text-sm text-slate-600">{notif.desc}</p>
                                         </div>
                                         <button
                                             onClick={() => setNotifPrefs({ ...notifPrefs, [notif.key]: !notifPrefs[notif.key as keyof typeof notifPrefs] })}
                                             className={`relative w-14 h-8 rounded-full transition ${notifPrefs[notif.key as keyof typeof notifPrefs]
                                                     ? "bg-primary"
-                                                    : "bg-slate-300 dark:bg-slate-600"
+                                                    : "bg-slate-300"
                                                 }`}
                                         >
                                             <span
@@ -438,28 +438,28 @@ export default function VendorSettingsPage() {
                         {activeTab === "shipping" && (
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">
                                         Processing Time (days)
                                     </label>
                                     <input
                                         type="number"
                                         value={shippingForm.processingDays}
                                         onChange={(e) => setShippingForm({ ...shippingForm, processingDays: parseInt(e.target.value) })}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         min="1"
                                     />
                                     <p className="text-sm text-slate-500 mt-1">Number of days to process orders before shipping</p>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-medium text-slate-900 mb-2">
                                         Return Policy
                                     </label>
                                     <textarea
                                         value={shippingForm.returnPolicy}
                                         onChange={(e) => setShippingForm({ ...shippingForm, returnPolicy: e.target.value })}
                                         rows={4}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900"
                                         placeholder="Describe your return and refund policy..."
                                     />
                                 </div>

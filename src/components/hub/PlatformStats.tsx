@@ -55,13 +55,13 @@ export default function PlatformStats() {
     const displayValues = [counts.users, counts.exports, counts.products, counts.courses];
 
     return (
-        <div className="py-20 bg-slate-50 dark:bg-slate-900">
+        <div className="py-20 bg-slate-50">
             <div className="max-w-7xl mx-auto px-4">
                 <div className="text-center mb-12">
-                    <h2 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4">
+                    <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
                         Our Growing Community
                     </h2>
-                    <p className="text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+                    <p className="text-slate-600 max-w-2xl mx-auto">
                         Join thousands of farmers, traders, and learners transforming
                         agricultural commerce across Nigeria
                     </p>
@@ -73,7 +73,7 @@ export default function PlatformStats() {
                         return (
                             <div
                                 key={stat.label}
-                                className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg text-center animate-[slideInUp_0.6s_ease-out]"
+                                className="bg-white rounded-2xl p-6 shadow-lg text-center animate-[slideInUp_0.6s_ease-out]"
                                 style={{ animationDelay: `${index * 100}ms` }}
                             >
                                 <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -83,7 +83,7 @@ export default function PlatformStats() {
                                     {displayValues[index].toLocaleString()}
                                     {stat.suffix || ''}
                                 </div>
-                                <div className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                                <div className="text-sm font-semibold text-slate-600">
                                     {stat.label}
                                 </div>
                             </div>
@@ -94,8 +94,8 @@ export default function PlatformStats() {
                 {/* Trust Badge */}
                 <div className="mt-12 text-center">
                     <div className="inline-flex items-center gap-2 px-6 py-3 bg-green-500/10 border border-green-500/30 rounded-full">
-                        <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-                        <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                        <TrendingUp className="w-5 h-5 text-green-600" />
+                        <span className="text-sm font-semibold text-green-700">
                             Growing 25% month-over-month
                         </span>
                     </div>

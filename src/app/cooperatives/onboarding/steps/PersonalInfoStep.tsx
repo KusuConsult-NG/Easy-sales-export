@@ -102,10 +102,10 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
         <div className="space-y-8">
             {/* Header */}
             <div className="text-center">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
+                <h2 className="text-3xl font-bold text-slate-900 mb-3">
                     Personal Information
                 </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400">
+                <p className="text-lg text-slate-600">
                     Tell us about yourself
                 </p>
             </div>
@@ -114,7 +114,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Full Name */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Full Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -122,7 +122,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         value={data.fullName}
                         onChange={(e) => onChange({ ...data, fullName: e.target.value })}
                         placeholder="John Doe"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.fullName ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.fullName ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.fullName && (
@@ -133,7 +133,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 {/* Phone and Email */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Phone Number <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -141,7 +141,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             value={data.phone}
                             onChange={(e) => onChange({ ...data, phone: e.target.value })}
                             placeholder="08012345678"
-                            className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.phone ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.phone ? "border-red-500" : "border-slate-300"
                                 }`}
                         />
                         {errors.phone && (
@@ -150,7 +150,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Email Address <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -158,7 +158,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             value={data.email}
                             onChange={(e) => onChange({ ...data, email: e.target.value })}
                             placeholder="john@example.com"
-                            className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.email ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.email ? "border-red-500" : "border-slate-300"
                                 }`}
                         />
                         {errors.email && (
@@ -170,7 +170,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 {/* Date of Birth and Gender */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Date of Birth <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -178,7 +178,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             value={data.dateOfBirth}
                             onChange={(e) => onChange({ ...data, dateOfBirth: e.target.value })}
                             max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
-                            className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.dateOfBirth ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.dateOfBirth ? "border-red-500" : "border-slate-300"
                                 }`}
                         />
                         {errors.dateOfBirth && (
@@ -187,13 +187,13 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Gender <span className="text-red-500">*</span>
                         </label>
                         <select
                             value={data.gender}
                             onChange={(e) => onChange({ ...data, gender: e.target.value })}
-                            className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.gender ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.gender ? "border-red-500" : "border-slate-300"
                                 }`}
                         >
                             <option value="">Select gender</option>
@@ -209,7 +209,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
 
                 {/* Occupation */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Occupation <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -217,7 +217,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         value={data.occupation}
                         onChange={(e) => onChange({ ...data, occupation: e.target.value })}
                         placeholder="e.g. Farmer, Trader, Civil Servant"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.occupation ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.occupation ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.occupation && (
@@ -226,18 +226,18 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 </div>
 
                 {/* Address */}
-                <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <h3 className="font-semibold text-slate-900 dark:text-white">Address</h3>
+                <div className="space-y-4 pt-4 border-t border-slate-200">
+                    <h3 className="font-semibold text-slate-900">Address</h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 State <span className="text-red-500">*</span>
                             </label>
                             <select
                                 value={data.address.state}
                                 onChange={(e) => onChange({ ...data, address: { ...data.address, state: e.target.value, lga: "" } })}
-                                className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.state ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                                className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.state ? "border-red-500" : "border-slate-300"
                                     }`}
                             >
                                 <option value="">Select state</option>
@@ -251,7 +251,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 LGA
                             </label>
                             <input
@@ -260,13 +260,13 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                                 onChange={(e) => onChange({ ...data, address: { ...data.address, lga: e.target.value } })}
                                 placeholder="Local Government Area"
                                 disabled={!data.address.state}
-                                className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50"
+                                className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50"
                             />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Street Address <span className="text-red-500">*</span>
                         </label>
                         <textarea
@@ -274,7 +274,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             onChange={(e) => onChange({ ...data, address: { ...data.address, street: e.target.value } })}
                             placeholder="House number and street name"
                             rows={3}
-                            className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.street ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.street ? "border-red-500" : "border-slate-300"
                                 }`}
                         />
                         {errors.street && (
@@ -288,7 +288,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-semibold hover:bg-slate-50 transition-all"
                 >
                     Back
                 </button>

@@ -23,7 +23,7 @@ export default function MarketplaceProductsPage() {
     } = useMarketplaceSearch();
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-linear-to-r from-green-600 to-emerald-600 text-white py-16">
                 <div className="max-w-7xl mx-auto px-8">
@@ -39,7 +39,7 @@ export default function MarketplaceProductsPage() {
 
             {/* Filters & Search */}
             <div className="max-w-7xl mx-auto px-8 py-8">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg mb-8">
+                <div className="bg-white rounded-2xl p-6 shadow-lg mb-8">
                     <div className="flex flex-col md:flex-row gap-4">
                         {/* Search */}
                         <div className="flex-1">
@@ -50,7 +50,7 @@ export default function MarketplaceProductsPage() {
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
                                     placeholder="Search products..."
-                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition"
                                 />
                             </div>
                         </div>
@@ -59,7 +59,7 @@ export default function MarketplaceProductsPage() {
                         <select
                             value={category}
                             onChange={(e) => setCategory(e.target.value)}
-                            className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition"
                         >
                             <option>All Categories</option>
                             <option value="grains">Grains & Cereals</option>
@@ -74,7 +74,7 @@ export default function MarketplaceProductsPage() {
                         <select
                             value={state}
                             onChange={(e) => setState(e.target.value)}
-                            className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+                            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition"
                         >
                             <option>All Locations</option>
                             <option>Abuja</option>
@@ -87,11 +87,11 @@ export default function MarketplaceProductsPage() {
                         </select>
 
                         {/* View Toggle (Visual only for now) */}
-                        <div className="flex items-center gap-2 p-1 bg-slate-100 dark:bg-slate-700 rounded-xl">
-                            <button className="p-2 bg-white dark:bg-slate-600 rounded-lg shadow-sm">
+                        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+                            <button className="p-2 bg-white rounded-lg shadow-sm">
                                 <Grid className="w-5 h-5 text-green-600" />
                             </button>
-                            <button className="p-2 hover:bg-white/50 dark:hover:bg-slate-600/50 rounded-lg transition">
+                            <button className="p-2 hover:bg-white/50 rounded-lg transition">
                                 <List className="w-5 h-5 text-slate-400" />
                             </button>
                         </div>
@@ -100,7 +100,7 @@ export default function MarketplaceProductsPage() {
 
                 {/* Error State */}
                 {error && (
-                    <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl mb-8 text-center">
+                    <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-8 text-center">
                         {error}
                     </div>
                 )}
@@ -110,9 +110,9 @@ export default function MarketplaceProductsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {products.map((product) => (
                             <Link href={`/marketplace/products/${product.id}`} key={product.id} className="block group">
-                                <div className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 h-full flex flex-col">
+                                <div className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all hover:-translate-y-1 h-full flex flex-col">
                                     {/* Product Image */}
-                                    <div className="relative h-56 bg-slate-200 dark:bg-slate-700">
+                                    <div className="relative h-56 bg-slate-200">
                                         {product.images && product.images[0] ? (
                                             <Image
                                                 src={product.images[0]}
@@ -136,10 +136,10 @@ export default function MarketplaceProductsPage() {
 
                                     {/* Product Details */}
                                     <div className="p-6 flex-1 flex flex-col">
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 line-clamp-1">
+                                        <h3 className="text-xl font-bold text-slate-900 mb-2 line-clamp-1">
                                             {product.title}
                                         </h3>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                                        <p className="text-sm text-slate-600 mb-1">
                                             by {product.sellerName || "Verified Seller"}
                                         </p>
                                         <div className="flex items-center gap-1 text-slate-500 mb-4 text-sm">
@@ -147,14 +147,14 @@ export default function MarketplaceProductsPage() {
                                             {product.location?.state || "Nigeria"}
                                         </div>
 
-                                        <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                                        <div className="mt-auto pt-4 border-t border-slate-200 flex justify-between items-center">
                                             <div>
                                                 <div className="text-2xl font-bold text-green-600">
                                                     ₦{product.pricingTiers?.[0]?.price?.toLocaleString() ?? "N/A"}
                                                 </div>
                                                 <div className="text-xs text-slate-500">per {product.unit}</div>
                                             </div>
-                                            <div className="flex items-center gap-1 text-yellow-500 text-sm font-bold bg-yellow-50 dark:bg-yellow-900/20 px-2 py-1 rounded-lg">
+                                            <div className="flex items-center gap-1 text-yellow-500 text-sm font-bold bg-yellow-50 px-2 py-1 rounded-lg">
                                                 <Star className="w-3 h-3 fill-current" />
                                                 {product.rating || "New"}
                                             </div>
@@ -166,9 +166,9 @@ export default function MarketplaceProductsPage() {
                     </div>
                 ) : (
                     !loading && (
-                        <div className="text-center py-24 bg-white dark:bg-slate-800 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
+                        <div className="text-center py-24 bg-white rounded-3xl border border-dashed border-slate-200">
                             <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">No products found</h3>
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">No products found</h3>
                             <p className="text-slate-500 max-w-md mx-auto">
                                 We couldn't find any products matching your search. Try adjusting your filters.
                             </p>
@@ -194,7 +194,7 @@ export default function MarketplaceProductsPage() {
                     <div className="mt-12 flex justify-center">
                         <button
                             onClick={loadMore}
-                            className="px-8 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition shadow-sm hover:shadow-md"
+                            className="px-8 py-3 bg-white border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition shadow-sm hover:shadow-md"
                         >
                             Load More Products
                         </button>

@@ -69,8 +69,8 @@ export default function QuizComponent({
         <div className="space-y-6">
             {/* Questions */}
             {quiz.questions.map((question, qIndex) => (
-                <div key={question.id} className="p-6 bg-slate-50 dark:bg-slate-900 rounded-xl">
-                    <p className="font-semibold text-slate-900 dark:text-white mb-4">
+                <div key={question.id} className="p-6 bg-slate-50 rounded-xl">
+                    <p className="font-semibold text-slate-900 mb-4">
                         {qIndex + 1}. {question.question}
                     </p>
                     <div className="space-y-3">
@@ -84,13 +84,13 @@ export default function QuizComponent({
                                     key={optIndex}
                                     className={`block p-4 rounded-lg border-2 transition cursor-pointer ${showFeedback
                                         ? isCorrect
-                                            ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                            ? 'border-green-500 bg-green-50'
                                             : isSelected
-                                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                                : 'border-slate-200 dark:border-slate-700'
+                                                ? 'border-red-500 bg-red-50'
+                                                : 'border-slate-200'
                                         : isSelected
-                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                            : 'border-slate-200 dark:border-slate-700 hover:border-blue-300'
+                                            ? 'border-blue-500 bg-blue-50'
+                                            : 'border-slate-200 hover:border-blue-300'
                                         }`}
                                 >
                                     <div className="flex items-center justify-between">
@@ -106,7 +106,7 @@ export default function QuizComponent({
                                                 disabled={submitted}
                                                 className="w-4 h-4"
                                             />
-                                            <span className="text-slate-900 dark:text-white">{option}</span>
+                                            <span className="text-slate-900">{option}</span>
                                         </div>
                                         {showFeedback && isCorrect && (
                                             <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
@@ -141,23 +141,23 @@ export default function QuizComponent({
                     )}
                 </button>
             ) : (
-                <div className="text-center p-8 bg-slate-50 dark:bg-slate-900 rounded-xl">
+                <div className="text-center p-8 bg-slate-50 rounded-xl">
                     <Award
                         className={`w-20 h-20 mx-auto mb-4 ${passed ? "text-green-600" : "text-red-600"
                             }`}
                     />
-                    <h3 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h3 className="text-3xl font-bold text-slate-900 mb-2">
                         {passed ? "Quiz Passed! 🎉" : "Quiz Failed"}
                     </h3>
-                    <p className="text-xl text-slate-600 dark:text-slate-400 mb-1">
+                    <p className="text-xl text-slate-600 mb-1">
                         Your Score: <span className="font-bold">{score}%</span>
                     </p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                    <p className="text-sm text-slate-500 mb-6">
                         Passing score: {quiz.passingScore}%
                     </p>
 
                     {passed ? (
-                        <p className="text-green-600 dark:text-green-400 font-medium">
+                        <p className="text-green-600 font-medium">
                             Great job! You can proceed to the next module.
                         </p>
                     ) : (

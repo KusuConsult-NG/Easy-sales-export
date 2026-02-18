@@ -86,22 +86,22 @@ export default function VendorProductsPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4">
+        <div className="min-h-screen bg-gray-50 py-8 px-4">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
                             Product Catalog
                         </h1>
-                        <p className="text-gray-600 dark:text-gray-400">
+                        <p className="text-gray-600">
                             Manage your product inventory
                         </p>
                     </div>
@@ -116,26 +116,26 @@ export default function VendorProductsPage() {
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Total Products</p>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
+                    <div className="bg-white rounded-xl p-4 shadow">
+                        <p className="text-sm text-gray-600">Total Products</p>
+                        <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Active</p>
+                    <div className="bg-white rounded-xl p-4 shadow">
+                        <p className="text-sm text-gray-600">Active</p>
                         <p className="text-2xl font-bold text-green-600">{stats.active}</p>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Out of Stock</p>
+                    <div className="bg-white rounded-xl p-4 shadow">
+                        <p className="text-sm text-gray-600">Out of Stock</p>
                         <p className="text-2xl font-bold text-red-600">{stats.outOfStock}</p>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Total Value</p>
+                    <div className="bg-white rounded-xl p-4 shadow">
+                        <p className="text-sm text-gray-600">Total Value</p>
                         <p className="text-xl font-bold text-purple-600">{formatCurrency(stats.totalValue)}</p>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow mb-6">
+                <div className="bg-white rounded-xl p-4 shadow mb-6">
                     <div className="flex flex-col md:flex-row gap-4">
                         <div className="flex-1 relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -144,7 +144,7 @@ export default function VendorProductsPage() {
                                 placeholder="Search products..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 bg-gray-100 dark:bg-gray-700 border-none rounded-lg text-gray-900 dark:text-white"
+                                className="w-full pl-10 pr-4 py-3 bg-gray-100 border-none rounded-lg text-gray-900"
                             />
                         </div>
                         <div className="flex gap-2">
@@ -159,7 +159,7 @@ export default function VendorProductsPage() {
                                     onClick={() => setFilterStatus(f.key as any)}
                                     className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${filterStatus === f.key
                                         ? "bg-blue-600 text-white"
-                                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                                        : "bg-gray-100 text-gray-600"
                                         }`}
                                 >
                                     {f.label}
@@ -171,10 +171,10 @@ export default function VendorProductsPage() {
 
                 {/* Products Table */}
                 {filteredProducts.length === 0 ? (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-12 text-center shadow">
-                        <Package className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No Products Found</h3>
-                        <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    <div className="bg-white rounded-xl p-12 text-center shadow">
+                        <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">No Products Found</h3>
+                        <p className="text-gray-600 mb-6">
                             {searchQuery || filterStatus !== "all"
                                 ? "No products match your filters"
                                 : "Get started by adding your first product"}
@@ -189,32 +189,32 @@ export default function VendorProductsPage() {
                         )}
                     </div>
                 ) : (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+                    <div className="bg-white rounded-xl shadow overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full">
-                                <thead className="bg-gray-50 dark:bg-gray-900">
+                                <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Product</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">SKU</th>
-                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Price</th>
-                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Stock</th>
-                                        <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Status</th>
-                                        <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase">Actions</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Product</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">SKU</th>
+                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Price</th>
+                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Stock</th>
+                                        <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Status</th>
+                                        <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                <tbody className="divide-y divide-gray-200">
                                     {filteredProducts.map((product) => (
-                                        <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition">
+                                        <tr key={product.id} className="hover:bg-gray-50 transition">
                                             <td className="px-6 py-4">
                                                 <div>
-                                                    <p className="font-semibold text-gray-900 dark:text-white">{product.name}</p>
+                                                    <p className="font-semibold text-gray-900">{product.name}</p>
                                                     <p className="text-sm text-gray-500">{product.category}</p>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 font-mono text-sm text-gray-600 dark:text-gray-400">
+                                            <td className="px-6 py-4 font-mono text-sm text-gray-600">
                                                 {product.sku}
                                             </td>
-                                            <td className="px-6 py-4 text-right font-semibold text-gray-900 dark:text-white">
+                                            <td className="px-6 py-4 text-right font-semibold text-gray-900">
                                                 {formatCurrency(product.price)}/{product.unit}
                                             </td>
                                             <td className="px-6 py-4 text-right">
@@ -229,9 +229,9 @@ export default function VendorProductsPage() {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-center">
-                                                <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold capitalize ${product.status === "active" ? "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400" :
-                                                    product.status === "out_of_stock" ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400" :
-                                                        "bg-gray-100 text-gray-700 dark:bg-gray-900/20 dark:text-gray-400"
+                                                <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold capitalize ${product.status === "active" ? "bg-green-100 text-green-700" :
+                                                    product.status === "out_of_stock" ? "bg-red-100 text-red-700" :
+                                                        "bg-gray-100 text-gray-700"
                                                     }`}>
                                                     {product.status.replace("_", " ")}
                                                 </span>
@@ -240,7 +240,7 @@ export default function VendorProductsPage() {
                                                 <div className="flex items-center justify-center gap-2">
                                                     <button
                                                         onClick={() => handleToggleStatus(product.id)}
-                                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                                        className="p-2 hover:bg-gray-100 rounded-lg transition"
                                                         title={product.status === "active" ? "Deactivate" : "Activate"}
                                                     >
                                                         {product.status === "active" ? (
@@ -251,14 +251,14 @@ export default function VendorProductsPage() {
                                                     </button>
                                                     <button
                                                         onClick={() => router.push(`/vendor/products/${product.id}`)}
-                                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                                        className="p-2 hover:bg-gray-100 rounded-lg transition"
                                                         title="Edit"
                                                     >
                                                         <Edit className="w-5 h-5 text-blue-600" />
                                                     </button>
                                                     <button
                                                         onClick={() => handleDeleteProduct(product.id, product.name)}
-                                                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                                        className="p-2 hover:bg-gray-100 rounded-lg transition"
                                                         title="Delete"
                                                     >
                                                         <Trash2 className="w-5 h-5 text-red-600" />

@@ -39,7 +39,7 @@ export default function HubHero() {
     }, [heroImages.length]);
 
     return (
-        <div className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-linear-to-br from-primary via-primary/80 to-blue-600 dark:from-primary/90 dark:via-primary/70 dark:to-blue-700">
+        <div className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-linear-to-br from-primary via-primary/80 to-blue-600">
             {/* Background Image Slider */}
             <div className="absolute inset-0 overflow-hidden">
                 {heroImages.map((img, index) => {

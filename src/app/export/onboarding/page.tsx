@@ -85,7 +85,7 @@ export default function ExportOnboardingPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
             </div>
         );
@@ -226,8 +226,8 @@ export default function ExportOnboardingPage() {
             <div className="mt-8">{renderCurrentStep()}</div>
 
             {/* Benefits Reminder */}
-            <div className="mt-12 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg p-6">
-                <h3 className="font-semibold text-orange-900 dark:text-orange-100 mb-4 flex items-center gap-2">
+            <div className="mt-12 bg-orange-50 border border-orange-200 rounded-lg p-6">
+                <h3 className="font-semibold text-orange-900 mb-4 flex items-center gap-2">
                     <CheckCircle className="w-5 h-5" />
                     Why Verify Your Account?
                 </h3>
@@ -235,10 +235,10 @@ export default function ExportOnboardingPage() {
                     <div className="flex items-start gap-2">
                         <TrendingUp className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
                         <div>
-                            <p className="font-medium text-orange-900 dark:text-orange-100">
+                            <p className="font-medium text-orange-900">
                                 Higher Returns
                             </p>
-                            <p className="text-orange-700 dark:text-orange-300">
+                            <p className="text-orange-700">
                                 Access premium export opportunities with 18-22% ROI
                             </p>
                         </div>
@@ -246,10 +246,10 @@ export default function ExportOnboardingPage() {
                     <div className="flex items-start gap-2">
                         <Shield className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
                         <div>
-                            <p className="font-medium text-orange-900 dark:text-orange-100">
+                            <p className="font-medium text-orange-900">
                                 Secure Escrow
                             </p>
-                            <p className="text-orange-700 dark:text-orange-300">
+                            <p className="text-orange-700">
                                 Your funds are protected with professional escrow services
                             </p>
                         </div>
@@ -257,10 +257,10 @@ export default function ExportOnboardingPage() {
                     <div className="flex items-start gap-2">
                         <Package className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
                         <div>
-                            <p className="font-medium text-orange-900 dark:text-orange-100">
+                            <p className="font-medium text-orange-900">
                                 Verified Contracts
                             </p>
-                            <p className="text-orange-700 dark:text-orange-300">
+                            <p className="text-orange-700">
                                 All export contracts are thoroughly vetted and verified
                             </p>
                         </div>

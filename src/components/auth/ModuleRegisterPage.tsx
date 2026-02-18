@@ -196,7 +196,7 @@ function ModuleRegisterContent({
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4 relative">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative">
             {/* Background Decoration */}
             {backgroundImage ? backgroundImage : (
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -206,7 +206,7 @@ function ModuleRegisterContent({
                 </div>
             )}
 
-            <div className="relative w-full max-w-5xl bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2 z-10">
+            <div className="relative w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2 z-10">
                 {/* Left Side - Information & Branding */}
                 <div className={`hidden lg:block relative bg-linear-to-br ${theme.gradient} p-12 text-white`}>
                     <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
@@ -251,11 +251,11 @@ function ModuleRegisterContent({
                 {/* Right Side - Registration Form */}
                 <div className="p-8 lg:p-12 overflow-y-auto max-h-[90vh]">
                     <div className="lg:hidden mb-8 text-center">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Join {moduleName}</h2>
+                        <h2 className="text-2xl font-bold text-slate-900">Join {moduleName}</h2>
                         {footerText ? (
-                            <div className="text-slate-500 dark:text-slate-400 text-sm mt-1">{footerText}</div>
+                            <div className="text-slate-500 text-sm mt-1">{footerText}</div>
                         ) : (
-                            <p className="text-slate-500 dark:text-slate-400">Powered by Easy Sales Export</p>
+                            <p className="text-slate-500">Powered by Easy Sales Export</p>
                         )}
                     </div>
 
@@ -267,16 +267,16 @@ function ModuleRegisterContent({
                         {fixedGender && <input type="hidden" name="gender" value={fixedGender} />}
 
                         {state.error && (
-                            <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-xl p-4 flex items-start gap-3">
-                                <AlertCircle className="w-5 h-5 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
-                                <p className="text-sm text-red-600 dark:text-red-300">{state.error}</p>
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <p className="text-sm text-red-600">{state.error}</p>
                             </div>
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             {/* Full Name */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Full Name <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
@@ -286,7 +286,7 @@ function ModuleRegisterContent({
                                         name="fullName"
                                         value={formData.fullName}
                                         onChange={handleInputChange}
-                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.fullName ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} dark:text-white transition-all`}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.fullName ? "border-red-500" : "border-slate-200"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} transition-all`}
                                         placeholder="John Doe"
                                         disabled={isPending}
                                         required
@@ -297,7 +297,7 @@ function ModuleRegisterContent({
 
                             {/* Email */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Email Address <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
@@ -307,7 +307,7 @@ function ModuleRegisterContent({
                                         name="email"
                                         value={formData.email}
                                         onChange={handleInputChange}
-                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.email ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} dark:text-white transition-all`}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.email ? "border-red-500" : "border-slate-200"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} transition-all`}
                                         placeholder="your@email.com"
                                         disabled={isPending}
                                         required
@@ -318,7 +318,7 @@ function ModuleRegisterContent({
 
                             {/* Phone */}
                             <div className={fixedGender ? "col-span-1" : "col-span-1"}>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Phone Number
                                 </label>
                                 <div className="relative">
@@ -328,7 +328,7 @@ function ModuleRegisterContent({
                                         name="phone"
                                         value={formData.phone}
                                         onChange={handleInputChange}
-                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.phone ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} dark:text-white transition-all`}
+                                        className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.phone ? "border-red-500" : "border-slate-200"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} transition-all`}
                                         placeholder="+234..."
                                         disabled={isPending}
                                     />
@@ -339,7 +339,7 @@ function ModuleRegisterContent({
                             {/* Gender */}
                             {!fixedGender ? (
                                 <div className="col-span-1">
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Gender <span className="text-red-500">*</span>
                                     </label>
                                     <div className="relative">
@@ -347,7 +347,7 @@ function ModuleRegisterContent({
                                             name="gender"
                                             value={formData.gender}
                                             onChange={handleInputChange}
-                                            className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.gender ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} dark:text-white transition-all appearance-none cursor-pointer`}
+                                            className={`w-full px-4 py-3 bg-slate-50 border ${errors.gender ? "border-red-500" : "border-slate-200"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} transition-all appearance-none cursor-pointer`}
                                             disabled={isPending}
                                             required
                                         >
@@ -360,10 +360,10 @@ function ModuleRegisterContent({
                                 </div>
                             ) : (
                                 <div className="col-span-1">
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Gender
                                     </label>
-                                    <div className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 dark:text-slate-400 cursor-not-allowed">
+                                    <div className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed">
                                         {fixedGender === 'female' ? 'Female' : fixedGender}
                                         <span className="ml-2 text-xs opacity-70">(Fixed)</span>
                                     </div>
@@ -372,7 +372,7 @@ function ModuleRegisterContent({
 
                             {/* Password */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Password <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
@@ -382,7 +382,7 @@ function ModuleRegisterContent({
                                         name="password"
                                         value={formData.password}
                                         onChange={handleInputChange}
-                                        className={`w-full pl-11 pr-11 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.password ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} dark:text-white transition-all`}
+                                        className={`w-full pl-11 pr-11 py-3 bg-slate-50 border ${errors.password ? "border-red-500" : "border-slate-200"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} transition-all`}
                                         placeholder="Min 8 chars"
                                         disabled={isPending}
                                         required
@@ -390,7 +390,7 @@ function ModuleRegisterContent({
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                                     >
                                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
@@ -401,7 +401,7 @@ function ModuleRegisterContent({
                                         {[1, 2, 3, 4, 5].map((i) => (
                                             <div
                                                 key={i}
-                                                className={`flex-1 rounded-full bg-slate-200 dark:bg-slate-700 ${i <= passwordStrength.score ? passwordStrength.color : ""
+                                                className={`flex-1 rounded-full bg-slate-200 ${i <= passwordStrength.score ? passwordStrength.color : ""
                                                     }`}
                                             />
                                         ))}
@@ -411,7 +411,7 @@ function ModuleRegisterContent({
 
                             {/* Confirm Password */}
                             <div className="col-span-full">
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Confirm Password <span className="text-red-500">*</span>
                                 </label>
                                 <div className="relative">
@@ -421,7 +421,7 @@ function ModuleRegisterContent({
                                         name="confirmPassword"
                                         value={formData.confirmPassword}
                                         onChange={handleInputChange}
-                                        className={`w-full pl-11 pr-11 py-3 bg-slate-50 dark:bg-slate-700 border ${errors.confirmPassword ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} dark:text-white transition-all`}
+                                        className={`w-full pl-11 pr-11 py-3 bg-slate-50 border ${errors.confirmPassword ? "border-red-500" : "border-slate-200"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} transition-all`}
                                         placeholder="Confirm password"
                                         disabled={isPending}
                                         required
@@ -429,7 +429,7 @@ function ModuleRegisterContent({
                                     <button
                                         type="button"
                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                                     >
                                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                     </button>
@@ -447,7 +447,7 @@ function ModuleRegisterContent({
                                     onChange={handleInputChange}
                                     className={`mt-1 w-4 h-4 rounded ${theme.checkbox || "text-primary focus:ring-primary"} border-slate-300`}
                                 />
-                                <span className="text-sm text-slate-600 dark:text-slate-400">
+                                <span className="text-sm text-slate-600">
                                     I agree to the <Link href="/terms" className={`${theme.text} hover:underline`}>Terms of Service</Link> and <Link href="/privacy" className={`${theme.text} hover:underline`}>Privacy Policy</Link>.
                                 </span>
                             </label>
@@ -473,7 +473,7 @@ function ModuleRegisterContent({
                         </button>
 
                         <div className="text-center mt-6">
-                            <p className="text-slate-600 dark:text-slate-400 text-sm">
+                            <p className="text-slate-600 text-sm">
                                 Already a member?{" "}
                                 <Link href={loginLink} className={`${theme.text} font-semibold hover:underline`}>
                                     Sign In
@@ -490,7 +490,7 @@ function ModuleRegisterContent({
 export default function ModuleRegisterPage(props: ModuleRegisterProps) {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className={`w-8 h-8 ${props.theme.text} animate-spin`} />
             </div>
         }>

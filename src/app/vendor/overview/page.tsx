@@ -54,24 +54,24 @@ export default function VendorOverviewPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading dashboard...</p>
+                    <p className="text-slate-600">Loading dashboard...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 px-4">
+        <div className="min-h-screen bg-slate-50 py-8 px-4">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         Vendor Dashboard
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Track your sales, inventory, and performance metrics
                     </p>
                 </div>
@@ -110,8 +110,8 @@ export default function VendorOverviewPage() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                     {/* Revenue Trends Chart */}
-                    <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-lg">
+                        <h2 className="text-xl font-bold text-slate-900 mb-4">
                             Revenue Trends (Last 30 Days)
                         </h2>
                         <div className="h-64 flex items-end justify-between gap-1">
@@ -138,31 +138,31 @@ export default function VendorOverviewPage() {
                     </div>
 
                     {/* Inventory Overview */}
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                        <h2 className="text-xl font-bold text-slate-900 mb-4">
                             Inventory Status
                         </h2>
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
-                                <span className="text-slate-600 dark:text-slate-400">Total Products</span>
-                                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                                <span className="text-slate-600">Total Products</span>
+                                <span className="text-2xl font-bold text-slate-900">
                                     {inventoryStats?.totalProducts || 0}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-slate-600 dark:text-slate-400">Active</span>
+                                <span className="text-slate-600">Active</span>
                                 <span className="text-xl font-semibold text-green-600">
                                     {inventoryStats?.activeProducts || 0}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-slate-600 dark:text-slate-400">Out of Stock</span>
+                                <span className="text-slate-600">Out of Stock</span>
                                 <span className="text-xl font-semibold text-red-600">
                                     {inventoryStats?.outOfStock || 0}
                                 </span>
                             </div>
                             <div className="flex items-center justify-between">
-                                <span className="text-slate-600 dark:text-slate-400">Low Stock</span>
+                                <span className="text-slate-600">Low Stock</span>
                                 <span className="text-xl font-semibold text-amber-600">
                                     {inventoryStats?.lowStock || 0}
                                 </span>
@@ -170,15 +170,15 @@ export default function VendorOverviewPage() {
                         </div>
 
                         {inventoryStats?.lowStockProducts?.length > 0 && (
-                            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-                                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                            <div className="mt-6 pt-6 border-t border-slate-200">
+                                <h3 className="text-sm font-semibold text-slate-900 mb-3">
                                     Low Stock Alerts
                                 </h3>
                                 <div className="space-y-2">
                                     {inventoryStats.lowStockProducts.slice(0, 3).map((product: any) => (
                                         <div key={product.id} className="flex items-center gap-2 text-xs">
                                             <AlertCircle className="w-4 h-4 text-amber-500" />
-                                            <span className="text-slate-900 dark:text-white flex-1 truncate">
+                                            <span className="text-slate-900 flex-1 truncate">
                                                 {product.name}
                                             </span>
                                             <span className="text-amber-600 font-semibold">
@@ -194,22 +194,22 @@ export default function VendorOverviewPage() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                     {/* Top Selling Products */}
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                        <h2 className="text-xl font-bold text-slate-900 mb-4">
                             Top Selling Products
                         </h2>
                         <div className="space-y-3">
                             {topProducts.length > 0 ? (
                                 topProducts.map((product, index) => (
-                                    <div key={product.productId} className="flex items-center gap-4 p-3 bg-slate-50 dark:bg-slate-900 rounded-xl">
+                                    <div key={product.productId} className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl">
                                         <div className="w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center font-bold">
                                             {index + 1}
                                         </div>
                                         <div className="flex-1">
-                                            <p className="font-semibold text-slate-900 dark:text-white">
+                                            <p className="font-semibold text-slate-900">
                                                 {product.productName}
                                             </p>
-                                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                            <p className="text-sm text-slate-600">
                                                 {product.totalSold} units sold
                                             </p>
                                         </div>
@@ -227,37 +227,37 @@ export default function VendorOverviewPage() {
                     </div>
 
                     {/* Revenue Insights */}
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                        <h2 className="text-xl font-bold text-slate-900 mb-4">
                             Revenue Insights
                         </h2>
                         <div className="space-y-4">
-                            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl">
-                                <p className="text-sm text-green-700 dark:text-green-400 mb-1">Total Revenue</p>
-                                <p className="text-2xl font-bold text-green-900 dark:text-green-300">
+                            <div className="p-4 bg-green-50 rounded-xl">
+                                <p className="text-sm text-green-700 mb-1">Total Revenue</p>
+                                <p className="text-2xl font-bold text-green-900">
                                     ₦{revenueInsights?.totalRevenue?.toLocaleString() || 0}
                                 </p>
                             </div>
-                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
-                                <p className="text-sm text-amber-700 dark:text-amber-400 mb-1">Pending Payouts</p>
-                                <p className="text-2xl font-bold text-amber-900 dark:text-amber-300">
+                            <div className="p-4 bg-amber-50 rounded-xl">
+                                <p className="text-sm text-amber-700 mb-1">Pending Payouts</p>
+                                <p className="text-2xl font-bold text-amber-900">
                                     ₦{revenueInsights?.pendingPayouts?.toLocaleString() || 0}
                                 </p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                                    <p className="text-sm text-slate-600 mb-1">
                                         Completed Transactions
                                     </p>
-                                    <p className="text-xl font-bold text-slate-900 dark:text-white">
+                                    <p className="text-xl font-bold text-slate-900">
                                         {revenueInsights?.completedTransactions || 0}
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                                    <p className="text-sm text-slate-600 mb-1">
                                         Avg. Order Value
                                     </p>
-                                    <p className="text-xl font-bold text-slate-900 dark:text-white">
+                                    <p className="text-xl font-bold text-slate-900">
                                         ₦{revenueInsights?.averageOrderValue?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || 0}
                                     </p>
                                 </div>
@@ -267,14 +267,14 @@ export default function VendorOverviewPage() {
                 </div>
 
                 {/* Recent Activity Feed */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                <div className="bg-white rounded-2xl p-6 shadow-lg">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">
                         Recent Activity
                     </h2>
                     <div className="space-y-3">
                         {activityFeed.length > 0 ? (
                             activityFeed.map((activity) => (
-                                <div key={activity.id} className="flex items-start gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl">
+                                <div key={activity.id} className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl">
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activity.type === 'order' ? 'bg-blue-100 text-blue-600' :
                                             activity.type === 'stock' ? 'bg-amber-100 text-amber-600' :
                                                 activity.type === 'payout' ? 'bg-green-100 text-green-600' :
@@ -286,10 +286,10 @@ export default function VendorOverviewPage() {
                                         {activity.type === 'review' && <Users className="w-5 h-5" />}
                                     </div>
                                     <div className="flex-1">
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="font-semibold text-slate-900">
                                             {activity.title}
                                         </p>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        <p className="text-sm text-slate-600">
                                             {activity.description}
                                         </p>
                                         <p className="text-xs text-slate-500 mt-1">
@@ -316,23 +316,23 @@ function StatCard({ title, value, subtitle, icon: Icon, color }: {
     color: string;
 }) {
     const colorClasses = {
-        green: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
-        blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-        purple: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
-        indigo: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400',
+        green: 'bg-green-100 text-green-600',
+        blue: 'bg-blue-100 text-blue-600',
+        purple: 'bg-purple-100 text-purple-600',
+        indigo: 'bg-indigo-100 text-indigo-600',
     };
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+        <div className="bg-white rounded-2xl p-6 shadow-lg">
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                <h3 className="text-sm font-semibold text-slate-600">
                     {title}
                 </h3>
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colorClasses[color as keyof typeof colorClasses]}`}>
                     <Icon className="w-5 h-5" />
                 </div>
             </div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+            <p className="text-2xl font-bold text-slate-900 mb-1">
                 {value}
             </p>
             <p className="text-sm text-slate-500">

@@ -111,24 +111,24 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
                     Your Property Preferences
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Tell us what you're looking for so we can help you better
                 </p>
             </div>
 
             {/* Buyer Interests */}
             {isBuyer && (
-                <div className="space-y-6 p-6 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                <div className="space-y-6 p-6 bg-slate-50 rounded-xl">
+                    <h3 className="text-lg font-bold text-slate-900">
                         Buyer Preferences
                     </h3>
 
                     {/* Property Types */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                        <label className="block text-sm font-semibold text-slate-900 mb-3">
                             What type of properties are you interested in? <span className="text-red-500">*</span>
                         </label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -138,8 +138,8 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                     type="button"
                                     onClick={() => togglePropertyType(type)}
                                     className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${formData.propertyTypes.includes(type)
-                                            ? "border-teal-600 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-100"
-                                            : "border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white hover:border-teal-300"
+                                            ? "border-teal-600 bg-teal-50 text-teal-900"
+                                            : "border-slate-200 text-slate-900 hover:border-teal-300"
                                         }`}
                                 >
                                     {type}
@@ -153,14 +153,14 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
                     {/* Budget Range */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Budget Range <span className="text-red-500">*</span>
                         </label>
                         <select
                             value={formData.budgetRange}
                             onChange={(e) => setFormData((prev) => ({ ...prev, budgetRange: e.target.value }))}
-                            className={`w-full px-4 py-3 bg-white dark:bg-slate-900 border ${errors.budgetRange ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white`}
+                            className={`w-full px-4 py-3 bg-white border ${errors.budgetRange ? "border-red-500" : "border-slate-200"
+                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500`}
                         >
                             <option value="">Select budget range</option>
                             {BUDGET_RANGES.map((range) => (
@@ -176,13 +176,13 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
                     {/* Preferred Size */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Preferred Property Size <span className="text-slate-400">(Optional)</span>
                         </label>
                         <select
                             value={formData.preferredSize}
                             onChange={(e) => setFormData((prev) => ({ ...prev, preferredSize: e.target.value }))}
-                            className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
                         >
                             <option value="">Select size range</option>
                             {ACREAGE_RANGES.map((range) => (
@@ -197,14 +197,14 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
             {/* Seller Interests */}
             {isSeller && (
-                <div className="space-y-6 p-6 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                <div className="space-y-6 p-6 bg-slate-50 rounded-xl">
+                    <h3 className="text-lg font-bold text-slate-900">
                         Seller Information
                     </h3>
 
                     {/* Listing Types */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                        <label className="block text-sm font-semibold text-slate-900 mb-3">
                             What type of properties do you want to list? <span className="text-red-500">*</span>
                         </label>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -214,8 +214,8 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                     type="button"
                                     onClick={() => toggleListingType(type)}
                                     className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${formData.listingTypes.includes(type)
-                                            ? "border-teal-600 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-100"
-                                            : "border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white hover:border-teal-300"
+                                            ? "border-teal-600 bg-teal-50 text-teal-900"
+                                            : "border-slate-200 text-slate-900 hover:border-teal-300"
                                         }`}
                                 >
                                     {type}
@@ -229,13 +229,13 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
                     {/* Total Acreage */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Total Acreage Available <span className="text-slate-400">(Optional)</span>
                         </label>
                         <select
                             value={formData.totalAcreage}
                             onChange={(e) => setFormData((prev) => ({ ...prev, totalAcreage: e.target.value }))}
-                            className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
                         >
                             <option value="">Select total acreage</option>
                             {ACREAGE_RANGES.map((range) => (
@@ -257,7 +257,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                 }
                                 className="w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-2 focus:ring-teal-500"
                             />
-                            <span className="text-sm text-slate-900 dark:text-white">
+                            <span className="text-sm text-slate-900">
                                 I have properties ready to list now
                             </span>
                         </label>
@@ -269,7 +269,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                 <button
                     type="button"
                     onClick={onBack}
-                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back

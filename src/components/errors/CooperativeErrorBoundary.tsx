@@ -49,29 +49,29 @@ export class CooperativeErrorBoundary extends React.Component<
             }
 
             return (
-                <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-                    <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-800">
+                <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                    <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
                         <div className="flex flex-col items-center text-center">
                             {/* Error Icon */}
-                            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
-                                <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                                <AlertTriangle className="w-8 h-8 text-red-600" />
                             </div>
 
                             {/* Error Title */}
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-2">
                                 Something Went Wrong
                             </h2>
 
                             {/* Error Message */}
-                            <p className="text-slate-600 dark:text-slate-400 mb-6">
+                            <p className="text-slate-600 mb-6">
                                 We encountered an unexpected error while loading the cooperative module.
                                 Please try refreshing the page or contact support if the problem persists.
                             </p>
 
                             {/* Error Details (only in development) */}
                             {process.env.NODE_ENV === 'development' && this.state.error && (
-                                <div className="w-full mb-6 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                                    <p className="text-xs font-mono text-red-800 dark:text-red-200 text-left break-all">
+                                <div className="w-full mb-6 p-4 bg-red-50 rounded-lg border border-red-200">
+                                    <p className="text-xs font-mono text-red-800 text-left break-all">
                                         {this.state.error.toString()}
                                     </p>
                                 </div>
@@ -87,7 +87,7 @@ export class CooperativeErrorBoundary extends React.Component<
                                 </button>
                                 <a
                                     href="/cooperatives"
-                                    className="flex-1 px-6 py-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-900 dark:text-white rounded-xl font-semibold transition-colors text-center"
+                                    className="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-xl font-semibold transition-colors text-center"
                                 >
                                     Go Home
                                 </a>

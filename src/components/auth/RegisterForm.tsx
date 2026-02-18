@@ -82,7 +82,7 @@ export default function RegisterForm() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background Pattern */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl opacity-50" />
@@ -99,28 +99,28 @@ export default function RegisterForm() {
                             <User className="w-6 h-6 md:w-8 md:h-8" />
                         </div>
                     </Link>
-                    <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
                         Create Account
                     </h2>
-                    <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">
+                    <p className="text-sm md:text-base text-slate-500">
                         Join thousands of successful agri-exporters today.
                     </p>
                 </div>
                 {/* Registration Card */}
-                <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-2xl backdrop-blur-sm rounded-3xl p-8 relative z-10">
+                <div className="bg-white border border-slate-100 shadow-2xl backdrop-blur-sm rounded-3xl p-8 relative z-10">
                     <form action={formAction} className="space-y-6">
                         <input type="hidden" name="callbackUrl" value={callbackUrl} />
 
                         {state.error && (
-                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/30 rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                                 <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                                <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>
+                                <p className="text-sm text-red-600">{state.error}</p>
                             </div>
                         )}
 
                         {/* Full Name Field */}
                         <div className="space-y-2">
-                            <label htmlFor="fullName" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                            <label htmlFor="fullName" className="block text-sm font-semibold text-slate-900">
                                 Full Name
                             </label>
                             <div className="relative group">
@@ -132,7 +132,7 @@ export default function RegisterForm() {
                                     autoComplete="name"
                                     value={formData.fullName}
                                     onChange={handleInputChange}
-                                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
+                                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
                                     placeholder="John Doe"
                                     required
                                     disabled={isPending}
@@ -142,7 +142,7 @@ export default function RegisterForm() {
 
                         {/* Email Field */}
                         <div className="space-y-2">
-                            <label htmlFor="email" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                            <label htmlFor="email" className="block text-sm font-semibold text-slate-900">
                                 Email Address
                             </label>
                             <div className="relative group">
@@ -154,7 +154,7 @@ export default function RegisterForm() {
                                     autoComplete="email"
                                     value={formData.email}
                                     onChange={handleInputChange}
-                                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
+                                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
                                     placeholder="your.email@example.com"
                                     required
                                     disabled={isPending}
@@ -164,7 +164,7 @@ export default function RegisterForm() {
 
                         {/* Phone Field (Optional) */}
                         <div className="space-y-2">
-                            <label htmlFor="phone" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                            <label htmlFor="phone" className="block text-sm font-semibold text-slate-900">
                                 Phone Number <span className="text-slate-400 font-normal">(Optional)</span>
                             </label>
                             <input
@@ -174,7 +174,7 @@ export default function RegisterForm() {
                                 autoComplete="tel"
                                 value={formData.phone}
                                 onChange={handleInputChange}
-                                className="w-full px-4 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
+                                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
                                 placeholder="+234 XXX XXX XXXX"
                                 disabled={isPending}
                             />
@@ -182,7 +182,7 @@ export default function RegisterForm() {
 
                         {/* Password Field */}
                         <div className="space-y-2">
-                            <label htmlFor="password" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                            <label htmlFor="password" className="block text-sm font-semibold text-slate-900">
                                 Password
                             </label>
                             <div className="relative group">
@@ -194,7 +194,7 @@ export default function RegisterForm() {
                                     autoComplete="new-password"
                                     value={formData.password}
                                     onChange={handleInputChange}
-                                    className="w-full pl-11 pr-12 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
+                                    className="w-full pl-11 pr-12 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
                                     placeholder="••••••••"
                                     required
                                     disabled={isPending}
@@ -202,7 +202,7 @@ export default function RegisterForm() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 transition-colors"
                                     disabled={isPending}
                                 >
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -212,7 +212,7 @@ export default function RegisterForm() {
 
                         {/* Confirm Password Field */}
                         <div className="space-y-2">
-                            <label htmlFor="confirmPassword" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                            <label htmlFor="confirmPassword" className="block text-sm font-semibold text-slate-900">
                                 Confirm Password
                             </label>
                             <div className="relative group">
@@ -224,7 +224,7 @@ export default function RegisterForm() {
                                     autoComplete="new-password"
                                     value={formData.confirmPassword}
                                     onChange={handleInputChange}
-                                    className="w-full pl-11 pr-12 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
+                                    className="w-full pl-11 pr-12 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
                                     placeholder="••••••••"
                                     required
                                     disabled={isPending}
@@ -232,7 +232,7 @@ export default function RegisterForm() {
                                 <button
                                     type="button"
                                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 transition-colors"
                                     disabled={isPending}
                                 >
                                     {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -254,12 +254,12 @@ export default function RegisterForm() {
                     </form>
 
                     {/* Login Link */}
-                    <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700 text-center">
-                        <p className="text-slate-600 dark:text-slate-400">
+                    <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                        <p className="text-slate-600">
                             Already have an account?{" "}
                             <Link
                                 href={"/auth/login" + (callbackUrl !== "/dashboard" ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "")}
-                                className="text-slate-600 font-bold hover:text-slate-900 dark:hover:text-white hover:underline transition-all"
+                                className="text-slate-600 font-bold hover:text-slate-900 hover:underline transition-all"
                             >
                                 Sign In
                             </Link>
@@ -269,10 +269,10 @@ export default function RegisterForm() {
 
                 {/* Footer */}
                 <div className="mt-8 text-center relative z-10 space-y-4">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-sm text-slate-500">
                         © {new Date().getFullYear()} Easy Sales Export • v2.0.0
                     </p>
-                    <div className="flex items-center justify-center gap-6 text-sm text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center justify-center gap-6 text-sm text-slate-500">
                         <Link href="/privacy" className="hover:underline hover:text-primary transition-colors">
                             Privacy Policy
                         </Link>

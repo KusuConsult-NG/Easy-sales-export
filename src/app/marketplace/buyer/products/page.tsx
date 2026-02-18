@@ -152,14 +152,14 @@ export default function ProductsPage() {
     });
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
-            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+            <div className="bg-white border-b border-slate-200">
                 <div className="max-w-7xl mx-auto px-8 py-6">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         Browse Products
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Discover quality agricultural products from verified sellers across Nigeria
                     </p>
                 </div>
@@ -167,7 +167,7 @@ export default function ProductsPage() {
 
             <div className="max-w-7xl mx-auto px-8 py-8">
                 {/* Search and Filters */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-8">
+                <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
                     {/* Search Bar */}
                     <div className="relative mb-6">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -176,20 +176,20 @@ export default function ProductsPage() {
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search products, sellers, or categories..."
-                            className="w-full pl-12 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         />
                     </div>
 
                     {/* Filter Row */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Sort By
                             </label>
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value)}
-                                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-900"
                             >
                                 <option value="featured">Featured</option>
                                 <option value="price_low">Price: Low to High</option>
@@ -200,13 +200,13 @@ export default function ProductsPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Location
                             </label>
                             <select
                                 value={selectedState}
                                 onChange={(e) => setSelectedState(e.target.value)}
-                                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-900"
                             >
                                 <option value="all">All States</option>
                                 <option value="lagos">Lagos</option>
@@ -217,13 +217,13 @@ export default function ProductsPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Price Range
                             </label>
                             <select
                                 value={priceRange}
                                 onChange={(e) => setPriceRange(e.target.value)}
-                                className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-900"
                             >
                                 <option value="all">All Prices</option>
                                 <option value="under_2000">Under ₦2,000</option>
@@ -234,10 +234,10 @@ export default function ProductsPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Availability
                             </label>
-                            <select className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                            <select className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-900">
                                 <option value="all">All Products</option>
                                 <option value="in_stock">In Stock</option>
                                 <option value="pre_order">Pre-Order</option>
@@ -249,8 +249,8 @@ export default function ProductsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                     {/* Categories Sidebar */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 sticky top-8">
-                            <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                        <div className="bg-white rounded-xl border border-slate-200 p-6 sticky top-8">
+                            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
                                 <Filter className="w-5 h-5" />
                                 Categories
                             </h3>
@@ -260,13 +260,13 @@ export default function ProductsPage() {
                                         key={category.id}
                                         onClick={() => setSelectedCategory(category.id)}
                                         className={`w-full text-left px-4 py-2.5 rounded-lg transition-colors ${selectedCategory === category.id
-                                                ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 font-semibold"
-                                                : "text-slate-900 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-700"
+                                                ? "bg-green-50 text-green-700 font-semibold"
+                                                : "text-slate-900 hover:bg-slate-50"
                                             }`}
                                     >
                                         <div className="flex justify-between items-center">
                                             <span>{category.name}</span>
-                                            <span className="text-xs bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded">
+                                            <span className="text-xs bg-slate-200 px-2 py-1 rounded">
                                                 {category.count}
                                             </span>
                                         </div>
@@ -279,8 +279,8 @@ export default function ProductsPage() {
                     {/* Products Grid */}
                     <div className="lg:col-span-3">
                         <div className="flex items-center justify-between mb-6">
-                            <p className="text-slate-600 dark:text-slate-400">
-                                Showing <span className="font-semibold text-slate-900 dark:text-white">{filteredProducts.length}</span> products
+                            <p className="text-slate-600">
+                                Showing <span className="font-semibold text-slate-900">{filteredProducts.length}</span> products
                             </p>
                         </div>
 
@@ -288,26 +288,26 @@ export default function ProductsPage() {
                             {filteredProducts.map((product) => (
                                 <div
                                     key={product.id}
-                                    className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-lg transition-shadow group"
+                                    className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow group"
                                 >
                                     {/* Product Image */}
-                                    <div className="h-48 bg-slate-200 dark:bg-slate-700 relative">
-                                        <div className="absolute top-3 right-3 bg-white dark:bg-slate-800 rounded-full p-2 shadow">
+                                    <div className="h-48 bg-slate-200 relative">
+                                        <div className="absolute top-3 right-3 bg-white rounded-full p-2 shadow">
                                             <Star className="w-5 h-5 text-slate-400" />
                                         </div>
                                     </div>
 
                                     {/* Product Info */}
                                     <div className="p-5">
-                                        <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-1 group-hover:text-green-600 transition-colors">
+                                        <h3 className="font-bold text-lg text-slate-900 mb-1 group-hover:text-green-600 transition-colors">
                                             {product.name}
                                         </h3>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3 line-clamp-2">
+                                        <p className="text-sm text-slate-600 mb-3 line-clamp-2">
                                             {product.description}
                                         </p>
 
                                         {/* Seller Info */}
-                                        <div className="flex items-center gap-2 mb-3 text-sm text-slate-600 dark:text-slate-400">
+                                        <div className="flex items-center gap-2 mb-3 text-sm text-slate-600">
                                             <MapPin className="w-4 h-4" />
                                             <span>{product.seller}</span>
                                         </div>
@@ -316,7 +316,7 @@ export default function ProductsPage() {
                                         <div className="flex items-center gap-2 mb-4">
                                             <div className="flex items-center gap-1">
                                                 <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                                <span className="font-semibold text-slate-900 dark:text-white text-sm">
+                                                <span className="font-semibold text-slate-900 text-sm">
                                                     {product.rating}
                                                 </span>
                                             </div>
@@ -326,7 +326,7 @@ export default function ProductsPage() {
                                         </div>
 
                                         {/* Price and Action */}
-                                        <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                                        <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                             <div>
                                                 <div className="text-2xl font-bold text-green-600">
                                                     ₦{product.price.toLocaleString()}
@@ -347,7 +347,7 @@ export default function ProductsPage() {
                         {/* Load More */}
                         {filteredProducts.length >= 6 && (
                             <div className="text-center mt-8">
-                                <button className="px-8 py-3 border-2 border-green-600 text-green-600 font-semibold rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
+                                <button className="px-8 py-3 border-2 border-green-600 text-green-600 font-semibold rounded-xl hover:bg-green-50 transition-colors">
                                     Load More Products
                                 </button>
                             </div>

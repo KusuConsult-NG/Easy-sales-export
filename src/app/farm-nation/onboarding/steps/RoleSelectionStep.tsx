@@ -61,10 +61,10 @@ export default function RoleSelectionStep({ onNext, initialData }: RoleSelection
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
                     How do you want to use Farm Nation?
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Choose the option that best describes your goals. You can change this later.
                 </p>
             </div>
@@ -79,8 +79,8 @@ export default function RoleSelectionStep({ onNext, initialData }: RoleSelection
                             key={role.id}
                             onClick={() => setSelectedRole(role.id)}
                             className={`relative p-6 rounded-2xl border-2 transition-all text-left ${isSelected
-                                    ? "border-teal-600 bg-teal-50 dark:bg-teal-900/20 shadow-lg scale-105"
-                                    : "border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-700 hover:shadow-md"
+                                    ? "border-teal-600 bg-teal-50 shadow-lg scale-105"
+                                    : "border-slate-200 hover:border-teal-300 hover:shadow-md"
                                 }`}
                         >
                             {isSelected && (
@@ -95,23 +95,23 @@ export default function RoleSelectionStep({ onNext, initialData }: RoleSelection
                                 <div
                                     className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ${isSelected
                                             ? "bg-teal-600 text-white"
-                                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                                            : "bg-slate-100 text-slate-600"
                                         }`}
                                 >
                                     <Icon className="w-6 h-6" />
                                 </div>
                                 <h3
                                     className={`text-lg font-bold mb-1 ${isSelected
-                                            ? "text-teal-900 dark:text-teal-100"
-                                            : "text-slate-900 dark:text-white"
+                                            ? "text-teal-900"
+                                            : "text-slate-900"
                                         }`}
                                 >
                                     {role.title}
                                 </h3>
                                 <p
                                     className={`text-sm ${isSelected
-                                            ? "text-teal-700 dark:text-teal-300"
-                                            : "text-slate-600 dark:text-slate-400"
+                                            ? "text-teal-700"
+                                            : "text-slate-600"
                                         }`}
                                 >
                                     {role.description}
@@ -123,8 +123,8 @@ export default function RoleSelectionStep({ onNext, initialData }: RoleSelection
                                     <li
                                         key={index}
                                         className={`flex items-start gap-2 text-sm ${isSelected
-                                                ? "text-teal-800 dark:text-teal-200"
-                                                : "text-slate-900 dark:text-white"
+                                                ? "text-teal-800"
+                                                : "text-slate-900"
                                             }`}
                                     >
                                         <CheckCircle

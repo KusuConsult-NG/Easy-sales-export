@@ -131,7 +131,7 @@ export default function AcademyOnboardingPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
         );
@@ -140,20 +140,20 @@ export default function AcademyOnboardingPage() {
     // PENDING STATE
     if (applicationStatus === "pending") {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-                    <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Clock className="w-8 h-8 text-yellow-600 dark:text-yellow-400" />
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Clock className="w-8 h-8 text-yellow-600" />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">
                         Application Pending
                     </h2>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                    <p className="text-slate-600 mb-6">
                         Your application to join the Academy is currently under review. We will notify you once it has been approved.
                     </p>
                     <Link
                         href="/dashboard"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                        className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-900 rounded-xl font-medium hover:bg-slate-200 transition-colors"
                     >
                         Return to Hub
                     </Link>
@@ -165,15 +165,15 @@ export default function AcademyOnboardingPage() {
     // REJECTED STATE
     if (applicationStatus === "rejected") {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <XCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <XCircle className="w-8 h-8 text-red-600" />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">
                         Application Rejected
                     </h2>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                    <p className="text-slate-600 mb-6">
                         Unfortunately, your application to the Academy was not approved. Please contact support for more information.
                     </p>
                     <div className="flex flex-col gap-3">
@@ -185,7 +185,7 @@ export default function AcademyOnboardingPage() {
                         </button>
                         <Link
                             href="/dashboard"
-                            className="w-full px-6 py-3 bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                            className="w-full px-6 py-3 bg-slate-100 text-slate-900 rounded-xl font-medium hover:bg-slate-200 transition-colors"
                         >
                             Return to Hub
                         </Link>
@@ -196,17 +196,17 @@ export default function AcademyOnboardingPage() {
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 dark:from-slate-950 dark:to-indigo-950 py-8">
+        <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50 py-8">
             <div className="max-w-3xl mx-auto px-4">
                 {/* Header */}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center gap-2 mb-4">
                         <GraduationCap className="w-12 h-12 text-blue-600" />
-                        <h1 className="text-4xl font-bold text-slate-900 dark:text-white">
+                        <h1 className="text-4xl font-bold text-slate-900">
                             Welcome to Academy
                         </h1>
                     </div>
-                    <p className="text-lg text-slate-600 dark:text-slate-400">
+                    <p className="text-lg text-slate-600">
                         Let's personalize your learning experience
                     </p>
                 </div>
@@ -218,18 +218,18 @@ export default function AcademyOnboardingPage() {
                             <div key={s} className="flex items-center flex-1">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${s <= step
                                     ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                                    : 'bg-slate-200 text-slate-500'
                                     }`}>
                                     {s < step ? <CheckCircle className="w-6 h-6" /> : s}
                                 </div>
                                 {s < totalSteps && (
-                                    <div className={`flex-1 h-1 mx-2 ${s < step ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
+                                    <div className={`flex-1 h-1 mx-2 ${s < step ? 'bg-blue-600' : 'bg-slate-200'
                                         }`} />
                                 )}
                             </div>
                         ))}
                     </div>
-                    <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400">
+                    <div className="flex justify-between text-xs text-slate-600">
                         <span>Skill Level</span>
                         <span>Preferences</span>
                         <span>Interests</span>
@@ -237,15 +237,15 @@ export default function AcademyOnboardingPage() {
                 </div>
 
                 {/* Main Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
+                <div className="bg-white rounded-2xl shadow-xl p-8">
                     {/* Step 1: Skill Level */}
                     {step === 1 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-2">
                                     What's your skill level?
                                 </h2>
-                                <p className="text-slate-600 dark:text-slate-400">
+                                <p className="text-slate-600">
                                     This helps us recommend the right courses for you
                                 </p>
                             </div>
@@ -260,14 +260,14 @@ export default function AcademyOnboardingPage() {
                                         key={level.value}
                                         onClick={() => setSkillLevel(level.value)}
                                         className={`w-full p-4 border-2 rounded-lg text-left transition-all ${skillLevel === level.value
-                                            ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                                            : "border-slate-200 dark:border-slate-600 hover:border-blue-400"
+                                            ? "border-blue-600 bg-blue-50"
+                                            : "border-slate-200 hover:border-blue-400"
                                             }`}
                                     >
-                                        <div className="font-semibold text-slate-900 dark:text-white">
+                                        <div className="font-semibold text-slate-900">
                                             {level.label}
                                         </div>
-                                        <div className="text-sm text-slate-600 dark:text-slate-400">
+                                        <div className="text-sm text-slate-600">
                                             {level.desc}
                                         </div>
                                     </button>
@@ -280,10 +280,10 @@ export default function AcademyOnboardingPage() {
                     {step === 2 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-2">
                                     How do you prefer to learn?
                                 </h2>
-                                <p className="text-slate-600 dark:text-slate-400">
+                                <p className="text-slate-600">
                                     We'll prioritize content in your preferred format
                                 </p>
                             </div>
@@ -299,12 +299,12 @@ export default function AcademyOnboardingPage() {
                                         key={pref.value}
                                         onClick={() => setLearningPreference(pref.value)}
                                         className={`p-4 border-2 rounded-lg transition-all ${learningPreference === pref.value
-                                            ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                                            : "border-slate-200 dark:border-slate-600 hover:border-blue-400"
+                                            ? "border-blue-600 bg-blue-50"
+                                            : "border-slate-200 hover:border-blue-400"
                                             }`}
                                     >
                                         <div className="text-3xl mb-2">{pref.icon}</div>
-                                        <div className="font-semibold text-slate-900 dark:text-white">
+                                        <div className="font-semibold text-slate-900">
                                             {pref.label}
                                         </div>
                                     </button>
@@ -317,10 +317,10 @@ export default function AcademyOnboardingPage() {
                     {step === 3 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-2">
                                     What areas interest you?
                                 </h2>
-                                <p className="text-slate-600 dark:text-slate-400">
+                                <p className="text-slate-600">
                                     Select all that apply - we'll recommend relevant courses
                                 </p>
                             </div>
@@ -337,20 +337,20 @@ export default function AcademyOnboardingPage() {
                                         key={interest.value}
                                         onClick={() => handleInterestToggle(interest.value)}
                                         className={`w-full p-4 border-2 rounded-lg text-left transition-all ${interests.includes(interest.value)
-                                            ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                                            : "border-slate-200 dark:border-slate-600 hover:border-blue-400"
+                                            ? "border-blue-600 bg-blue-50"
+                                            : "border-slate-200 hover:border-blue-400"
                                             }`}
                                     >
                                         <div className="flex items-start gap-3">
                                             <CheckCircle className={`w-6 h-6 mt-0.5 ${interests.includes(interest.value)
                                                 ? "text-blue-600"
-                                                : "text-slate-300 dark:text-slate-600"
+                                                : "text-slate-300"
                                                 }`} />
                                             <div className="flex-1">
-                                                <div className="font-semibold text-slate-900 dark:text-white">
+                                                <div className="font-semibold text-slate-900">
                                                     {interest.label}
                                                 </div>
-                                                <div className="text-sm text-slate-600 dark:text-slate-400">
+                                                <div className="text-sm text-slate-600">
                                                     {interest.desc}
                                                 </div>
                                             </div>
@@ -362,12 +362,12 @@ export default function AcademyOnboardingPage() {
                     )}
 
                     {/* Navigation */}
-                    <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
                         {step > 1 ? (
                             <button
                                 onClick={() => setStep(s => s - 1)}
                                 disabled={isSubmitting}
-                                className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                                className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors"
                             >
                                 <ArrowLeft className="w-5 h-5" />
                                 Back
@@ -375,7 +375,7 @@ export default function AcademyOnboardingPage() {
                         ) : (
                             <Link
                                 href="/dashboard"
-                                className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                                className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors"
                             >
                                 <ArrowLeft className="w-5 h-5" />
                                 Back to Hub
@@ -409,7 +409,7 @@ export default function AcademyOnboardingPage() {
                     <button
                         onClick={() => router.push("/academy/dashboard")}
                         disabled={isSubmitting}
-                        className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors underline"
+                        className="text-sm text-slate-600 hover:text-slate-900 transition-colors underline"
                     >
                         Skip onboarding - I'll explore on my own
                     </button>

@@ -106,7 +106,7 @@ export default function LoansPage() {
     // Show onboarding if not a member or pending approval
     if (membershipStatus === "not_member" || membershipStatus === "pending") {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+            <div className="min-h-screen bg-slate-50 py-8">
                 <div className="max-w-7xl mx-auto px-4">
                     <Link
                         href="/cooperatives"
@@ -169,7 +169,7 @@ export default function LoansPage() {
     const pendingApplications = applications.filter(a => a.status === "pending");
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
@@ -181,56 +181,56 @@ export default function LoansPage() {
                         Back to Cooperatives
                     </Link>
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h1 className="text-3xl font-bold text-slate-900 mb-2">
                             Cooperative Loans
                         </h1>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Access low-interest loans based on your savings balance
                         </p>
                     </div>
                 </div>
 
                 {isLoading ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center shadow-xl">
+                    <div className="bg-white rounded-2xl p-12 text-center shadow-xl">
                         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                        <p className="text-slate-600 dark:text-slate-400">Loading loan products...</p>
+                        <p className="text-slate-600">Loading loan products...</p>
                     </div>
                 ) : (
                     <>
                         {/* Stats Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
+                            <div className="bg-white rounded-2xl p-6 shadow-xl">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                                        <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <DollarSign className="w-5 h-5 text-blue-600" />
                                     </div>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">Active Loans</p>
+                                    <p className="text-sm text-slate-600">Active Loans</p>
                                 </div>
-                                <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                                <p className="text-3xl font-bold text-slate-900">
                                     {activeApplications.length}
                                 </p>
                             </div>
 
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
+                            <div className="bg-white rounded-2xl p-6 shadow-xl">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
-                                        <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                                    <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                                        <Clock className="w-5 h-5 text-yellow-600" />
                                     </div>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">Pending Applications</p>
+                                    <p className="text-sm text-slate-600">Pending Applications</p>
                                 </div>
-                                <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                                <p className="text-3xl font-bold text-slate-900">
                                     {pendingApplications.length}
                                 </p>
                             </div>
 
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl">
+                            <div className="bg-white rounded-2xl p-6 shadow-xl">
                                 <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                                        <FileText className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                        <FileText className="w-5 h-5 text-green-600" />
                                     </div>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">Available Products</p>
+                                    <p className="text-sm text-slate-600">Available Products</p>
                                 </div>
-                                <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                                <p className="text-3xl font-bold text-slate-900">
                                     {products.length}
                                 </p>
                             </div>
@@ -238,16 +238,16 @@ export default function LoansPage() {
 
                         {/* Loan Products */}
                         <div className="mb-8">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                 Available Loan Products
                             </h2>
                             {products.length === 0 ? (
-                                <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center shadow-xl">
-                                    <FileText className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                <div className="bg-white rounded-2xl p-12 text-center shadow-xl">
+                                    <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                                    <h3 className="text-xl font-bold text-slate-900 mb-2">
                                         No Loan Products Available
                                     </h3>
-                                    <p className="text-slate-600 dark:text-slate-400">
+                                    <p className="text-slate-600">
                                         Loan products will be displayed here once they're created by administrators.
                                     </p>
                                 </div>
@@ -256,36 +256,36 @@ export default function LoansPage() {
                                     {products.map((product) => (
                                         <div
                                             key={product.id}
-                                            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl border border-blue-100 dark:border-blue-900 hover:shadow-2xl transition-all"
+                                            className="bg-white rounded-2xl p-6 shadow-xl border border-blue-100 hover:shadow-2xl transition-all"
                                         >
                                             <div className="flex items-start justify-between mb-4">
                                                 <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
                                                     <DollarSign className="w-6 h-6 text-white" />
                                                 </div>
-                                                <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 rounded-full">
-                                                    <span className="text-xs font-bold text-blue-700 dark:text-blue-400">
+                                                <div className="px-3 py-1 bg-blue-100 rounded-full">
+                                                    <span className="text-xs font-bold text-blue-700">
                                                         {product.interestRate}% APR
                                                     </span>
                                                 </div>
                                             </div>
 
-                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                                 {product.name}
                                             </h3>
-                                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                            <p className="text-sm text-slate-600 mb-4">
                                                 {product.description}
                                             </p>
 
                                             <div className="space-y-2 mb-6">
                                                 <div className="flex items-center justify-between text-sm">
-                                                    <span className="text-slate-600 dark:text-slate-400">Loan Range</span>
-                                                    <span className="font-bold text-slate-900 dark:text-white">
+                                                    <span className="text-slate-600">Loan Range</span>
+                                                    <span className="font-bold text-slate-900">
                                                         {formatCurrency(product.minAmount)} - {formatCurrency(product.maxAmount)}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center justify-between text-sm">
-                                                    <span className="text-slate-600 dark:text-slate-400">Duration</span>
-                                                    <span className="font-bold text-slate-900 dark:text-white">
+                                                    <span className="text-slate-600">Duration</span>
+                                                    <span className="font-bold text-slate-900">
                                                         {product.durationMonths} months
                                                     </span>
                                                 </div>
@@ -307,39 +307,39 @@ export default function LoansPage() {
                         {/* My Applications */}
                         {applications.length > 0 && (
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                     My Loan Applications
                                 </h2>
                                 <div className="space-y-4">
                                     {applications.map((app) => (
                                         <div
                                             key={app.id}
-                                            className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-xl"
+                                            className="bg-white rounded-2xl p-6 shadow-xl"
                                         >
                                             <div className="flex items-start justify-between mb-4">
                                                 <div>
-                                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+                                                    <h3 className="text-lg font-bold text-slate-900 mb-1">
                                                         {app.productName}
                                                     </h3>
-                                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                    <p className="text-sm text-slate-600">
                                                         Applied on {new Date(app.appliedAt).toLocaleDateString()}
                                                     </p>
                                                 </div>
                                                 <div className={`px-3 py-1 rounded-full ${app.status === "approved" || app.status === "active"
-                                                    ? "bg-green-100 dark:bg-green-900/30"
+                                                    ? "bg-green-100"
                                                     : app.status === "pending" || app.status === "disbursed"
-                                                        ? "bg-yellow-100 dark:bg-yellow-900/30"
+                                                        ? "bg-yellow-100"
                                                         : app.status === "rejected"
-                                                            ? "bg-red-100 dark:bg-red-900/30"
-                                                            : "bg-blue-100 dark:bg-blue-900/30"
+                                                            ? "bg-red-100"
+                                                            : "bg-blue-100"
                                                     }`}>
                                                     <span className={`text-xs font-bold ${app.status === "approved" || app.status === "active"
-                                                        ? "text-green-700 dark:text-green-400"
+                                                        ? "text-green-700"
                                                         : app.status === "pending" || app.status === "disbursed"
-                                                            ? "text-yellow-700 dark:text-yellow-400"
+                                                            ? "text-yellow-700"
                                                             : app.status === "rejected"
-                                                                ? "text-red-700 dark:text-red-400"
-                                                                : "text-blue-700 dark:text-blue-400"
+                                                                ? "text-red-700"
+                                                                : "text-blue-700"
                                                         }`}>
                                                         {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                                                     </span>
@@ -348,26 +348,26 @@ export default function LoansPage() {
 
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Loan Amount</p>
-                                                    <p className="font-bold text-slate-900 dark:text-white">
+                                                    <p className="text-xs text-slate-500 mb-1">Loan Amount</p>
+                                                    <p className="font-bold text-slate-900">
                                                         {formatCurrency(app.amount)}
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Interest Rate</p>
-                                                    <p className="font-bold text-slate-900 dark:text-white">
+                                                    <p className="text-xs text-slate-500 mb-1">Interest Rate</p>
+                                                    <p className="font-bold text-slate-900">
                                                         {app.interestRate}% APR
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Duration</p>
-                                                    <p className="font-bold text-slate-900 dark:text-white">
+                                                    <p className="text-xs text-slate-500 mb-1">Duration</p>
+                                                    <p className="font-bold text-slate-900">
                                                         {app.durationMonths} months
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Monthly Payment</p>
-                                                    <p className="font-bold text-green-600 dark:text-green-400">
+                                                    <p className="text-xs text-slate-500 mb-1">Monthly Payment</p>
+                                                    <p className="font-bold text-green-600">
                                                         {formatCurrency(app.monthlyPayment)}
                                                     </p>
                                                 </div>
@@ -425,29 +425,29 @@ function LoanApplicationModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
                 {state.success ? (
                     <div className="p-12 text-center">
-                        <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle className="w-8 h-8 text-green-600" />
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h3 className="text-2xl font-bold text-slate-900 mb-2">
                             Application Submitted!
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Your loan application for {formatCurrency(product.minAmount)} has been received.
                         </p>
                     </div>
                 ) : (
                     <form action={action} className="p-6">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                            <h3 className="text-xl font-bold text-slate-900">
                                 Apply for {product.name}
                             </h3>
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+                                className="text-slate-500 hover:text-slate-900"
                             >
                                 <ArrowLeft className="w-6 h-6 rotate-180" />
                             </button>
@@ -457,14 +457,14 @@ function LoanApplicationModal({
 
                         <div className="space-y-4">
                             {state.error && (
-                                <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm rounded-xl flex items-start gap-2">
+                                <div className="p-4 bg-red-50 text-red-600 text-sm rounded-xl flex items-start gap-2">
                                     <AlertCircle className="w-5 h-5 shrink-0" />
                                     <span>{state.error}</span>
                                 </div>
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">
+                                <label className="block text-sm font-medium text-slate-900 mb-1">
                                     Loan Amount (₦)
                                 </label>
                                 <input
@@ -474,7 +474,7 @@ function LoanApplicationModal({
                                     min={product.minAmount}
                                     max={product.maxAmount}
                                     required
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500"
                                 />
                                 <p className="text-xs text-slate-500 mt-1">
                                     Range: {formatCurrency(product.minAmount)} - {formatCurrency(product.maxAmount)}
@@ -482,7 +482,7 @@ function LoanApplicationModal({
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-900 dark:text-white mb-1">
+                                <label className="block text-sm font-medium text-slate-900 mb-1">
                                     Purpose of Loan
                                 </label>
                                 <textarea
@@ -490,18 +490,18 @@ function LoanApplicationModal({
                                     required
                                     minLength={10}
                                     placeholder="Describe why you need this loan..."
-                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 h-24 resize-none"
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 h-24 resize-none"
                                 />
                             </div>
 
-                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl space-y-2">
+                            <div className="bg-blue-50 p-4 rounded-xl space-y-2">
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">Interest Rate</span>
-                                    <span className="font-semibold text-slate-900 dark:text-white">{product.interestRate}%</span>
+                                    <span className="text-slate-600">Interest Rate</span>
+                                    <span className="font-semibold text-slate-900">{product.interestRate}%</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">Duration</span>
-                                    <span className="font-semibold text-slate-900 dark:text-white">{product.durationMonths} months</span>
+                                    <span className="text-slate-600">Duration</span>
+                                    <span className="font-semibold text-slate-900">{product.durationMonths} months</span>
                                 </div>
                             </div>
 
@@ -524,7 +524,7 @@ function LoanApplicationModal({
                                     type="button"
                                     onClick={onClose}
                                     disabled={isPending}
-                                    className="w-full mt-3 py-3 text-slate-600 dark:text-slate-400 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+                                    className="w-full mt-3 py-3 text-slate-600 font-semibold hover:bg-slate-100 rounded-xl transition-all"
                                 >
                                     Cancel
                                 </button>

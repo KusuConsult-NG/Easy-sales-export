@@ -121,21 +121,21 @@ export default function MyLoansPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8">
+        <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         My Loans
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Track your loan balances and repayment schedule
                     </p>
                 </div>
@@ -150,26 +150,26 @@ export default function MyLoansPage() {
                         <p className="text-3xl font-bold">{formatCurrency(totalBalance)}</p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                                <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                                <TrendingUp className="w-5 h-5 text-purple-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Total Borrowed</p>
+                            <p className="text-sm text-slate-600">Total Borrowed</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-3xl font-bold text-slate-900">
                             {formatCurrency(totalBorrowed)}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                                <CheckCircle className="w-5 h-5 text-green-600" />
                             </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Active Loans</p>
+                            <p className="text-sm text-slate-600">Active Loans</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                        <p className="text-3xl font-bold text-slate-900">
                             {activeLoans.length}
                         </p>
                     </div>
@@ -184,7 +184,7 @@ export default function MyLoansPage() {
                             const progress = (paidPayments / totalPayments) * 100;
 
                             return (
-                                <div key={loan.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden">
+                                <div key={loan.id} className="bg-white rounded-2xl shadow-lg overflow-hidden">
                                     {/* Loan Header */}
                                     <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white p-6">
                                         <div className="flex items-center justify-between mb-4">
@@ -229,14 +229,14 @@ export default function MyLoansPage() {
                                     </div>
 
                                     {/* Next Payment Alert */}
-                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 p-4">
+                                    <div className="bg-yellow-50 border-b border-yellow-200 p-4">
                                         <div className="flex items-center gap-3">
-                                            <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                                            <Clock className="w-5 h-5 text-yellow-600" />
                                             <div className="flex-1">
-                                                <p className="font-semibold text-slate-900 dark:text-white">
+                                                <p className="font-semibold text-slate-900">
                                                     Next Payment Due
                                                 </p>
-                                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                <p className="text-sm text-slate-600">
                                                     {formatDate(loan.nextPaymentDate)} - {formatCurrency(loan.nextPaymentAmount)}
                                                 </p>
                                             </div>
@@ -251,7 +251,7 @@ export default function MyLoansPage() {
 
                                     {/* Repayment Schedule */}
                                     <div className="p-6">
-                                        <h4 className="font-bold text-slate-900 dark:text-white mb-4">
+                                        <h4 className="font-bold text-slate-900 mb-4">
                                             Repayment Schedule
                                         </h4>
                                         <div className="space-y-3">
@@ -259,8 +259,8 @@ export default function MyLoansPage() {
                                                 <div
                                                     key={index}
                                                     className={`flex items-center justify-between p-4 rounded-lg ${payment.paid
-                                                        ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
-                                                        : "bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
+                                                        ? "bg-green-50 border border-green-200"
+                                                        : "bg-slate-50 border border-slate-200"
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-3">
@@ -270,20 +270,20 @@ export default function MyLoansPage() {
                                                             <div className="w-5 h-5 rounded-full border-2 border-slate-400" />
                                                         )}
                                                         <div>
-                                                            <p className="font-semibold text-slate-900 dark:text-white">
+                                                            <p className="font-semibold text-slate-900">
                                                                 Payment #{index + 1}
                                                             </p>
-                                                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                            <p className="text-sm text-slate-600">
                                                                 {formatDate(payment.date)}
                                                             </p>
                                                         </div>
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="font-bold text-slate-900 dark:text-white">
+                                                        <p className="font-bold text-slate-900">
                                                             {formatCurrency(payment.amount)}
                                                         </p>
                                                         {payment.paid && (
-                                                            <p className="text-xs text-green-600 dark:text-green-400">Paid</p>
+                                                            <p className="text-xs text-green-600">Paid</p>
                                                         )}
                                                     </div>
                                                 </div>
@@ -295,12 +295,12 @@ export default function MyLoansPage() {
                         })}
                     </div>
                 ) : (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-12 text-center">
+                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
                         <DollarSign className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                        <h3 className="text-xl font-semibold text-slate-900 mb-2">
                             No Active Loans
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        <p className="text-slate-600 mb-6">
                             You don't have any active loans at the moment
                         </p>
                         <Link

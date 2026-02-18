@@ -116,63 +116,63 @@ export default function AdminDisputesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         Dispute Management
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Review and resolve marketplace disputes
                     </p>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-6">
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                            <h3 className="text-sm font-semibold text-yellow-800">
                                 Open Disputes
                             </h3>
-                            <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-500" />
+                            <AlertTriangle className="w-5 h-5 text-yellow-600" />
                         </div>
-                        <p className="text-3xl font-bold text-yellow-900 dark:text-yellow-100">
+                        <p className="text-3xl font-bold text-yellow-900">
                             {stats.open}
                         </p>
                     </div>
 
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6">
+                    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                            <h3 className="text-sm font-semibold text-blue-800">
                                 Under Review
                             </h3>
-                            <Clock className="w-5 h-5 text-blue-600 dark:text-blue-500" />
+                            <Clock className="w-5 h-5 text-blue-600" />
                         </div>
-                        <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                        <p className="text-3xl font-bold text-blue-900">
                             {stats.under_review}
                         </p>
                     </div>
 
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-6">
+                    <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-green-800 dark:text-green-200">
+                            <h3 className="text-sm font-semibold text-green-800">
                                 Resolved
                             </h3>
-                            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-500" />
+                            <CheckCircle className="w-5 h-5 text-green-600" />
                         </div>
-                        <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                        <p className="text-3xl font-bold text-green-900">
                             {stats.resolved}
                         </p>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6">
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Search */}
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
                                 Search
                             </label>
                             <div className="relative">
@@ -182,14 +182,14 @@ export default function AdminDisputesPage() {
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder="Search by order ID, dispute ID, or description..."
-                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
                         </div>
 
                         {/* Status Filter */}
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
                                 Status Filter
                             </label>
                             <div className="relative">
@@ -197,7 +197,7 @@ export default function AdminDisputesPage() {
                                 <select
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value as any)}
-                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary appearance-none"
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary appearance-none"
                                 >
                                     <option value="all">All Statuses</option>
                                     <option value="open">Open</option>
@@ -227,24 +227,24 @@ export default function AdminDisputesPage() {
                             return (
                                 <div
                                     key={dispute.id}
-                                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 hover:shadow-xl transition"
+                                    className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition"
                                 >
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <StatusIcon
-                                                    className={`w-5 h-5 text-${statusColor}-600 dark:text-${statusColor}-500`}
+                                                    className={`w-5 h-5 text-${statusColor}-600${statusColor}-500`}
                                                 />
-                                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                                <h3 className="text-lg font-bold text-gray-900">
                                                     Dispute #{dispute.id.slice(0, 8).toUpperCase()}
                                                 </h3>
                                                 <span
-                                                    className={`px-3 py-1 bg-${statusColor}-100 dark:bg-${statusColor}-900/20 text-${statusColor}-800 dark:text-${statusColor}-200 text-sm font-semibold rounded-full capitalize`}
+                                                    className={`px-3 py-1 bg-${statusColor}-100${statusColor}-900/20 text-${statusColor}-800${statusColor}-200 text-sm font-semibold rounded-full capitalize`}
                                                 >
                                                     {dispute.status.replace("_", " ")}
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                            <p className="text-sm text-gray-600 mb-1">
                                                 Order: {dispute.orderId || "N/A"} • Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago
                                             </p>
                                         </div>
@@ -252,26 +252,26 @@ export default function AdminDisputesPage() {
 
                                     {/* Reason */}
                                     <div className="mb-4">
-                                        <span className="inline-block px-3 py-1 bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200 text-sm font-semibold rounded-lg mb-2">
+                                        <span className="inline-block px-3 py-1 bg-red-100 text-red-800 text-sm font-semibold rounded-lg mb-2">
                                             {DISPUTE_REASON_LABELS[dispute.reason] || dispute.reason}
                                         </span>
-                                        <p className="text-gray-700 dark:text-gray-300 line-clamp-2">
+                                        <p className="text-gray-700 line-clamp-2">
                                             {dispute.description}
                                         </p>
                                     </div>
 
                                     {/* Parties */}
-                                    <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                                         <div className="flex gap-6 text-sm">
                                             <div>
-                                                <span className="text-gray-500 dark:text-gray-400">Buyer:</span>
-                                                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
+                                                <span className="text-gray-500">Buyer:</span>
+                                                <span className="ml-2 font-semibold text-gray-900">
                                                     {dispute.buyerId?.slice(0, 8) || "Unknown"}
                                                 </span>
                                             </div>
                                             <div>
-                                                <span className="text-gray-500 dark:text-gray-400">Seller:</span>
-                                                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
+                                                <span className="text-gray-500">Seller:</span>
+                                                <span className="ml-2 font-semibold text-gray-900">
                                                     {dispute.sellerId?.slice(0, 8) || "Unknown"}
                                                 </span>
                                             </div>
@@ -290,9 +290,9 @@ export default function AdminDisputesPage() {
                         })}
                     </div>
                 ) : (
-                    <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl">
+                    <div className="text-center py-12 bg-white rounded-2xl">
                         <CheckCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500 dark:text-gray-400 text-lg">
+                        <p className="text-gray-500 text-lg">
                             {searchQuery || statusFilter !== "all"
                                 ? "No disputes match your filters"
                                 : "No disputes found"}

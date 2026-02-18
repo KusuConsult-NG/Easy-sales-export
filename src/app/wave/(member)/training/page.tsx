@@ -90,21 +90,21 @@ export default function WaveTrainingPage() {
     function getEventStatusColor(status: string) {
         switch (status) {
             case "upcoming":
-                return "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300";
+                return "bg-blue-100 text-blue-700";
             case "ongoing":
-                return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-400";
+                return "bg-emerald-100 text-emerald-800";
             case "completed":
-                return "bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300";
+                return "bg-gray-100 text-gray-700";
             case "cancelled":
-                return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";
+                return "bg-red-100 text-red-700";
             default:
-                return "bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300";
+                return "bg-gray-100 text-gray-700";
         }
     }
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-emerald-700" />
             </div>
         );
@@ -115,50 +115,50 @@ export default function WaveTrainingPage() {
     const completedEvents = events.filter((e) => e.status === "completed");
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 dark:from-gray-900 dark:via-emerald-900/20 dark:to-gray-900 py-8">
+        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
                     <BackButton fallbackPath="/wave/dashboard" />
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         Training Events
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Register for workshops, webinars, and field trips to grow your skills
                     </p>
                 </div>
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Upcoming</h3>
+                            <h3 className="text-sm font-semibold text-gray-600">Upcoming</h3>
                             <Calendar className="w-5 h-5 text-blue-600" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{upcomingEvents.length}</p>
+                        <p className="text-3xl font-bold text-gray-900">{upcomingEvents.length}</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Enrolled</h3>
+                            <h3 className="text-sm font-semibold text-gray-600">Enrolled</h3>
                             <CheckCircle className="w-5 h-5 text-emerald-700" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{registeredEventIds.size}</p>
+                        <p className="text-3xl font-bold text-gray-900">{registeredEventIds.size}</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Completed</h3>
+                            <h3 className="text-sm font-semibold text-gray-600">Completed</h3>
                             <Calendar className="w-5 h-5 text-gray-600" />
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{completedEvents.length}</p>
+                        <p className="text-3xl font-bold text-gray-900">{completedEvents.length}</p>
                     </div>
                 </div>
 
                 {/* Upcoming Events */}
                 {upcomingEvents.length > 0 && (
                     <div className="mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
                             Upcoming Training
                         </h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -170,12 +170,12 @@ export default function WaveTrainingPage() {
                                 return (
                                     <div
                                         key={event.id}
-                                        className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 border border-gray-100 dark:border-gray-700"
+                                        className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100"
                                     >
                                         {/* Header */}
                                         <div className="flex items-start justify-between mb-4">
                                             <div>
-                                                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                                                <h3 className="text-xl font-bold text-gray-900 mb-1">
                                                     {event.title}
                                                 </h3>
                                                 <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getEventStatusColor(event.status)}`}>
@@ -185,18 +185,18 @@ export default function WaveTrainingPage() {
                                         </div>
 
                                         {/* Description */}
-                                        <p className="text-gray-600 dark:text-gray-400 mb-4">
+                                        <p className="text-gray-600 mb-4">
                                             {event.description}
                                         </p>
 
                                         {/* Details */}
                                         <div className="space-y-3 mb-4">
-                                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
                                                 <User className="w-4 h-4 text-emerald-700" />
                                                 <span className="font-medium">Instructor:</span> {event.instructor}
                                             </div>
 
-                                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
                                                 <Calendar className="w-4 h-4 text-emerald-700" />
                                                 <span className="font-medium">Date:</span>{" "}
                                                 {new Date(event.date).toLocaleDateString("en-US", {
@@ -207,18 +207,18 @@ export default function WaveTrainingPage() {
                                                 })}
                                             </div>
 
-                                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
                                                 <Clock className="w-4 h-4 text-blue-600" />
                                                 <span className="font-medium">Duration:</span> {event.duration}
                                             </div>
 
-                                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
                                                 <Users className="w-4 h-4 text-emerald-700" />
                                                 <span className="font-medium">Capacity:</span> {event.currentParticipants}/{event.maxParticipants} enrolled
                                             </div>
 
                                             {event.meetingLink && (
-                                                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                                <div className="flex items-center gap-2 text-sm text-gray-600">
                                                     <Video className="w-4 h-4 text-red-600" />
                                                     <span className="font-medium">Format:</span> Online
                                                 </div>
@@ -227,12 +227,12 @@ export default function WaveTrainingPage() {
 
                                         {/* Action Button */}
                                         {isRegistered ? (
-                                            <div className="flex items-center gap-2 px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-emerald-800 dark:text-emerald-400 font-semibold">
+                                            <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-emerald-800 font-semibold">
                                                 <CheckCircle className="w-5 h-5" />
                                                 You're Registered
                                             </div>
                                         ) : isFull ? (
-                                            <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 font-semibold">
+                                            <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 font-semibold">
                                                 <XCircle className="w-5 h-5" />
                                                 Event Full
                                             </div>
@@ -265,23 +265,23 @@ export default function WaveTrainingPage() {
                 {/* Ongoing Events */}
                 {ongoingEvents.length > 0 && (
                     <div className="mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
                             Currently Ongoing
                         </h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {ongoingEvents.map((event) => (
                                 <div
                                     key={event.id}
-                                    className="bg-green-50 dark:bg-green-900/10 rounded-2xl shadow-lg p-6 border-2 border-green-200 dark:border-green-800"
+                                    className="bg-green-50 rounded-2xl shadow-lg p-6 border-2 border-green-200"
                                 >
                                     <div className="flex items-center gap-2 mb-3">
                                         <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                                        <span className="text-emerald-800 dark:text-emerald-400 font-semibold text-sm">LIVE NOW</span>
+                                        <span className="text-emerald-800 font-semibold text-sm">LIVE NOW</span>
                                     </div>
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">
                                         {event.title}
                                     </h3>
-                                    <p className="text-gray-600 dark:text-gray-400 mb-4">{event.description}</p>
+                                    <p className="text-gray-600 mb-4">{event.description}</p>
                                     {event.meetingLink && (
                                         <a
                                             href={event.meetingLink}
@@ -301,12 +301,12 @@ export default function WaveTrainingPage() {
 
                 {/* Empty State */}
                 {events.length === 0 && (
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-12 text-center border border-gray-100 dark:border-gray-700">
+                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center border border-gray-100">
                         <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
                             No Training Events
                         </h3>
-                        <p className="text-gray-600 dark:text-gray-400">
+                        <p className="text-gray-600">
                             Check back soon for upcoming workshops, webinars, and training sessions!
                         </p>
                     </div>

@@ -53,13 +53,13 @@ function VerifyPaymentContent() {
 
     if (status === 'loading') {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-12 text-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
+                <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-12 text-center">
                     <Loader2 className="w-20 h-20 text-blue-600 animate-spin mx-auto mb-6" />
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">
                         Verifying Payment
                     </h2>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Please wait while we confirm your payment...
                     </p>
                 </div>
@@ -69,15 +69,15 @@ function VerifyPaymentContent() {
 
     if (status === 'error') {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-red-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-12 text-center">
-                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-red-50 flex items-center justify-center p-4">
+                <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-12 text-center">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <XCircle className="w-10 h-10 text-red-500" />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-4">
                         Verification Failed
                     </h2>
-                    <p className="text-slate-600 dark:text-slate-400 mb-8">
+                    <p className="text-slate-600 mb-8">
                         {message}
                     </p>
                     <Link
@@ -94,22 +94,22 @@ function VerifyPaymentContent() {
 
     // Success state
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4">
-            <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-12 text-center">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-xl shadow-2xl p-12 text-center">
                 <div className="w-20 h-20 bg-linear-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
                     <CheckCircle className="w-12 h-12 text-white" />
                 </div>
 
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                <h1 className="text-3xl font-bold text-slate-900 mb-4">
                     Payment Successful!
                 </h1>
 
-                <p className="text-lg text-slate-600 dark:text-slate-400 mb-8">
+                <p className="text-lg text-slate-600 mb-8">
                     {message}
                 </p>
 
-                <div className="bg-linear-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-xl p-6 mb-8 border border-green-200 dark:border-green-800">
-                    <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
+                <div className="bg-linear-to-r from-green-50 to-emerald-50 rounded-xl p-6 mb-8 border border-green-200">
+                    <div className="flex items-center justify-center gap-2 text-green-600">
                         <TrendingUp className="w-5 h-5" />
                         <span className="text-sm font-medium">Your contribution has been recorded</span>
                     </div>
@@ -130,10 +130,10 @@ function VerifyPaymentContent() {
 function VerifyPaymentPageContent() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-slate-600 dark:text-slate-400">Loading...</p>
+                    <p className="mt-4 text-slate-600">Loading...</p>
                 </div>
             </div>
         }>
@@ -145,7 +145,7 @@ function VerifyPaymentPageContent() {
 export default function VerifyPaymentPagePage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
             </div>
         }>

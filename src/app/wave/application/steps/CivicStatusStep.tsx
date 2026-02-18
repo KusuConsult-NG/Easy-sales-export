@@ -56,16 +56,16 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
                 Section B: National Identity & Civic Status 🗳️
             </h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-2">
+            <p className="text-slate-600 mb-2">
                 This section is compulsory for transparency, accountability, and eligibility validation.
             </p>
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 mb-8">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-8">
                 <div className="flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
-                    <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                    <p className="text-sm text-emerald-700">
                         Your NIN and PVC details are securely encrypted and used only for program verification and accountability purposes.
                     </p>
                 </div>
@@ -74,7 +74,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             <div className="space-y-6">
                 {/* National Identification Number (NIN) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         National Identification Number (NIN) 🔒 *
                     </label>
                     <input
@@ -82,7 +82,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         value={data.nin}
                         onChange={(e) => updateData({ nin: e.target.value.replace(/\D/g, "").slice(0, 11) })}
                         maxLength={11}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="Enter your 11-digit NIN"
                     />
                     {errors.nin && (
@@ -95,14 +95,14 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                 {/* Voter's Card Number (PVC) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Voter's Card Number (PVC) *
                     </label>
                     <input
                         type="text"
                         value={data.votersCardNumber}
                         onChange={(e) => updateData({ votersCardNumber: e.target.value.toUpperCase() })}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="e.g., 90F5B123456789012345"
                     />
                     {errors.votersCardNumber && (
@@ -116,14 +116,14 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 {/* Polling Unit & Ward */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Polling Unit *
                         </label>
                         <input
                             type="text"
                             value={data.pollingUnit}
                             onChange={(e) => updateData({ pollingUnit: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Your polling unit"
                         />
                         {errors.pollingUnit && (
@@ -135,14 +135,14 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Ward *
                         </label>
                         <input
                             type="text"
                             value={data.ward}
                             onChange={(e) => updateData({ ward: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Your ward"
                         />
                         {errors.ward && (
@@ -156,7 +156,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                 {/* Year of Voter Registration */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Year of Voter Registration *
                     </label>
                     <input
@@ -164,7 +164,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         value={data.yearOfVoterRegistration}
                         onChange={(e) => updateData({ yearOfVoterRegistration: e.target.value.replace(/\D/g, "").slice(0, 4) })}
                         maxLength={4}
-                        className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 dark:bg-slate-700 dark:text-white"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="e.g., 2023"
                     />
                     {errors.yearOfVoterRegistration && (
@@ -177,7 +177,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                 {/* Voted in Last Election */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Did you vote in the last general election? *
                     </label>
                     <div className="flex gap-4">
@@ -188,8 +188,8 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             <label
                                 key={option.label}
                                 className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.votedInLastElection === option.value
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -210,7 +210,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

@@ -112,7 +112,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
         );
@@ -125,12 +125,12 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     );
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-5xl mx-auto px-4">
                 {/* Back Button */}
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-primary mb-6 transition"
+                    className="flex items-center gap-2 text-gray-600 hover:text-primary mb-6 transition"
                 >
                     <ArrowLeft className="w-5 h-5" />
                     Back to Disputes
@@ -140,63 +140,63 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                 <div className="mb-8">
                     <div className="flex items-center gap-3 mb-2">
                         <AlertTriangle className="w-8 h-8 text-red-500" />
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <h1 className="text-3xl font-bold text-gray-900">
                             Dispute #{dispute.id.slice(0, 12).toUpperCase()}
                         </h1>
                         <span
                             className={`px-4 py-2 rounded-xl font-semibold text-sm ${dispute.status === "open"
-                                ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200"
+                                ? "bg-yellow-100 text-yellow-800"
                                 : dispute.status === "under_review"
-                                    ? "bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200"
-                                    : "bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-green-100 text-green-800"
                                 }`}
                         >
                             {dispute.status.replace("_", " ").toUpperCase()}
                         </span>
                     </div>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago •{" "}
                         {new Date(dispute.createdAt as any).toLocaleString()}
                     </p>
                 </div>
 
                 {/* Order Information */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <Package className="w-6 h-6 text-primary" />
                         Order Information
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Order Number</p>
-                            <p className="font-semibold text-gray-900 dark:text-white">{order.orderNumber}</p>
+                            <p className="text-sm text-gray-600 mb-1">Order Number</p>
+                            <p className="font-semibold text-gray-900">{order.orderNumber}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Order Date</p>
-                            <p className="text-gray-900 dark:text-white">
+                            <p className="text-sm text-gray-600 mb-1">Order Date</p>
+                            <p className="text-gray-900">
                                 {new Date(order.createdAt).toLocaleDateString()}
                             </p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Amount</p>
+                            <p className="text-sm text-gray-600 mb-1">Total Amount</p>
                             <p className="font-bold text-primary text-lg">{formatCurrency(order.totalAmount)}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Order Status</p>
-                            <p className="capitalize text-gray-900 dark:text-white">{order.status.replace("_", " ")}</p>
+                            <p className="text-sm text-gray-600 mb-1">Order Status</p>
+                            <p className="capitalize text-gray-900">{order.status.replace("_", " ")}</p>
                         </div>
                     </div>
 
                     {/* Order Items */}
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Order Items</p>
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                        <p className="text-sm font-semibold text-gray-700 mb-2">Order Items</p>
                         <div className="space-y-2">
                             {order.items.map((item, idx) => (
                                 <div key={idx} className="flex justify-between text-sm">
-                                    <span className="text-gray-900 dark:text-white">
+                                    <span className="text-gray-900">
                                         {item.productTitle} × {item.quantity}
                                     </span>
-                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                    <span className="font-semibold text-gray-900">
                                         {formatCurrency(item.totalPrice)}
                                     </span>
                                 </div>
@@ -206,29 +206,29 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                 </div>
 
                 {/* Dispute Details */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <FileText className="w-6 h-6 text-primary" />
                         Dispute Details
                     </h2>
 
                     <div className="mb-4">
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Reason</p>
-                        <span className="inline-block px-4 py-2 bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200 font-semibold rounded-lg">
+                        <p className="text-sm text-gray-600 mb-2">Reason</p>
+                        <span className="inline-block px-4 py-2 bg-red-100 text-red-800 font-semibold rounded-lg">
                             {DISPUTE_REASON_LABELS[dispute.reason] || dispute.reason}
                         </span>
                     </div>
 
                     <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Description</p>
-                        <p className="text-gray-900 dark:text-white p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <p className="text-sm text-gray-600 mb-2">Description</p>
+                        <p className="text-gray-900 p-4 bg-gray-50 rounded-xl">
                             {dispute.description}
                         </p>
                     </div>
 
                     {dispute.evidenceUrls && dispute.evidenceUrls.length > 0 && (
                         <div className="mt-4">
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Evidence</p>
+                            <p className="text-sm text-gray-600 mb-2">Evidence</p>
                             <div className="flex gap-2">
                                 {dispute.evidenceUrls.map((url, idx) => (
                                     <a
@@ -248,26 +248,26 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
 
                 {/* Parties */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
-                        <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
+                        <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
                             <User className="w-5 h-5 text-primary" />
                             Buyer
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">ID: {dispute.buyerId}</p>
+                        <p className="text-sm text-gray-600">ID: {dispute.buyerId}</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
-                        <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
+                        <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
                             <User className="w-5 h-5 text-primary" />
                             Seller
                         </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">ID: {dispute.sellerId}</p>
+                        <p className="text-sm text-gray-600">ID: {dispute.sellerId}</p>
                     </div>
                 </div>
 
                 {/* Resolution Section */}
                 {dispute.status !== "resolved" ? (
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
                         <button
                             onClick={() => setShowResolutionModal(true)}
                             className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition flex items-center justify-center gap-2 text-lg"
@@ -277,15 +277,15 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                         </button>
                     </div>
                 ) : (
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl p-6">
-                        <h3 className="font-bold text-green-900 dark:text-green-100 mb-2">Dispute Resolved</h3>
-                        <p className="text-sm text-green-800 dark:text-green-200 mb-2">
+                    <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
+                        <h3 className="font-bold text-green-900 mb-2">Dispute Resolved</h3>
+                        <p className="text-sm text-green-800 mb-2">
                             Resolution: {dispute.resolution?.replace("_", " ").toUpperCase()}
                         </p>
                         {dispute.adminNotes && (
                             <>
-                                <p className="text-sm text-green-800 dark:text-green-200 mb-1">Admin Notes:</p>
-                                <p className="text-green-900 dark:text-green-100 bg-green-100 dark:bg-green-900/30 p-3 rounded-lg">
+                                <p className="text-sm text-green-800 mb-1">Admin Notes:</p>
+                                <p className="text-green-900 bg-green-100 p-3 rounded-lg">
                                     {dispute.adminNotes}
                                 </p>
                             </>
@@ -296,14 +296,14 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                 {/* Resolution Modal */}
                 {showResolutionModal && (
                     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full p-8">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+                        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">
                                 Resolve Dispute
                             </h2>
 
                             {/* Resolution Type */}
                             <div className="mb-6">
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                                <label className="block text-sm font-semibold text-gray-700 mb-3">
                                     Resolution Decision
                                 </label>
                                 <div className="space-y-2">
@@ -318,10 +318,10 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                                             onClick={() => setResolution(option.value as DisputeResolution)}
                                             className={`w-full p-4 rounded-xl border-2 transition text-left ${resolution === option.value
                                                 ? "border-primary bg-primary/5"
-                                                : "border-gray-200 dark:border-gray-700 hover:border-primary/50"
+                                                : "border-gray-200 hover:border-primary/50"
                                                 }`}
                                         >
-                                            <div className="font-semibold text-gray-900 dark:text-white">
+                                            <div className="font-semibold text-gray-900">
                                                 {option.label}
                                             </div>
                                         </button>
@@ -332,14 +332,14 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                             {/* Refund Amount (for partial refund) */}
                             {resolution === "partial_refund" && (
                                 <div className="mb-6">
-                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Refund Amount (₦)
                                     </label>
                                     <input
                                         type="number"
                                         value={refundAmount}
                                         onChange={(e) => setRefundAmount(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                         placeholder="Enter refund amount"
                                     />
                                     <p className="text-sm text-gray-500 mt-1">
@@ -350,7 +350,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
 
                             {/* Admin Notes */}
                             <div className="mb-6">
-                                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">
                                     Admin Notes (Required)
                                 </label>
                                 <textarea
@@ -358,7 +358,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                                     onChange={(e) => setAdminNotes(e.target.value)}
                                     rows={4}
                                     placeholder="Explain the reasoning behind this resolution..."
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary resize-none"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary resize-none"
                                 />
                             </div>
 
@@ -366,7 +366,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setShowResolutionModal(false)}
-                                    className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition"
                                 >
                                     Cancel
                                 </button>

@@ -86,35 +86,35 @@ export default function ContributePage() {
     };
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 py-12 px-4">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
                     <Link
                         href="/cooperatives"
-                        className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white mb-4"
+                        className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Cooperative
                     </Link>
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-4xl font-bold text-slate-900 mb-2">
                         Make a Contribution
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Contribute to your cooperative and unlock higher loan limits
                     </p>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6">
                     {/* Left: Payment Form */}
-                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
-                        <h2 className="text-2xl font-semibold text-slate-900 dark:text-white mb-6">
+                    <div className="bg-white rounded-xl shadow-lg p-8">
+                        <h2 className="text-2xl font-semibold text-slate-900 mb-6">
                             Contribution Amount
                         </h2>
 
                         {/* Amount Input */}
                         <div className="mb-6">
-                            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+                            <label className="block text-sm font-medium text-slate-900 mb-2">
                                 Amount (₦)
                             </label>
                             <div className="relative">
@@ -129,17 +129,17 @@ export default function ContributePage() {
                                     min="1000"
                                     max="1000000"
                                     step="1000"
-                                    className="w-full pl-12 pr-4 py-4 text-2xl font-semibold border-2 border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white"
+                                    className="w-full pl-12 pr-4 py-4 text-2xl font-semibold border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                             </div>
-                            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                            <p className="mt-2 text-sm text-slate-500">
                                 Min: ₦1,000 • Max: ₦1,000,000
                             </p>
                         </div>
 
                         {/* Quick Amounts */}
                         <div className="mb-6">
-                            <p className="text-sm font-medium text-slate-900 dark:text-white mb-3">
+                            <p className="text-sm font-medium text-slate-900 mb-3">
                                 Quick Select
                             </p>
                             <div className="grid grid-cols-3 gap-2">
@@ -147,7 +147,7 @@ export default function ContributePage() {
                                     <button
                                         key={quickAmount}
                                         onClick={() => setAmount(quickAmount.toString())}
-                                        className="px-4 py-2 text-sm font-medium bg-slate-100 dark:bg-slate-700 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg transition-colors"
+                                        className="px-4 py-2 text-sm font-medium bg-slate-100 hover:bg-blue-100 rounded-lg transition-colors"
                                     >
                                         ₦{(quickAmount / 1000).toFixed(0)}k
                                     </button>
@@ -157,8 +157,8 @@ export default function ContributePage() {
 
                         {/* Error Display */}
                         {error && (
-                            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-sm text-red-600">{error}</p>
                             </div>
                         )}
 
@@ -177,7 +177,7 @@ export default function ContributePage() {
                         </LoadingButton>
 
                         {/* Security Notice */}
-                        <div className="mt-4 flex items-start gap-2 text-sm text-slate-500 dark:text-slate-400">
+                        <div className="mt-4 flex items-start gap-2 text-sm text-slate-500">
                             <Shield className="w-4 h-4 mt-0.5 shrink-0" />
                             <p>Secure payment powered by Paystack. Your payment information is encrypted.</p>
                         </div>
@@ -215,38 +215,38 @@ export default function ContributePage() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 border-2 border-dashed border-slate-300 dark:border-slate-700">
-                                <p className="text-center text-slate-500 dark:text-slate-400">
+                            <div className="bg-white rounded-xl shadow-lg p-8 border-2 border-dashed border-slate-300">
+                                <p className="text-center text-slate-500">
                                     Enter an amount to see your tier preview
                                 </p>
                             </div>
                         )}
 
                         {/* Tier Comparison */}
-                        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6">
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h3 className="text-lg font-semibold text-slate-900 mb-4">
                                 Tier Comparison
                             </h3>
                             <div className="space-y-4">
-                                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                                     <div>
-                                        <p className="font-medium text-slate-900 dark:text-white">Basic Tier</p>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                        <p className="font-medium text-slate-900">Basic Tier</p>
+                                        <p className="text-sm text-slate-500">
                                             ₦10,000+ contribution
                                         </p>
                                     </div>
-                                    <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+                                    <p className="text-lg font-semibold text-blue-600">
                                         2x Loan
                                     </p>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="font-medium text-slate-900 dark:text-white">Premium Tier</p>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                        <p className="font-medium text-slate-900">Premium Tier</p>
+                                        <p className="text-sm text-slate-500">
                                             ₦20,000+ contribution
                                         </p>
                                     </div>
-                                    <p className="text-lg font-semibold text-purple-600 dark:text-purple-400">
+                                    <p className="text-lg font-semibold text-purple-600">
                                         3x Loan
                                     </p>
                                 </div>

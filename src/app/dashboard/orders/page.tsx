@@ -117,14 +117,14 @@ export default function BuyerOrdersPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-5xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         My Orders
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Track and manage your marketplace orders
                     </p>
                 </div>
@@ -145,22 +145,22 @@ export default function BuyerOrdersPage() {
                             return (
                                 <div
                                     key={order.id}
-                                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6"
+                                    className="bg-white rounded-2xl shadow-lg p-6"
                                 >
                                     {/* Order Header */}
                                     <div className="flex items-start justify-between mb-6">
                                         <div>
                                             <div className="flex items-center gap-3 mb-2">
-                                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                                <h3 className="text-xl font-bold text-gray-900">
                                                     {order.orderNumber}
                                                 </h3>
                                                 <span
-                                                    className={`px-3 py-1 bg-${statusColor}-100 dark:bg-${statusColor}-900/20 text-${statusColor}-800 dark:text-${statusColor}-200 text-sm font-semibold rounded-full capitalize`}
+                                                    className={`px-3 py-1 bg-${statusColor}-100${statusColor}-900/20 text-${statusColor}-800${statusColor}-200 text-sm font-semibold rounded-full capitalize`}
                                                 >
                                                     {order.status.replace("_", " ")}
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            <p className="text-sm text-gray-600">
                                                 Placed on {new Date(order.createdAt).toLocaleDateString()}
                                             </p>
                                         </div>
@@ -178,7 +178,7 @@ export default function BuyerOrdersPage() {
                                     <div className="mb-6">
                                         <div className="flex items-center justify-between relative">
                                             {/* Progress bar */}
-                                            <div className="absolute top-4 left-0 w-full h-1 bg-gray-200 dark:bg-gray-700 -z-10">
+                                            <div className="absolute top-4 left-0 w-full h-1 bg-gray-200 -z-10">
                                                 <div
                                                     className="h-full bg-primary transition-all duration-500"
                                                     style={{
@@ -205,14 +205,14 @@ export default function BuyerOrdersPage() {
                                                         <div
                                                             className={`w-8 h-8 rounded-full flex items-center justify-center ${isActive
                                                                 ? "bg-primary text-white"
-                                                                : "bg-gray-200 dark:bg-gray-700 text-gray-400"
+                                                                : "bg-gray-200 text-gray-400"
                                                                 } transition-all duration-300 mb-2`}
                                                         >
                                                             <Icon className="w-4 h-4" />
                                                         </div>
                                                         <p
                                                             className={`text-xs ${isActive
-                                                                ? "text-gray-900 dark:text-white font-semibold"
+                                                                ? "text-gray-900 font-semibold"
                                                                 : "text-gray-500"
                                                                 }`}
                                                         >
@@ -225,21 +225,21 @@ export default function BuyerOrdersPage() {
                                     </div>
 
                                     {/* Delivery Info */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 bg-gray-50 rounded-xl">
                                         <div>
                                             <div className="flex items-center gap-2 mb-2">
                                                 <MapPin className="w-4 h-4 text-gray-500" />
-                                                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                <p className="text-sm font-semibold text-gray-700">
                                                     Delivery Address
                                                 </p>
                                             </div>
-                                            <p className="text-sm text-gray-900 dark:text-white">
+                                            <p className="text-sm text-gray-900">
                                                 {order.deliveryAddress.recipientName}
                                             </p>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            <p className="text-sm text-gray-600">
                                                 {order.deliveryAddress.street}
                                             </p>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            <p className="text-sm text-gray-600">
                                                 {order.deliveryAddress.city}, {order.deliveryAddress.state}
                                             </p>
                                         </div>
@@ -248,15 +248,15 @@ export default function BuyerOrdersPage() {
                                             <div>
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <Truck className="w-4 h-4 text-gray-500" />
-                                                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                    <p className="text-sm font-semibold text-gray-700">
                                                         Tracking Information
                                                     </p>
                                                 </div>
-                                                <p className="text-sm text-gray-900 dark:text-white font-mono">
+                                                <p className="text-sm text-gray-900 font-mono">
                                                     {order.trackingNumber}
                                                 </p>
                                                 {order.estimatedDeliveryDate && (
-                                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                                    <p className="text-sm text-gray-600 mt-1">
                                                         Est. Delivery:{" "}
                                                         {new Date(order.estimatedDeliveryDate).toLocaleDateString()}
                                                     </p>
@@ -267,7 +267,7 @@ export default function BuyerOrdersPage() {
 
                                     {/* Order Items */}
                                     <div className="mb-4">
-                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                                        <p className="text-sm font-semibold text-gray-700 mb-3">
                                             Order Items
                                         </p>
                                         <div className="space-y-2">
@@ -277,19 +277,19 @@ export default function BuyerOrdersPage() {
                                                     className="flex items-center justify-between text-sm"
                                                 >
                                                     <div>
-                                                        <span className="text-gray-900 dark:text-white font-medium">
+                                                        <span className="text-gray-900 font-medium">
                                                             {item.productTitle}
                                                         </span>
                                                         <span className="text-gray-500 ml-2">
                                                             × {item.quantity}
                                                         </span>
                                                         {item.tier !== "retail" && (
-                                                            <span className="ml-2 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 text-xs font-semibold rounded capitalize">
+                                                            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded capitalize">
                                                                 {item.tier}
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <span className="font-semibold text-gray-900 dark:text-white">
+                                                    <span className="font-semibold text-gray-900">
                                                         {formatCurrency(item.totalPrice)}
                                                     </span>
                                                 </div>
@@ -301,7 +301,7 @@ export default function BuyerOrdersPage() {
                                     <div className="flex flex-wrap gap-3">
                                         <button
                                             onClick={() => router.push(`/marketplace/orders/${order.id}`)}
-                                            className="flex-1 min-w-[140px] px-4 py-2 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center justify-center gap-2"
+                                            className="flex-1 min-w-[140px] px-4 py-2 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition flex items-center justify-center gap-2"
                                         >
                                             <Eye className="w-4 h-4" />
                                             View Details
@@ -360,9 +360,9 @@ export default function BuyerOrdersPage() {
                         })}
                     </div>
                 ) : (
-                    <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl">
+                    <div className="text-center py-12 bg-white rounded-2xl">
                         <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500 dark:text-gray-400 text-lg mb-4">
+                        <p className="text-gray-500 text-lg mb-4">
                             You haven't placed any orders yet
                         </p>
                         <button

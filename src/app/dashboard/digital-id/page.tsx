@@ -64,7 +64,7 @@ export default function DigitalIDPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 py-12 px-4">
                 <div className="max-w-4xl mx-auto">
                     <div className="flex items-center justify-center py-20">
                         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -76,10 +76,10 @@ export default function DigitalIDPage() {
 
     if (error) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 py-12 px-4">
                 <div className="max-w-4xl mx-auto">
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-                        <p className="text-red-800 dark:text-red-200">{error}</p>
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+                        <p className="text-red-800">{error}</p>
                     </div>
                 </div>
             </div>
@@ -91,17 +91,17 @@ export default function DigitalIDPage() {
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 py-12 px-4">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-8">
                     <div className="flex items-center justify-center space-x-3 mb-4">
                         <CreditCard className="w-10 h-10 text-blue-600" />
-                        <h1 className="text-4xl font-bold text-slate-900 dark:text-white">
+                        <h1 className="text-4xl font-bold text-slate-900">
                             Digital Member ID
                         </h1>
                     </div>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Your official Easy Sales Export platform identification
                     </p>
                 </div>
@@ -118,11 +118,11 @@ export default function DigitalIDPage() {
                 />
 
                 {/* Info Section */}
-                <div className="mt-8 bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm">
-                    <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">
+                <div className="mt-8 bg-white rounded-lg p-6 shadow-sm">
+                    <h2 className="text-xl font-semibold text-slate-900 mb-4">
                         About Your Digital ID
                     </h2>
-                    <ul className="space-y-3 text-slate-600 dark:text-slate-400">
+                    <ul className="space-y-3 text-slate-600">
                         <li className="flex items-start space-x-3">
                             <span className="text-blue-600 font-bold">•</span>
                             <span>

@@ -81,7 +81,7 @@ export default function CooperativeDashboardPage() {
             <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading dashboard...</p>
+                    <p className="text-slate-600">Loading dashboard...</p>
                 </div>
             </div>
         );
@@ -90,8 +90,8 @@ export default function CooperativeDashboardPage() {
     if (!membership) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Not a Member Yet?</h1>
-                <p className="text-slate-600 dark:text-slate-400 text-center max-w-md">
+                <h1 className="text-2xl font-bold text-slate-900">Not a Member Yet?</h1>
+                <p className="text-slate-600 text-center max-w-md">
                     Join a cooperative today to access savings, loans, and investment opportunities.
                 </p>
                 <Link
@@ -117,10 +117,10 @@ export default function CooperativeDashboardPage() {
         <div className="space-y-8">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     Welcome Back!
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Here's your cooperative summary
                 </p>
             </div>
@@ -144,50 +144,50 @@ export default function CooperativeDashboardPage() {
 
             {/* Financial Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                        <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                             <Wallet className="w-6 h-6 text-green-600" />
                         </div>
                     </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Total Savings</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <p className="text-sm text-slate-600 mb-1">Total Savings</p>
+                    <p className="text-2xl font-bold text-slate-900">
                         {formatCurrency(totalSavings)}
                     </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                        <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                             <CreditCard className="w-6 h-6 text-purple-600" />
                         </div>
                     </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Active Loans</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <p className="text-sm text-slate-600 mb-1">Active Loans</p>
+                    <p className="text-2xl font-bold text-slate-900">
                         {formatCurrency(activeLoans)}
                     </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                             <TrendingUp className="w-6 h-6 text-blue-600" />
                         </div>
                     </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Loan Limit</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <p className="text-sm text-slate-600 mb-1">Loan Limit</p>
+                    <p className="text-2xl font-bold text-slate-900">
                         {formatCurrency(availableLoanLimit)}
                     </p>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+                <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
+                        <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
                             <Award className="w-6 h-6 text-orange-600" />
                         </div>
                     </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Interest Earned</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <p className="text-sm text-slate-600 mb-1">Interest Earned</p>
+                    <p className="text-2xl font-bold text-slate-900">
                         {formatCurrency(interestEarned)}
                     </p>
                 </div>
@@ -196,58 +196,58 @@ export default function CooperativeDashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Quick Actions */}
                 <div className="lg:col-span-1">
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">
                         Quick Actions
                     </h2>
                     <div className="space-y-3">
                         <Link
                             href="/cooperatives/contribute"
-                            className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl shadow-lg hover:shadow-xl transition-all group"
+                            className="flex items-center justify-between p-4 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                                     <PlusCircle className="w-5 h-5 text-green-600" />
                                 </div>
-                                <span className="font-semibold text-slate-900 dark:text-white">Contribute</span>
+                                <span className="font-semibold text-slate-900">Contribute</span>
                             </div>
                             <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-green-600 group-hover:translate-x-1 transition-all" />
                         </Link>
 
                         <Link
                             href="/cooperatives/loans"
-                            className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl shadow-lg hover:shadow-xl transition-all group"
+                            className="flex items-center justify-between p-4 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                                     <TrendingUp className="w-5 h-5 text-blue-600" />
                                 </div>
-                                <span className="font-semibold text-slate-900 dark:text-white">Apply for Loan</span>
+                                <span className="font-semibold text-slate-900">Apply for Loan</span>
                             </div>
                             <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
                         </Link>
 
                         <Link
                             href="/cooperatives/withdrawals"
-                            className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl shadow-lg hover:shadow-xl transition-all group"
+                            className="flex items-center justify-between p-4 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                                     <ArrowDownLeft className="w-5 h-5 text-purple-600" />
                                 </div>
-                                <span className="font-semibold text-slate-900 dark:text-white">Withdraw</span>
+                                <span className="font-semibold text-slate-900">Withdraw</span>
                             </div>
                             <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" />
                         </Link>
 
                         <Link
                             href="/cooperatives/history"
-                            className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 rounded-xl shadow-lg hover:shadow-xl transition-all group"
+                            className="flex items-center justify-between p-4 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all group"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
                                     <HistoryIcon className="w-5 h-5 text-orange-600" />
                                 </div>
-                                <span className="font-semibold text-slate-900 dark:text-white">View Statement</span>
+                                <span className="font-semibold text-slate-900">View Statement</span>
                             </div>
                             <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-orange-600 group-hover:translate-x-1 transition-all" />
                         </Link>
@@ -257,7 +257,7 @@ export default function CooperativeDashboardPage() {
                 {/* Recent Activity */}
                 <div className="lg:col-span-2">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                        <h2 className="text-xl font-bold text-slate-900">
                             Recent Activity
                         </h2>
                         <Link
@@ -267,7 +267,7 @@ export default function CooperativeDashboardPage() {
                             View All
                         </Link>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg divide-y divide-slate-200 dark:divide-slate-700">
+                    <div className="bg-white rounded-2xl shadow-lg divide-y divide-slate-200">
                         {transactions.length === 0 ? (
                             <div className="p-8 text-center text-slate-500">
                                 No recent activity
@@ -276,14 +276,14 @@ export default function CooperativeDashboardPage() {
                             transactions.map((activity) => (
                                 <div key={activity.id} className="p-4 flex items-center justify-between">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center">
+                                        <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
                                             {getActivityIcon(activity.type)}
                                         </div>
                                         <div>
-                                            <p className="font-semibold text-slate-900 dark:text-white">
+                                            <p className="font-semibold text-slate-900">
                                                 {activity.description || "Transaction"}
                                             </p>
-                                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                            <p className="text-sm text-slate-600">
                                                 {formatDate(activity.date)}
                                             </p>
                                         </div>
@@ -296,7 +296,7 @@ export default function CooperativeDashboardPage() {
                                             {activity.amount > 0 ? "+" : ""}
                                             {formatCurrency(Math.abs(activity.amount))}
                                         </p>
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs font-semibold rounded-full capitalize">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full capitalize">
                                             {activity.status}
                                         </span>
                                     </div>

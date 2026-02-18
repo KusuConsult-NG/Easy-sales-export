@@ -9,31 +9,31 @@ import { XCircle, Home, Mail } from "lucide-react";
 
 export default function ExportRejectedPage() {
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
             <div className="max-w-2xl w-full">
                 {/* Card */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+                <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
                     {/* Icon */}
-                    <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <XCircle className="w-10 h-10 text-red-600" />
                     </div>
 
                     {/* Title */}
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-4">
                         Application Not Approved
                     </h1>
 
                     {/* Message */}
-                    <p className="text-lg text-slate-600 dark:text-slate-400 mb-8">
+                    <p className="text-lg text-slate-600 mb-8">
                         Unfortunately, your Export Windows application has not been approved at this time.
                     </p>
 
                     {/* Rejection Reasons */}
-                    <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg p-6 mb-8 text-left">
-                        <h3 className="font-semibold text-red-900 dark:text-red-300 mb-3">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-8 text-left">
+                        <h3 className="font-semibold text-red-900 mb-3">
                             Common reasons for rejection:
                         </h3>
-                        <ul className="space-y-2 text-sm text-red-800 dark:text-red-400">
+                        <ul className="space-y-2 text-sm text-red-800">
                             <li className="flex items-start gap-2">
                                 <span className="text-red-600 mt-1">•</span>
                                 <span>Incomplete or unclear KYC documentation</span>
@@ -54,15 +54,15 @@ export default function ExportRejectedPage() {
                     </div>
 
                     {/* Next Steps */}
-                    <div className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-6 mb-8 text-left">
-                        <h3 className="font-semibold text-slate-900 dark:text-white mb-3">
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 mb-8 text-left">
+                        <h3 className="font-semibold text-slate-900 mb-3">
                             What can you do?
                         </h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                        <p className="text-sm text-slate-600 mb-4">
                             You may reapply after addressing the issues mentioned in your rejection email.
                             Please check your inbox for detailed feedback.
                         </p>
-                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
                             <Mail className="w-4 h-4" />
                             <span>Check your email for more details</span>
                         </div>
@@ -86,8 +86,8 @@ export default function ExportRejectedPage() {
                     </div>
 
                     {/* Support */}
-                    <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-700">
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                    <div className="mt-8 pt-8 border-t border-slate-200">
+                        <p className="text-sm text-slate-600">
                             Need help? Contact support at{" "}
                             <a
                                 href="mailto:support@easysalesexport.com"

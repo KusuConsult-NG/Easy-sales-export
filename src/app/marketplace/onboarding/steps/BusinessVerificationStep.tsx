@@ -56,26 +56,26 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
         <div className="space-y-8">
             {/* Header */}
             <div className="text-center">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
+                <h2 className="text-3xl font-bold text-slate-900 mb-3">
                     Business Verification
                 </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400">
+                <p className="text-lg text-slate-600">
                     Upload documents to verify your business
                 </p>
             </div>
 
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Info Banner */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0 mt-0.5">
                             <span className="text-white text-sm">ℹ</span>
                         </div>
                         <div className="text-sm">
-                            <p className="font-semibold text-blue-900 dark:text-blue-200 mb-1">
+                            <p className="font-semibold text-blue-900 mb-1">
                                 Document Requirements
                             </p>
-                            <p className="text-blue-800 dark:text-blue-300">
+                            <p className="text-blue-800">
                                 All documents must be clear and legible. Supported formats: PDF, JPG, PNG (max 5MB each).
                                 Verification typically takes 1-3 business days.
                             </p>
@@ -87,11 +87,11 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 <div>
                     <div className="flex items-center gap-2 mb-3">
                         <FileText className="w-5 h-5 text-slate-600" />
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white">
+                        <label className="block text-sm font-semibold text-slate-900">
                             Business Registration Certificate (Optional)
                         </label>
                     </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    <p className="text-sm text-slate-600 mb-3">
                         CAC certificate for registered businesses or cooperative registration documents
                     </p>
                     <DocumentUpload
@@ -105,7 +105,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
 
                 {/* Tax ID */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Tax Identification Number (TIN) *
                     </label>
                     <input
@@ -113,13 +113,13 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                         value={documents.taxId || ""}
                         onChange={(e) => updateDocument("taxId", e.target.value)}
                         placeholder="Enter your TIN"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white ${errors.taxId ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.taxId ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     />
                     {errors.taxId && (
                         <p className="mt-1 text-sm text-red-600">{errors.taxId}</p>
                     )}
-                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    <p className="mt-2 text-sm text-slate-600">
                         Required for tax compliance and payment processing
                     </p>
                 </div>
@@ -128,11 +128,11 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 <div>
                     <div className="flex items-center gap-2 mb-3">
                         <Image className="w-5 h-5 text-slate-600" />
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white">
+                        <label className="block text-sm font-semibold text-slate-900">
                             Farm/Business Location Photos (Optional)
                         </label>
                     </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    <p className="text-sm text-slate-600 mb-3">
                         Upload 2-4 photos showing your farm or business facility
                     </p>
                     <div className="grid grid-cols-2 gap-4">
@@ -163,11 +163,11 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 <div>
                     <div className="flex items-center gap-2 mb-3">
                         <Package className="w-5 h-5 text-slate-600" />
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white">
+                        <label className="block text-sm font-semibold text-slate-900">
                             Product Sample Photos (Optional)
                         </label>
                     </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    <p className="text-sm text-slate-600 mb-3">
                         Upload photos of your products to showcase quality
                     </p>
                     <div className="grid grid-cols-2 gap-4">
@@ -195,11 +195,11 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 </div>
 
                 {/* Verification Timeline */}
-                <div className="bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl p-6">
-                    <h4 className="font-bold text-slate-900 dark:text-white mb-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
+                    <h4 className="font-bold text-slate-900 mb-3">
                         What happens next?
                     </h4>
-                    <ol className="space-y-2 text-sm text-slate-900 dark:text-white">
+                    <ol className="space-y-2 text-sm text-slate-900">
                         <li className="flex items-start gap-3">
                             <span className="font-bold text-green-600">1.</span>
                             <span>Our team reviews your documents within 24 hours</span>
@@ -224,7 +224,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
                 >
                     Back
                 </button>

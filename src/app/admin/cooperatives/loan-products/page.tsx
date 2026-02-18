@@ -148,10 +148,10 @@ export default function LoanProductsPage() {
         <div className="p-8">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         Loan Products
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Manage available loan products for cooperative members
                     </p>
                 </div>
@@ -165,17 +165,17 @@ export default function LoanProductsPage() {
             </div>
 
             {isLoading ? (
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-12 text-center shadow-lg">
+                <div className="bg-white rounded-xl p-12 text-center shadow-lg">
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading products...</p>
+                    <p className="text-slate-600">Loading products...</p>
                 </div>
             ) : products.length === 0 ? (
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-12 text-center shadow-lg">
-                    <Package className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                <div className="bg-white rounded-xl p-12 text-center shadow-lg">
+                    <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">
                         No Loan Products
                     </h3>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                    <p className="text-slate-600 mb-6">
                         Create your first loan product to get started
                     </p>
                     <button
@@ -190,7 +190,7 @@ export default function LoanProductsPage() {
                     {products.map((product) => (
                         <div
                             key={product.id}
-                            className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg hover:shadow-xl transition-all"
+                            className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all"
                         >
                             <div className="flex items-start justify-between mb-4">
                                 <div className="w-12 h-12 bg-linear-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
@@ -199,50 +199,50 @@ export default function LoanProductsPage() {
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => handleOpenModal(product)}
-                                        className="p-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                                        className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
                                     >
-                                        <Pencil className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                                        <Pencil className="w-4 h-4 text-slate-600" />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(product.id)}
-                                        className="p-2 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg transition-colors"
+                                        className="p-2 bg-red-100 hover:bg-red-200 rounded-lg transition-colors"
                                     >
-                                        <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                                        <Trash2 className="w-4 h-4 text-red-600" />
                                     </button>
                                 </div>
                             </div>
 
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 {product.name}
                             </h3>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                            <p className="text-sm text-slate-600 mb-4">
                                 {product.description}
                             </p>
 
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">Amount Range</span>
-                                    <span className="font-bold text-slate-900 dark:text-white">
+                                    <span className="text-slate-600">Amount Range</span>
+                                    <span className="font-bold text-slate-900">
                                         {formatCurrency(product.minAmount)} - {formatCurrency(product.maxAmount)}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">Interest Rate</span>
-                                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                                    <span className="text-slate-600">Interest Rate</span>
+                                    <span className="font-bold text-blue-600">
                                         {product.interestRate}% APR
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">Duration</span>
-                                    <span className="font-bold text-slate-900 dark:text-white">
+                                    <span className="text-slate-600">Duration</span>
+                                    <span className="font-bold text-slate-900">
                                         {product.durationMonths} months
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600 dark:text-slate-400">Status</span>
+                                    <span className="text-slate-600">Status</span>
                                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${product.isActive
-                                        ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                        : "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-400"
+                                        ? "bg-green-100 text-green-700"
+                                        : "bg-slate-100 text-slate-900"
                                         }`}>
                                         {product.isActive ? "Active" : "Inactive"}
                                     </span>
@@ -256,22 +256,22 @@ export default function LoanProductsPage() {
             {/* Create/Edit Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                    <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+                            <h2 className="text-2xl font-bold text-slate-900">
                                 {editingProduct ? "Edit Loan Product" : "Create Loan Product"}
                             </h2>
                             <button
                                 onClick={handleCloseModal}
-                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                             >
-                                <X className="w-6 h-6 text-slate-600 dark:text-slate-400" />
+                                <X className="w-6 h-6 text-slate-600" />
                             </button>
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
                             <div>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Product Name
                                 </label>
                                 <input
@@ -279,13 +279,13 @@ export default function LoanProductsPage() {
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                     required
-                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="e.g., Quick Business Loan"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Description
                                 </label>
                                 <textarea
@@ -293,14 +293,14 @@ export default function LoanProductsPage() {
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     required
                                     rows={3}
-                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="Describe the loan product..."
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Minimum Amount (₦)
                                     </label>
                                     <input
@@ -310,11 +310,11 @@ export default function LoanProductsPage() {
                                         required
                                         min="0"
                                         step="10000"
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Maximum Amount (₦)
                                     </label>
                                     <input
@@ -324,14 +324,14 @@ export default function LoanProductsPage() {
                                         required
                                         min={formData.minAmount}
                                         step="10000"
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Interest Rate (%)
                                     </label>
                                     <input
@@ -342,11 +342,11 @@ export default function LoanProductsPage() {
                                         min="0"
                                         max="100"
                                         step="0.1"
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Duration (Months)
                                     </label>
                                     <input
@@ -356,7 +356,7 @@ export default function LoanProductsPage() {
                                         required
                                         min="1"
                                         max="60"
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                             </div>
@@ -369,7 +369,7 @@ export default function LoanProductsPage() {
                                     onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                                     className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                                 />
-                                <label htmlFor="isActive" className="text-sm font-semibold text-slate-900 dark:text-white">
+                                <label htmlFor="isActive" className="text-sm font-semibold text-slate-900">
                                     Product is active (visible to members)
                                 </label>
                             </div>
@@ -384,7 +384,7 @@ export default function LoanProductsPage() {
                                 <button
                                     type="button"
                                     onClick={handleCloseModal}
-                                    className="px-6 py-3 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold rounded-xl transition-all"
+                                    className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-xl transition-all"
                                 >
                                     Cancel
                                 </button>

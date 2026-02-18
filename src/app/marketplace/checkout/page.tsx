@@ -187,28 +187,28 @@ export default function CheckoutPage() {
 
     if (!isClient || cart.length === 0) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading checkout...</p>
+                    <p className="text-slate-600">Loading checkout...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 px-4">
+        <div className="min-h-screen bg-slate-50 py-8 px-4">
             <div className="max-w-6xl mx-auto">
                 {/* Header */}
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white mb-6 transition"
+                    className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6 transition"
                 >
                     <ArrowLeft className="w-5 h-5" />
                     Back to Marketplace
                 </button>
 
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">
+                <h1 className="text-3xl font-bold text-slate-900 mb-8">
                     Checkout
                 </h1>
 
@@ -216,8 +216,8 @@ export default function CheckoutPage() {
                     {/* Order Summary */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Cart Items */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6">
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl p-6">
+                            <h2 className="text-xl font-bold text-slate-900 mb-4">
                                 Order Summary
                             </h2>
                             <div className="space-y-4">
@@ -226,9 +226,9 @@ export default function CheckoutPage() {
                                     return (
                                         <div
                                             key={item.id}
-                                            className="flex items-start gap-4 pb-4 border-b border-slate-200 dark:border-slate-700 last:border-0"
+                                            className="flex items-start gap-4 pb-4 border-b border-slate-200 last:border-0"
                                         >
-                                            <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-700">
+                                            <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-slate-100">
                                                 {item.images[0] ? (
                                                     <Image
                                                         src={item.images[0]}
@@ -241,10 +241,10 @@ export default function CheckoutPage() {
                                                 )}
                                             </div>
                                             <div className="flex-1">
-                                                <h3 className="font-bold text-slate-900 dark:text-white">
+                                                <h3 className="font-bold text-slate-900">
                                                     {item.title}
                                                 </h3>
-                                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                <p className="text-sm text-slate-600">
                                                     {formatCurrency(price)} × {item.quantity} {item.unit}
                                                 </p>
                                             </div>
@@ -258,13 +258,13 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* Contact Information */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6">
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl p-6">
+                            <h2 className="text-xl font-bold text-slate-900 mb-4">
                                 Contact Information
                             </h2>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                                         Email Address
                                     </label>
                                     <input
@@ -272,7 +272,7 @@ export default function CheckoutPage() {
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         placeholder="your.email@example.com"
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
                                         required
                                     />
                                 </div>
@@ -287,8 +287,8 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* Payment Method */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6">
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl p-6">
+                            <h2 className="text-xl font-bold text-slate-900 mb-4">
                                 Payment Method
                             </h2>
                             <div className="space-y-3">
@@ -296,15 +296,15 @@ export default function CheckoutPage() {
                                     onClick={() => setPaymentMethod("paystack")}
                                     className={`w-full p-4 border-2 rounded-xl flex items-center gap-3 transition ${paymentMethod === "paystack"
                                         ? "border-primary bg-primary/5"
-                                        : "border-slate-200 dark:border-slate-700"
+                                        : "border-slate-200"
                                         }`}
                                 >
                                     <CreditCard className="w-6 h-6 text-primary" />
                                     <div className="flex-1 text-left">
-                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                        <p className="font-semibold text-slate-900">
                                             Card Payment (Paystack)
                                         </p>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        <p className="text-sm text-slate-600">
                                             Pay securely with your debit/credit card
                                         </p>
                                     </div>
@@ -318,21 +318,21 @@ export default function CheckoutPage() {
 
                     {/* Order Total */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 sticky top-8">
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl p-6 sticky top-8">
+                            <h2 className="text-xl font-bold text-slate-900 mb-4">
                                 Order Total
                             </h2>
                             <div className="space-y-3 mb-6">
-                                <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                                <div className="flex justify-between text-slate-600">
                                     <span>Subtotal</span>
                                     <span>{formatCurrency(subtotal)}</span>
                                 </div>
-                                <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                                <div className="flex justify-between text-slate-600">
                                     <span>Delivery Fee</span>
                                     <span>{formatCurrency(deliveryFee)}</span>
                                 </div>
-                                <div className="pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between text-lg font-bold">
-                                    <span className="text-slate-900 dark:text-white">Total</span>
+                                <div className="pt-3 border-t border-slate-200 flex justify-between text-lg font-bold">
+                                    <span className="text-slate-900">Total</span>
                                     <span className="text-primary">{formatCurrency(subtotal + deliveryFee)}</span>
                                 </div>
                             </div>
@@ -340,7 +340,7 @@ export default function CheckoutPage() {
 
                             {/* Payment Method Selection */}
                             <div className="mb-6">
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                                <label className="block text-sm font-semibold text-slate-900 mb-3">
                                     Payment Method *
                                 </label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -349,14 +349,14 @@ export default function CheckoutPage() {
                                         onClick={() => setPaymentMethod("paystack")}
                                         className={`p-4 border-2 rounded-xl transition-all text-left ${paymentMethod === "paystack"
                                             ? "border-primary bg-primary/10"
-                                            : "border-slate-200 dark:border-slate-700 hover:border-primary/50"
+                                            : "border-slate-200 hover:border-primary/50"
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <CreditCard className="w-6 h-6 text-primary" />
                                             <div>
-                                                <p className="font-semibold text-slate-900 dark:text-white">Card Payment</p>
-                                                <p className="text-xs text-slate-600 dark:text-slate-400">Pay with debit/credit card</p>
+                                                <p className="font-semibold text-slate-900">Card Payment</p>
+                                                <p className="text-xs text-slate-600">Pay with debit/credit card</p>
                                             </div>
                                         </div>
                                     </button>
@@ -366,14 +366,14 @@ export default function CheckoutPage() {
                                         onClick={() => setPaymentMethod("bank_transfer")}
                                         className={`p-4 border-2 rounded-xl transition-all text-left ${paymentMethod === "bank_transfer"
                                             ? "border-primary bg-primary/10"
-                                            : "border-slate-200 dark:border-slate-700 hover:border-primary/50"
+                                            : "border-slate-200 hover:border-primary/50"
                                             }`}
                                     >
                                         <div className="flex items-center gap-3">
                                             <Store className="w-6 h-6 text-primary" />
                                             <div>
-                                                <p className="font-semibold text-slate-900 dark:text-white">Bank Transfer</p>
-                                                <p className="text-xs text-slate-600 dark:text-slate-400">Transfer directly to our account</p>
+                                                <p className="font-semibold text-slate-900">Bank Transfer</p>
+                                                <p className="text-xs text-slate-600">Transfer directly to our account</p>
                                             </div>
                                         </div>
                                     </button>
@@ -382,24 +382,24 @@ export default function CheckoutPage() {
 
                             {/* Bank Transfer Details */}
                             {paymentMethod === "bank_transfer" && (
-                                <div className="mb-6 p-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-                                    <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-4">Bank Transfer Details</h3>
+                                <div className="mb-6 p-6 bg-blue-50 border border-blue-200 rounded-xl">
+                                    <h3 className="font-semibold text-blue-900 mb-4">Bank Transfer Details</h3>
                                     <div className="space-y-3 text-sm">
-                                        <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg">
-                                            <span className="text-slate-600 dark:text-slate-400">Bank Name:</span>
-                                            <span className="font-semibold text-slate-900 dark:text-white">First Bank of Nigeria</span>
+                                        <div className="flex justify-between items-center p-3 bg-white rounded-lg">
+                                            <span className="text-slate-600">Bank Name:</span>
+                                            <span className="font-semibold text-slate-900">First Bank of Nigeria</span>
                                         </div>
-                                        <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg">
-                                            <span className="text-slate-600 dark:text-slate-400">Account Number:</span>
-                                            <span className="font-semibold text-slate-900 dark:text-white font-mono">1234567890</span>
+                                        <div className="flex justify-between items-center p-3 bg-white rounded-lg">
+                                            <span className="text-slate-600">Account Number:</span>
+                                            <span className="font-semibold text-slate-900 font-mono">1234567890</span>
                                         </div>
-                                        <div className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 rounded-lg">
-                                            <span className="text-slate-600 dark:text-slate-400">Account Name:</span>
-                                            <span className="font-semibold text-slate-900 dark:text-white">Easy Sales Export Ltd</span>
+                                        <div className="flex justify-between items-center p-3 bg-white rounded-lg">
+                                            <span className="text-slate-600">Account Name:</span>
+                                            <span className="font-semibold text-slate-900">Easy Sales Export Ltd</span>
                                         </div>
                                     </div>
-                                    <div className="mt-4 p-3 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg">
-                                        <p className="text-xs text-yellow-900 dark:text-yellow-200">
+                                    <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+                                        <p className="text-xs text-yellow-900">
                                             ⚠️ <strong>Important:</strong> After transfer, your order will be marked as "pending payment verification".
                                             We'll confirm your payment within 24 hours and ship your order.
                                         </p>
@@ -409,8 +409,8 @@ export default function CheckoutPage() {
 
                             {/* Error Display */}
                             {error && (
-                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-4">
-                                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                                <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                                    <p className="text-sm text-red-600">{error}</p>
                                 </div>
                             )}
 
@@ -438,23 +438,23 @@ export default function CheckoutPage() {
                                     )}
                                 </button>
                             ) : (
-                                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
-                                    <p className="text-sm text-yellow-800 dark:text-yellow-200 font-semibold mb-2">
+                                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                                    <p className="text-sm text-yellow-800 font-semibold mb-2">
                                         Payment Temporarily Unavailable
                                     </p>
-                                    <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                                    <p className="text-xs text-yellow-700">
                                         Please contact support to complete your order.
                                     </p>
                                     <button
                                         disabled
-                                        className="w-full mt-3 px-6 py-3 bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-bold rounded-xl cursor-not-allowed"
+                                        className="w-full mt-3 px-6 py-3 bg-slate-300 text-slate-500 font-bold rounded-xl cursor-not-allowed"
                                     >
                                         Payment Disabled
                                     </button>
                                 </div>
                             )}
 
-                            <p className="text-xs text-center text-slate-500 dark:text-slate-400 mt-4">
+                            <p className="text-xs text-center text-slate-500 mt-4">
                                 All payments are escrow-protected for your security
                             </p>
                         </div>

@@ -85,7 +85,7 @@ export default function FarmNationOnboardingPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
             </div>
         );
@@ -187,7 +187,7 @@ export default function FarmNationOnboardingPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-linear-to-r from-teal-600 to-cyan-600 text-white py-6 px-4 md:px-8">
                 <div className="max-w-4xl mx-auto">
@@ -211,8 +211,8 @@ export default function FarmNationOnboardingPage() {
                                     className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors ${step.completed
                                         ? "bg-teal-600 text-white"
                                         : index === currentStepIndex
-                                            ? "bg-teal-100 dark:bg-teal-900 text-teal-600 dark:text-teal-100 border-2 border-teal-600"
-                                            : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                                            ? "bg-teal-100 text-teal-600 border-2 border-teal-600"
+                                            : "bg-slate-200 text-slate-500"
                                         }`}
                                 >
                                     {step.completed ? (
@@ -222,7 +222,7 @@ export default function FarmNationOnboardingPage() {
                                     )}
                                 </div>
                                 <div className="mt-2 text-center hidden md:block">
-                                    <p className="text-xs font-medium text-slate-900 dark:text-white">
+                                    <p className="text-xs font-medium text-slate-900">
                                         {step.title}
                                     </p>
                                 </div>
@@ -231,7 +231,7 @@ export default function FarmNationOnboardingPage() {
                                 <div
                                     className={`flex-1 h-1 mx-2 ${step.completed
                                         ? "bg-teal-600"
-                                        : "bg-slate-200 dark:bg-slate-700"
+                                        : "bg-slate-200"
                                         }`}
                                 />
                             )}
@@ -242,13 +242,13 @@ export default function FarmNationOnboardingPage() {
 
             {/* Current Step Content */}
             <div className="max-w-4xl mx-auto px-4 md:px-8 py-8">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-6 md:p-8">
+                <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
                     {renderCurrentStep()}
                 </div>
 
                 {/* Benefits Reminder */}
-                <div className="mt-8 bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-800 rounded-lg p-6">
-                    <h3 className="font-semibold text-teal-900 dark:text-teal-100 mb-4 flex items-center gap-2">
+                <div className="mt-8 bg-teal-50 border border-teal-200 rounded-lg p-6">
+                    <h3 className="font-semibold text-teal-900 mb-4 flex items-center gap-2">
                         <CheckCircle className="w-5 h-5" />
                         Why Complete Your Profile?
                     </h3>
@@ -256,10 +256,10 @@ export default function FarmNationOnboardingPage() {
                         <div className="flex items-start gap-2">
                             <TrendingUp className="w-4 h-4 text-teal-600 mt-0.5 shrink-0" />
                             <div>
-                                <p className="font-medium text-teal-900 dark:text-teal-100">
+                                <p className="font-medium text-teal-900">
                                     Better Matches
                                 </p>
-                                <p className="text-teal-700 dark:text-teal-300">
+                                <p className="text-teal-700">
                                     Get property recommendations tailored to your needs
                                 </p>
                             </div>
@@ -267,10 +267,10 @@ export default function FarmNationOnboardingPage() {
                         <div className="flex items-start gap-2">
                             <Shield className="w-4 h-4 text-teal-600 mt-0.5 shrink-0" />
                             <div>
-                                <p className="font-medium text-teal-900 dark:text-teal-100">
+                                <p className="font-medium text-teal-900">
                                     Verified Listings
                                 </p>
-                                <p className="text-teal-700 dark:text-teal-300">
+                                <p className="text-teal-700">
                                     Access to verified agricultural properties nationwide
                                 </p>
                             </div>
@@ -278,10 +278,10 @@ export default function FarmNationOnboardingPage() {
                         <div className="flex items-start gap-2">
                             <Home className="w-4 h-4 text-teal-600 mt-0.5 shrink-0" />
                             <div>
-                                <p className="font-medium text-teal-900 dark:text-teal-100">
+                                <p className="font-medium text-teal-900">
                                     Secure Transactions
                                 </p>
-                                <p className="text-teal-700 dark:text-teal-300">
+                                <p className="text-teal-700">
                                     Protected by escrow and legal documentation
                                 </p>
                             </div>

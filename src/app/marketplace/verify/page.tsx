@@ -112,13 +112,13 @@ export default function SellerVerificationPage() {
         const config = statusConfig[existingVerification.status as keyof typeof statusConfig];
 
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 text-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
                     <div className="flex justify-center mb-6">{config.icon}</div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-4">
                         {config.title}
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400 mb-8">
+                    <p className="text-gray-600 mb-8">
                         {config.message}
                     </p>
                     {'action' in config && config.action && (
@@ -135,19 +135,19 @@ export default function SellerVerificationPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-3xl mx-auto px-4">
                 {/* Header */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-6">
+                <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
                     <div className="flex items-center gap-4 mb-4">
                         <div className="p-3 rounded-xl bg-primary/10">
                             <Store className="w-8 h-8 text-primary" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                            <h1 className="text-3xl font-bold text-gray-900">
                                 Become a Seller
                             </h1>
-                            <p className="text-gray-600 dark:text-gray-400">
+                            <p className="text-gray-600">
                                 Complete verification to start selling on our marketplace
                             </p>
                         </div>
@@ -155,13 +155,13 @@ export default function SellerVerificationPage() {
                 </div>
 
                 {/* Verification Form */}
-                <form action={formAction} className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 space-y-8">
+                <form action={formAction} className="bg-white rounded-2xl shadow-lg p-8 space-y-8">
 
                     {/* Phone Verification */}
                     <section>
                         <div className="flex items-center gap-3 mb-4">
                             <Phone className="w-5 h-5 text-primary" />
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-semibold text-gray-900">
                                 Phone Verification
                             </h2>
                         </div>
@@ -170,7 +170,7 @@ export default function SellerVerificationPage() {
                             name="phoneNumber"
                             required
                             placeholder="+234 800 000 0000"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary focus:border-transparent"
                         />
                     </section>
 
@@ -178,42 +178,42 @@ export default function SellerVerificationPage() {
                     <section>
                         <div className="flex items-center gap-3 mb-4">
                             <FileText className="w-5 h-5 text-primary" />
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-semibold text-gray-900">
                                 Identity Documents
                             </h2>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     NIN (Optional)
                                 </label>
                                 <input
                                     type="text"
                                     name="nin"
                                     placeholder="12345678901"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     BVN (Optional)
                                 </label>
                                 <input
                                     type="text"
                                     name="bvn"
                                     placeholder="12345678901"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
                             <div className="md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     CAC (For Business - Optional)
                                 </label>
                                 <input
                                     type="text"
                                     name="cac"
                                     placeholder="RC1234567"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
                         </div>
@@ -223,19 +223,19 @@ export default function SellerVerificationPage() {
                     <section>
                         <div className="flex items-center gap-3 mb-4">
                             <CreditCard className="w-5 h-5 text-primary" />
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-semibold text-gray-900">
                                 Bank Account Details
                             </h2>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Bank Name *
                                 </label>
                                 <select
                                     name="bankName"
                                     required
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 >
                                     <option value="">Select Bank</option>
                                     {nigerianBanks.map(bank => (
@@ -247,7 +247,7 @@ export default function SellerVerificationPage() {
                                 <input type="hidden" name="bankCode" value="044" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Account Number *
                                 </label>
                                 <input
@@ -256,11 +256,11 @@ export default function SellerVerificationPage() {
                                     required
                                     placeholder="0123456789"
                                     maxLength={10}
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
                             <div className="md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Account Name *
                                 </label>
                                 <input
@@ -268,7 +268,7 @@ export default function SellerVerificationPage() {
                                     name="accountName"
                                     required
                                     placeholder="John Doe"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
                         </div>
@@ -278,13 +278,13 @@ export default function SellerVerificationPage() {
                     <section>
                         <div className="flex items-center gap-3 mb-4">
                             <MapPin className="w-5 h-5 text-primary" />
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-semibold text-gray-900">
                                 Physical Address
                             </h2>
                         </div>
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Street Address *
                                 </label>
                                 <input
@@ -292,12 +292,12 @@ export default function SellerVerificationPage() {
                                     name="street"
                                     required
                                     placeholder="123 Main Street"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         City *
                                     </label>
                                     <input
@@ -305,17 +305,17 @@ export default function SellerVerificationPage() {
                                         name="city"
                                         required
                                         placeholder="Lagos"
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         State *
                                     </label>
                                     <select
                                         name="state"
                                         required
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="">Select State</option>
                                         {nigerianStates.map(state => (
@@ -324,7 +324,7 @@ export default function SellerVerificationPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         LGA *
                                     </label>
                                     <input
@@ -332,7 +332,7 @@ export default function SellerVerificationPage() {
                                         name="lga"
                                         required
                                         placeholder="Ikeja"
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
                                 </div>
                             </div>

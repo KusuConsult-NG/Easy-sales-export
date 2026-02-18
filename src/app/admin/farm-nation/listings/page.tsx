@@ -54,7 +54,7 @@ export default function FarmNationListingsPage() {
             header: "Property",
             accessor: (item: Property) => (
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-700 overflow-hidden shrink-0">
+                    <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden shrink-0">
                         {item.images?.[0] ? (
                             <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
                         ) : (
@@ -64,7 +64,7 @@ export default function FarmNationListingsPage() {
                         )}
                     </div>
                     <div>
-                        <div className="font-bold text-slate-900 dark:text-white line-clamp-1">{item.name}</div>
+                        <div className="font-bold text-slate-900 line-clamp-1">{item.name}</div>
                         <div className="text-xs text-slate-500">{item.location}, {item.state}</div>
                     </div>
                 </div>
@@ -98,7 +98,7 @@ export default function FarmNationListingsPage() {
             header: "Owner",
             accessor: (item: Property) => (
                 <div className="text-sm">
-                    <div className="text-slate-900 dark:text-white">{item.ownerName}</div>
+                    <div className="text-slate-900">{item.ownerName}</div>
                     <div className="text-slate-500 text-xs">{item.ownerEmail}</div>
                 </div>
             ),
@@ -123,14 +123,14 @@ export default function FarmNationListingsPage() {
                     <Link
                         href={`/farm-nation/property/${item.id}`}
                         target="_blank"
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                     >
                         <ArrowUpRight className="w-4 h-4" />
                     </Link>
                     <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
                         disabled={processingId === item.id}
-                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition disabled:opacity-50"
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
                     >
                         {processingId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                     </button>
@@ -140,13 +140,13 @@ export default function FarmNationListingsPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-8">
+        <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
             <div className="mb-6 sm:mb-8 flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
                         Property Listings
                     </h1>
-                    <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400">
+                    <p className="text-sm sm:text-base text-slate-600">
                         Manage Farm Nation property listings
                     </p>
                 </div>
@@ -174,7 +174,7 @@ export default function FarmNationListingsPage() {
                         <select
                             value={filters.type || "all"}
                             onChange={(e) => updateFilter("type", e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm"
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
                         >
                             <option value="all">All Types</option>
                             <option value="sale">For Sale</option>
@@ -183,7 +183,7 @@ export default function FarmNationListingsPage() {
                         <select
                             value={filters.status || "all"}
                             onChange={(e) => updateFilter("status", e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm"
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
                         >
                             <option value="all">All Status</option>
                             <option value="available">Available</option>

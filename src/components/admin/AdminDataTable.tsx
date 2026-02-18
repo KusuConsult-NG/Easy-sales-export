@@ -76,7 +76,7 @@ export default function AdminDataTable<T extends Record<string, any>>({
     return (
         <div className="space-y-4">
             {/* Toolbar: Search, Filters, Actions */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white dark:bg-slate-800 p-4 rounded-xl elevation-1">
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white p-4 rounded-xl elevation-1">
                 <div className="flex flex-1 flex-col sm:flex-row gap-3 w-full sm:w-auto">
                     {onSearch && (
                         <div className="relative flex-1 sm:max-w-md">
@@ -86,7 +86,7 @@ export default function AdminDataTable<T extends Record<string, any>>({
                                 placeholder={searchPlaceholder}
                                 value={searchTerm || ""}
                                 onChange={(e) => onSearch(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-600 text-sm"
+                                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-600 text-sm"
                             />
                         </div>
                     )}
@@ -105,23 +105,23 @@ export default function AdminDataTable<T extends Record<string, any>>({
 
             {/* Error State */}
             {error && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-600 dark:text-red-400 text-sm">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-600 text-sm">
                     {error}
                 </div>
             )}
 
             {/* Table / List */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden elevation-1">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden elevation-1">
                 {/* Desktop Table */}
                 <div className="hidden md:block overflow-x-auto">
                     <table className="w-full">
-                        <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+                        <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
                                 {selectable && onSelectAll && (
                                     <th className="px-6 py-4 w-4">
                                         <input
                                             type="checkbox"
-                                            className="rounded border-slate-300 dark:border-slate-600"
+                                            className="rounded border-slate-300"
                                             checked={Math.max(0, data.length) > 0 && selectedIds?.size === data.length}
                                             onChange={onSelectAll}
                                         />
@@ -134,7 +134,7 @@ export default function AdminDataTable<T extends Record<string, any>>({
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                        <tbody className="divide-y divide-slate-100">
                             {loading && data.length === 0 ? (
                                 <tr>
                                     <td colSpan={columns.length + (selectable ? 1 : 0)} className="px-6 py-12 text-center">
@@ -157,22 +157,22 @@ export default function AdminDataTable<T extends Record<string, any>>({
                                             onClick={() => onRowClick?.(item)}
                                             className={`
                                                 group transition-colors
-                                                ${onRowClick ? "hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer" : ""}
-                                                ${selectedIds?.has(id) ? "bg-blue-50/50 dark:bg-blue-900/10" : ""}
+                                                ${onRowClick ? "hover:bg-slate-50 cursor-pointer" : ""}
+                                                ${selectedIds?.has(id) ? "bg-blue-50/50" : ""}
                                             `}
                                         >
                                             {selectable && onSelectRow && (
                                                 <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                                                     <input
                                                         type="checkbox"
-                                                        className="rounded border-slate-300 dark:border-slate-600"
+                                                        className="rounded border-slate-300"
                                                         checked={selectedIds?.has(id)}
                                                         onChange={() => onSelectRow(id)}
                                                     />
                                                 </td>
                                             )}
                                             {columns.map((col, idx) => (
-                                                <td key={idx} className={`px-6 py-4 text-sm text-slate-900 dark:text-slate-200 ${col.className || ""}`}>
+                                                <td key={idx} className={`px-6 py-4 text-sm text-slate-900 ${col.className || ""}`}>
                                                     {getCellValue(item, col)}
                                                 </td>
                                             ))}
@@ -185,7 +185,7 @@ export default function AdminDataTable<T extends Record<string, any>>({
                 </div>
 
                 {/* Mobile List View */}
-                <div className="md:hidden divide-y divide-slate-100 dark:divide-slate-700">
+                <div className="md:hidden divide-y divide-slate-100">
                     {loading && data.length === 0 ? (
                         <div className="p-12 text-center">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
@@ -201,14 +201,14 @@ export default function AdminDataTable<T extends Record<string, any>>({
                                 <div
                                     key={id}
                                     onClick={() => onRowClick?.(item)}
-                                    className={`p-4 space-y-3 ${onRowClick ? "active:bg-slate-50 dark:active:bg-slate-800" : ""}`}
+                                    className={`p-4 space-y-3 ${onRowClick ? "active:bg-slate-50" : ""}`}
                                 >
                                     <div className="flex justify-between items-start">
                                         {selectable && onSelectRow && (
                                             <div onClick={(e) => e.stopPropagation()} className="mr-3 pt-1">
                                                 <input
                                                     type="checkbox"
-                                                    className="rounded border-slate-300 dark:border-slate-600"
+                                                    className="rounded border-slate-300"
                                                     checked={selectedIds?.has(id)}
                                                     onChange={() => onSelectRow(id)}
                                                 />
@@ -218,7 +218,7 @@ export default function AdminDataTable<T extends Record<string, any>>({
                                             {columns.filter(c => !c.hideOnMobile).map((col, idx) => (
                                                 <div key={idx} className="flex justify-between">
                                                     <span className="text-xs font-semibold text-slate-500 uppercase">{col.header}</span>
-                                                    <span className="text-sm text-slate-900 dark:text-white text-right">{getCellValue(item, col)}</span>
+                                                    <span className="text-sm text-slate-900 text-right">{getCellValue(item, col)}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -231,16 +231,16 @@ export default function AdminDataTable<T extends Record<string, any>>({
             </div>
 
             {/* Pagination Controls */}
-            <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200">
                 <button
                     onClick={onPrevPage}
                     disabled={pageIndex === 0 || loading}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 disabled:opacity-50 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-300 disabled:opacity-50 text-sm hover:bg-slate-50 transition"
                 >
                     <ChevronLeft className="w-4 h-4" />
                     Previous
                 </button>
-                <div className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                <div className="text-sm font-medium text-slate-600">
                     Page {pageIndex + 1}
                 </div>
                 <button

@@ -117,7 +117,7 @@ export default function LoginForm() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background Pattern */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-32 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl opacity-50" />
@@ -129,7 +129,7 @@ export default function LoginForm() {
             <div className="absolute top-4 left-4 z-50 md:top-8 md:left-8">
                 <Link
                     href="/"
-                    className="flex items-center gap-2 p-2 px-4 text-sm font-medium text-slate-600 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-full hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600 transition-all shadow-sm group"
+                    className="flex items-center gap-2 p-2 px-4 text-sm font-medium text-slate-600 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full hover:text-slate-900 hover:border-slate-300 transition-all shadow-sm group"
                 >
                     <Home className="w-4 h-4 group-hover:scale-110 transition-transform" />
                     <span>Back to Hub</span>
@@ -144,12 +144,12 @@ export default function LoginForm() {
                             <User className="w-6 h-6 md:w-8 md:h-8" />
                         </div>
                     </Link>
-                    <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">Welcome Back</h1>
-                    <p className="text-sm md:text-base text-slate-500 dark:text-slate-400">Sign in to your account</p>
+                    <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">Welcome Back</h1>
+                    <p className="text-sm md:text-base text-slate-500">Sign in to your account</p>
                 </div>
 
                 {/* Login Card */}
-                <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-2xl backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-8 relative z-10">
+                <div className="bg-white border border-slate-100 shadow-2xl backdrop-blur-sm rounded-2xl md:rounded-3xl p-6 md:p-8 relative z-10">
                     <form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
                         <input type="hidden" name="redirectTo" value={callbackUrl} />
 
@@ -162,7 +162,7 @@ export default function LoginForm() {
 
                         {/* Email Field */}
                         <div className="space-y-2">
-                            <label htmlFor="login-email" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                            <label htmlFor="login-email" className="block text-sm font-semibold text-slate-900">
                                 Email Address
                             </label>
                             <div className="relative group">
@@ -174,7 +174,7 @@ export default function LoginForm() {
                                     autoComplete="email"
                                     value={formData.email}
                                     onChange={handleInputChange}
-                                    className={`w-full pl-11 pr-4 py-3.5 bg-slate-50 dark:bg-slate-900 border ${errors.email ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all`}
+                                    className={`w-full pl-11 pr-4 py-3.5 bg-slate-50 border ${errors.email ? "border-red-500" : "border-slate-200"} rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all`}
                                     placeholder="your.email@example.com"
                                     required
                                     disabled={isLoading}
@@ -185,7 +185,7 @@ export default function LoginForm() {
                         {/* Password Field */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <label htmlFor="login-password" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                                <label htmlFor="login-password" className="block text-sm font-semibold text-slate-900">
                                     Password
                                 </label>
                                 <Link
@@ -204,7 +204,7 @@ export default function LoginForm() {
                                     autoComplete="current-password"
                                     value={formData.password}
                                     onChange={handleInputChange}
-                                    className={`w-full pl-11 pr-12 py-3.5 bg-slate-50 dark:bg-slate-900 border ${errors.password ? "border-red-500" : "border-slate-200 dark:border-slate-600"} rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all`}
+                                    className={`w-full pl-11 pr-12 py-3.5 bg-slate-50 border ${errors.password ? "border-red-500" : "border-slate-200"} rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all`}
                                     placeholder="••••••••"
                                     required
                                     disabled={isLoading}
@@ -212,7 +212,7 @@ export default function LoginForm() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 transition-colors"
                                     disabled={isLoading}
                                     aria-label={showPassword ? "Hide password" : "Show password"}
                                 >
@@ -232,12 +232,12 @@ export default function LoginForm() {
                                         type="checkbox"
                                         checked={rememberMe}
                                         onChange={(e) => setRememberMe(e.target.checked)}
-                                        className="peer w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500/50 transition-all active:scale-95"
+                                        className="peer w-5 h-5 rounded-md border-2 border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500/50 transition-all active:scale-95"
                                         disabled={isLoading}
                                     />
                                     <CheckCircle className="absolute w-3.5 h-3.5 text-white pointer-events-none opacity-0 peer-checked:opacity-100 left-0.5 top-0.5 transition-opacity" />
                                 </div>
-                                <span className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">Remember me</span>
+                                <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">Remember me</span>
                             </label>
                         </div>
 
@@ -255,8 +255,8 @@ export default function LoginForm() {
                     </form>
 
                     {/* Register Link */}
-                    <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700 text-center">
-                        <p className="text-slate-600 dark:text-slate-400">
+                    <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                        <p className="text-slate-600">
                             New to the platform?{" "}
                             <Link
                                 href="/auth/register"
@@ -270,12 +270,12 @@ export default function LoginForm() {
 
                 {/* Footer */}
                 <div className="mt-8 text-center relative z-10 space-y-4">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-sm text-slate-500">
                         {`© ${new Date().getFullYear()} Easy Sales Export`}
                     </p>
-                    <div className="flex items-center justify-center gap-6 text-sm text-slate-500 dark:text-slate-400">
-                        <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white transition-colors">Privacy Policy</Link>
-                        <Link href="/terms" className="hover:text-slate-900 dark:hover:text-white transition-colors">Terms of Service</Link>
+                    <div className="flex items-center justify-center gap-6 text-sm text-slate-500">
+                        <Link href="/privacy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
+                        <Link href="/terms" className="hover:text-slate-900 transition-colors">Terms of Service</Link>
                     </div>
                 </div>
             </div>

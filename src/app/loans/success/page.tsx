@@ -14,7 +14,7 @@ function LoanSuccessContent() {
     const loanId = searchParams.get('id');
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-8">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 flex items-center justify-center p-8">
             <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -125,7 +125,7 @@ function LoanSuccessContent() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.8 }}
-                    className="mt-8 text-center text-slate-600 dark:text-slate-400"
+                    className="mt-8 text-center text-slate-600"
                 >
                     <p className="text-sm">
                         Need help? <Link href="/support" className="text-green-600 hover:text-green-700 font-medium underline">Contact Support</Link>
@@ -139,10 +139,10 @@ function LoanSuccessContent() {
 function LoanSuccessPageContent() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-green-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="mt-4 text-slate-600 dark:text-slate-400">Loading...</p>
+                    <p className="mt-4 text-slate-600">Loading...</p>
                 </div>
             </div>
         }>
@@ -154,7 +154,7 @@ function LoanSuccessPageContent() {
 export default function LoanSuccessPagePage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
             </div>
         }>

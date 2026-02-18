@@ -40,7 +40,7 @@ export default function CooperativeWidget() {
 
     if (loading) {
         return (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+            <div className="bg-white rounded-2xl p-6 shadow-lg">
                 <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-8 h-8 animate-spin text-green-600" />
                 </div>
@@ -50,13 +50,13 @@ export default function CooperativeWidget() {
 
     if (error) {
         return (
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
+            <div className="bg-white rounded-2xl p-6 shadow-lg">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                    <h3 className="text-lg font-bold text-slate-900">
                         Cooperative Savings
                     </h3>
                 </div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                <p className="text-sm text-slate-600 mb-4">
                     Join the cooperative to start saving and access loans
                 </p>
                 <Link

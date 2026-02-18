@@ -43,7 +43,7 @@ export default function FarmNationLandingPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
 
 
             {/* Hero Section */}
@@ -87,36 +87,36 @@ export default function FarmNationLandingPage() {
             {/* Stats Section */}
             <div className="max-w-7xl mx-auto px-8 -mt-16 relative z-10">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
                         <div className="text-4xl font-bold text-teal-600 mb-2">1,200+</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Properties Listed</div>
+                        <div className="text-slate-600 font-medium">Properties Listed</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
                         <div className="text-4xl font-bold text-teal-600 mb-2">36 States</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Nationwide Coverage</div>
+                        <div className="text-slate-600 font-medium">Nationwide Coverage</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
                         <div className="text-4xl font-bold text-teal-600 mb-2">₦8.5B+</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Properties Value</div>
+                        <div className="text-slate-600 font-medium">Properties Value</div>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2 text-center">
+                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
                         <div className="text-4xl font-bold text-teal-600 mb-2">850+</div>
-                        <div className="text-slate-600 dark:text-slate-400 font-medium">Successful Deals</div>
+                        <div className="text-slate-600 font-medium">Successful Deals</div>
                     </div>
                 </div>
             </div>
 
             {/* Categories */}
             <div className="max-w-7xl mx-auto px-8 py-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-12">
+                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-12">
                     Farm Categories
                 </h2>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-12">
                     {categories.map((category, index) => (
-                        <div key={index} className="bg-white dark:bg-slate-800 rounded-xl p-6 elevation-2 hover-lift text-center">
+                        <div key={index} className="bg-white rounded-xl p-6 elevation-2 hover-lift text-center">
                             <div className="text-4xl mb-3">{category.icon}</div>
-                            <h4 className="font-bold text-slate-900 dark:text-white text-sm mb-1">{category.name}</h4>
+                            <h4 className="font-bold text-slate-900 text-sm mb-1">{category.name}</h4>
                             <p className="text-xs text-teal-600 font-semibold">{category.count}</p>
                         </div>
                     ))}
@@ -125,17 +125,17 @@ export default function FarmNationLandingPage() {
 
             {/* Featured Properties */}
             <div className="max-w-7xl mx-auto px-8 py-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-4">
+                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-4">
                     Featured Farms
                 </h2>
-                <p className="text-center text-slate-600 dark:text-slate-400 mb-12 max-w-2xl mx-auto">
+                <p className="text-center text-slate-600 mb-12 max-w-2xl mx-auto">
                     Premium agricultural properties verified and ready for investment
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
                     {featuredProperties.map((property, index) => (
-                        <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift">
-                            <div className="relative h-56 bg-slate-200 dark:bg-slate-700">
+                        <div key={index} className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift">
+                            <div className="relative h-56 bg-slate-200">
                                 <Image
                                     src={property.image}
                                     alt={property.title}
@@ -149,20 +149,20 @@ export default function FarmNationLandingPage() {
                                 </div>
                             </div>
                             <div className="p-6">
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                <h3 className="text-xl font-bold text-slate-900 mb-2">
                                     {property.title}
                                 </h3>
-                                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-4">
+                                <div className="flex items-center gap-2 text-slate-600 mb-4">
                                     <MapPin className="w-4 h-4" />
                                     <span className="text-sm">{property.location}</span>
                                 </div>
-                                <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                     <div>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Size</p>
-                                        <p className="font-semibold text-slate-900 dark:text-white">{property.size}</p>
+                                        <p className="text-xs text-slate-500 mb-1">Size</p>
+                                        <p className="font-semibold text-slate-900">{property.size}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Price</p>
+                                        <p className="text-xs text-slate-500 mb-1">Price</p>
                                         <p className="text-xl font-bold text-teal-600">{property.price}</p>
                                     </div>
                                 </div>
@@ -183,43 +183,43 @@ export default function FarmNationLandingPage() {
 
             {/* Benefits Section */}
             <div className="max-w-7xl mx-auto px-8 py-16">
-                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 dark:text-white mb-12">
+                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-12">
                     Why Choose Farm Nation?
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
-                        <div className="w-14 h-14 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center mb-6">
+                    <div className="bg-white rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center mb-6">
                             <CheckCircle className="w-7 h-7 text-teal-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                        <h3 className="text-xl font-bold text-slate-900 mb-3">
                             Verified Properties
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Every property is inspected and verified with clear documentation and legal compliance.
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
-                        <div className="w-14 h-14 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center mb-6">
+                    <div className="bg-white rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center mb-6">
                             <Search className="w-7 h-7 text-teal-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                        <h3 className="text-xl font-bold text-slate-900 mb-3">
                             Smart Search
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Filter by location, size, price, and property type to find your ideal agricultural land.
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 elevation-2">
-                        <div className="w-14 h-14 bg-teal-100 dark:bg-teal-900/30 rounded-xl flex items-center justify-center mb-6">
+                    <div className="bg-white rounded-2xl p-8 elevation-2">
+                        <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center mb-6">
                             <Award className="w-7 h-7 text-teal-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                        <h3 className="text-xl font-bold text-slate-900 mb-3">
                             Expert Support
                         </h3>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Get professional guidance on property selection, legal processes, and investment strategy.
                         </p>
                     </div>

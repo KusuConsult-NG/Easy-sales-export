@@ -100,30 +100,30 @@ export default function VerifyIDPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
+        <div className="min-h-screen bg-slate-50 p-4 md:p-8">
             <div className="max-w-2xl mx-auto">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
                         <Shield className="w-8 h-8 text-blue-600" />
                         Verify Digital ID
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mt-2">
+                    <p className="text-slate-600 mt-2">
                         Scan a member's QR code to verify their identity
                     </p>
                 </div>
 
                 {/* Scanner Section */}
                 {!result && (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
                         {!isScanning ? (
                             <div className="text-center">
-                                <div className="w-24 h-24 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
                                     <Camera className="w-12 h-12 text-blue-600" />
                                 </div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                     Ready to Scan
                                 </h2>
-                                <p className="text-slate-600 dark:text-white mb-6">
+                                <p className="text-slate-600 mb-6">
                                     Click the button below to activate your camera and scan a Digital ID QR code
                                 </p>
                                 <button
@@ -136,7 +136,7 @@ export default function VerifyIDPage() {
                             </div>
                         ) : (
                             <div>
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 text-center">
+                                <h3 className="text-xl font-bold text-slate-900 mb-4 text-center">
                                     Position QR Code in View
                                 </h3>
                                 <div className="relative">
@@ -164,11 +164,11 @@ export default function VerifyIDPage() {
 
                 {/* Result Section */}
                 {result && (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
+                    <div className="bg-white rounded-2xl p-6 md:p-8 shadow-xl">
                         {result.valid ? (
                             <div>
                                 <div className="flex items-center justify-center mb-6">
-                                    <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
                                         <CheckCircle className="w-10 h-10 text-green-600" />
                                     </div>
                                 </div>
@@ -178,37 +178,37 @@ export default function VerifyIDPage() {
 
                                 {result.user && (
                                     <div className="space-y-4">
-                                        <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-4">
+                                        <div className="bg-slate-50 rounded-xl p-4">
                                             <div className="flex items-center gap-3 mb-3">
                                                 <User className="w-5 h-5 text-slate-500" />
-                                                <span className="text-sm text-slate-500 dark:text-slate-400">Member Information</span>
+                                                <span className="text-sm text-slate-500">Member Information</span>
                                             </div>
                                             <div className="space-y-2">
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Full Name</p>
-                                                    <p className="font-semibold text-slate-900 dark:text-white">{result.user.fullName}</p>
+                                                    <p className="text-xs text-slate-500">Full Name</p>
+                                                    <p className="font-semibold text-slate-900">{result.user.fullName}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Email</p>
-                                                    <p className="font-semibold text-slate-900 dark:text-white">{result.user.email}</p>
+                                                    <p className="text-xs text-slate-500">Email</p>
+                                                    <p className="font-semibold text-slate-900">{result.user.email}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Role</p>
-                                                    <span className="inline-block mt-1 px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm font-semibold capitalize">
+                                                    <p className="text-xs text-slate-500">Role</p>
+                                                    <span className="inline-block mt-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold capitalize">
                                                         {result.user.role}
                                                     </span>
                                                 </div>
                                                 {result.user.membershipId && (
                                                     <div>
-                                                        <p className="text-xs text-slate-500 dark:text-slate-400">Membership ID</p>
-                                                        <p className="font-mono text-sm text-slate-900 dark:text-white">{result.user.membershipId}</p>
+                                                        <p className="text-xs text-slate-500">Membership ID</p>
+                                                        <p className="font-mono text-sm text-slate-900">{result.user.membershipId}</p>
                                                     </div>
                                                 )}
                                                 <div>
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400">Verification Status</p>
+                                                    <p className="text-xs text-slate-500">Verification Status</p>
                                                     <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-semibold ${result.user.verified
-                                                        ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200"
-                                                        : "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200"
+                                                        ? "bg-green-100 text-green-800"
+                                                        : "bg-yellow-100 text-yellow-800"
                                                         }`}>
                                                         {result.user.verified ? "Verified" : "Pending"}
                                                     </span>
@@ -221,14 +221,14 @@ export default function VerifyIDPage() {
                         ) : (
                             <div>
                                 <div className="flex items-center justify-center mb-6">
-                                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+                                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
                                         <XCircle className="w-10 h-10 text-red-600" />
                                     </div>
                                 </div>
                                 <h2 className="text-2xl font-bold text-red-600 text-center mb-4">
                                     Invalid QR Code
                                 </h2>
-                                <p className="text-slate-600 dark:text-white text-center">
+                                <p className="text-slate-600 text-center">
                                     {result.error || "This QR code could not be verified. It may be expired, tampered with, or invalid."}
                                 </p>
                             </div>

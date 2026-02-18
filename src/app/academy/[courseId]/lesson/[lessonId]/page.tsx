@@ -238,7 +238,7 @@ export default function LessonPage(props: LessonPageProps) {
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
             </div>
         );
@@ -246,9 +246,9 @@ export default function LessonPage(props: LessonPageProps) {
 
     if (!course || !currentLesson || !currentModule) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex items-center justify-center">
                 <div className="text-center">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h2 className="text-2xl font-bold text-slate-900 mb-2">
                         Lesson Not Found
                     </h2>
                     <button
@@ -270,29 +270,29 @@ export default function LessonPage(props: LessonPageProps) {
     const progressPercent = progress?.overallProgress || 0;
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 py-8 px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 py-8 px-4">
             <div className="max-w-5xl mx-auto">
                 {/* Header */}
                 <div className="mb-6">
                     <button
                         onClick={() => router.push(`/academy/${courseId}`)}
-                        className="mb-4 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-sm font-medium flex items-center gap-2"
+                        className="mb-4 text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-2"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to {course.title}
                     </button>
 
                     {/* Progress Bar */}
-                    <div className="bg-white dark:bg-slate-800 rounded-xl p-4 mb-4">
+                    <div className="bg-white rounded-xl p-4 mb-4">
                         <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                            <span className="text-sm font-medium text-slate-600">
                                 Course Progress
                             </span>
                             <span className="text-sm font-bold text-blue-600">
                                 {completedLessons} / {totalLessons} lessons ({progressPercent}%)
                             </span>
                         </div>
-                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-linear-to-r from-blue-500 to-cyan-500 transition-all duration-500"
                                 style={{ width: `${progressPercent}%` }}
@@ -301,18 +301,18 @@ export default function LessonPage(props: LessonPageProps) {
                     </div>
 
                     {/* Module & Lesson Title */}
-                    <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 mb-2">
+                    <div className="flex items-center gap-2 text-sm text-slate-600 mb-2">
                         <BookOpen className="w-4 h-4" />
                         <span>{currentModule.title}</span>
                     </div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
                         {currentLesson.title}
                     </h1>
-                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
                         <Clock className="w-4 h-4" />
                         <span>{currentLesson.duration}</span>
                         {isCompleted && (
-                            <div className="flex items-center gap-1 text-green-600 dark:text-green-400 ml-4">
+                            <div className="flex items-center gap-1 text-green-600 ml-4">
                                 <CheckCircle className="w-4 h-4" />
                                 <span>Completed</span>
                             </div>
@@ -337,29 +337,29 @@ export default function LessonPage(props: LessonPageProps) {
                 )}
 
                 {/* Lesson Content */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 mb-6">
+                <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
                     <div
-                        className="prose dark:prose-invert max-w-none"
+                        className="prose max-w-none"
                         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(currentLesson.content) }}
                     />
                 </div>
 
                 {/* Quiz Section - Render if module has quiz and lesson is completed */}
                 {currentModule.quiz && isCompleted && (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 mb-6">
+                    <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
                         <div className="flex items-center justify-between mb-6">
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-1">
                                     Module Quiz
                                 </h2>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <p className="text-sm text-slate-600">
                                     {currentModule.quiz.questions.length} questions • Passing score: {currentModule.quiz.passingScore}%
                                 </p>
                             </div>
                             {progress?.quizScores[currentModule.id] !== undefined && (
                                 <div className={`px-4 py-2 rounded-lg font-bold ${(progress.quizScores[currentModule.id] || 0) >= currentModule.quiz.passingScore
-                                    ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                                    : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-red-100 text-red-700'
                                     }`}>
                                     Score: {progress.quizScores[currentModule.id]}%
                                 </div>
@@ -379,13 +379,13 @@ export default function LessonPage(props: LessonPageProps) {
 
                 {/* Mark Complete Button */}
                 {!isCompleted && (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 mb-6">
+                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="font-semibold text-slate-900 dark:text-white mb-1">
+                                <h3 className="font-semibold text-slate-900 mb-1">
                                     Finished this lesson?
                                 </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <p className="text-sm text-slate-600">
                                     Mark it as complete to track your progress
                                 </p>
                             </div>
@@ -415,10 +415,10 @@ export default function LessonPage(props: LessonPageProps) {
                     {previousLesson ? (
                         <button
                             onClick={() => router.push(`/academy/${courseId}/lesson/${previousLesson.lessonId}`)}
-                            className="flex-1 px-6 py-4 bg-white dark:bg-slate-800 rounded-xl shadow hover:shadow-lg transition flex items-center gap-2 justify-center"
+                            className="flex-1 px-6 py-4 bg-white rounded-xl shadow hover:shadow-lg transition flex items-center gap-2 justify-center"
                         >
                             <ArrowLeft className="w-5 h-5" />
-                            <span className="font-medium text-slate-900 dark:text-white">Previous Lesson</span>
+                            <span className="font-medium text-slate-900">Previous Lesson</span>
                         </button>
                     ) : (
                         <div className="flex-1" />

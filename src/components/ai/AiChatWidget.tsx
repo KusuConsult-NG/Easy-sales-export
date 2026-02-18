@@ -92,7 +92,7 @@ export function AiChatWidget() {
             {/* Chat Window */}
             <div
                 className={cn(
-                    "mb-4 w-[350px] md:w-[400px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all duration-300 origin-bottom-right",
+                    "mb-4 w-[350px] md:w-[400px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 origin-bottom-right",
                     isOpen ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none h-0 mb-0"
                 )}
             >
@@ -119,7 +119,7 @@ export function AiChatWidget() {
                 </div>
 
                 {/* Messages Area */}
-                <div className="h-[400px] overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950/50">
+                <div className="h-[400px] overflow-y-auto p-4 space-y-4 bg-slate-50">
                     {messages.map((msg) => (
                         <div
                             key={msg.id}
@@ -131,8 +131,8 @@ export function AiChatWidget() {
                             <div className={cn(
                                 "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
                                 msg.role === "user"
-                                    ? "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                                    : "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                                    ? "bg-slate-200 text-slate-600"
+                                    : "bg-green-100 text-green-600"
                             )}>
                                 {msg.role === "user" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                             </div>
@@ -141,7 +141,7 @@ export function AiChatWidget() {
                                 "p-3 rounded-2xl text-sm leading-relaxed",
                                 msg.role === "user"
                                     ? "bg-green-600 text-white rounded-tr-none"
-                                    : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-tl-none shadow-sm"
+                                    : "bg-white text-slate-800 border border-slate-200 rounded-tl-none shadow-sm"
                             )}>
                                 {msg.content}
                                 <span className="text-[10px] opacity-50 block mt-1 text-right">
@@ -152,10 +152,10 @@ export function AiChatWidget() {
                     ))}
                     {isLoading && (
                         <div className="flex gap-3 mr-auto items-center">
-                            <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
                                 <Bot className="w-4 h-4" />
                             </div>
-                            <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <div className="bg-white p-3 rounded-2xl rounded-tl-none border border-slate-200 shadow-sm">
                                 <div className="flex gap-1">
                                     <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
                                     <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
@@ -168,14 +168,14 @@ export function AiChatWidget() {
                 </div>
 
                 {/* Input Area */}
-                <form onSubmit={handleSubmit} className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+                <form onSubmit={handleSubmit} className="p-4 bg-white border-t border-slate-200">
                     <div className="flex gap-2">
                         <input
                             type="text"
                             value={inputValue}
                             onChange={(e) => setInputValue(e.target.value)}
                             placeholder="Type your question..."
-                            className="flex-1 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-green-500 placeholder:text-slate-400 text-sm"
+                            className="flex-1 bg-slate-100 border-0 rounded-xl px-4 py-2.5 text-slate-900 focus:ring-2 focus:ring-green-500 placeholder:text-slate-400 text-sm"
                             disabled={isLoading}
                         />
                         <button
@@ -205,7 +205,7 @@ export function AiChatWidget() {
                     <>
                         <MessageCircle className="w-7 h-7" />
                         {/* Notification Dot */}
-                        <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white dark:border-slate-950" />
+                        <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
                     </>
                 )}
             </button>

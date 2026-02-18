@@ -82,14 +82,14 @@ export function DocumentUpload({
     return (
         <div className="w-full">
             {/* Label */}
-            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
+            <label className="block text-sm font-medium text-slate-900 mb-2">
                 {label}
                 {required && <span className="text-red-500 ml-1">*</span>}
             </label>
 
             {/* Description */}
             {description && (
-                <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                <p className="text-sm text-slate-600 mb-3">
                     {description}
                 </p>
             )}
@@ -98,7 +98,7 @@ export function DocumentUpload({
             {!file && !previewUrl ? (
                 <div
                     onClick={handleClick}
-                    className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-8 text-center cursor-pointer hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors"
+                    className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-orange-500 hover:bg-orange-50 transition-colors"
                 >
                     <input
                         ref={fileInputRef}
@@ -108,7 +108,7 @@ export function DocumentUpload({
                         className="hidden"
                     />
                     <Upload className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-                    <p className="text-sm font-medium text-slate-900 dark:text-white mb-1">
+                    <p className="text-sm font-medium text-slate-900 mb-1">
                         Click to upload or drag and drop
                     </p>
                     <p className="text-xs text-slate-500">
@@ -116,10 +116,10 @@ export function DocumentUpload({
                     </p>
                 </div>
             ) : (
-                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                <div className="border border-slate-200 rounded-lg p-4">
                     {/* Preview or File Info */}
                     {previewUrl && isImage(file?.name || value || "") ? (
-                        <div className="relative w-full h-48 mb-3 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden">
+                        <div className="relative w-full h-48 mb-3 bg-slate-100 rounded-lg overflow-hidden">
                             <Image
                                 src={previewUrl}
                                 alt="Preview"
@@ -131,7 +131,7 @@ export function DocumentUpload({
                         <div className="flex items-center gap-3 mb-3">
                             <File className="w-10 h-10 text-orange-500" />
                             <div className="flex-1">
-                                <p className="text-sm font-medium text-slate-900 dark:text-white">
+                                <p className="text-sm font-medium text-slate-900">
                                     {file?.name || "Uploaded file"}
                                 </p>
                                 <p className="text-xs text-slate-500">

@@ -75,16 +75,16 @@ export default function StatusUpdateModal({
                 )}
 
                 {/* Current Status */}
-                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Current Status</p>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white capitalize">
+                <div className="p-4 bg-slate-50 rounded-xl">
+                    <p className="text-xs text-slate-500 mb-1">Current Status</p>
+                    <p className="text-sm font-bold text-slate-900 capitalize">
                         {currentStatus.replace("_", " ")}
                     </p>
                 </div>
 
                 {/* Status Selection */}
                 <div>
-                    <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
+                    <label className="block text-sm font-medium text-slate-900 mb-3">
                         <Package className="w-4 h-4 inline mr-2" />
                         New Status
                     </label>
@@ -93,8 +93,8 @@ export default function StatusUpdateModal({
                             <label
                                 key={option.value}
                                 className={`flex items-start p-4 border-2 rounded-xl cursor-pointer transition ${option.value === currentStatus
-                                    ? "border-slate-300 dark:border-slate-600 opacity-50 cursor-not-allowed"
-                                    : "border-slate-200 dark:border-slate-700 hover:border-primary"
+                                    ? "border-slate-300 opacity-50 cursor-not-allowed"
+                                    : "border-slate-200 hover:border-primary"
                                     }`}
                             >
                                 <input
@@ -106,10 +106,10 @@ export default function StatusUpdateModal({
                                     className="mt-1 text-primary focus:ring-primary"
                                 />
                                 <div className="ml-3 flex-1">
-                                    <p className="font-semibold text-slate-900 dark:text-white">
+                                    <p className="font-semibold text-slate-900">
                                         {option.label}
                                     </p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    <p className="text-xs text-slate-500">
                                         {option.description}
                                     </p>
                                 </div>
@@ -124,7 +124,7 @@ export default function StatusUpdateModal({
                         type="button"
                         onClick={onClose}
                         disabled={isPending}
-                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        className="flex-1 px-6 py-3 rounded-xl border border-slate-300 text-slate-900 font-semibold hover:bg-slate-50 transition disabled:opacity-50"
                     >
                         Cancel
                     </button>

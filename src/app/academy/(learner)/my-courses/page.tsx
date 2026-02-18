@@ -48,52 +48,52 @@ export default function MyCoursesPage() {
             {/* Header */}
             <div>
                 <BackButton fallbackPath="/academy/dashboard" />
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     My Courses
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Continue learning and track your progress
                 </p>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                             <BookOpen className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Enrolled Courses</p>
-                            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                            <p className="text-sm text-slate-600">Enrolled Courses</p>
+                            <p className="text-2xl font-bold text-slate-900">
                                 {ENROLLED_COURSES.length}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                             <CheckCircle className="w-6 h-6 text-green-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">Completed</p>
-                            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                            <p className="text-sm text-slate-600">Completed</p>
+                            <p className="text-2xl font-bold text-slate-900">
                                 {completedCourses.length}
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+                <div className="bg-white rounded-xl p-6 border border-slate-200">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                        <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
                             <Clock className="w-6 h-6 text-orange-600" />
                         </div>
                         <div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">In Progress</p>
-                            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                            <p className="text-sm text-slate-600">In Progress</p>
+                            <p className="text-2xl font-bold text-slate-900">
                                 {inProgressCourses.length}
                             </p>
                         </div>
@@ -104,14 +104,14 @@ export default function MyCoursesPage() {
             {/* In Progress Courses */}
             {inProgressCourses.length > 0 && (
                 <div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">
                         Continue Learning
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {inProgressCourses.map((course) => (
                             <div
                                 key={course.id}
-                                className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow"
+                                className="bg-white rounded-xl overflow-hidden border border-slate-200 hover:shadow-lg transition-shadow"
                             >
                                 {/* Thumbnail */}
                                 <div className="h-40 bg-linear-to-br from-primary/20 to-transparent relative">
@@ -122,24 +122,24 @@ export default function MyCoursesPage() {
 
                                 {/* Content */}
                                 <div className="p-6">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+                                    <h3 className="text-lg font-bold text-slate-900 mb-1">
                                         {course.title}
                                     </h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                    <p className="text-sm text-slate-600 mb-4">
                                         {course.instructor}
                                     </p>
 
                                     {/* Progress Bar */}
                                     <div className="mb-4">
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                            <span className="text-sm font-semibold text-slate-900">
                                                 {course.progress}% Complete
                                             </span>
                                             <span className="text-xs text-slate-500">
                                                 {course.completedLessons}/{course.totalLessons} lessons
                                             </span>
                                         </div>
-                                        <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                                             <div
                                                 className="h-full bg-blue-600 rounded-full transition-all"
                                                 style={{ width: `${course.progress}%` }}
@@ -148,7 +148,7 @@ export default function MyCoursesPage() {
                                     </div>
 
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                        <div className="flex items-center gap-2 text-sm text-slate-600">
                                             <Clock className="w-4 h-4" />
                                             <span>{course.estimatedTime}</span>
                                         </div>
@@ -170,7 +170,7 @@ export default function MyCoursesPage() {
             {/* Completed Courses */}
             {completedCourses.length > 0 && (
                 <div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
                         <Award className="w-5 h-5 text-yellow-500" />
                         Completed Courses
                     </h2>
@@ -178,7 +178,7 @@ export default function MyCoursesPage() {
                         {completedCourses.map((course) => (
                             <div
                                 key={course.id}
-                                className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden border border-green-200 dark:border-green-800 relative"
+                                className="bg-white rounded-xl overflow-hidden border border-green-200 relative"
                             >
                                 {/* Completed Badge */}
                                 <div className="absolute top-4 right-4 z-10">
@@ -197,15 +197,15 @@ export default function MyCoursesPage() {
 
                                 {/* Content */}
                                 <div className="p-6">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+                                    <h3 className="text-lg font-bold text-slate-900 mb-1">
                                         {course.title}
                                     </h3>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                    <p className="text-sm text-slate-600 mb-4">
                                         {course.instructor}
                                     </p>
 
                                     <div className="flex items-center justify-between">
-                                        <div className="text-sm text-green-600 dark:text-green-400 font-semibold">
+                                        <div className="text-sm text-green-600 font-semibold">
                                             Certificate earned!
                                         </div>
                                         <Link
@@ -225,12 +225,12 @@ export default function MyCoursesPage() {
 
             {/* Empty State */}
             {ENROLLED_COURSES.length === 0 && (
-                <div className="bg-white dark:bg-slate-800 rounded-xl p-12 text-center border border-slate-200 dark:border-slate-700">
+                <div className="bg-white rounded-xl p-12 text-center border border-slate-200">
                     <BookOpen className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">
                         No Courses Enrolled Yet
                     </h3>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                    <p className="text-slate-600 mb-6">
                         Start your learning journey by browsing our course catalog
                     </p>
                     <Link

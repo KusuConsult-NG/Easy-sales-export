@@ -85,7 +85,7 @@ export default function CertificatePage() {
 
     if (loading || status === "loading") {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
             </div>
         );
@@ -93,13 +93,13 @@ export default function CertificatePage() {
 
     if (!course || !progress || progress.overallProgress !== 100) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-8">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
                 <div className="text-center max-w-md">
                     <Award className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">
                         Certificate Not Available
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                    <p className="text-slate-600 mb-6">
                         Complete all lessons to earn your certificate.
                     </p>
                     <button
@@ -119,13 +119,13 @@ export default function CertificatePage() {
         : new Date();
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 px-4">
+        <div className="min-h-screen bg-slate-50 py-12 px-4">
             <div className="max-w-4xl mx-auto">
                 {/* Header Actions */}
                 <div className="flex items-center justify-between mb-8 print:hidden">
                     <button
                         onClick={() => router.push('/academy/dashboard')}
-                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition"
+                        className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         <span>Back to Dashboard</span>
@@ -134,7 +134,7 @@ export default function CertificatePage() {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={handleShare}
-                            className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white rounded-lg transition flex items-center gap-2"
+                            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg transition flex items-center gap-2"
                         >
                             <Share2 className="w-4 h-4" />
                             <span>Share</span>
@@ -160,7 +160,7 @@ export default function CertificatePage() {
                 </div>
 
                 {/* Certificate */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
                     {/* Decorative Header */}
                     <div className="bg-linear-to-r from-blue-600 via-cyan-600 to-blue-600 h-4"></div>
 
@@ -170,7 +170,7 @@ export default function CertificatePage() {
                             <div className="inline-block mb-4">
                                 <Award className="w-24 h-24 text-yellow-500" />
                             </div>
-                            <h1 className="text-5xl font-bold text-slate-900 dark:text-white mb-2">
+                            <h1 className="text-5xl font-bold text-slate-900 mb-2">
                                 Certificate of Completion
                             </h1>
                             <div className="w-32 h-1 bg-linear-to-r from-transparent via-blue-600 to-transparent mx-auto"></div>
@@ -178,43 +178,43 @@ export default function CertificatePage() {
 
                         {/* Body */}
                         <div className="text-center space-y-8 mb-12">
-                            <p className="text-lg text-slate-600 dark:text-slate-400">
+                            <p className="text-lg text-slate-600">
                                 This certifies that
                             </p>
 
-                            <h2 className="text-4xl font-bold text-slate-900 dark:text-white">
+                            <h2 className="text-4xl font-bold text-slate-900">
                                 {session?.user?.name || 'Student Name'}
                             </h2>
 
-                            <p className="text-lg text-slate-600 dark:text-slate-400">
+                            <p className="text-lg text-slate-600">
                                 has successfully completed the course
                             </p>
 
-                            <h3 className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                            <h3 className="text-3xl font-bold text-blue-600">
                                 {course.title}
                             </h3>
 
-                            <div className="flex items-center justify-center gap-8 text-slate-600 dark:text-slate-400">
+                            <div className="flex items-center justify-center gap-8 text-slate-600">
                                 <div>
                                     <p className="text-sm font-medium">Instructor</p>
-                                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                                    <p className="text-lg font-bold text-slate-900">
                                         {course.instructor}
                                     </p>
                                 </div>
-                                <div className="w-px h-12 bg-slate-300 dark:bg-slate-600"></div>
+                                <div className="w-px h-12 bg-slate-300"></div>
                                 <div>
                                     <p className="text-sm font-medium">Duration</p>
-                                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                                    <p className="text-lg font-bold text-slate-900">
                                         {course.duration}
                                     </p>
                                 </div>
                             </div>
 
                             <div className="pt-8">
-                                <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
+                                <p className="text-sm text-slate-500 mb-2">
                                     Completed on
                                 </p>
-                                <p className="text-xl font-bold text-slate-900 dark:text-white">
+                                <p className="text-xl font-bold text-slate-900">
                                     {completionDate.toLocaleDateString('en-US', {
                                         year: 'numeric',
                                         month: 'long',
@@ -225,30 +225,30 @@ export default function CertificatePage() {
                         </div>
 
                         {/* Signature Area */}
-                        <div className="pt-8 border-t border-slate-200 dark:border-slate-700">
+                        <div className="pt-8 border-t border-slate-200">
                             <div className="flex items-end justify-between">
                                 <div className="text-center">
-                                    <div className="w-48 border-b-2 border-slate-300 dark:border-slate-600 mb-2"></div>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">Program Director</p>
+                                    <div className="w-48 border-b-2 border-slate-300 mb-2"></div>
+                                    <p className="text-sm text-slate-600">Program Director</p>
                                 </div>
                                 <div className="text-center">
                                     <div className="flex items-center gap-2 mb-2">
                                         <CheckCircle className="w-5 h-5 text-green-600" />
-                                        <span className="font-mono text-sm text-slate-600 dark:text-slate-400">
+                                        <span className="font-mono text-sm text-slate-600">
                                             {certNumber}
                                         </span>
                                     </div>
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">Certificate ID</p>
+                                    <p className="text-sm text-slate-600">Certificate ID</p>
                                 </div>
                             </div>
                         </div>
 
                         {/* Footer Note */}
                         <div className="mt-12 text-center">
-                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                            <p className="text-xs text-slate-400">
                                 Easy Sales Export Academy • www.easysalesexport.com
                             </p>
-                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                            <p className="text-xs text-slate-400 mt-1">
                                 Verify this certificate at: www.easysalesexport.com/verify/{certNumber}
                             </p>
                         </div>
@@ -259,7 +259,7 @@ export default function CertificatePage() {
                 </div>
 
                 {/* Print Instructions */}
-                <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400 print:hidden">
+                <div className="mt-8 text-center text-sm text-slate-500 print:hidden">
                     <p>💡 Tip: Click "Download PDF" to get your official verifiable certificate.</p>
                 </div>
             </div>

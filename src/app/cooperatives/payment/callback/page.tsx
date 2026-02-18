@@ -55,15 +55,15 @@ function PaymentCallbackContent() {
     }, [searchParams]);
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-            <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-xl text-center">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-2xl p-8 shadow-xl text-center">
                 {status === "loading" && (
                     <>
                         <Loader2 className="w-16 h-16 text-primary mx-auto mb-4 animate-spin" />
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h1 className="text-2xl font-bold text-slate-900 mb-2">
                             Verifying Payment
                         </h1>
-                        <p className="text-slate-600 dark:text-slate-400">
+                        <p className="text-slate-600">
                             Please wait while we confirm your payment...
                         </p>
                     </>
@@ -71,13 +71,13 @@ function PaymentCallbackContent() {
 
                 {status === "success" && (
                     <>
-                        <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle className="w-10 h-10 text-green-600" />
                         </div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h1 className="text-2xl font-bold text-slate-900 mb-2">
                             Payment Successful!
                         </h1>
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        <p className="text-slate-600 mb-6">
                             {message}
                         </p>
                         <Link
@@ -91,13 +91,13 @@ function PaymentCallbackContent() {
 
                 {status === "failed" && (
                     <>
-                        <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <XCircle className="w-10 h-10 text-red-600 dark:text-red-400" />
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <XCircle className="w-10 h-10 text-red-600" />
                         </div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                        <h1 className="text-2xl font-bold text-slate-900 mb-2">
                             Payment Failed
                         </h1>
-                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        <p className="text-slate-600 mb-6">
                             {message}
                         </p>
                         <div className="flex gap-3">
@@ -109,7 +109,7 @@ function PaymentCallbackContent() {
                             </Link>
                             <Link
                                 href="/cooperatives"
-                                className="flex-1 px-6 py-3 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                className="flex-1 px-6 py-3 border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
                             >
                                 Go Back
                             </Link>
@@ -124,13 +124,13 @@ function PaymentCallbackContent() {
 function PaymentCallbackPageContent() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-xl text-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                <div className="max-w-md w-full bg-white rounded-2xl p-8 shadow-xl text-center">
                     <Loader2 className="w-16 h-16 text-primary mx-auto mb-4 animate-spin" />
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">
                         Loading Payment Status
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-slate-600">
                         Please wait...
                     </p>
                 </div>
@@ -144,7 +144,7 @@ function PaymentCallbackPageContent() {
 export default function PaymentCallbackPagePage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
             </div>
         }>

@@ -32,15 +32,15 @@ export default function CooperativePaymentPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
             <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8 items-center">
 
                 {/* Left Column: Value Prop */}
                 <div className="space-y-6">
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white leading-tight">
+                    <h1 className="text-4xl font-bold text-slate-900 leading-tight">
                         Join the <span className="text-purple-600">EasySales Cooperative</span>
                     </h1>
-                    <p className="text-lg text-slate-600 dark:text-slate-400">
+                    <p className="text-lg text-slate-600">
                         Unlock exclusive financial tools, low-interest loans, and high-yield savings designed for exporters.
                     </p>
 
@@ -53,26 +53,26 @@ export default function CooperativePaymentPage() {
                         ].map((item, i) => (
                             <div key={i} className="flex items-center gap-3">
                                 <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
-                                <span className="text-slate-700 dark:text-slate-300 font-medium">{item}</span>
+                                <span className="text-slate-700 font-medium">{item}</span>
                             </div>
                         ))}
                     </div>
                 </div>
 
                 {/* Right Column: Payment Card */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
                     <div className="p-8 space-y-8">
                         <div>
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Select Membership Tier</h2>
+                            <h2 className="text-xl font-bold text-slate-900 mb-4">Select Membership Tier</h2>
                             <div className="grid grid-cols-2 gap-4">
                                 <button
                                     onClick={() => setSelectedTier("basic")}
                                     className={`p-4 rounded-xl border-2 text-left transition-all ${selectedTier === "basic"
-                                            ? "border-purple-600 bg-purple-50 dark:bg-purple-900/20"
-                                            : "border-slate-200 dark:border-slate-700 hover:border-purple-300"
+                                            ? "border-purple-600 bg-purple-50"
+                                            : "border-slate-200 hover:border-purple-300"
                                         }`}
                                 >
-                                    <div className="font-bold text-slate-900 dark:text-white">Basic</div>
+                                    <div className="font-bold text-slate-900">Basic</div>
                                     <div className="text-sm text-slate-500 mb-2">Non-Voting Rights</div>
                                     <div className="text-lg font-bold text-purple-600">₦10,000</div>
                                 </button>
@@ -80,11 +80,11 @@ export default function CooperativePaymentPage() {
                                 <button
                                     onClick={() => setSelectedTier("premium")}
                                     className={`p-4 rounded-xl border-2 text-left transition-all ${selectedTier === "premium"
-                                            ? "border-purple-600 bg-purple-50 dark:bg-purple-900/20"
-                                            : "border-slate-200 dark:border-slate-700 hover:border-purple-300"
+                                            ? "border-purple-600 bg-purple-50"
+                                            : "border-slate-200 hover:border-purple-300"
                                         }`}
                                 >
-                                    <div className="font-bold text-slate-900 dark:text-white">Premium</div>
+                                    <div className="font-bold text-slate-900">Premium</div>
                                     <div className="text-sm text-slate-500 mb-2">Voting Rights</div>
                                     <div className="text-lg font-bold text-purple-600">₦20,000</div>
                                 </button>
@@ -95,7 +95,7 @@ export default function CooperativePaymentPage() {
                             <button
                                 onClick={handlePayment}
                                 disabled={isSubmitting}
-                                className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-purple-200 dark:shadow-none"
+                                className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-purple-200"
                             >
                                 {isSubmitting ? (
                                     <>
@@ -110,7 +110,7 @@ export default function CooperativePaymentPage() {
                                 )}
                             </button>
 
-                            <div className="flex items-center justify-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
                                 <ShieldCheck className="w-4 h-4" />
                                 <span>Secured by Paystack</span>
                             </div>

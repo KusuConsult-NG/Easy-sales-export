@@ -54,16 +54,16 @@ export default function Modal({
                             leaveTo="opacity-0 scale-95"
                         >
                             <Dialog.Panel
-                                className={`w-full ${maxWidthClasses[maxWidth]} transform overflow-hidden rounded-2xl bg-white dark:bg-slate-800 p-6 text-left align-middle shadow-xl transition-all`}
+                                className={`w-full ${maxWidthClasses[maxWidth]} transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all`}
                             >
                                 {title && (
                                     <div className="flex items-center justify-between mb-4">
-                                        <Dialog.Title className="text-xl font-bold text-slate-900 dark:text-white">
+                                        <Dialog.Title className="text-xl font-bold text-slate-900">
                                             {title}
                                         </Dialog.Title>
                                         <button
                                             onClick={onClose}
-                                            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                            className="text-slate-400 hover:text-slate-600 transition-colors"
                                         >
                                             <X className="w-5 h-5" />
                                         </button>

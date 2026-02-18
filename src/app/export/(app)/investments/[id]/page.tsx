@@ -241,7 +241,7 @@ export default function InvestmentDetailPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-linear-to-r from-purple-600 to-pink-600 text-white py-8">
                 <div className="max-w-7xl mx-auto px-8">
@@ -285,27 +285,27 @@ export default function InvestmentDetailPage() {
                     {/* Main Content */}
                     <div className="lg:col-span-2 space-y-8">
                         {/* Progress Overview */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl p-6 shadow-lg">
+                            <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                 Investment Progress
                             </h2>
                             <div className="mb-4">
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                    <span className="text-sm font-medium text-slate-900">
                                         Overall Progress
                                     </span>
-                                    <span className="text-sm font-bold text-purple-600 dark:text-purple-400">
+                                    <span className="text-sm font-bold text-purple-600">
                                         {investment.progress}%
                                     </span>
                                 </div>
-                                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3">
+                                <div className="w-full bg-slate-200 rounded-full h-3">
                                     <div
                                         className="bg-linear-to-r from-purple-600 to-pink-600 h-3 rounded-full transition-all"
                                         style={{ width: `${investment.progress}%` }}
                                     ></div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
                                 <Clock className="w-4 h-4" />
                                 {investment.daysRemaining} days until expected return
                             </div>
@@ -313,8 +313,8 @@ export default function InvestmentDetailPage() {
 
                         {/* Milestones */}
                         {investment.milestones.length > 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+                            <div className="bg-white rounded-2xl p-6 shadow-lg">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                     Investment Timeline
                                 </h2>
                                 <div className="space-y-6">
@@ -323,10 +323,10 @@ export default function InvestmentDetailPage() {
                                             <div className="flex flex-col items-center">
                                                 <div
                                                     className={`w-10 h-10 rounded-full flex items-center justify-center ${milestone.status === "completed"
-                                                        ? "bg-green-100 dark:bg-green-900/30"
+                                                        ? "bg-green-100"
                                                         : milestone.status === "current"
-                                                            ? "bg-purple-100 dark:bg-purple-900/30"
-                                                            : "bg-slate-100 dark:bg-slate-700"
+                                                            ? "bg-purple-100"
+                                                            : "bg-slate-100"
                                                         }`}
                                                 >
                                                     {milestone.status === "completed" ? (
@@ -334,7 +334,7 @@ export default function InvestmentDetailPage() {
                                                     ) : (
                                                         <span
                                                             className={`text-sm font-bold ${milestone.status === "current"
-                                                                ? "text-purple-600 dark:text-purple-400"
+                                                                ? "text-purple-600"
                                                                 : "text-slate-400"
                                                                 }`}
                                                         >
@@ -345,22 +345,22 @@ export default function InvestmentDetailPage() {
                                                 {index < investment.milestones.length - 1 && (
                                                     <div
                                                         className={`w-0.5 h-16 my-2 ${milestone.status === "completed"
-                                                            ? "bg-green-200 dark:bg-green-900/30"
-                                                            : "bg-slate-200 dark:bg-slate-700"
+                                                            ? "bg-green-200"
+                                                            : "bg-slate-200"
                                                             }`}
                                                     ></div>
                                                 )}
                                             </div>
                                             <div className="flex-1 pb-8">
                                                 <div className="flex items-center justify-between mb-1">
-                                                    <h3 className="font-bold text-slate-900 dark:text-white">
+                                                    <h3 className="font-bold text-slate-900">
                                                         {milestone.title}
                                                     </h3>
-                                                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                                                    <span className="text-sm text-slate-500">
                                                         {milestone.date}
                                                     </span>
                                                 </div>
-                                                <p className="text-slate-600 dark:text-slate-400 text-sm">
+                                                <p className="text-slate-600 text-sm">
                                                     {milestone.description}
                                                 </p>
                                             </div>
@@ -372,18 +372,18 @@ export default function InvestmentDetailPage() {
 
                         {/* Documents */}
                         {investment.documents.length > 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                            <div className="bg-white rounded-2xl p-6 shadow-lg">
+                                <h2 className="text-2xl font-bold text-slate-900 mb-4">
                                     Investment Documents
                                 </h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {investment.documents.map((doc, index) => (
                                         <button
                                             key={index}
-                                            className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-300 dark:hover:border-purple-700 transition text-left"
+                                            className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg hover:border-purple-300 transition text-left"
                                         >
                                             <FileText className="w-5 h-5 text-purple-600 shrink-0" />
-                                            <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                            <span className="text-sm font-medium text-slate-900">
                                                 {doc}
                                             </span>
                                         </button>
@@ -396,50 +396,50 @@ export default function InvestmentDetailPage() {
                     {/* Sidebar */}
                     <div className="space-y-6">
                         {/* Investment Summary */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl p-6 shadow-lg">
+                            <h3 className="text-xl font-bold text-slate-900 mb-4">
                                 Investment Summary
                             </h3>
 
                             <div className="space-y-4">
                                 <div>
-                                    <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                                    <div className="text-sm text-slate-600 mb-1">
                                         Amount Invested
                                     </div>
-                                    <div className="text-3xl font-bold text-slate-900 dark:text-white">
+                                    <div className="text-3xl font-bold text-slate-900">
                                         ₦{investment.amount.toLocaleString()}
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                                <div className="pt-4 border-t border-slate-200">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm text-slate-600 dark:text-slate-400">
+                                        <span className="text-sm text-slate-600">
                                             Expected Return
                                         </span>
-                                        <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                                        <span className="text-sm font-bold text-green-600">
                                             +₦{investment.expectedReturn.toLocaleString()}
                                         </span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm text-slate-600 dark:text-slate-400">
+                                        <span className="text-sm text-slate-600">
                                             Total Payout
                                         </span>
-                                        <span className="text-lg font-bold text-slate-900 dark:text-white">
+                                        <span className="text-lg font-bold text-slate-900">
                                             ₦{(investment.amount + investment.expectedReturn).toLocaleString()}
                                         </span>
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                                <div className="pt-4 border-t border-slate-200">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm text-slate-600 dark:text-slate-400">
+                                        <span className="text-sm text-slate-600">
                                             Expected Date
                                         </span>
-                                        <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                        <span className="text-sm font-medium text-slate-900">
                                             {investment.expectedReturnDate}
                                         </span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+                                    <div className="flex items-center gap-2 text-sm text-purple-600">
                                         <Clock className="w-4 h-4" />
                                         {investment.daysRemaining} days remaining
                                     </div>
@@ -449,34 +449,34 @@ export default function InvestmentDetailPage() {
 
                         {/* Payment Schedule */}
                         {investment.paymentSchedule.length > 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                            <div className="bg-white rounded-2xl p-6 shadow-lg">
+                                <h3 className="text-xl font-bold text-slate-900 mb-4">
                                     Payment Schedule
                                 </h3>
                                 <div className="space-y-3">
                                     {investment.paymentSchedule.map((payment, index) => (
                                         <div
                                             key={index}
-                                            className="p-3 bg-slate-50 dark:bg-slate-700 rounded-lg"
+                                            className="p-3 bg-slate-50 rounded-lg"
                                         >
                                             <div className="flex items-center justify-between mb-1">
-                                                <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                                <span className="text-sm font-medium text-slate-900">
                                                     {payment.phase}
                                                 </span>
                                                 <span
                                                     className={`text-xs px-2 py-1 rounded-full ${payment.status === "paid"
-                                                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                                        ? "bg-green-100 text-green-700"
+                                                        : "bg-amber-100 text-amber-700"
                                                         }`}
                                                 >
                                                     {payment.status}
                                                 </span>
                                             </div>
                                             <div className="flex items-center justify-between">
-                                                <span className="text-xs text-slate-600 dark:text-slate-400">
+                                                <span className="text-xs text-slate-600">
                                                     {payment.date}
                                                 </span>
-                                                <span className="text-sm font-bold text-slate-900 dark:text-white">
+                                                <span className="text-sm font-bold text-slate-900">
                                                     ₦{payment.amount.toLocaleString()}
                                                 </span>
                                             </div>

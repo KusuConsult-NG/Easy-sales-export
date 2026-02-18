@@ -101,7 +101,7 @@ function NewReviewContent() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
         );
@@ -112,12 +112,12 @@ function NewReviewContent() {
     const selectedProduct = order.items.find((item) => item.productId === selectedProductId);
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-3xl mx-auto px-4">
                 {/* Back Button */}
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-primary mb-6 transition"
+                    className="flex items-center gap-2 text-gray-600 hover:text-primary mb-6 transition"
                 >
                     <ArrowLeft className="w-5 h-5" />
                     Back to Orders
@@ -125,20 +125,20 @@ function NewReviewContent() {
 
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         Leave a Review
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Share your experience with this product
                     </p>
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+                <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-6">
                     {/* Select Product */}
                     {order.items.length > 1 && (
                         <div className="mb-6">
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                            <label className="block text-sm font-semibold text-gray-700 mb-3">
                                 Select Product *
                             </label>
                             <div className="space-y-2">
@@ -149,13 +149,13 @@ function NewReviewContent() {
                                         onClick={() => setSelectedProductId(item.productId)}
                                         className={`w-full p-4 rounded-xl border-2 transition text-left ${selectedProductId === item.productId
                                             ? "border-primary bg-primary/5"
-                                            : "border-gray-200 dark:border-gray-700 hover:border-primary/50"
+                                            : "border-gray-200 hover:border-primary/50"
                                             }`}
                                     >
-                                        <div className="font-semibold text-gray-900 dark:text-white mb-1">
+                                        <div className="font-semibold text-gray-900 mb-1">
                                             {item.productTitle}
                                         </div>
-                                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                                        <div className="text-sm text-gray-600">
                                             Quantity: {item.quantity} • {formatCurrency(item.totalPrice)}
                                         </div>
                                     </button>
@@ -166,14 +166,14 @@ function NewReviewContent() {
 
                     {/* Product Display (if auto-selected) */}
                     {order.items.length === 1 && selectedProduct && (
-                        <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <div className="mb-6 p-4 bg-gray-50 rounded-xl">
                             <div className="flex items-center gap-3">
                                 <Package className="w-5 h-5 text-primary" />
                                 <div>
-                                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                                    <h3 className="font-semibold text-gray-900">
                                         {selectedProduct.productTitle}
                                     </h3>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    <p className="text-sm text-gray-600">
                                         Quantity: {selectedProduct.quantity} • {formatCurrency(selectedProduct.totalPrice)}
                                     </p>
                                 </div>
@@ -183,7 +183,7 @@ function NewReviewContent() {
 
                     {/* Rating */}
                     <div className="mb-6">
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">
                             Your Rating *
                         </label>
                         <div className="flex items-center gap-2">
@@ -199,12 +199,12 @@ function NewReviewContent() {
                                     <Star
                                         className={`w-10 h-10 ${star <= (hoverRating || rating)
                                             ? "fill-yellow-400 text-yellow-400"
-                                            : "text-gray-300 dark:text-gray-600"
+                                            : "text-gray-300"
                                             }`}
                                     />
                                 </button>
                             ))}
-                            <span className="ml-3 text-lg font-semibold text-gray-900 dark:text-white">
+                            <span className="ml-3 text-lg font-semibold text-gray-900">
                                 {rating} / 5
                             </span>
                         </div>
@@ -212,7 +212,7 @@ function NewReviewContent() {
 
                     {/* Comment */}
                     <div className="mb-6">
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">
                             Your Review * (minimum 20 characters)
                         </label>
                         <textarea
@@ -221,7 +221,7 @@ function NewReviewContent() {
                             rows={6}
                             maxLength={500}
                             placeholder="Tell us about your experience with this product. What did you like? What could be better?"
-                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary resize-none"
+                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary resize-none"
                         />
                         <div className="mt-2 flex justify-between text-sm">
                             <span className={comment.length < 20 ? "text-red-500" : "text-gray-500"}>
@@ -232,8 +232,8 @@ function NewReviewContent() {
                     </div>
 
                     {/* Info */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
-                        <p className="text-sm text-blue-900 dark:text-blue-200">
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                        <p className="text-sm text-blue-900">
                             <strong>Note:</strong> Your review will be marked as a verified purchase and will appear on the
                             product page after admin approval. You can edit your review within 30 days of submission.
                         </p>
@@ -244,7 +244,7 @@ function NewReviewContent() {
                         <button
                             type="button"
                             onClick={() => router.back()}
-                            className="flex-1 px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                            className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition"
                         >
                             Cancel
                         </button>
@@ -275,7 +275,7 @@ function NewReviewContent() {
 export default function NewReviewPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
         }>

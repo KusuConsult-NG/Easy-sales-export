@@ -61,17 +61,17 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
                 Section F: Training, Support & Commitment
             </h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-8">
+            <p className="text-slate-600 mb-8">
                 Tell us what support you need and your commitment to the program
             </p>
 
             <div className="space-y-6">
                 {/* Which support do you need */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Which support do you need from WAVE? *
                         <span className="text-xs font-normal text-slate-500 ml-1">(Select all that apply)</span>
                     </label>
@@ -86,8 +86,8 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                             <label
                                 key={support.value}
                                 className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.supportNeeded.includes(support.value)
-                                    ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                                    : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
@@ -110,14 +110,14 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                 </div>
 
                 {/* Commitment Questions */}
-                <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-6 space-y-6">
-                    <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-300 mb-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 space-y-6">
+                    <h3 className="text-lg font-semibold text-emerald-900 mb-4">
                         Program Commitment Requirements
                     </h3>
 
                     {/* Willing to undergo training */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Are you willing to undergo mandatory training? *
                         </label>
                         <div className="flex gap-4">
@@ -129,9 +129,9 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                                     key={option.label}
                                     className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToUndergoTraining === option.value
                                         ? option.value
-                                            ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                                            ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                             : "border-red-300 bg-red-50 text-red-700"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                        : "border-slate-300 hover:bg-slate-50"
                                         }`}
                                 >
                                     <input
@@ -155,7 +155,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
 
                     {/* Comply with standards */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Are you willing to comply with WAVE production and quality standards? *
                         </label>
                         <div className="flex gap-4">
@@ -167,9 +167,9 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                                     key={option.label}
                                     className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToComplyWithStandards === option.value
                                         ? option.value
-                                            ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                                            ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                             : "border-red-300 bg-red-50 text-red-700"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                        : "border-slate-300 hover:bg-slate-50"
                                         }`}
                                 >
                                     <input
@@ -193,7 +193,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
 
                     {/* Participate in M&E */}
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Are you willing to participate in monitoring & evaluation (M&E)? *
                         </label>
                         <div className="flex gap-4">
@@ -205,9 +205,9 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                                     key={option.label}
                                     className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToParticipateInME === option.value
                                         ? option.value
-                                            ? "border-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                                            ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                             : "border-red-300 bg-red-50 text-red-700"
-                                        : "border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                        : "border-slate-300 hover:bg-slate-50"
                                         }`}
                                 >
                                     <input
@@ -235,7 +235,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 dark:border-slate-600 rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-900 dark:text-white"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back

@@ -25,7 +25,7 @@ export default function StepIndicator({ steps, currentStep }: StepIndicatorProps
                                         ? "bg-green-600 text-white"
                                         : currentStep === step.id
                                             ? "bg-green-600 text-white"
-                                            : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+                                            : "bg-slate-200 text-slate-500"
                                     }`}
                             >
                                 {currentStep > step.id ? (
@@ -36,13 +36,13 @@ export default function StepIndicator({ steps, currentStep }: StepIndicatorProps
                             </div>
                             <div className="mt-2 text-center">
                                 <p className={`text-sm font-semibold ${currentStep >= step.id
-                                        ? "text-slate-900 dark:text-white"
+                                        ? "text-slate-900"
                                         : "text-slate-500"
                                     }`}>
                                     {step.title}
                                 </p>
                                 {step.description && (
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 hidden md:block">
+                                    <p className="text-xs text-slate-500 hidden md:block">
                                         {step.description}
                                     </p>
                                 )}
@@ -52,7 +52,7 @@ export default function StepIndicator({ steps, currentStep }: StepIndicatorProps
                             <div
                                 className={`h-1 flex-1 mx-2 rounded-full transition-all ${currentStep > step.id
                                         ? "bg-green-600"
-                                        : "bg-slate-200 dark:bg-slate-700"
+                                        : "bg-slate-200"
                                     }`}
                             />
                         )}

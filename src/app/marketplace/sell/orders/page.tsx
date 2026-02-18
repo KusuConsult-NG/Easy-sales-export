@@ -115,83 +115,83 @@ export default function SellerOrdersPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         My Orders
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
+                    <p className="text-gray-600">
                         Manage and track your marketplace orders
                     </p>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
+                    <div className="bg-white rounded-xl p-4 shadow">
                         <div className="flex items-center justify-between mb-2">
                             <Package className="w-5 h-5 text-gray-400" />
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                            <span className="text-2xl font-bold text-gray-900">
                                 {stats.total}
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Total Orders</p>
+                        <p className="text-sm text-gray-600">Total Orders</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
+                    <div className="bg-white rounded-xl p-4 shadow">
                         <div className="flex items-center justify-between mb-2">
                             <Clock className="w-5 h-5 text-yellow-500" />
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                            <span className="text-2xl font-bold text-gray-900">
                                 {stats.pending}
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Pending</p>
+                        <p className="text-sm text-gray-600">Pending</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
+                    <div className="bg-white rounded-xl p-4 shadow">
                         <div className="flex items-center justify-between mb-2">
                             <Package className="w-5 h-5 text-blue-500" />
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                            <span className="text-2xl font-bold text-gray-900">
                                 {stats.processing}
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Processing</p>
+                        <p className="text-sm text-gray-600">Processing</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
+                    <div className="bg-white rounded-xl p-4 shadow">
                         <div className="flex items-center justify-between mb-2">
                             <Truck className="w-5 h-5 text-purple-500" />
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                            <span className="text-2xl font-bold text-gray-900">
                                 {stats.shipped}
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Shipped</p>
+                        <p className="text-sm text-gray-600">Shipped</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
+                    <div className="bg-white rounded-xl p-4 shadow">
                         <div className="flex items-center justify-between mb-2">
                             <CheckCircle className="w-5 h-5 text-green-500" />
-                            <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                            <span className="text-2xl font-bold text-gray-900">
                                 {stats.completed}
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Completed</p>
+                        <p className="text-sm text-gray-600">Completed</p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow">
+                    <div className="bg-white rounded-xl p-4 shadow">
                         <div className="flex items-center justify-between mb-2">
                             <DollarSign className="w-5 h-5 text-green-500" />
-                            <span className="text-lg font-bold text-gray-900 dark:text-white">
+                            <span className="text-lg font-bold text-gray-900">
                                 {formatCurrency(stats.totalRevenue)}
                             </span>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
+                        <p className="text-sm text-gray-600">Revenue</p>
                     </div>
                 </div>
 
                 {/* Filters & Search */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6">
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -200,7 +200,7 @@ export default function SellerOrdersPage() {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search by order number or customer name..."
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                             />
                         </div>
 
@@ -209,7 +209,7 @@ export default function SellerOrdersPage() {
                             <select
                                 value={filterStatus}
                                 onChange={(e) => setFilterStatus(e.target.value as OrderStatus | "all")}
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary appearance-none"
+                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary appearance-none"
                             >
                                 <option value="all">All Statuses</option>
                                 {statusOptions.map(status => (
@@ -234,19 +234,19 @@ export default function SellerOrdersPage() {
                             return (
                                 <div
                                     key={order.id}
-                                    className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 hover:shadow-xl transition"
+                                    className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition"
                                 >
                                     <div className="flex items-start justify-between mb-4">
                                         <div>
                                             <div className="flex items-center gap-3 mb-2">
-                                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                                <h3 className="text-lg font-bold text-gray-900">
                                                     {order.orderNumber}
                                                 </h3>
-                                                <span className={`px-3 py-1 bg-${statusColor}-100 dark:bg-${statusColor}-900/20 text-${statusColor}-800 dark:text-${statusColor}-200 text-sm font-semibold rounded-full capitalize`}>
+                                                <span className={`px-3 py-1 bg-${statusColor}-100${statusColor}-900/20 text-${statusColor}-800${statusColor}-200 text-sm font-semibold rounded-full capitalize`}>
                                                     {order.status.replace("_", " ")}
                                                 </span>
                                             </div>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            <p className="text-sm text-gray-600">
                                                 {new Date(order.createdAt).toLocaleDateString()} • {order.deliveryAddress.recipientName}
                                             </p>
                                         </div>
@@ -263,17 +263,17 @@ export default function SellerOrdersPage() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                         <div>
                                             <p className="text-sm text-gray-500 mb-1">Delivery Address</p>
-                                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                            <p className="text-sm font-semibold text-gray-900">
                                                 {order.deliveryAddress.street}, {order.deliveryAddress.city}
                                             </p>
-                                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            <p className="text-sm text-gray-600">
                                                 {order.deliveryAddress.state}
                                             </p>
                                         </div>
                                         {order.trackingNumber && (
                                             <div>
                                                 <p className="text-sm text-gray-500 mb-1">Tracking Number</p>
-                                                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                                <p className="text-sm font-semibold text-gray-900">
                                                     {order.trackingNumber}
                                                 </p>
                                             </div>
@@ -283,7 +283,7 @@ export default function SellerOrdersPage() {
                                     <div className="flex gap-3">
                                         <button
                                             onClick={() => router.push(`/marketplace/orders/${order.id}`)}
-                                            className="flex-1 px-4 py-2 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center justify-center gap-2"
+                                            className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition flex items-center justify-center gap-2"
                                         >
                                             <Eye className="w-4 h-4" />
                                             View Details
@@ -308,7 +308,7 @@ export default function SellerOrdersPage() {
                 ) : (
                     <div className="text-center py-12">
                         <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500 dark:text-gray-400 text-lg">
+                        <p className="text-gray-500 text-lg">
                             {searchQuery || filterStatus !== "all"
                                 ? "No orders match your filters"
                                 : "No orders yet"}
@@ -319,23 +319,23 @@ export default function SellerOrdersPage() {
                 {/* Update Status Modal */}
                 {showStatusModal && selectedOrder && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl max-w-md w-full p-6">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-4">
                                 Update Order Status
                             </h2>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                            <p className="text-sm text-gray-600 mb-6">
                                 Order: {selectedOrder.orderNumber}
                             </p>
 
                             <div className="space-y-4 mb-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         New Status
                                     </label>
                                     <select
                                         value={newStatus}
                                         onChange={(e) => setNewStatus(e.target.value as OrderStatus)}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >
                                         {statusOptions.map(status => (
                                             <option key={status.value} value={status.value}>
@@ -347,7 +347,7 @@ export default function SellerOrdersPage() {
 
                                 {(newStatus === "shipped" || newStatus === "delivered") && (
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
                                             Tracking Number (Optional)
                                         </label>
                                         <input
@@ -355,7 +355,7 @@ export default function SellerOrdersPage() {
                                             value={trackingNumber}
                                             onChange={(e) => setTrackingNumber(e.target.value)}
                                             placeholder="Enter tracking number"
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                         />
                                     </div>
                                 )}
@@ -364,7 +364,7 @@ export default function SellerOrdersPage() {
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setShowStatusModal(false)}
-                                    className="flex-1 px-4 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                    className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition"
                                 >
                                     Cancel
                                 </button>

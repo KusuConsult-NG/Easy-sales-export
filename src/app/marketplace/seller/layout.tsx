@@ -14,7 +14,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 async function SellerLayoutContent({ children }: { children: React.ReactNode }) {
     return (
         <ErrorBoundary>
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            <div className="min-h-screen bg-slate-50">
                 <MarketplaceSidebar />
 
                 {/* Main Content */}

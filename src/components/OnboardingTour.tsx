@@ -72,9 +72,9 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 overflow-hidden">
                 {/* Progress Bar */}
-                <div className="h-2 bg-slate-200 dark:bg-slate-700">
+                <div className="h-2 bg-slate-200">
                     <div
                         className="h-full bg-linear-to-r from-blue-500 to-indigo-600 transition-all duration-300"
                         style={{ width: `${((currentStep + 1) / tourSteps.length) * 100}%` }}
@@ -87,17 +87,17 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
                         <div className="flex items-center space-x-4">
                             <div className="text-6xl">{step.icon}</div>
                             <div>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">
+                                <p className="text-sm text-slate-500">
                                     Step {currentStep + 1} of {tourSteps.length}
                                 </p>
-                                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mt-1">
+                                <h2 className="text-3xl font-bold text-slate-900 mt-1">
                                     {step.title}
                                 </h2>
                             </div>
                         </div>
                     </div>
 
-                    <p className="text-lg text-slate-600 dark:text-white leading-relaxed">
+                    <p className="text-lg text-slate-600 leading-relaxed">
                         {step.description}
                     </p>
                 </div>
@@ -110,7 +110,7 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
                                 key={index}
                                 className={`h-2 rounded-full flex-1 transition-all ${index <= currentStep
                                         ? "bg-blue-600"
-                                        : "bg-slate-200 dark:bg-slate-700"
+                                        : "bg-slate-200"
                                     }`}
                             />
                         ))}
@@ -118,12 +118,12 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
                 </div>
 
                 {/* Footer */}
-                <div className="bg-slate-50 dark:bg-slate-900/50 px-8 py-6">
+                <div className="bg-slate-50 px-8 py-6">
                     <div className="flex items-center justify-between">
                         <button
                             onClick={handlePrevious}
                             disabled={currentStep === 0}
-                            className="flex items-center space-x-2 px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="flex items-center space-x-2 px-4 py-2 text-slate-600 hover:text-slate-900 transition disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <ChevronLeft className="w-5 h-5" />
                             <span>Previous</span>
@@ -141,7 +141,7 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
                         </div>
                     </div>
 
-                    <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
+                    <p className="text-center text-xs text-slate-500 mt-4">
                         You can access this tour anytime from your profile settings
                     </p>
                 </div>

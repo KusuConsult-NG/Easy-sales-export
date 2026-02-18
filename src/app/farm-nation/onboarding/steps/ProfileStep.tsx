@@ -61,10 +61,10 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
                     Profile & Location
                 </h2>
-                <p className="text-slate-600 dark:text-slate-400">
+                <p className="text-slate-600">
                     Help us connect you with the right properties in your area
                 </p>
             </div>
@@ -72,7 +72,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Full Name */}
                 <div className="col-span-full">
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Full Name <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -82,8 +82,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="fullName"
                             value={formData.fullName}
                             onChange={handleChange}
-                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border ${errors.fullName ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white transition-all`}
+                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.fullName ? "border-red-500" : "border-slate-200"
+                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                             placeholder="John Doe"
                         />
                     </div>
@@ -94,7 +94,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* Phone */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Phone Number <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -104,8 +104,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="phone"
                             value={formData.phone}
                             onChange={handleChange}
-                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border ${errors.phone ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white transition-all`}
+                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.phone ? "border-red-500" : "border-slate-200"
+                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                             placeholder="0801 234 5678"
                         />
                     </div>
@@ -114,7 +114,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* Business Name (Optional) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Business Name <span className="text-slate-400">(Optional)</span>
                     </label>
                     <div className="relative">
@@ -124,7 +124,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="businessName"
                             value={formData.businessName}
                             onChange={handleChange}
-                            className="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white transition-all"
+                            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                             placeholder="Agro Ventures Ltd"
                         />
                     </div>
@@ -132,7 +132,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* State */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         State <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -141,8 +141,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="state"
                             value={formData.state}
                             onChange={handleChange}
-                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border ${errors.state ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white transition-all`}
+                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.state ? "border-red-500" : "border-slate-200"
+                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                         >
                             <option value="">Select State</option>
                             {NIGERIAN_STATES.map((state) => (
@@ -157,7 +157,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* LGA */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Local Government Area <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -165,8 +165,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                         name="lga"
                         value={formData.lga}
                         onChange={handleChange}
-                        className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border ${errors.lga ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white transition-all`}
+                        className={`w-full px-4 py-3 bg-slate-50 border ${errors.lga ? "border-red-500" : "border-slate-200"
+                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                         placeholder="Enter LGA"
                     />
                     {errors.lga && <p className="mt-1 text-sm text-red-500">{errors.lga}</p>}
@@ -174,7 +174,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
 
                 {/* Address */}
                 <div className="col-span-full">
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Address <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -182,8 +182,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                         name="address"
                         value={formData.address}
                         onChange={handleChange}
-                        className={`w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border ${errors.address ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 dark:text-white transition-all`}
+                        className={`w-full px-4 py-3 bg-slate-50 border ${errors.address ? "border-red-500" : "border-slate-200"
+                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                         placeholder="123 Main Street"
                     />
                     {errors.address && <p className="mt-1 text-sm text-red-500">{errors.address}</p>}
@@ -194,7 +194,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                 <button
                     type="button"
                     onClick={onBack}
-                    className="px-6 py-3 border-2 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back

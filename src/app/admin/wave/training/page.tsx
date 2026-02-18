@@ -174,15 +174,15 @@ export default function AdminWaveTrainingPage() {
     const cancelledEvents = events.filter((e) => e.status === "cancelled");
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
                             WAVE Training Events Management
                         </h1>
-                        <p className="text-gray-600 dark:text-gray-400">
+                        <p className="text-gray-600">
                             Manage workshops, webinars, and training sessions
                         </p>
                     </div>
@@ -197,42 +197,42 @@ export default function AdminWaveTrainingPage() {
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-2 mb-2">
                             <Calendar className="w-5 h-5 text-blue-600" />
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Upcoming</p>
+                            <p className="text-sm text-gray-600">Upcoming</p>
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <p className="text-3xl font-bold text-gray-900">
                             {upcomingEvents.length}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-2 mb-2">
                             <CheckCircle className="w-5 h-5 text-green-600" />
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Ongoing</p>
+                            <p className="text-sm text-gray-600">Ongoing</p>
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <p className="text-3xl font-bold text-gray-900">
                             {ongoingEvents.length}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-2 mb-2">
                             <Calendar className="w-5 h-5 text-gray-600" />
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Completed</p>
+                            <p className="text-sm text-gray-600">Completed</p>
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <p className="text-3xl font-bold text-gray-900">
                             {completedEvents.length}
                         </p>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg">
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
                         <div className="flex items-center gap-2 mb-2">
                             <Users className="w-5 h-5 text-pink-600" />
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Total Events</p>
+                            <p className="text-sm text-gray-600">Total Events</p>
                         </div>
-                        <p className="text-3xl font-bold text-gray-900 dark:text-white">{events.length}</p>
+                        <p className="text-3xl font-bold text-gray-900">{events.length}</p>
                     </div>
                 </div>
 
@@ -251,10 +251,10 @@ export default function AdminWaveTrainingPage() {
                             (section) =>
                                 section.items.length > 0 && (
                                     <div key={section.title}>
-                                        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                                        <h2 className="text-xl font-bold text-gray-900 mb-4">
                                             {section.title}
                                         </h2>
-                                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg divide-y divide-gray-200 dark:divide-gray-700">
+                                        <div className="bg-white rounded-2xl shadow-lg divide-y divide-gray-200">
                                             {section.items.map((event) => {
                                                 const statusColor = getStatusColor(event.status);
                                                 return (
@@ -262,35 +262,35 @@ export default function AdminWaveTrainingPage() {
                                                         <div className="flex items-start justify-between mb-4">
                                                             <div className="flex-1">
                                                                 <div className="flex items-center gap-3 mb-2">
-                                                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                                                    <h3 className="text-lg font-bold text-gray-900">
                                                                         {event.title}
                                                                     </h3>
                                                                     <span
-                                                                        className={`px-3 py-1 bg-${statusColor}-100 dark:bg-${statusColor}-900/30 text-${statusColor}-700 dark:text-${statusColor}-300 text-xs font-semibold rounded-full`}
+                                                                        className={`px-3 py-1 bg-${statusColor}-100${statusColor}-900/30 text-${statusColor}-700${statusColor}-300 text-xs font-semibold rounded-full`}
                                                                     >
                                                                         {event.status}
                                                                     </span>
                                                                 </div>
-                                                                <p className="text-gray-600 dark:text-gray-400 mb-4">
+                                                                <p className="text-gray-600 mb-4">
                                                                     {event.description}
                                                                 </p>
 
                                                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                                                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                                    <div className="flex items-center gap-2 text-gray-600">
                                                                         <Users className="w-4 h-4 text-pink-600" />
                                                                         <span>{event.instructor}</span>
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                                    <div className="flex items-center gap-2 text-gray-600">
                                                                         <Calendar className="w-4 h-4 text-purple-600" />
                                                                         <span>
                                                                             {new Date(event.date).toLocaleDateString()}
                                                                         </span>
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                                    <div className="flex items-center gap-2 text-gray-600">
                                                                         <Clock className="w-4 h-4 text-blue-600" />
                                                                         <span>{event.duration}</span>
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                                                    <div className="flex items-center gap-2 text-gray-600">
                                                                         <Users className="w-4 h-4 text-green-600" />
                                                                         <span>
                                                                             {event.currentParticipants}/{event.maxParticipants}
@@ -302,17 +302,17 @@ export default function AdminWaveTrainingPage() {
                                                             <div className="flex items-center gap-2 ml-4">
                                                                 <button
                                                                     onClick={() => event.id && viewParticipants(event.id)}
-                                                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                                                    className="p-2 hover:bg-gray-100 rounded-lg transition"
                                                                     title="View Participants"
                                                                 >
-                                                                    <Eye className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                                                    <Eye className="w-5 h-5 text-gray-600" />
                                                                 </button>
                                                                 <button
                                                                     onClick={() => openEditModal(event)}
-                                                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                                                    className="p-2 hover:bg-gray-100 rounded-lg transition"
                                                                     title="Edit Event"
                                                                 >
-                                                                    <Edit className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                                                                    <Edit className="w-5 h-5 text-gray-600" />
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -325,12 +325,12 @@ export default function AdminWaveTrainingPage() {
                         )}
                     </div>
                 ) : (
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-12 text-center">
+                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
                         <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
                             No Events Yet
                         </h3>
-                        <p className="text-gray-600 dark:text-gray-400 mb-6">
+                        <p className="text-gray-600 mb-6">
                             Create your first training event for WAVE members
                         </p>
                         <button
@@ -345,14 +345,14 @@ export default function AdminWaveTrainingPage() {
                 {/* Create/Edit Modal */}
                 {isModalOpen && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                            <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                                <h2 className="text-2xl font-bold text-gray-900">
                                     {editingEvent ? "Edit Event" : "Create New Event"}
                                 </h2>
                                 <button
                                     onClick={() => setIsModalOpen(false)}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
@@ -360,7 +360,7 @@ export default function AdminWaveTrainingPage() {
 
                             <form onSubmit={handleSubmit} className="p-6 space-y-4">
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Title *
                                     </label>
                                     <input
@@ -368,13 +368,13 @@ export default function AdminWaveTrainingPage() {
                                         value={formData.title}
                                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                         required
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-pink-600"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                         placeholder="e.g., Export Regulations Workshop"
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Description *
                                     </label>
                                     <textarea
@@ -384,14 +384,14 @@ export default function AdminWaveTrainingPage() {
                                         }
                                         required
                                         rows={4}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-pink-600"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                         placeholder="What will participants learn?"
                                     />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
                                             Instructor *
                                         </label>
                                         <input
@@ -401,20 +401,20 @@ export default function AdminWaveTrainingPage() {
                                                 setFormData({ ...formData, instructor: e.target.value })
                                             }
                                             required
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-pink-600"
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                             placeholder="Dr. Jane Smith"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
                                             Duration
                                         </label>
                                         <input
                                             type="text"
                                             value={formData.duration}
                                             onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-pink-600"
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                             placeholder="2 hours"
                                         />
                                     </div>
@@ -422,7 +422,7 @@ export default function AdminWaveTrainingPage() {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
                                             Date & Time *
                                         </label>
                                         <input
@@ -430,12 +430,12 @@ export default function AdminWaveTrainingPage() {
                                             value={formData.date}
                                             onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                             required
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-pink-600"
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
                                             Max Participants
                                         </label>
                                         <input
@@ -447,13 +447,13 @@ export default function AdminWaveTrainingPage() {
                                                     maxParticipants: parseInt(e.target.value) || 50,
                                                 })
                                             }
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-pink-600"
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                         />
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
                                         Meeting Link (optional)
                                     </label>
                                     <input
@@ -462,14 +462,14 @@ export default function AdminWaveTrainingPage() {
                                         onChange={(e) =>
                                             setFormData({ ...formData, meetingLink: e.target.value })
                                         }
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-pink-600"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                         placeholder="https://meet.google.com/..."
                                     />
                                 </div>
 
                                 {editingEvent && (
                                     <div>
-                                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">
                                             Status
                                         </label>
                                         <select
@@ -477,7 +477,7 @@ export default function AdminWaveTrainingPage() {
                                             onChange={(e) =>
                                                 setFormData({ ...formData, status: e.target.value as any })
                                             }
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-pink-600"
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                         >
                                             {STATUS_OPTIONS.map((opt) => (
                                                 <option key={opt.id} value={opt.id}>
@@ -492,7 +492,7 @@ export default function AdminWaveTrainingPage() {
                                     <button
                                         type="button"
                                         onClick={() => setIsModalOpen(false)}
-                                        className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                        className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition"
                                     >
                                         Cancel
                                     </button>
@@ -519,14 +519,14 @@ export default function AdminWaveTrainingPage() {
                 {/* Participants Modal */}
                 {viewingParticipants && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                            <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                                <h2 className="text-2xl font-bold text-gray-900">
                                     Event Participants
                                 </h2>
                                 <button
                                     onClick={() => setViewingParticipants(null)}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
@@ -542,13 +542,13 @@ export default function AdminWaveTrainingPage() {
                                         {participants.map((participant) => (
                                             <div
                                                 key={participant.id}
-                                                className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl flex items-center justify-between"
+                                                className="p-4 bg-gray-50 rounded-xl flex items-center justify-between"
                                             >
                                                 <div>
-                                                    <p className="font-semibold text-gray-900 dark:text-white">
+                                                    <p className="font-semibold text-gray-900">
                                                         User ID: {participant.userId}
                                                     </p>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                    <p className="text-sm text-gray-500">
                                                         Registered:{" "}
                                                         {new Date(participant.registeredAt.toDate()).toLocaleDateString()}
                                                     </p>
@@ -560,7 +560,7 @@ export default function AdminWaveTrainingPage() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                                    <p className="text-center text-gray-500 py-8">
                                         No participants yet
                                     </p>
                                 )}

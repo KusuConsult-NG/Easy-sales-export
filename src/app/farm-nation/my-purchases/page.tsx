@@ -123,10 +123,10 @@ This document serves as a record of the purchase agreement initiated through Eas
 
     const getStatusBadge = (status: string) => {
         const styles = {
-            pending_payment: "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400",
-            payment_confirmed: "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400",
-            completed: "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400",
-            cancelled: "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400",
+            pending_payment: "bg-yellow-100 text-yellow-700",
+            payment_confirmed: "bg-blue-100 text-blue-700",
+            completed: "bg-green-100 text-green-700",
+            cancelled: "bg-red-100 text-red-700",
         };
 
         const icons = {
@@ -148,10 +148,10 @@ This document serves as a record of the purchase agreement initiated through Eas
 
     const getEscrowBadge = (escrowStatus: string) => {
         const styles = {
-            pending: "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white",
-            held: "bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400",
-            released: "bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400",
-            refunded: "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400",
+            pending: "bg-slate-100 text-slate-900",
+            held: "bg-blue-100 text-blue-700",
+            released: "bg-green-100 text-green-700",
+            refunded: "bg-yellow-100 text-yellow-700",
         };
 
         return (
@@ -163,51 +163,51 @@ This document serves as a record of the purchase agreement initiated through Eas
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto mb-4" />
-                    <p className="text-slate-600 dark:text-slate-400">Loading your purchases...</p>
+                    <p className="text-slate-600">Loading your purchases...</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-8">
+        <div className="min-h-screen bg-slate-50 p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
                     <button
                         onClick={() => router.push("/farm-nation")}
-                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white mb-4 transition"
+                        className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Marketplace
                     </button>
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">My Purchase Requests</h1>
-                    <p className="text-slate-600 dark:text-slate-400">Track your property acquisition requests</p>
+                    <h1 className="text-4xl font-bold text-slate-900 mb-2">My Purchase Requests</h1>
+                    <p className="text-slate-600">Track your property acquisition requests</p>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Total Requests</p>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{purchases.length}</p>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Total Requests</p>
+                        <p className="text-3xl font-bold text-slate-900">{purchases.length}</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Pending Payment</p>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Pending Payment</p>
                         <p className="text-3xl font-bold text-yellow-600">
                             {purchases.filter(p => p.status === "pending_payment").length}
                         </p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">In Progress</p>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">In Progress</p>
                         <p className="text-3xl font-bold text-blue-600">
                             {purchases.filter(p => p.status === "payment_confirmed").length}
                         </p>
                     </div>
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Completed</p>
+                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                        <p className="text-sm text-slate-600 mb-1">Completed</p>
                         <p className="text-3xl font-bold text-green-600">
                             {purchases.filter(p => p.status === "completed").length}
                         </p>
@@ -215,16 +215,16 @@ This document serves as a record of the purchase agreement initiated through Eas
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 mb-6 elevation-2">
+                <div className="bg-white rounded-2xl p-4 mb-6 elevation-2">
                     <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white">Filter:</span>
+                        <span className="text-sm font-semibold text-slate-900">Filter:</span>
                         {["all", "pending_payment", "payment_confirmed", "completed", "cancelled"].map((status) => (
                             <button
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
                                 className={`px-4 py-2 rounded-lg font-medium text-sm transition ${filterStatus === status
                                     ? "bg-green-600 text-white"
-                                    : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                     }`}
                             >
                                 {status === "all" ? "All" : status.replace("_", " ").toUpperCase()}
@@ -235,23 +235,23 @@ This document serves as a record of the purchase agreement initiated through Eas
 
                 {/* Error Display */}
                 {error && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6 flex items-start gap-3">
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
                         <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                        <p className="text-red-800 dark:text-red-200">{error}</p>
+                        <p className="text-red-800">{error}</p>
                     </div>
                 )}
 
                 {/* Purchases List */}
                 {filteredPurchases.length === 0 ? (
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-12 text-center elevation-2">
+                    <div className="bg-white rounded-2xl p-12 text-center elevation-2">
                         <div className="max-w-md mx-auto">
-                            <div className="w-24 h-24 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <DollarSign className="w-12 h-12 text-slate-400" />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 {filterStatus === "all" ? "No Purchase Requests" : `No ${filterStatus.replace("_", " ")} Requests`}
                             </h3>
-                            <p className="text-slate-600 dark:text-slate-400 mb-6">
+                            <p className="text-slate-600 mb-6">
                                 {filterStatus === "all"
                                     ? "Browse available properties and make your first purchase request."
                                     : `You don't have any requests with status "${filterStatus.replace("_", " ")}".`}
@@ -271,13 +271,13 @@ This document serves as a record of the purchase agreement initiated through Eas
                         {filteredPurchases.map((purchase) => (
                             <div
                                 key={purchase.id}
-                                className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden elevation-2 hover-lift transition"
+                                className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift transition"
                             >
                                 <div className="p-6">
                                     <div className="flex items-start gap-6">
                                         {/* Property Image */}
                                         {purchase.propertyImages && purchase.propertyImages.length > 0 ? (
-                                            <div className="relative w-32 h-32 rounded-xl overflow-hidden shrink-0 bg-slate-200 dark:bg-slate-700">
+                                            <div className="relative w-32 h-32 rounded-xl overflow-hidden shrink-0 bg-slate-200">
                                                 <Image
                                                     src={purchase.propertyImages[0]}
                                                     alt={purchase.propertyName}
@@ -286,7 +286,7 @@ This document serves as a record of the purchase agreement initiated through Eas
                                                 />
                                             </div>
                                         ) : (
-                                            <div className="w-32 h-32 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                                            <div className="w-32 h-32 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
                                                 <MapPin className="w-8 h-8 text-slate-400" />
                                             </div>
                                         )}
@@ -295,11 +295,11 @@ This document serves as a record of the purchase agreement initiated through Eas
                                         <div className="flex-1">
                                             <div className="flex items-start justify-between mb-3">
                                                 <div>
-                                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                                                    <h3 className="text-xl font-bold text-slate-900 mb-1">
                                                         {purchase.propertyName}
                                                     </h3>
                                                     {purchase.propertyLocation && (
-                                                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                                                        <div className="flex items-center gap-2 text-sm text-slate-600">
                                                             <MapPin className="w-4 h-4" />
                                                             <span>{purchase.propertyLocation}</span>
                                                         </div>
@@ -309,44 +309,44 @@ This document serves as a record of the purchase agreement initiated through Eas
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Amount</p>
-                                                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                                                <div className="bg-slate-50 rounded-lg p-3">
+                                                    <p className="text-xs text-slate-600 mb-1">Amount</p>
+                                                    <p className="text-lg font-bold text-slate-900">
                                                         ₦{purchase.propertyPrice.toLocaleString()}
                                                     </p>
                                                 </div>
 
-                                                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Type</p>
-                                                    <p className="text-lg font-bold text-slate-900 dark:text-white capitalize">
+                                                <div className="bg-slate-50 rounded-lg p-3">
+                                                    <p className="text-xs text-slate-600 mb-1">Type</p>
+                                                    <p className="text-lg font-bold text-slate-900 capitalize">
                                                         {purchase.propertyType}
                                                     </p>
                                                 </div>
 
-                                                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-1">Request Date</p>
-                                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                <div className="bg-slate-50 rounded-lg p-3">
+                                                    <p className="text-xs text-slate-600 mb-1">Request Date</p>
+                                                    <p className="text-sm font-semibold text-slate-900">
                                                         {new Date(purchase.createdAt).toLocaleDateString()}
                                                     </p>
                                                 </div>
                                             </div>
 
                                             {/* Seller Info */}
-                                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-                                                <p className="text-xs font-semibold text-blue-800 dark:text-blue-200 mb-2">Seller Information</p>
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                                                <p className="text-xs font-semibold text-blue-800 mb-2">Seller Information</p>
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                                                    <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                                                    <div className="flex items-center gap-2 text-slate-900">
                                                         <CheckCircle className="w-4 h-4 text-blue-600" />
                                                         <span>{purchase.sellerName}</span>
                                                     </div>
                                                     {purchase.sellerEmail && (
-                                                        <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                                                        <div className="flex items-center gap-2 text-slate-900">
                                                             <Mail className="w-4 h-4 text-blue-600" />
                                                             <span>{purchase.sellerEmail}</span>
                                                         </div>
                                                     )}
                                                     {purchase.sellerPhone && (
-                                                        <div className="flex items-center gap-2 text-slate-900 dark:text-white">
+                                                        <div className="flex items-center gap-2 text-slate-900">
                                                             <Phone className="w-4 h-4 text-blue-600" />
                                                             <span>{purchase.sellerPhone}</span>
                                                         </div>
@@ -373,7 +373,7 @@ This document serves as a record of the purchase agreement initiated through Eas
 
                                                     <button
                                                         onClick={() => router.push(`/farm-nation/property/${purchase.propertyId}`)}
-                                                        className="px-4 py-2 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-400 text-sm font-semibold rounded-lg transition"
+                                                        className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 text-sm font-semibold rounded-lg transition"
                                                     >
                                                         View Property
                                                     </button>
@@ -381,7 +381,7 @@ This document serves as a record of the purchase agreement initiated through Eas
                                                     {purchase.status === "pending_payment" && (
                                                         <button
                                                             onClick={() => handleCancelPurchase(purchase.id)}
-                                                            className="px-4 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 text-sm font-semibold rounded-lg transition"
+                                                            className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 text-sm font-semibold rounded-lg transition"
                                                         >
                                                             Cancel Request
                                                         </button>

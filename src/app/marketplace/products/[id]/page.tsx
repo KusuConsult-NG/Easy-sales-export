@@ -48,7 +48,7 @@ export default function ProductDetailPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-green-600" />
             </div>
         );
@@ -56,10 +56,10 @@ export default function ProductDetailPage() {
 
     if (error || !product) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-8">
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
                 <Package className="w-16 h-16 text-slate-300 mb-4" />
-                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Product Not Found</h1>
-                <p className="text-slate-600 dark:text-slate-400 mb-6">{error || "The product you're looking for doesn't exist or has been removed."}</p>
+                <h1 className="text-2xl font-bold text-slate-900 mb-2">Product Not Found</h1>
+                <p className="text-slate-600 mb-6">{error || "The product you're looking for doesn't exist or has been removed."}</p>
                 <Link
                     href="/marketplace/products"
                     className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition"
@@ -81,7 +81,7 @@ export default function ProductDetailPage() {
     else if (product.bulkAvailable) badge = "Bulk Available";
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-linear-to-r from-green-600 to-emerald-600 text-white py-8">
                 <div className="max-w-7xl mx-auto px-8">
@@ -103,7 +103,7 @@ export default function ProductDetailPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                     {/* Product Image */}
                     <div className="space-y-6">
-                        <div className="relative h-96 lg:h-[500px] bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                        <div className="relative h-96 lg:h-[500px] bg-white rounded-2xl overflow-hidden shadow-xl">
                             <Image
                                 src={mainImage}
                                 alt={product.title}
@@ -119,17 +119,17 @@ export default function ProductDetailPage() {
 
                         {/* Trust Badges */}
                         <div className="grid grid-cols-3 gap-4">
-                            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl text-center">
+                            <div className="bg-white p-4 rounded-xl text-center">
                                 <Shield className="w-6 h-6 text-green-600 mx-auto mb-2" />
-                                <div className="text-xs text-slate-600 dark:text-slate-400">Verified Seller</div>
+                                <div className="text-xs text-slate-600">Verified Seller</div>
                             </div>
-                            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl text-center">
+                            <div className="bg-white p-4 rounded-xl text-center">
                                 <Award className="w-6 h-6 text-green-600 mx-auto mb-2" />
-                                <div className="text-xs text-slate-600 dark:text-slate-400">Quality Assured</div>
+                                <div className="text-xs text-slate-600">Quality Assured</div>
                             </div>
-                            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl text-center">
+                            <div className="bg-white p-4 rounded-xl text-center">
                                 <Package className="w-6 h-6 text-green-600 mx-auto mb-2" />
-                                <div className="text-xs text-slate-600 dark:text-slate-400">Fast Shipping</div>
+                                <div className="text-xs text-slate-600">Fast Shipping</div>
                             </div>
                         </div>
                     </div>
@@ -137,21 +137,21 @@ export default function ProductDetailPage() {
                     {/* Product Info */}
                     <div className="space-y-6">
                         <div>
-                            <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
+                            <h1 className="text-4xl font-bold text-slate-900 mb-4">
                                 {product.title}
                             </h1>
 
                             <div className="flex items-center gap-4 mb-6">
                                 <div className="flex items-center gap-1">
                                     <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                                    <span className="text-lg font-semibold text-slate-900 dark:text-white">
+                                    <span className="text-lg font-semibold text-slate-900">
                                         {product.rating || 0}
                                     </span>
-                                    <span className="text-slate-600 dark:text-slate-400">
+                                    <span className="text-slate-600">
                                         ({product.reviewCount || 0} reviews)
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                <div className="flex items-center gap-2 text-slate-600">
                                     <MapPin className="w-4 h-4" />
                                     {product.location?.state}, {product.location?.lga}
                                 </div>
@@ -162,26 +162,26 @@ export default function ProductDetailPage() {
                                 <span className="text-xl font-normal text-slate-500 ml-2">/{product.unit}</span>
                             </div>
 
-                            <p className="text-lg text-slate-900 dark:text-white leading-relaxed mb-6">
+                            <p className="text-lg text-slate-900 leading-relaxed mb-6">
                                 {product.description}
                             </p>
                         </div>
 
                         {/* Seller Info */}
-                        <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl p-6">
-                            <h3 className="font-bold text-slate-900 dark:text-white mb-3">
+                        <div className="bg-slate-100 rounded-2xl p-6">
+                            <h3 className="font-bold text-slate-900 mb-3">
                                 Sold by: {product.sellerName || "AgriMarket Seller"}
                             </h3>
                             <div className="space-y-2 text-sm">
-                                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                <div className="flex items-center gap-2 text-slate-600">
                                     <MapPin className="w-4 h-4" />
                                     Location: {product.location?.state}
                                 </div>
-                                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                <div className="flex items-center gap-2 text-slate-600">
                                     <Phone className="w-4 h-4" />
                                     Contact for details
                                 </div>
-                                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                <div className="flex items-center gap-2 text-slate-600">
                                     <Mail className="w-4 h-4" />
                                     Message seller
                                 </div>
@@ -194,33 +194,33 @@ export default function ProductDetailPage() {
                                 <ShoppingCart className="w-5 h-5" />
                                 Add to Cart
                             </button>
-                            <button className="px-8 py-4 bg-white dark:bg-slate-800 text-green-600 dark:text-green-400 font-bold text-lg rounded-xl border-2 border-green-600 dark:border-green-400 hover:bg-green-50 dark:hover:bg-slate-700 transition-all">
+                            <button className="px-8 py-4 bg-white text-green-600 font-bold text-lg rounded-xl border-2 border-green-600 hover:bg-green-50 transition-all">
                                 Contact Seller
                             </button>
                         </div>
 
                         {/* Specifications */}
-                        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                        <div className="bg-white rounded-2xl p-6 shadow-lg">
+                            <h3 className="text-xl font-bold text-slate-900 mb-4">
                                 Specifications
                             </h3>
                             <dl className="space-y-3">
-                                <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                    <dt className="font-semibold text-slate-900 dark:text-white">Minimum Order</dt>
-                                    <dd className="text-slate-600 dark:text-slate-400">{product.minimumOrderQuantity} {product.unit}</dd>
+                                <div className="flex justify-between border-b border-slate-200 pb-2">
+                                    <dt className="font-semibold text-slate-900">Minimum Order</dt>
+                                    <dd className="text-slate-600">{product.minimumOrderQuantity} {product.unit}</dd>
                                 </div>
-                                <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                    <dt className="font-semibold text-slate-900 dark:text-white">Available Quantity</dt>
-                                    <dd className="text-slate-600 dark:text-slate-400">{product.availableQuantity} {product.unit}</dd>
+                                <div className="flex justify-between border-b border-slate-200 pb-2">
+                                    <dt className="font-semibold text-slate-900">Available Quantity</dt>
+                                    <dd className="text-slate-600">{product.availableQuantity} {product.unit}</dd>
                                 </div>
-                                <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                    <dt className="font-semibold text-slate-900 dark:text-white">Delivery Method</dt>
-                                    <dd className="text-slate-600 dark:text-slate-400 capitalize">{product.deliveryMethod}</dd>
+                                <div className="flex justify-between border-b border-slate-200 pb-2">
+                                    <dt className="font-semibold text-slate-900">Delivery Method</dt>
+                                    <dd className="text-slate-600 capitalize">{product.deliveryMethod}</dd>
                                 </div>
                                 {product.estimatedDeliveryDays && (
-                                    <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                                        <dt className="font-semibold text-slate-900 dark:text-white">Est. Delivery</dt>
-                                        <dd className="text-slate-600 dark:text-slate-400">{product.estimatedDeliveryDays} Days</dd>
+                                    <div className="flex justify-between border-b border-slate-200 pb-2">
+                                        <dt className="font-semibold text-slate-900">Est. Delivery</dt>
+                                        <dd className="text-slate-600">{product.estimatedDeliveryDays} Days</dd>
                                     </div>
                                 )}
                             </dl>
@@ -228,13 +228,13 @@ export default function ProductDetailPage() {
 
                         {/* Features/Certifications */}
                         {product.certifications && product.certifications.length > 0 && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-lg">
-                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                            <div className="bg-white rounded-2xl p-6 shadow-lg">
+                                <h3 className="text-xl font-bold text-slate-900 mb-4">
                                     Certifications
                                 </h3>
                                 <ul className="space-y-2">
                                     {product.certifications.map((cert, index) => (
-                                        <li key={index} className="flex items-start gap-3 text-slate-900 dark:text-white">
+                                        <li key={index} className="flex items-start gap-3 text-slate-900">
                                             <span className="text-green-600 mt-1">✓</span>
                                             {cert}
                                         </li>
@@ -247,14 +247,14 @@ export default function ProductDetailPage() {
 
             {/* Related Products */}
             <div className="max-w-7xl mx-auto px-6 py-12">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Related Products</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mb-6">Related Products</h2>
                 {relatedProducts.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {relatedProducts.map((relatedProduct) => (
                             <Link
                                 key={relatedProduct.id}
                                 href={`/marketplace/products/${relatedProduct.id}`}
-                                className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition group"
+                                className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition group"
                             >
                                 <div className="relative h-48">
                                     {relatedProduct.images?.[0] ? (
@@ -265,18 +265,18 @@ export default function ProductDetailPage() {
                                             className="object-cover group-hover:scale-105 transition-transform duration-300"
                                         />
                                     ) : (
-                                        <div className="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                        <div className="w-full h-full bg-slate-200 flex items-center justify-center">
                                             <Package className="w-12 h-12 text-slate-400" />
                                         </div>
                                     )}
                                 </div>
                                 <div className="p-4">
-                                    <h3 className="font-semibold text-slate-900 dark:text-white text-sm line-clamp-2 mb-2">
+                                    <h3 className="font-semibold text-slate-900 text-sm line-clamp-2 mb-2">
                                         {relatedProduct.title}
                                     </h3>
                                     <p className="text-lg font-bold text-green-600">
                                         ₦{relatedProduct.pricingTiers[0]?.price.toLocaleString()}
-                                        <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">
+                                        <span className="text-xs text-slate-500 font-normal">
                                             /{relatedProduct.unit}
                                         </span>
                                     </p>
@@ -285,7 +285,7 @@ export default function ProductDetailPage() {
                         ))}
                     </div>
                 ) : (
-                    <div className="text-center text-slate-600 dark:text-slate-400 py-12 bg-white dark:bg-slate-800 rounded-2xl">
+                    <div className="text-center text-slate-600 py-12 bg-white rounded-2xl">
                         <Package className="w-16 h-16 mx-auto mb-4 text-slate-400" />
                         <p>No related products available</p>
                     </div>

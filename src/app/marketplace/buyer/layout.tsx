@@ -13,7 +13,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 async function BuyerLayoutContent({ children }: { children: React.ReactNode }) {
     return (
         <ErrorBoundary>
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            <div className="min-h-screen bg-slate-50">
                 {/* Main Content - Full Width */}
                 <main className="w-full">
                     {children}

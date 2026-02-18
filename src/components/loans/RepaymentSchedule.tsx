@@ -43,12 +43,12 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
 
     if (loading) {
         return (
-            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg">
+            <div className="bg-white rounded-xl p-6 shadow-lg">
                 <div className="animate-pulse">
-                    <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mb-4"></div>
+                    <div className="h-6 bg-slate-200 rounded w-1/3 mb-4"></div>
                     <div className="space-y-3">
                         {[1, 2, 3].map((i) => (
-                            <div key={i} className="h-16 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                            <div key={i} className="h-16 bg-slate-200 rounded"></div>
                         ))}
                     </div>
                 </div>
@@ -61,20 +61,20 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
     const progressPercent = (paidCount / schedule.length) * 100;
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg border border-slate-200 dark:border-slate-700">
+        <div className="bg-white rounded-xl p-6 shadow-lg border border-slate-200">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
+                    <h3 className="text-xl font-bold text-slate-900 mb-1">
                         Repayment Schedule
                     </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                    <p className="text-sm text-slate-600">
                         {paidCount} of {schedule.length} installments paid
                     </p>
                 </div>
                 <div className="text-right">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Monthly Payment</p>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    <p className="text-sm text-slate-500">Monthly Payment</p>
+                    <p className="text-2xl font-bold text-blue-600">
                         ₦{monthlyPayment.toLocaleString()}
                     </p>
                 </div>
@@ -83,14 +83,14 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
             {/* Progress Bar */}
             <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-900 dark:text-white">
+                    <span className="text-sm font-medium text-slate-900">
                         Payment Progress
                     </span>
-                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                    <span className="text-sm font-bold text-blue-600">
                         {progressPercent.toFixed(0)}%
                     </span>
                 </div>
-                <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
                     <div
                         className="h-full bg-linear-to-r from-green-500 to-blue-600 rounded-full transition-all duration-300"
                         style={{ width: `${progressPercent}%` }}
@@ -100,9 +100,9 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
 
             {/* Overdue Warning */}
             {overdueCount > 0 && (
-                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800 flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                    <p className="text-sm text-red-700 dark:text-red-400 font-medium">
+                <div className="mb-4 p-3 bg-red-50 rounded-lg border border-red-200 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600" />
+                    <p className="text-sm text-red-700 font-medium">
                         {overdueCount} overdue payment{overdueCount > 1 ? "s" : ""} - penalties may apply after 7-day grace period
                     </p>
                 </div>
@@ -115,10 +115,10 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
                         installment.status === "overdue" ? AlertCircle : Clock;
 
                     const statusColors = {
-                        paid: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800",
-                        overdue: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
-                        partial: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
-                        pending: "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white border-slate-200 dark:border-slate-600",
+                        paid: "bg-green-100 text-green-700 border-green-200",
+                        overdue: "bg-red-100 text-red-700 border-red-200",
+                        partial: "bg-yellow-100 text-yellow-700 border-yellow-200",
+                        pending: "bg-slate-100 text-slate-900 border-slate-200",
                     };
 
                     return (
@@ -152,7 +152,7 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
                                         </p>
                                     )}
                                     {installment.penaltyAmount && installment.penaltyAmount > 0 && (
-                                        <p className="text-xs mt-1 text-red-600 dark:text-red-400">
+                                        <p className="text-xs mt-1 text-red-600">
                                             Penalty: ₦{installment.penaltyAmount.toLocaleString()}
                                         </p>
                                     )}
@@ -173,22 +173,22 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
             </div>
 
             {/* Summary */}
-            <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-3 gap-4">
+            <div className="mt-6 pt-4 border-t border-slate-200 grid grid-cols-3 gap-4">
                 <div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Total Loan</p>
-                    <p className="font-bold text-slate-900 dark:text-white">
+                    <p className="text-xs text-slate-500 mb-1">Total Loan</p>
+                    <p className="font-bold text-slate-900">
                         ₦{loanAmount.toLocaleString()}
                     </p>
                 </div>
                 <div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Paid</p>
-                    <p className="font-bold text-green-600 dark:text-green-400">
+                    <p className="text-xs text-slate-500 mb-1">Paid</p>
+                    <p className="font-bold text-green-600">
                         {paidCount}/{schedule.length}
                     </p>
                 </div>
                 <div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Remaining</p>
-                    <p className="font-bold text-blue-600 dark:text-blue-400">
+                    <p className="text-xs text-slate-500 mb-1">Remaining</p>
+                    <p className="font-bold text-blue-600">
                         {schedule.length - paidCount}
                     </p>
                 </div>

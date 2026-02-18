@@ -41,7 +41,7 @@ export default function CooperativePaymentOption({
 
     if (checking) {
         return (
-            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
                 <Loader2 className="w-6 h-6 animate-spin text-green-600 mx-auto" />
             </div>
         );
@@ -55,23 +55,23 @@ export default function CooperativePaymentOption({
                     type="button"
                     onClick={() => onSelect("cooperative")}
                     className={`w-full p-6 rounded-xl border-2 transition-all text-left ${selected === "cooperative"
-                        ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                        : "border-slate-200 dark:border-slate-700 hover:border-green-400"
+                        ? "border-green-600 bg-green-50"
+                        : "border-slate-200 hover:border-green-400"
                         }`}
                 >
                     <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                                <Wallet className="w-6 h-6 text-green-600 dark:text-green-400" />
+                            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                                <Wallet className="w-6 h-6 text-green-600" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-slate-900 dark:text-white mb-1">
+                                <h3 className="font-bold text-slate-900 mb-1">
                                     Cooperative Credit
                                 </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">
+                                <p className="text-sm text-slate-600">
                                     Pay with your cooperative savings
                                 </p>
-                                <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                <p className="text-xs text-green-600 mt-1">
                                     Available: {formatCurrency(availableCredit)}
                                 </p>
                             </div>
@@ -87,8 +87,8 @@ export default function CooperativePaymentOption({
 
             {/* Low Credit Alert */}
             {!eligible && availableCredit > 0 && (
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                    <p className="text-sm text-yellow-800">
                         💡 Your available credit ({formatCurrency(availableCredit)}) is insufficient for this purchase.
                         Contribute more to your savings to increase your credit limit.
                     </p>
@@ -97,13 +97,13 @@ export default function CooperativePaymentOption({
 
             {/* Not a Member Alert */}
             {!eligible && availableCredit === 0 && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-                    <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <p className="text-sm text-blue-800 mb-2">
                         💡 Join the cooperative to unlock credit for marketplace purchases!
                     </p>
                     <a
                         href="/cooperatives/register"
-                        className="text-blue-600 dark:text-blue-400 font-semibold hover:underline text-sm"
+                        className="text-blue-600 font-semibold hover:underline text-sm"
                     >
                         Learn More →
                     </a>
@@ -115,20 +115,20 @@ export default function CooperativePaymentOption({
                 type="button"
                 onClick={() => onSelect("card")}
                 className={`w-full p-6 rounded-xl border-2 transition-all text-left ${selected === "card"
-                    ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                    : "border-slate-200 dark:border-slate-700 hover:border-blue-400"
+                    ? "border-blue-600 bg-blue-50"
+                    : "border-slate-200 hover:border-blue-400"
                     }`}
             >
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                            <CreditCard className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                            <CreditCard className="w-6 h-6 text-blue-600" />
                         </div>
                         <div>
-                            <h3 className="font-bold text-slate-900 dark:text-white mb-1">
+                            <h3 className="font-bold text-slate-900 mb-1">
                                 Card Payment
                             </h3>
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                            <p className="text-sm text-slate-600">
                                 Pay with debit or credit card
                             </p>
                         </div>

@@ -40,7 +40,7 @@ export default async function AcademyLearnerLayout({
 
     return (
         <ErrorBoundary>
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+            <div className="min-h-screen bg-slate-50">
                 <AcademySidebar />
 
                 {/* Main Content - Offset for sidebar */}

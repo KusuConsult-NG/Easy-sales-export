@@ -89,19 +89,19 @@ export default function CreateProductPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+        <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-4xl mx-auto px-4">
                 {/* Header */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 mb-6">
+                <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
                     <div className="flex items-center gap-4 mb-4">
                         <div className="p-3 rounded-xl bg-primary/10">
                             <Package className="w-8 h-8 text-primary" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                            <h1 className="text-3xl font-bold text-gray-900">
                                 Create Product Listing
                             </h1>
-                            <p className="text-gray-600 dark:text-gray-400">
+                            <p className="text-gray-600">
                                 List your products and reach thousands of buyers
                             </p>
                         </div>
@@ -111,13 +111,13 @@ export default function CreateProductPage() {
                 {/* Product Form */}
                 <form action={handleSubmit} className="space-y-6">
                     {/* Basic Information */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
+                        <h2 className="text-xl font-semibold text-gray-900 mb-4">
                             Basic Information
                         </h2>
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Product Title *
                                 </label>
                                 <input
@@ -125,12 +125,12 @@ export default function CreateProductPage() {
                                     name="title"
                                     required
                                     placeholder="e.g., Fresh Organic Tomatoes"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Description *
                                 </label>
                                 <textarea
@@ -138,19 +138,19 @@ export default function CreateProductPage() {
                                     required
                                     rows={4}
                                     placeholder="Describe your product, quality, origin, etc."
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Category *
                                     </label>
                                     <select
                                         name="category"
                                         required
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="">Select Category</option>
                                         {productCategories.map(cat => (
@@ -160,13 +160,13 @@ export default function CreateProductPage() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Unit *
                                     </label>
                                     <select
                                         name="unit"
                                         required
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="">Select Unit</option>
                                         {units.map(unit => (
@@ -179,10 +179,10 @@ export default function CreateProductPage() {
                     </div>
 
                     {/* Product Images */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
                         <div className="flex items-center gap-3 mb-4">
                             <ImageIcon className="w-5 h-5 text-primary" />
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-semibold text-gray-900">
                                 Product Images
                             </h2>
                         </div>
@@ -206,7 +206,7 @@ export default function CreateProductPage() {
                             ))}
 
                             {images.length < 5 && (
-                                <label className="w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-primary transition">
+                                <label className="w-full h-32 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-primary transition">
                                     <Upload className="w-6 h-6 text-gray-400 mb-2" />
                                     <span className="text-sm text-gray-500">Upload</span>
                                     <input
@@ -224,10 +224,10 @@ export default function CreateProductPage() {
                     </div>
 
                     {/* Pricing */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
                         <div className="flex items-center gap-3 mb-4">
                             <DollarSign className="w-5 h-5 text-primary" />
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-semibold text-gray-900">
                                 Pricing & Inventory
                             </h2>
                         </div>
@@ -236,7 +236,7 @@ export default function CreateProductPage() {
                             {/* Retail Price */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Retail Price (₦) *
                                     </label>
                                     <input
@@ -246,11 +246,11 @@ export default function CreateProductPage() {
                                         min="0"
                                         step="0.01"
                                         placeholder="1000"
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Available Quantity *
                                     </label>
                                     <input
@@ -259,13 +259,13 @@ export default function CreateProductPage() {
                                         required
                                         min="1"
                                         placeholder="100"
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Minimum Order Quantity *
                                 </label>
                                 <input
@@ -274,7 +274,7 @@ export default function CreateProductPage() {
                                     required
                                     min="1"
                                     defaultValue="1"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                 />
                             </div>
 
@@ -287,7 +287,7 @@ export default function CreateProductPage() {
                                         onChange={(e) => setEnableBulkPricing(e.target.checked)}
                                         className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                                     />
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <span className="text-sm font-medium text-gray-700">
                                         Enable Bulk Pricing
                                     </span>
                                 </label>
@@ -299,7 +299,7 @@ export default function CreateProductPage() {
                                             placeholder="Bulk Price (₦)"
                                             min="0"
                                             step="0.01"
-                                            className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            className="px-4 py-2 rounded-xl border border-gray-300 bg-white text-gray-900"
                                         />
                                         <input
                                             type="number"
@@ -307,7 +307,7 @@ export default function CreateProductPage() {
                                             placeholder="Min Qty for Bulk"
                                             min="1"
                                             defaultValue="50"
-                                            className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            className="px-4 py-2 rounded-xl border border-gray-300 bg-white text-gray-900"
                                         />
                                     </div>
                                 )}
@@ -322,7 +322,7 @@ export default function CreateProductPage() {
                                         onChange={(e) => setEnableExportPricing(e.target.checked)}
                                         className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                                     />
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    <span className="text-sm font-medium text-gray-700">
                                         Enable Export Pricing
                                     </span>
                                 </label>
@@ -334,7 +334,7 @@ export default function CreateProductPage() {
                                             placeholder="Export Price (₦)"
                                             min="0"
                                             step="0.01"
-                                            className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            className="px-4 py-2 rounded-xl border border-gray-300 bg-white text-gray-900"
                                         />
                                         <input
                                             type="number"
@@ -342,7 +342,7 @@ export default function CreateProductPage() {
                                             placeholder="Min Qty for Export"
                                             min="1"
                                             defaultValue="100"
-                                            className="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            className="px-4 py-2 rounded-xl border border-gray-300 bg-white text-gray-900"
                                         />
                                     </div>
                                 )}
@@ -354,10 +354,10 @@ export default function CreateProductPage() {
                     </div>
 
                     {/* Location & Delivery */}
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+                    <div className="bg-white rounded-2xl shadow-lg p-6">
                         <div className="flex items-center gap-3 mb-4">
                             <MapPin className="w-5 h-5 text-primary" />
-                            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                            <h2 className="text-xl font-semibold text-gray-900">
                                 Location & Delivery
                             </h2>
                         </div>
@@ -365,13 +365,13 @@ export default function CreateProductPage() {
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         State *
                                     </label>
                                     <select
                                         name="state"
                                         required
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="">Select State</option>
                                         {nigerianStates.map(state => (
@@ -380,7 +380,7 @@ export default function CreateProductPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         LGA *
                                     </label>
                                     <input
@@ -388,20 +388,20 @@ export default function CreateProductPage() {
                                         name="lga"
                                         required
                                         placeholder="e.g., Ikeja"
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Delivery Method *
                                     </label>
                                     <select
                                         name="deliveryMethod"
                                         required
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="both">Pickup & Delivery</option>
                                         <option value="pickup">Pickup Only</option>
@@ -409,7 +409,7 @@ export default function CreateProductPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                         Est. Delivery Days
                                     </label>
                                     <input
@@ -417,7 +417,7 @@ export default function CreateProductPage() {
                                         name="estimatedDeliveryDays"
                                         min="1"
                                         placeholder="3-5 days"
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     />
                                 </div>
                             </div>
@@ -429,7 +429,7 @@ export default function CreateProductPage() {
                         <button
                             type="button"
                             onClick={() => router.back()}
-                            className="flex-1 px-6 py-4 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                            className="flex-1 px-6 py-4 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition"
                         >
                             Cancel
                         </button>

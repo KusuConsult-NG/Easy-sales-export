@@ -53,7 +53,7 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
         <div className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-left text-slate-900 dark:text-white hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-between gap-2"
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg text-left text-slate-900 hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all flex items-center justify-between gap-2"
             >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                     <Calendar className="w-5 h-5 text-slate-400 shrink-0" />
@@ -67,7 +67,7 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                             e.stopPropagation();
                             handleClear();
                         }}
-                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors shrink-0"
+                        className="p-1 hover:bg-slate-100 rounded transition-colors shrink-0"
                     >
                         <X className="w-4 h-4" />
                     </button>
@@ -83,10 +83,10 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                     />
 
                     {/* Dropdown */}
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl z-50 p-4">
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-4">
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     From Date
                                 </label>
                                 <input
@@ -97,12 +97,12 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                                         from: e.target.value ? new Date(e.target.value) : null
                                     })}
                                     max={tempRange.to ? tempRange.to.toISOString().split('T')[0] : undefined}
-                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                                <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     To Date
                                 </label>
                                 <input
@@ -113,13 +113,13 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                                         to: e.target.value ? new Date(e.target.value) : null
                                     })}
                                     min={tempRange.from ? tempRange.from.toISOString().split('T')[0] : undefined}
-                                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                                 />
                             </div>
 
                             {/* Quick Presets */}
                             <div>
-                                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Quick Select</p>
+                                <p className="text-xs font-semibold text-slate-500 mb-2">Quick Select</p>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         onClick={() => {
@@ -128,7 +128,7 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                                             lastWeek.setDate(today.getDate() - 7);
                                             setTempRange({ from: lastWeek, to: today });
                                         }}
-                                        className="px-3 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-primary/20 dark:hover:bg-primary/20 text-slate-900 dark:text-white rounded-lg transition-colors"
+                                        className="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-primary/20 text-slate-900 rounded-lg transition-colors"
                                     >
                                         Last 7 Days
                                     </button>
@@ -139,7 +139,7 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                                             lastMonth.setMonth(today.getMonth() - 1);
                                             setTempRange({ from: lastMonth, to: today });
                                         }}
-                                        className="px-3 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-primary/20 dark:hover:bg-primary/20 text-slate-900 dark:text-white rounded-lg transition-colors"
+                                        className="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-primary/20 text-slate-900 rounded-lg transition-colors"
                                     >
                                         Last 30 Days
                                     </button>
@@ -149,7 +149,7 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                                             const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
                                             setTempRange({ from: firstDayOfMonth, to: today });
                                         }}
-                                        className="px-3 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-primary/20 dark:hover:bg-primary/20 text-slate-900 dark:text-white rounded-lg transition-colors"
+                                        className="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-primary/20 text-slate-900 rounded-lg transition-colors"
                                     >
                                         This Month
                                     </button>
@@ -160,7 +160,7 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                                             const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
                                             setTempRange({ from: lastMonthStart, to: lastMonthEnd });
                                         }}
-                                        className="px-3 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-primary/20 dark:hover:bg-primary/20 text-slate-900 dark:text-white rounded-lg transition-colors"
+                                        className="px-3 py-2 text-xs font-semibold bg-slate-100 hover:bg-primary/20 text-slate-900 rounded-lg transition-colors"
                                     >
                                         Last Month
                                     </button>
@@ -168,10 +168,10 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
                             </div>
 
                             {/* Actions */}
-                            <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                            <div className="flex gap-2 pt-2 border-t border-slate-200">
                                 <button
                                     onClick={handleClear}
-                                    className="flex-1 px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold rounded-lg transition-all"
+                                    className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold rounded-lg transition-all"
                                 >
                                     Clear
                                 </button>

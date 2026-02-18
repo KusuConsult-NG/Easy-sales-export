@@ -110,25 +110,25 @@ export default function QuizEditorPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 px-4">
+        <div className="min-h-screen bg-slate-50 py-8 px-4">
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-4">
                         <Link
                             href={`/admin/academy/${courseId}`}
-                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                         >
-                            <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                            <ArrowLeft className="w-5 h-5 text-slate-600" />
                         </Link>
                         <div>
                             <input
                                 type="text"
                                 value={quizTitle}
                                 onChange={(e) => setQuizTitle(e.target.value)}
-                                className="text-2xl font-bold text-slate-900 dark:text-white bg-transparent border-none focus:ring-0 p-0 w-full"
+                                className="text-2xl font-bold text-slate-900 bg-transparent border-none focus:ring-0 p-0 w-full"
                             />
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Quiz Editor</p>
+                            <p className="text-sm text-slate-500">Quiz Editor</p>
                         </div>
                     </div>
                     <button
@@ -144,9 +144,9 @@ export default function QuizEditorPage() {
                 {/* Questions List */}
                 <div className="space-y-6">
                     {questions.map((q, index) => (
-                        <div key={q.id} className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+                        <div key={q.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                             <div className="flex items-start gap-4 mb-4">
-                                <span className="flex-none w-8 h-8 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center font-bold text-slate-600 dark:text-slate-400">
+                                <span className="flex-none w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-600">
                                     {index + 1}
                                 </span>
                                 <div className="flex-1">
@@ -154,13 +154,13 @@ export default function QuizEditorPage() {
                                         type="text"
                                         value={q.text}
                                         onChange={(e) => handleUpdateQuestion(q.id, e.target.value)}
-                                        className="w-full text-lg font-medium text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-200 focus:border-primary focus:outline-none transition-colors"
+                                        className="w-full text-lg font-medium text-slate-900 bg-transparent border-b border-transparent hover:border-slate-200 focus:border-primary focus:outline-none transition-colors"
                                         placeholder="Enter question text..."
                                     />
                                 </div>
                                 <button
                                     onClick={() => handleDeleteQuestion(q.id)}
-                                    className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-lg transition"
+                                    className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                 </button>
@@ -174,7 +174,7 @@ export default function QuizEditorPage() {
                                             onClick={() => handleSetCorrectOption(q.id, opt.id)}
                                             className={`flex-none w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${opt.isCorrect
                                                     ? "border-green-500 bg-green-500 text-white"
-                                                    : "border-slate-300 dark:border-slate-600 text-transparent hover:border-slate-400"
+                                                    : "border-slate-300 text-transparent hover:border-slate-400"
                                                 }`}
                                         >
                                             <CheckCircle2 className="w-3 h-3" />
@@ -183,12 +183,12 @@ export default function QuizEditorPage() {
                                             type="text"
                                             value={opt.text}
                                             onChange={(e) => handleUpdateOption(q.id, opt.id, e.target.value)}
-                                            className="flex-1 text-slate-900 dark:text-white bg-transparent border border-transparent hover:border-slate-200 dark:hover:border-slate-700 rounded px-2 py-1 focus:border-primary focus:outline-none transition-colors"
+                                            className="flex-1 text-slate-900 bg-transparent border border-transparent hover:border-slate-200 rounded px-2 py-1 focus:border-primary focus:outline-none transition-colors"
                                             placeholder="Option text..."
                                         />
                                         <button
                                             onClick={() => handleDeleteOption(q.id, opt.id)}
-                                            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded transition"
+                                            className="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-500 rounded transition"
                                         >
                                             <Trash2 className="w-3 h-3" />
                                         </button>
@@ -207,7 +207,7 @@ export default function QuizEditorPage() {
 
                     <button
                         onClick={handleAddQuestion}
-                        className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl text-slate-500 hover:border-primary hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-800/50 transition flex items-center justify-center gap-2 font-medium"
+                        className="w-full py-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-primary hover:text-primary hover:bg-slate-50 transition flex items-center justify-center gap-2 font-medium"
                     >
                         <Plus className="w-5 h-5" />
                         Add Question

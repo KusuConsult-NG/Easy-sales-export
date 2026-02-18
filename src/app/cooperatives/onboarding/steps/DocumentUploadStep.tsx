@@ -145,23 +145,23 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
         <div className="space-y-8">
             {/* Header */}
             <div className="text-center">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
+                <h2 className="text-3xl font-bold text-slate-900 mb-3">
                     Document Upload
                 </h2>
-                <p className="text-lg text-slate-600 dark:text-slate-400">
+                <p className="text-lg text-slate-600">
                     Upload your verification documents
                 </p>
             </div>
 
             {/* Info Banner */}
-            <div className="max-w-2xl mx-auto bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4">
+            <div className="max-w-2xl mx-auto bg-orange-50 border border-orange-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
                     <div>
-                        <p className="font-semibold text-orange-900 dark:text-orange-200 mb-1">
+                        <p className="font-semibold text-orange-900 mb-1">
                             Document Requirements
                         </p>
-                        <ul className="text-sm text-orange-800 dark:text-orange-300 space-y-1">
+                        <ul className="text-sm text-orange-800 space-y-1">
                             <li>• All documents must be clear and readable</li>
                             <li>• Accepted formats: JPG, PNG, PDF (Max 5MB each)</li>
                             <li>• Documents will be verified within 24-48 hours</li>
@@ -174,21 +174,21 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Valid ID */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Valid ID <span className="text-red-500">*</span>
                     </label>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    <p className="text-sm text-slate-600 mb-3">
                         Government-issued ID (NIN, Driver's License, International Passport)
                     </p>
-                    <div className={`border-2 border-dashed rounded-xl p-6 text-center ${errors.validId ? "border-red-500 bg-red-50 dark:bg-red-900/10" : "border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800"
+                    <div className={`border-2 border-dashed rounded-xl p-6 text-center ${errors.validId ? "border-red-500 bg-red-50" : "border-slate-300 bg-slate-50"
                         }`}>
                         {uploadStates.validId.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-900 dark:text-white font-medium">
+                                <p className="text-slate-900 font-medium">
                                     Uploading... {Math.round(uploadStates.validId.progress)}%
                                 </p>
-                                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                <div className="w-full bg-slate-200 rounded-full h-2">
                                     <div
                                         className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                                         style={{ width: `${uploadStates.validId.progress}%` }}
@@ -199,7 +199,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <CheckCircle className="w-6 h-6 text-green-600" />
-                                    <span className="text-slate-900 dark:text-white font-medium">
+                                    <span className="text-slate-900 font-medium">
                                         {data.validId.name}
                                     </span>
                                 </div>
@@ -221,7 +221,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                                     disabled={uploadStates.validId.uploading}
                                 />
                                 <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                                <p className="text-slate-600 dark:text-slate-400 font-medium">
+                                <p className="text-slate-600 font-medium">
                                     Click to upload ID document
                                 </p>
                                 <p className="text-sm text-slate-500 mt-1">JPG, PNG, PDF (Max 5MB)</p>
@@ -235,21 +235,21 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
 
                 {/* Passport Photo */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Passport Photo <span className="text-red-500">*</span>
                     </label>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    <p className="text-sm text-slate-600 mb-3">
                         Recent passport-sized photograph
                     </p>
-                    <div className={`border-2 border-dashed rounded-xl p-6 text-center ${errors.passportPhoto ? "border-red-500 bg-red-50 dark:bg-red-900/10" : "border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800"
+                    <div className={`border-2 border-dashed rounded-xl p-6 text-center ${errors.passportPhoto ? "border-red-500 bg-red-50" : "border-slate-300 bg-slate-50"
                         }`}>
                         {uploadStates.passportPhoto.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-900 dark:text-white font-medium">
+                                <p className="text-slate-900 font-medium">
                                     Uploading... {Math.round(uploadStates.passportPhoto.progress)}%
                                 </p>
-                                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                <div className="w-full bg-slate-200 rounded-full h-2">
                                     <div
                                         className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                                         style={{ width: `${uploadStates.passportPhoto.progress}%` }}
@@ -260,7 +260,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <CheckCircle className="w-6 h-6 text-green-600" />
-                                    <span className="text-slate-900 dark:text-white font-medium">
+                                    <span className="text-slate-900 font-medium">
                                         {data.passportPhoto.name}
                                     </span>
                                 </div>
@@ -282,7 +282,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                                     disabled={uploadStates.passportPhoto.uploading}
                                 />
                                 <Image className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                                <p className="text-slate-600 dark:text-slate-400 font-medium">
+                                <p className="text-slate-600 font-medium">
                                     Click to upload passport photo
                                 </p>
                                 <p className="text-sm text-slate-500 mt-1">JPG, PNG (Max 5MB)</p>
@@ -296,20 +296,20 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
 
                 {/* Proof of Address (Optional) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Proof of Address <span className="text-slate-500">(Optional)</span>
                     </label>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    <p className="text-sm text-slate-600 mb-3">
                         Utility bill, bank statement, or tenancy agreement
                     </p>
-                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 text-center bg-slate-50 dark:bg-slate-800">
+                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50">
                         {uploadStates.proofOfAddress.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-900 dark:text-white font-medium">
+                                <p className="text-slate-900 font-medium">
                                     Uploading... {Math.round(uploadStates.proofOfAddress.progress)}%
                                 </p>
-                                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                <div className="w-full bg-slate-200 rounded-full h-2">
                                     <div
                                         className="bg-purple-600 h-2 rounded-full transition-all duration-300"
                                         style={{ width: `${uploadStates.proofOfAddress.progress}%` }}
@@ -320,7 +320,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <CheckCircle className="w-6 h-6 text-green-600" />
-                                    <span className="text-slate-900 dark:text-white font-medium">
+                                    <span className="text-slate-900 font-medium">
                                         {data.proofOfAddress.name}
                                     </span>
                                 </div>
@@ -342,7 +342,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                                     disabled={uploadStates.proofOfAddress.uploading}
                                 />
                                 <Upload className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                                <p className="text-slate-600 dark:text-slate-400 font-medium">
+                                <p className="text-slate-600 font-medium">
                                     Click to upload proof of address
                                 </p>
                                 <p className="text-sm text-slate-500 mt-1">JPG, PNG, PDF (Max 5MB)</p>
@@ -353,10 +353,10 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
 
                 {/* BVN */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Bank Verification Number (BVN) <span className="text-red-500">*</span>
                     </label>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                    <p className="text-sm text-slate-600 mb-3">
                         Your 11-digit BVN for identity verification
                     </p>
                     <input
@@ -365,7 +365,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                         onChange={(e) => onChange({ ...data, bvn: e.target.value.replace(/\D/g, '').slice(0, 11) })}
                         placeholder="12345678901"
                         maxLength={11}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.bvn ? "border-red-500" : "border-slate-300 dark:border-slate-600"
+                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.bvn ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.bvn && (
@@ -377,7 +377,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                 </div>
 
                 {/* BVN Consent */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-start gap-3">
                         <input
                             type="checkbox"
@@ -386,19 +386,19 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                             onChange={(e) => setBvnConsent(e.target.checked)}
                             className="mt-1 w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
                         />
-                        <label htmlFor="bvnConsent" className="flex-1 text-sm text-slate-900 dark:text-white">
-                            <span className="font-semibold text-slate-900 dark:text-white">
+                        <label htmlFor="bvnConsent" className="flex-1 text-sm text-slate-900">
+                            <span className="font-semibold text-slate-900">
                                 I consent to the collection and processing of my BVN
                             </span>
-                            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            <p className="mt-2 text-xs text-slate-600 leading-relaxed">
                                 Your Bank Verification Number (BVN) is collected solely for:
                             </p>
-                            <ul className="mt-2 text-xs text-slate-600 dark:text-slate-400 space-y-1 ml-4 list-disc">
+                            <ul className="mt-2 text-xs text-slate-600 space-y-1 ml-4 list-disc">
                                 <li>Identity verification and fraud prevention</li>
                                 <li>Compliance with Nigerian regulatory requirements</li>
                                 <li>Enabling cooperative financial services (loans, savings)</li>
                             </ul>
-                            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+                            <p className="mt-2 text-xs text-slate-600">
                                 Your BVN will be stored securely and never shared with third parties without your explicit consent,
                                 except as required by law. You may request deletion of your data by contacting{' '}
                                 <a href="mailto:privacy@easysalescooperative.com" className="text-purple-600 hover:underline">
@@ -414,15 +414,15 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
 
                 {/* Terms of Reference */}
                 <div className="space-y-4">
-                    <label className="block text-sm font-semibold text-slate-900 dark:text-white">
+                    <label className="block text-sm font-semibold text-slate-900">
                         Terms of Reference <span className="text-red-500">*</span>
                     </label>
 
-                    <div className="h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap">
+                    <div className="h-64 overflow-y-auto border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
                         {TERMS_OF_REFERENCE}
                     </div>
 
-                    <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                         <div className="flex items-start gap-3">
                             <input
                                 type="checkbox"
@@ -431,7 +431,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                                 onChange={(e) => setTorAgreed(e.target.checked)}
                                 className="mt-1 w-4 h-4 text-purple-600 rounded focus:ring-2 focus:ring-purple-500"
                             />
-                            <label htmlFor="torAgreed" className="flex-1 text-sm text-slate-900 dark:text-white font-medium cursor-pointer">
+                            <label htmlFor="torAgreed" className="flex-1 text-sm text-slate-900 font-medium cursor-pointer">
                                 I have read and agree to the Terms of Reference for the Easy Sales Cooperative Society.
                             </label>
                         </div>
@@ -446,7 +446,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white rounded-xl font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-semibold hover:bg-slate-50 transition-all"
                 >
                     Back
                 </button>
