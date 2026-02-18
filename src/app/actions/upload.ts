@@ -49,16 +49,19 @@ export async function uploadDocumentAction(
         const sanitizedName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
         const storagePath = `cooperative/documents/${userId}/${documentType}-${timestamp}-${sanitizedName}`;
 
-        // Get bucket name from env
-        const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+        // Get bucket name - prefer server-side var, fallback to public var
+        const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
         if (!bucketName) {
-            return { success: false, error: "Storage not configured" };
+            return { success: false, error: "Storage bucket not configured. Set FIREBASE_STORAGE_BUCKET in environment variables." };
         }
 
         // Upload via Admin SDK (bypasses App Check)
         const adminStorage = getAdminStorage();
+        // Use bucket() with explicit name to ensure correct bucket is used
         const bucket = adminStorage.bucket(bucketName);
         const file = bucket.file(storagePath);
+
+        logger.info(`Uploading to bucket: ${bucketName}, path: ${storagePath}`);
 
         await file.save(buffer, {
             metadata: {

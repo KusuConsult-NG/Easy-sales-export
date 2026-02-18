@@ -69,6 +69,7 @@ function initializeFirebaseAdmin(): App {
                 clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
                 privateKey: privateKey,
             }),
+            storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
         });
     } catch (error: any) {
         throw new Error(
