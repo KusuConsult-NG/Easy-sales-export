@@ -21,7 +21,6 @@ interface DocumentUploadStepProps {
     onChange: (data: any) => void;
     onNext: () => void;
     onBack: () => void;
-    isSubmitting?: boolean;
 }
 
 interface UploadState {
@@ -32,7 +31,7 @@ interface UploadState {
 
 import { useToast } from "@/contexts/ToastContext";
 
-export default function DocumentUploadStep({ data, onChange, onNext, onBack, isSubmitting = false }: DocumentUploadStepProps) {
+export default function DocumentUploadStep({ data, onChange, onNext, onBack }: DocumentUploadStepProps) {
     const { data: session } = useSession();
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -449,21 +448,13 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack, isS
                     onClick={onBack}
                     className="px-8 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-semibold hover:bg-slate-50 transition-all"
                 >
-                    Back
+                    ← Back
                 </button>
                 <button
                     onClick={handleContinue}
-                    disabled={isSubmitting}
-                    className="px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all flex items-center gap-2"
                 >
-                    {isSubmitting ? (
-                        <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Submitting...
-                        </>
-                    ) : (
-                        "Submit Application"
-                    )}
+                    Continue →
                 </button>
             </div>
         </div>

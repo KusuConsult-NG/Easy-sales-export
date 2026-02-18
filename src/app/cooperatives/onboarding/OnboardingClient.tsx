@@ -177,10 +177,10 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             <div key={step.number} className="flex items-center flex-1">
                                 <div className="flex flex-col items-center flex-1">
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${currentStep > step.number
-                                            ? "bg-purple-600 text-white"
-                                            : currentStep === step.number
-                                                ? "bg-purple-600 text-white ring-4 ring-purple-200"
-                                                : "bg-slate-200 text-slate-600"
+                                        ? "bg-purple-600 text-white"
+                                        : currentStep === step.number
+                                            ? "bg-purple-600 text-white ring-4 ring-purple-200"
+                                            : "bg-slate-200 text-slate-600"
                                         }`}>
                                         {currentStep > step.number ? <CheckCircle className="w-5 h-5" /> : step.number}
                                     </div>
@@ -228,7 +228,6 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                         onChange={setDocuments}
                         onNext={() => setCurrentStep(4)}
                         onBack={() => setCurrentStep(2)}
-                        isSubmitting={false}
                     />
                 )}
 
