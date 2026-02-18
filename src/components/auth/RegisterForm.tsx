@@ -54,7 +54,8 @@ export default function RegisterForm() {
                     router.push("/auth/login?callbackUrl=" + encodeURIComponent(state.redirectUrl));
                 } else {
                     // Successful login, redirect to callback or dashboard
-                    router.push(state.redirectUrl);
+                    // CRITICAL: Use hard redirect to ensure cookies are seen by middleware
+                    window.location.href = state.redirectUrl;
                 }
             });
         }

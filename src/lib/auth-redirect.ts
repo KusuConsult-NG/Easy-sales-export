@@ -81,7 +81,10 @@ export function getLoginUrl(pathname: string, callbackUrl?: string): string {
 export function getRegisterUrl(pathname: string, returnUrl?: string): string {
     const registerPath = getModuleAuthUrl(pathname, 'register');
     if (returnUrl) {
-        return `${registerPath}?returnUrl=${encodeURIComponent(returnUrl)}`;
+        // Use URL API to properly append query params (handles existing params like ?module=...)
+        const url = new URL(registerPath, 'http://localhost');
+        url.searchParams.set('returnUrl', returnUrl);
+        return url.pathname + url.search;
     }
     return registerPath;
 }
