@@ -119,51 +119,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }),
     ],
     callbacks: {
-        async jwt({ token, user, trigger }) {
+        async jwt({ token, user }) {
             // On sign in, store user info in JWT
             if (user) {
                 token.id = user.id;
                 token.email = user.email;
                 token.name = user.name;
                 token.image = user.image;
-                token.roles = user.roles; // Multi-role support
-                token.verified = user.verified ?? true; // Email verification status
-
-                // CRITICAL: Generate Firebase Custom Token for client-side SDK authentication
-                try {
-                    const { getAdminAuth } = await import("@/lib/firebase-admin");
-                    const adminAuth = getAdminAuth();
-                    // Create custom token with claims matching the user's role
-                    const customToken = await adminAuth.createCustomToken(user.id, {
-                        roles: user.roles,
-                        verified: user.verified ?? true
-                    });
-                    token.firebaseToken = customToken;
-                } catch (error) {
-                    console.error("Failed to generate custom token:", error);
-                }
+                token.roles = user.roles;
+                token.verified = user.verified ?? true;
             }
-
-            // Ensure Firebase Custom Token exists (mint if missing or expired check could go here)
-            // We mint it if it's missing, which handles existing sessions and new logins
-            if (!token.firebaseToken && token.id) {
-                try {
-                    const { getAdminAuth } = await import("@/lib/firebase-admin");
-                    const adminAuth = getAdminAuth();
-                    const roles = (token.roles as any[]) || [];
-                    const verified = (token.verified as boolean) ?? true;
-
-                    // Create custom token
-                    const customToken = await adminAuth.createCustomToken(token.id as string, {
-                        roles,
-                        verified
-                    });
-                    token.firebaseToken = customToken;
-                } catch (error) {
-                    console.error("Failed to generate custom token in JWT callback:", error);
-                }
-            }
-
             return token;
         },
         async session({ session, token }) {
@@ -173,12 +138,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 session.user.email = token.email as string;
                 session.user.name = token.name as string;
                 session.user.image = token.image as string | null;
-                session.user.roles = (token.roles as UserRole[]) || []; // Multi-role support
+                session.user.roles = (token.roles as UserRole[]) || [];
                 session.user.verified = token.verified as boolean;
 
-                // Pass custom token to client
-                if (token.firebaseToken) {
-                    session.firebaseToken = token.firebaseToken as string;
+                // Mint a FRESH Firebase custom token on every session read.
+                // Firebase custom tokens expire after 1 hour; storing them in the
+                // 30-day JWT causes auth/invalid-custom-token errors after expiry.
+                if (token.id) {
+                    try {
+                        const { getAdminAuth } = await import("@/lib/firebase-admin");
+                        const adminAuth = getAdminAuth();
+                        const freshToken = await adminAuth.createCustomToken(token.id as string, {
+                            roles: (token.roles as any[]) || [],
+                            verified: (token.verified as boolean) ?? true,
+                        });
+                        session.firebaseToken = freshToken;
+                    } catch (error) {
+                        console.error("Failed to mint Firebase custom token:", error);
+                    }
                 }
             }
             return session;
