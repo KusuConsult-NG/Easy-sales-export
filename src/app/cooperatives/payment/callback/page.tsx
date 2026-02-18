@@ -23,16 +23,17 @@ function PaymentCallbackContent() {
 
             if (data.success) {
                 setStatus("success");
-                // Redirect to onboarding form so user can complete their membership application
+                setMessage(data.message || "Payment verified successfully!");
+                // Use window.location.href for reliable redirect inside Suspense
                 setTimeout(() => {
-                    router.push("/cooperatives/onboarding");
+                    window.location.href = "/cooperatives/onboarding";
                 }, 2000);
             } else {
-                setStatus("failed"); // Fixed type error (was "error")
-                setMessage(data.error || "Payment verification failed");
+                setStatus("failed");
+                setMessage(data.message || data.error || "Payment verification failed");
             }
         } catch (error) {
-            setStatus("failed"); // Fixed type error
+            setStatus("failed");
             setMessage("An error occurred while verifying payment");
         }
     };
@@ -41,7 +42,7 @@ function PaymentCallbackContent() {
         const reference = searchParams.get("reference");
 
         if (!reference) {
-            setStatus("failed"); // Fixed type error
+            setStatus("failed");
             setMessage("No payment reference found");
             return;
         }
@@ -73,12 +74,19 @@ function PaymentCallbackContent() {
                         <h1 className="text-2xl font-bold text-slate-900 mb-2">
                             Payment Successful!
                         </h1>
-                        <p className="text-slate-600 mb-6">
+                        <p className="text-slate-600 mb-4">
                             {message}
                         </p>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-slate-500 mb-6">
                             Redirecting you to your membership form...
                         </p>
+                        {/* Manual fallback button in case redirect is slow */}
+                        <button
+                            onClick={() => { window.location.href = "/cooperatives/onboarding"; }}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-bold transition"
+                        >
+                            Continue to Membership Form →
+                        </button>
                     </>
                 )}
 
