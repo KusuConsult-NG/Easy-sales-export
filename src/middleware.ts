@@ -196,11 +196,14 @@ export default auth(async (request: NextRequest & { auth: any }) => {
         // Check if user has permission to access this route
         if (!hasErrorParam && !canAccessRoute(userRoles, pathname)) {
             if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
-                // Allow dashboard access
+                // Allow dashboard access - it will redirect based on roles
             } else if (pathname.startsWith('/messages')) {
                 // Messages route - approval check in layout
             } else {
-                return NextResponse.redirect(new URL("/dashboard?error=unauthorized", request.url));
+                // CRITICAL FIX: Do NOT redirect to /dashboard?error=unauthorized
+                // Instead, redirect to module selection so users can apply for the module
+                logger.warn(`Access denied for user to ${pathname}, redirecting to module selection`);
+                return NextResponse.redirect(new URL("/auth/get-started", request.url));
             }
         }
     }
