@@ -242,6 +242,8 @@ export async function registerCooperativeMemberAction(
             bvn: bvn,
             // Keep status as pending (admin review needed)
             membershipStatus: "pending",
+            // Flag to distinguish "form submitted" from "payment initiated"
+            onboardingCompleted: true,
             updatedAt: FieldValue.serverTimestamp(),
         };
 

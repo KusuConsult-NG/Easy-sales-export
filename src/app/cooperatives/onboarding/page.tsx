@@ -26,8 +26,12 @@ export default async function CooperativeOnboardingPage() {
         redirect("/cooperatives/dashboard");
     }
 
-    // If already submitted and pending review, show pending page
-    if (status === "pending" || status === "under_review") {
+    // Only redirect to pending page if the form has actually been submitted.
+    // membershipStatus is set to "pending" as soon as payment is initiated,
+    // so we can't use it alone — we check for onboardingCompleted or firstName
+    // (set by registerCooperativeMemberAction when the form is submitted).
+    const formSubmitted = memberData?.onboardingCompleted === true || !!memberData?.firstName;
+    if (formSubmitted && (status === "pending" || status === "under_review")) {
         redirect("/cooperatives/onboarding/pending");
     }
 
