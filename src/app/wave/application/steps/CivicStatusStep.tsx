@@ -17,6 +17,7 @@ interface Props {
 }
 
 import { useToast } from "@/contexts/ToastContext";
+import { getWards, getPollingUnits } from "@/lib/locations";
 
 export default function CivicStatusStep({ data, updateData, onNext, onBack }: Props) {
     const { showToast } = useToast();
@@ -119,13 +120,17 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Polling Unit *
                         </label>
-                        <input
-                            type="text"
+                        <select
                             value={data.pollingUnit}
                             onChange={(e) => updateData({ pollingUnit: e.target.value })}
                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            placeholder="Your polling unit"
-                        />
+                            disabled={!data.ward}
+                        >
+                            <option value="">Select Polling Unit</option>
+                            {data.ward && getPollingUnits(data.ward).map((pu) => (
+                                <option key={pu} value={pu}>{pu}</option>
+                            )) || []}
+                        </select>
                         {errors.pollingUnit && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                                 <AlertCircle className="w-4 h-4" />
@@ -136,15 +141,19 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
-                            Ward *
+                            Ward (based on Residence) *
                         </label>
-                        <input
-                            type="text"
+                        <select
                             value={data.ward}
-                            onChange={(e) => updateData({ ward: e.target.value })}
+                            onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })} // Reset PU when ward changes
                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            placeholder="Your ward"
-                        />
+                            disabled={!data.lgaOfResidence}
+                        >
+                            <option value="">Select Ward</option>
+                            {data.lgaOfResidence && getWards(data.lgaOfResidence).map((ward) => (
+                                <option key={ward} value={ward}>{ward}</option>
+                            )) || []}
+                        </select>
                         {errors.ward && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                                 <AlertCircle className="w-4 h-4" />

@@ -243,3 +243,39 @@ export function isValidLGA(state: string, lga: string): boolean {
     const lgas = NIGERIAN_LOCATIONS[normalizedState];
     return lgas.some(l => normalizeLocation(l) === normalizedLGA);
 }
+
+// MOCK DATA FOR WARDS AND POLLING UNITS
+// In a real application, this would be fetched from an API or a large database
+const MOCK_WARDS: Record<string, string[]> = {
+    "default": ["Ward 1", "Ward 2", "Ward 3", "Ward 4", "Ward 5", "Ward 6", "Ward 7", "Ward 8", "Ward 9", "Ward 10"],
+    "Ikeja": ["Alausa", "Agidingbi", "Oregun", "Opebi", "GRA", "Wasimi", "Maryland", "Ojodu", "Oke-Ira", "Aguda"],
+    "Abuja Municipal": ["Garki", "Wuse", "Asokoro", "Maitama", "Gwarinpa", "Wuye", "Jabi", "Utako", "Mabushi", "Kado", "Garki II", "Wuse II", "Gwagwa", "Jiwa", "Gui", "Karshi", "Orozo", "Kar7", "Nyanya", "City Centre"]
+};
+
+const MOCK_PUs: Record<string, string[]> = {
+    "default": ["PU 001", "PU 002", "PU 003", "PU 004", "PU 005", "PU 006", "PU 007", "PU 008", "PU 009", "PU 010"],
+    "Alausa": ["Secretariat Gate 1", "Secretariat Gate 2", "Awolowo Way Junction", "Oregun Road/Alausa"],
+    "Garki": ["Garki Area 1 Primary School", "Garki Area 2 Shopping Complex", "Garki Village Square", "Area 10 UTC", "Area 7 UTC", "Area 8 UTC", "Area 3 Junction"]
+};
+
+/**
+ * Returns a list of Wards for a given LGA.
+ * Falls back to generic numbered wards if refined data isn't available.
+ */
+export function getWards(lga: string): string[] {
+    if (!lga) return [];
+    // Try to find specific wards for the LGA
+    // Check various normalizations or keys
+    const key = Object.keys(MOCK_WARDS).find(k => normalizeLocation(k) === normalizeLocation(lga));
+    return key ? MOCK_WARDS[key] : MOCK_WARDS["default"];
+}
+
+/**
+ * Returns a list of Polling Units for a given Ward.
+ * Falls back to generic numbered units if refined data isn't available.
+ */
+export function getPollingUnits(ward: string): string[] {
+    if (!ward) return [];
+    const key = Object.keys(MOCK_PUs).find(k => normalizeLocation(k) === normalizeLocation(ward));
+    return key ? MOCK_PUs[key] : MOCK_PUs["default"];
+}
