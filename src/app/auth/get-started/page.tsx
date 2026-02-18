@@ -2,6 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect } from "react";
 import {
     Waves,
@@ -9,7 +10,8 @@ import {
     ShoppingCart,
     Users,
     GraduationCap,
-    TrendingUp
+    TrendingUp,
+    Home
 } from "lucide-react";
 
 /**
@@ -96,8 +98,19 @@ export default function GetStartedPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-6xl mx-auto">
+        <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 relative">
+            {/* Back to Hub Navigation */}
+            <div className="absolute top-4 left-4 z-50 md:top-8 md:left-8">
+                <Link
+                    href="/"
+                    className="flex items-center gap-2 p-2 px-4 text-sm font-medium text-slate-600 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full hover:text-slate-900 hover:border-slate-300 transition-all shadow-sm group"
+                >
+                    <Home className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    <span>Back to Hub</span>
+                </Link>
+            </div>
+
+            <div className="max-w-6xl mx-auto pt-8">
                 {/* Header */}
                 <div className="text-center mb-12">
                     <h1 className="text-4xl font-bold text-slate-900 mb-4">
