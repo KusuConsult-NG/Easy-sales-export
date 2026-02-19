@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CheckCircle, XCircle, PartyPopper, ArrowRight } from "lucide-react";
 import { verifyAcademyPaymentAction } from "@/app/actions/academy";
@@ -9,26 +9,44 @@ import { Suspense } from "react";
 
 function PaymentCallbackContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const reference = searchParams.get("reference") || searchParams.get("trxref");
     const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
+    const [countdown, setCountdown] = useState(5);
+
+    const verify = useCallback(async () => {
+        if (!reference) {
+            setStatus("failed");
+            return;
+        }
+
+        try {
+            const result = await verifyAcademyPaymentAction(reference);
+            setStatus(result.success ? "success" : "failed");
+        } catch {
+            setStatus("failed");
+        }
+    }, [reference]);
 
     useEffect(() => {
-        const verify = async () => {
-            if (!reference) {
-                setStatus("failed");
-                return;
-            }
-
-            try {
-                const result = await verifyAcademyPaymentAction(reference);
-                setStatus(result.success ? "success" : "failed");
-            } catch {
-                setStatus("failed");
-            }
-        };
-
         verify();
-    }, [reference]);
+    }, [verify]);
+
+    // Auto-redirect after success
+    useEffect(() => {
+        if (status !== "success") return;
+        const timer = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    router.push("/academy/setup");
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [status, router]);
 
     if (status === "loading") {
         return (
@@ -53,7 +71,7 @@ function PaymentCallbackContent() {
                         We couldn&apos;t verify your payment. Please try again or contact support.
                     </p>
                     <Link
-                        href="/academy/application"
+                        href="/academy/setup"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"
                     >
                         Try Again
@@ -84,7 +102,7 @@ function PaymentCallbackContent() {
                     <ol className="space-y-3 mb-8">
                         <li className="flex items-start gap-3">
                             <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</span>
-                            <p className="text-sm text-slate-600">Complete the membership application form</p>
+                            <p className="text-sm text-slate-600">Complete the application form</p>
                         </li>
                         <li className="flex items-start gap-3">
                             <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</span>
@@ -97,12 +115,15 @@ function PaymentCallbackContent() {
                     </ol>
 
                     <Link
-                        href="/academy/application"
+                        href="/academy/setup"
                         className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold text-base transition-all shadow-lg shadow-blue-200"
                     >
                         Continue to Application Form
                         <ArrowRight className="w-5 h-5" />
                     </Link>
+                    <p className="text-center text-sm text-slate-500 mt-3">
+                        Redirecting automatically in {countdown} second{countdown !== 1 ? "s" : ""}...
+                    </p>
                 </div>
             </div>
         </div>

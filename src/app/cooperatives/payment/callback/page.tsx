@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState, Suspense, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle, XCircle, Loader2, PartyPopper, FileText, Clock, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 function PaymentCallbackContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
     const [message, setMessage] = useState("");
+    const [countdown, setCountdown] = useState(5);
 
-    const verifyPayment = async (reference: string) => {
+    const verifyPayment = useCallback(async (reference: string) => {
         try {
             const response = await fetch("/api/cooperative/verify-payment", {
                 method: "POST",
@@ -29,7 +31,7 @@ function PaymentCallbackContent() {
             setStatus("failed");
             setMessage("An error occurred while verifying payment");
         }
-    };
+    }, []);
 
     useEffect(() => {
         const reference = searchParams.get("reference");
@@ -39,7 +41,23 @@ function PaymentCallbackContent() {
             return;
         }
         verifyPayment(reference);
-    }, [searchParams]);
+    }, [searchParams, verifyPayment]);
+
+    // Auto-redirect after success
+    useEffect(() => {
+        if (status !== "success") return;
+        const timer = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    router.push("/cooperatives/onboarding");
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [status, router]);
 
     return (
         <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #ddd6fe 100%)" }}>
@@ -113,6 +131,9 @@ function PaymentCallbackContent() {
                                 Continue to Membership Form
                                 <ArrowRight className="w-5 h-5" />
                             </Link>
+                            <p className="text-center text-sm text-slate-500 mt-3">
+                                Redirecting automatically in {countdown} second{countdown !== 1 ? "s" : ""}...
+                            </p>
                         </div>
                     </div>
                 )}

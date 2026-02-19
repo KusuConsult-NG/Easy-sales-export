@@ -1,20 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { initiateCooperativePaymentAction } from "@/app/actions/cooperative";
-import { Loader2, CreditCard, CheckCircle, ShieldCheck } from "lucide-react";
+import { Loader2, CreditCard, CheckCircle, ShieldCheck, AlertCircle } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 
 export default function CooperativePaymentPage() {
-    const { data: session } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
     const { showToast } = useToast();
+    const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [checking, setChecking] = useState(true);
+
+    // Check if user already paid or has membership
+    useEffect(() => {
+        if (sessionStatus === "loading") return;
+        if (sessionStatus === "unauthenticated") {
+            router.replace("/auth/login?callbackUrl=/cooperatives/payment");
+            return;
+        }
+
+        const checkExisting = async () => {
+            try {
+                const { checkCooperativeStatusAction } = await import("@/app/actions/cooperative");
+                const status = await checkCooperativeStatusAction();
+                if (status === "approved" || status === "active") {
+                    showToast("You are already a cooperative member!", "info");
+                    router.replace("/cooperatives/dashboard");
+                    return;
+                }
+                if (status === "pending" || status === "under_review") {
+                    showToast("Your application is being reviewed.", "info");
+                    router.replace("/cooperatives/onboarding/pending");
+                    return;
+                }
+            } catch {
+                // No existing membership, allow payment
+            }
+            setChecking(false);
+        };
+        checkExisting();
+    }, [sessionStatus, router, showToast]);
 
     const handlePayment = async () => {
         setIsSubmitting(true);
         try {
-            // Single flat fee — always "basic" tier
             const result = await initiateCooperativePaymentAction("basic");
 
             if (result.success && result.paymentUrl) {
@@ -23,11 +55,19 @@ export default function CooperativePaymentPage() {
                 showToast(result.error || "Failed to initiate payment", "error");
                 setIsSubmitting(false);
             }
-        } catch (error) {
+        } catch {
             showToast("An unexpected error occurred", "error");
             setIsSubmitting(false);
         }
     };
+
+    if (checking || sessionStatus === "loading") {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
