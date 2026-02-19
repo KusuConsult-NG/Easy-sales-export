@@ -253,7 +253,8 @@ export async function sendWithdrawalRejectedEmail(
     });
 }
 /**
- * Send Briefing Confirmation Email
+ * Send Briefing Confirmation Email — "You Are Now Officially Positioned"
+ * Sent immediately after successful registration.
  */
 export async function sendBriefingConfirmationEmail(
     userEmail: string,
@@ -261,30 +262,98 @@ export async function sendBriefingConfirmationEmail(
 ) {
     return sendEmailNotification({
         to: userEmail,
-        subject: 'Registration Confirmed - WAVE National Awareness Briefing',
+        subject: '⚠ You Are Now Officially Positioned',
         message: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #14532d;">Registration Confirmed ✅</h2>
-                <p>Hello ${userName},</p>
-                <p>Your seat for the <strong>WAVE National Awareness & Opportunity Briefing</strong> has been successfully reserved.</p>
-                
-                <div style="background-color: #f0fdf4; border: 1px solid #dcfce7; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <h3 style="color: #166534; margin-top: 0;">What Happens Next?</h3>
-                    <ul style="color: #15803d; padding-left: 20px;">
-                        <li>You have been added to the priority guest list.</li>
-                        <li>Venue details and time verification will be sent to this email.</li>
-                        <li>Prepare to learn about the government-backed agricultural structure.</li>
-                    </ul>
+            <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; color: #1a1a1a; line-height: 1.8;">
+                <p style="font-size: 16px;">Dear ${userName},</p>
+
+                <p style="font-size: 16px;">You have just done something most Nigerians will ignore.</p>
+
+                <p style="font-size: 16px;"><strong>You positioned yourself early.</strong></p>
+
+                <p style="font-size: 16px;">This briefing is not motivational talk.</p>
+
+                <p style="font-size: 16px;">It is structural insight into:</p>
+
+                <ul style="font-size: 16px; padding-left: 24px; line-height: 2.2;">
+                    <li>How WAVE capital works</li>
+                    <li>How ₦1M multiplies</li>
+                    <li>How national food security is creating new wealth pipelines</li>
+                    <li>How cooperative positioning gives advantage</li>
+                </ul>
+
+                <div style="background-color: #f0fdf4; border-left: 4px solid #15803d; padding: 20px 24px; margin: 28px 0; border-radius: 4px;">
+                    <p style="font-size: 16px; font-weight: bold; margin: 0 0 12px 0;">Important:</p>
+                    <p style="font-size: 16px; margin: 4px 0;">Arrive prepared.</p>
+                    <p style="font-size: 16px; margin: 4px 0;">Arrive attentive.</p>
+                    <p style="font-size: 16px; margin: 4px 0;">Arrive ready to act.</p>
                 </div>
 
-                <p>This is a strategic session. Please prioritize your attendance.</p>
-                
-                <p style="margin-top: 30px;">
-                    <strong>Women Agro-Value Expansion (WAVE)</strong><br />
-                    <em>Powered by Easy Sales Export</em>
+                <p style="font-size: 16px;">The link / venue details will be sent 24 hours before the event.</p>
+
+                <p style="font-size: 16px;"><strong>Watch your inbox carefully.</strong></p>
+
+                <br />
+                <p style="font-size: 16px;">— <strong>Sir Abdallah</strong></p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
+                <p style="font-size: 12px; color: #9ca3af;">
+                    Women Agro-Value Expansion (WAVE) &nbsp;|&nbsp; Powered by Easy Sales Export
                 </p>
             </div>
         `,
         metadata: { type: 'briefing_confirmation' },
+    });
+}
+
+/**
+ * Send 24-Hour Briefing Reminder — "Tomorrow Changes Your Financial Direction"
+ * Send to ALL registrants 24 hours before the briefing event.
+ * Trigger from a scheduled cron job or admin action iterating over
+ * all docs in `wave_briefing_registrations` where status === "registered".
+ */
+export async function sendBriefing24HourReminderEmail(
+    userEmail: string,
+    userName: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: 'Tomorrow Changes Your Financial Direction',
+        message: `
+            <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; color: #1a1a1a; line-height: 1.8;">
+                <p style="font-size: 16px;">Dear ${userName},</p>
+
+                <p style="font-size: 16px;">Tomorrow, you will see:</p>
+
+                <p style="font-size: 16px;">
+                    Why agriculture is no longer for survival…<br />
+                    But for <strong>structured wealth.</strong>
+                </p>
+
+                <p style="font-size: 16px;">Come with:</p>
+
+                <ul style="font-size: 16px; padding-left: 24px; line-height: 2.2;">
+                    <li>Notebook</li>
+                    <li>Questions</li>
+                    <li>Serious mindset</li>
+                </ul>
+
+                <div style="background-color: #fefce8; border-left: 4px solid #ca8a04; padding: 20px 24px; margin: 28px 0; border-radius: 4px;">
+                    <p style="font-size: 16px; margin: 4px 0;">Those who come casually will leave confused.</p>
+                    <p style="font-size: 16px; margin: 4px 0;"><strong>Those who come serious will leave positioned.</strong></p>
+                </div>
+
+                <p style="font-size: 16px;">See you inside.</p>
+
+                <br />
+                <p style="font-size: 16px;">— <strong>Sir Abdallah</strong></p>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
+                <p style="font-size: 12px; color: #9ca3af;">
+                    Women Agro-Value Expansion (WAVE) &nbsp;|&nbsp; Powered by Easy Sales Export
+                </p>
+            </div>
+        `,
+        metadata: { type: 'briefing_24hr_reminder' },
     });
 }

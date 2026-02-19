@@ -83,7 +83,7 @@ export default function WaveLandingPage() {
                     <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
                         RH-WAVE 774
                     </h1>
-                    <h2 className="text-3xl md:text-5xl font-bold bg-linear-to-r from-green-700 via-green-600 to-green-500 bg-clip-text text-transparent mb-6">
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-linear-to-r from-green-700 via-green-600 to-green-500 bg-clip-text text-transparent mb-6 whitespace-nowrap">
                         Women Agro-Value Expansion Program
                     </h2>
 
