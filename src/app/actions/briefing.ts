@@ -71,6 +71,7 @@ export async function registerForBriefingAction(
         return { success: true };
     } catch (error) {
         logger.error("[WAVE Briefing] Registration error:", error);
-        return { success: false, error: "Registration failed. Please try again." };
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        return { success: false, error: `Registration failed: ${errorMessage}` };
     }
 }
