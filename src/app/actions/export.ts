@@ -492,16 +492,12 @@ export async function submitExportOnboardingAction(
         const onboardingRef = db.collection("export_onboarding").doc();
         await onboardingRef.set(fullApplication);
 
-        // Update user document to mark export service registration
+        // Update user document to mark export service registration with safe dot notation
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         await userRef.update({
-            serviceRegistrations: {
-                export: {
-                    status: "pending_approval",
-                    applicationId,
-                    appliedAt: FieldValue.serverTimestamp(),
-                },
-            },
+            "serviceRegistrations.export.status": "pending_approval",
+            "serviceRegistrations.export.applicationId": applicationId,
+            "serviceRegistrations.export.appliedAt": FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 

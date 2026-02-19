@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, query, getDocs, orderBy, doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get All Land Verifications (Admin)
@@ -17,21 +16,19 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Check admin role
-        const userRef = doc(db, "users", session.user.id);
-        const userDoc = await getDoc(userRef);
-
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        // Check admin role from session
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
             );
         }
 
-        // Get all land listings
-        const listingsRef = collection(db, "land_listings");
-        const q = query(listingsRef, orderBy("createdAt", "desc"));
-        const snapshot = await getDocs(q);
+        // Get all land listings (Admin SDK)
+        const snapshot = await db.collection("land_listings")
+            .orderBy("createdAt", "desc")
+            .get();
 
         const verifications = snapshot.docs.map(doc => ({
             id: doc.id,

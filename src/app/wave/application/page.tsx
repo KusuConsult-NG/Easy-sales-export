@@ -180,24 +180,13 @@ export default function WaveApplicationPage() {
     const { data: session, status } = useSession();
 
     useEffect(() => {
-        if (status === "unauthenticated") {
-            showToast("You must be logged in to apply for WAVE", "error");
-            router.push("/auth/login?callbackUrl=/wave/application");
-            return;
-        }
-
-        // CHECK: If user already has a pending application, redirect to review-pending
+        // Auth is now enforced server-side in middleware.
+        // By the time this component renders, the user is guaranteed to be authenticated.
+        // We only need to check if they already have a pending/approved application.
         if (session?.user?.id) {
-            // We can check the service registrations from the session if available, 
-            // or we might need to fetch it.
-            // For now, let's assuming session updates on login. 
-            // If the user just applied, they might need to refresh session.
-
-            // However, a more robust check involves calling a server action to check status
-            // to avoid relying on stale session data.
             checkApplicationStatus();
         }
-    }, [status, router, showToast, session]);
+    }, [session, router, showToast]);
 
     const checkApplicationStatus = async () => {
         try {

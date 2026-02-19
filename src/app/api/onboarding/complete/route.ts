@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -19,23 +19,23 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const userDocRef = doc(db, COLLECTIONS.USERS, session.user.id);
-        const userDoc = await getDoc(userDocRef);
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
+        const userDoc = await userDocRef.get();
 
-        // If user document doesn't exist, create it with onboarding completed
-        if (!userDoc.exists()) {
-            await setDoc(userDocRef, {
+        if (!userDoc.exists) {
+            // Create user document with onboarding completed
+            await userDocRef.set({
                 id: session.user.id,
                 email: session.user.email,
                 onboardingCompleted: true,
-                createdAt: new Date(),
-                updatedAt: new Date(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             }, { merge: true });
         } else {
             // Update existing document
-            await updateDoc(userDocRef, {
+            await userDocRef.update({
                 onboardingCompleted: true,
-                updatedAt: new Date(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
         }
 
@@ -45,18 +45,8 @@ export async function POST(request: NextRequest) {
         });
     } catch (error: any) {
         logger.error("Onboarding completion error:", error);
-        logger.error("Error details:", {
-            code: error.code,
-            message: error.message,
-            stack: error.stack,
-        });
-
         return NextResponse.json(
-            {
-                success: false,
-                error: "Failed to mark complete",
-                details: error.message // Include error message for debugging
-            },
+            { success: false, error: "Failed to mark complete", details: error.message },
             { status: 500 }
         );
     }

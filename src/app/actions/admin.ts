@@ -1421,11 +1421,11 @@ export async function getAcademyApplicationsAction(
             }
         }
 
-        let query = db.collection("ACADEMY_APPLICATIONS")
+        let query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .orderBy("submittedAt", "desc");
 
         if (statusFilter) {
-            query = db.collection("ACADEMY_APPLICATIONS")
+            query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", statusFilter)
                 .orderBy("submittedAt", "desc");
         }
@@ -1459,7 +1459,7 @@ export async function approveAcademyApplicationAction(
         }
 
         // Get application first
-        const appRef = db.collection("ACADEMY_APPLICATIONS").doc(applicationId);
+        const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
@@ -1531,7 +1531,7 @@ export async function rejectAcademyApplicationAction(
             return { error: "Unauthorized", success: false };
         }
 
-        await db.collection("ACADEMY_APPLICATIONS").doc(applicationId).update({
+        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).update({
             status: "rejected",
             rejectionReason: reason,
             reviewedBy: session.user.id,
@@ -1539,7 +1539,7 @@ export async function rejectAcademyApplicationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        const appDoc = await db.collection("ACADEMY_APPLICATIONS").doc(applicationId).get();
+        const appDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).get();
         if (appDoc.exists) {
             const userId = appDoc.data()?.userId;
             if (userId) {

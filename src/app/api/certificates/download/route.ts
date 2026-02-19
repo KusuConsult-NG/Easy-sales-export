@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * GET - Download certificate
@@ -28,18 +27,19 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const certDoc = await getDoc(doc(db, "user_certificates", id));
+        // Get certificate (Admin SDK)
+        const certDoc = await db.collection("user_certificates").doc(id).get();
 
-        if (!certDoc.exists()) {
+        if (!certDoc.exists) {
             return NextResponse.json(
                 { success: false, error: "Certificate not found" },
                 { status: 404 }
             );
         }
 
-        const certData = certDoc.data();
+        const certData = certDoc.data()!;
 
-        // Access control: user can only download own certificates
+        // Access control
         if (certData.userId !== session.user.id &&
             !session.user.roles?.includes("admin") &&
             !session.user.roles?.includes("super_admin")) {

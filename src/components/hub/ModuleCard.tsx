@@ -9,6 +9,7 @@ interface ModuleCardProps {
     description: string;
     icon?: LucideIcon;
     iconImage?: string;
+    iconSize?: "md" | "lg";
     href: string;
     gradient: string;
     stats?: string;
@@ -20,38 +21,35 @@ export default function ModuleCard({
     description,
     icon: Icon,
     iconImage,
+    iconSize = "md",
     href,
     gradient,
     stats,
     isNew = false,
 }: ModuleCardProps) {
+    const sizeClasses = iconSize === "lg" ? "w-24 h-24" : "w-20 h-20";
+    const imgDim = iconSize === "lg" ? 96 : 80;
     return (
         <Link href={href}>
             <div className="group relative bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-slate-200 overflow-hidden">
-                {/* Gradient overlay on hover */}
-                <div className={`absolute inset-0 bg-linear-to-br ${gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`} />
 
-                {/* New Badge */}
-                {isNew && (
-                    <div className="absolute top-4 right-4 px-3 py-1 bg-primary rounded-full text-xs font-bold text-white">
-                        NEW
-                    </div>
-                )}
 
                 {/* Icon */}
-                <div className={`w-14 h-14 rounded-xl bg-linear-to-br ${gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 overflow-hidden`}>
-                    {iconImage ? (
+                {iconImage ? (
+                    <div className={`${sizeClasses} mb-4 group-hover:scale-110 transition-transform duration-300`}>
                         <Image
                             src={iconImage}
                             alt={title}
-                            width={56}
-                            height={56}
-                            className="w-full h-full object-contain"
+                            width={imgDim}
+                            height={imgDim}
+                            className="w-full h-full object-cover"
                         />
-                    ) : Icon ? (
+                    </div>
+                ) : Icon ? (
+                    <div className={`w-14 h-14 rounded-xl bg-linear-to-br ${gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
                         <Icon className="w-7 h-7 text-white" />
-                    ) : null}
-                </div>
+                    </div>
+                ) : null}
 
                 {/* Content */}
                 <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-primary transition-colors">

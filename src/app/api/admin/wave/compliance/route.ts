@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get WAVE Compliance Data (Admin)
@@ -17,11 +16,9 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Check admin role
-        const userRef = doc(db, "users", session.user.id);
-        const userDoc = await getDoc(userRef);
-
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        // Check admin role from session (not from DB query)
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -48,18 +45,14 @@ export async function GET(request: NextRequest) {
                 break;
         }
 
-        // Fetch WAVE applications
-        const applicationsRef = collection(db, "wave_applications");
-        let applicationsQuery = query(applicationsRef);
+        // Fetch WAVE applications (Admin SDK)
+        let query: FirebaseFirestore.Query = db.collection("wave_applications");
 
         if (dateFilter) {
-            applicationsQuery = query(
-                applicationsRef,
-                where("createdAt", ">=", dateFilter)
-            );
+            query = query.where("createdAt", ">=", dateFilter);
         }
 
-        const applicationsSnapshot = await getDocs(applicationsQuery);
+        const applicationsSnapshot = await query.get();
         const applications = applicationsSnapshot.docs.map(doc => {
             const data = doc.data();
             return {
@@ -80,16 +73,14 @@ export async function GET(request: NextRequest) {
         const rejected = applications.filter(app => app.status === "rejected").length;
         const pending = applications.filter(app => app.status === "pending").length;
 
-        // Calculate financial metrics (sample data - replace with real data)
         const totalDisbursed = applications
             .filter(app => app.status === "approved" && app.amountDisbursed)
             .reduce((sum, app) => sum + (app.amountDisbursed || 0), 0);
 
         const averageLoanSize = approved > 0 ? totalDisbursed / approved : 0;
-        
-        // Calculate repayment rate from actual loan data
-        const loansRef = collection(db, "loans");
-        const loansSnapshot = await getDocs(loansRef);
+
+        // Calculate repayment rate from actual loan data (Admin SDK)
+        const loansSnapshot = await db.collection("loans").get();
         const totalLoans = loansSnapshot.size;
         const repaidLoans = loansSnapshot.docs.filter(
             doc => doc.data().status === "repaid" || doc.data().status === "completed"
@@ -109,7 +100,6 @@ export async function GET(request: NextRequest) {
         const businessTypes: Record<string, number> = {};
 
         applications.forEach(app => {
-            // Age groups
             const age = app.age || 0;
             if (age >= 18 && age <= 25) ageGroups["18-25"]++;
             else if (age >= 26 && age <= 35) ageGroups["26-35"]++;
@@ -117,11 +107,9 @@ export async function GET(request: NextRequest) {
             else if (age >= 46 && age <= 55) ageGroups["46-55"]++;
             else if (age >= 56) ageGroups["56+"]++;
 
-            // States
             const state = app.state || "Unknown";
             states[state] = (states[state] || 0) + 1;
 
-            // Business Types
             const businessType = app.businessType || "Other";
             businessTypes[businessType] = (businessTypes[businessType] || 0) + 1;
         });
@@ -134,7 +122,7 @@ export async function GET(request: NextRequest) {
             totalDisbursed,
             averageLoanSize,
             repaymentRate,
-            activeMembers: approved, // Simplified
+            activeMembers: approved,
         };
 
         const demographics = {

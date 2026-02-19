@@ -73,19 +73,14 @@ export default function MarketplaceOnboarding() {
     const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState<Partial<OnboardingData>>({});
 
-    // AUTH GATE: Redirect unauthenticated users to marketplace registration
+    // AUTH GATE: Auth is now enforced server-side in layout.tsx.
+    // By the time this component renders, the user is guaranteed to be authenticated.
+    // We only need to check if they already have a pending/approved onboarding.
     useEffect(() => {
-        if (status === "loading") return; // Wait for session check
-
-        if (status === "unauthenticated" || !session) {
-            // Redirect to global registration
-            router.replace("/auth/register?callbackUrl=/marketplace/onboarding");
-            return;
-        }
+        if (status === "loading") return;
 
         const checkStatus = async () => {
             try {
-                // Dynamically import to avoid server-client boundary issues if needed, or import at top
                 const { checkMarketplaceStatusAction } = await import("@/app/actions/marketplace");
                 const result = await checkMarketplaceStatusAction();
 
@@ -102,7 +97,9 @@ export default function MarketplaceOnboarding() {
                 logger.error("Failed to check Marketplace status:", error);
             }
         };
-        checkStatus();
+        if (session?.user) {
+            checkStatus();
+        }
 
     }, [session, status, router]);
 

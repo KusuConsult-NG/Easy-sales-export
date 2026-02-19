@@ -52,8 +52,12 @@ export async function POST(req: NextRequest) {
             } else if (type === "export_investment") {
                 const exportId = metadata.exportId;
                 processExportInvestment(reference, amountPaidv, userId, exportId);
-            } else if (type === "cooperative_contribution") {
-                // Placeholder for cooperative logic
+            } else if (type === "cooperative_membership_registration") {
+                const tier = metadata.membershipTier;
+                processCooperativeRegistration(reference, amountPaidv, userId, tier);
+            } else if (type === "academy_registration") {
+                const plan = metadata.plan;
+                processAcademyRegistration(reference, amountPaidv, userId, plan);
             }
 
             return NextResponse.json({ message: "Event processed" }, { status: 200 });
@@ -202,4 +206,103 @@ async function processExportInvestment(reference: string, amount: number, userId
     });
 
     logger.info(`[Paystack Webhook] Successfully processed Export Investment for ${exportId} by ${userId}`);
+}
+
+/**
+ * Handle Cooperative Membership Registration Fulfillment
+ */
+async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string) {
+    // Validate Amount based on Tier
+    let expectedAmount = 10000; // Basic
+    if (tier === "premium") expectedAmount = 20000;
+
+    // Strict check (allow 1 naira variance)
+    if (amount < expectedAmount - 1) {
+        logger.error(`[Paystack Webhook] Cooperative Payment Underpaid. Expected ${expectedAmount}, Paid ${amount}`);
+        // Log it but maybe don't fulfill? 
+        // For safety, we THROW to bubble up error and NOT return 200 OK so Paystack retries?
+        // No, Paystack will retry forever if we fail. 
+        // Better to record it as "failed_verification" in processedPayments?
+        // For now, let's THROW to fail the webhook.
+        throw new Error("Insufficient payment amount");
+    }
+
+    await db.runTransaction(async (t) => {
+        const memberRef = db.collection("cooperative_members").doc(userId);
+        const processedRef = db.collection("processedPayments").doc(reference);
+
+        // 1. Update Member Record
+        // We use set with merge to ensure we don't overwrite if existing data
+        t.set(memberRef, {
+            paymentStatus: "completed",
+            paymentReference: reference,
+            membershipTier: tier,
+            paymentVerifiedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            // Initialize balances if they don't exist (using merge will keep existing if present? No, merge doesn't default.)
+            // We can't easily "default if missing" in a set merge without reading first.
+            // But this is a blind write for speed? 
+            // Actually, let's just set the status. The application form will handle the rest or the user is already partially created.
+        }, { merge: true });
+
+        // 2. Mark Processed
+        t.set(processedRef, {
+            reference,
+            type: "cooperative_membership_registration",
+            userId,
+            amount,
+            tier,
+            processedAt: FieldValue.serverTimestamp(),
+            source: "webhook"
+        });
+    });
+
+    logger.info(`[Paystack Webhook] Processed Cooperative Registration for ${userId}`);
+}
+
+/**
+ * Handle Academy Registration Fulfillment
+ */
+async function processAcademyRegistration(reference: string, amount: number, userId: string, plan: string) {
+    // Validate Amount
+    let expectedAmount = 25000; // Foundation
+    if (plan === "advanced") expectedAmount = 50000;
+    if (plan === "elite") expectedAmount = 100000;
+
+    if (amount < expectedAmount - 1) {
+        logger.error(`[Paystack Webhook] Academy Payment Underpaid. Expected ${expectedAmount}, Paid ${amount}`);
+        throw new Error("Insufficient payment amount");
+    }
+
+    await db.runTransaction(async (t) => {
+        const userRef = db.collection("users").doc(userId);
+        const processedRef = db.collection("processedPayments").doc(reference);
+
+        // 1. Update User Service Registration
+        t.set(userRef, {
+            serviceRegistrations: {
+                academy: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    paymentAmount: amount,
+                    plan: plan || "foundation",
+                    paidAt: FieldValue.serverTimestamp(),
+                }
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // 2. Mark Processed
+        t.set(processedRef, {
+            reference,
+            type: "academy_registration",
+            userId,
+            amount,
+            plan,
+            processedAt: FieldValue.serverTimestamp(),
+            source: "webhook"
+        });
+    });
+
+    logger.info(`[Paystack Webhook] Processed Academy Registration for ${userId}`);
 }

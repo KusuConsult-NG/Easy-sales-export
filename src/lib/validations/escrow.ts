@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EscrowStatus } from '@/types/strict';
+import { EscrowStatus } from '@/types/escrow';
 
 // Escrow Transaction Creation Schema
 export const escrowTransactionSchema = z.object({

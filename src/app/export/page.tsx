@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Package, Shield, TrendingUp, Clock, Globe, CheckCircle, DollarSign, Home } from "lucide-react";
+import { ArrowRight, Package, Shield, TrendingUp, Clock, Globe, CheckCircle, DollarSign, Home, ShoppingBag, Truck, FileCheck, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import BackToHub from "@/components/common/BackToHub";
 
@@ -55,18 +55,25 @@ export default function ExportWindowsLandingPage() {
                             Export Windows
                         </h1>
                         <p className="text-lg md:text-xl lg:text-2xl mb-3 md:mb-4 text-orange-50">
-                            Invest in Global Trade Opportunities
+                            Invest in Global Trade & Source Quality Products
                         </p>
                         <p className="text-base md:text-lg mb-6 md:mb-8 text-orange-100 max-w-2xl">
-                            Fund verified agricultural export contracts and earn attractive returns. Secure escrow protection, transparent tracking, and professional management.
+                            Fund verified agricultural export contracts and earn attractive returns — or source premium Nigerian agricultural products directly from verified suppliers.
                         </p>
                         <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4">
                             <Link
-                                href="/auth/register?callbackUrl=/export/application"
-                                className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition shadow-lg hover:shadow-slate-900/20"
+                                href="/export/onboarding"
+                                className="group inline-flex items-center justify-center w-full sm:w-auto gap-2 md:gap-3 bg-white text-orange-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-orange-500/50 transition-all hover:scale-105"
                             >
-                                Get Started
-                                <ArrowRight className="ml-2 w-5 h-5" />
+                                Start Investing
+                                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                            <Link
+                                href="/export/buyer"
+                                className="group inline-flex items-center justify-center w-full sm:w-auto gap-2 md:gap-3 bg-white/10 backdrop-blur-sm border-2 border-white text-white px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg hover:bg-white/20 transition-all"
+                            >
+                                <ShoppingBag className="w-4 h-4 md:w-5 md:h-5" />
+                                Buy Nigerian Products
                             </Link>
                         </div>
                     </div>
@@ -188,8 +195,14 @@ export default function ExportWindowsLandingPage() {
                 </div>
             </div>
 
-            {/* Benefits Section */}
+            {/* For Investors - Benefits */}
             <div className="max-w-7xl mx-auto px-8 py-16">
+                <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-4">
+                    For Investors
+                </h2>
+                <p className="text-center text-slate-600 mb-12 max-w-2xl mx-auto">
+                    Fund verified export contracts and earn attractive returns with full escrow protection
+                </p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="bg-white rounded-2xl p-8 elevation-2">
                         <div className="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center mb-6">
@@ -226,6 +239,116 @@ export default function ExportWindowsLandingPage() {
                             Earn 18-22% ROI on verified agricultural export contracts within 4-6 months.
                         </p>
                     </div>
+                </div>
+            </div>
+
+            {/* For International Buyers */}
+            <div className="max-w-7xl mx-auto px-8 py-16 border-t border-slate-200">
+                <div className="text-center mb-12">
+                    <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-semibold mb-4">
+                        <Globe className="w-4 h-4" />
+                        International Buyers
+                    </div>
+                    <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+                        Source Quality Nigerian Agricultural Products
+                    </h2>
+                    <p className="text-lg text-slate-600 max-w-3xl mx-auto">
+                        Connect directly with verified Nigerian exporters. Access premium agricultural commodities with quality certifications, competitive pricing, and reliable logistics.
+                    </p>
+                </div>
+
+                {/* Product Categories */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-16">
+                    {[
+                        { name: "Cashew Nuts", icon: "🥜", grade: "W320, W240" },
+                        { name: "Sesame Seeds", icon: "🌰", grade: "99% Purity" },
+                        { name: "Hibiscus", icon: "🌺", grade: "Sun-Dried" },
+                        { name: "Cocoa Beans", icon: "🫘", grade: "Grade A" },
+                        { name: "Shea Butter", icon: "🧴", grade: "Unrefined" },
+                        { name: "Yam Tubers", icon: "🌾", grade: "Export Grade" },
+                    ].map((product, index) => (
+                        <div key={index} className="bg-white rounded-xl p-5 elevation-2 hover-lift text-center">
+                            <div className="text-4xl mb-3">{product.icon}</div>
+                            <h4 className="font-bold text-slate-900 text-sm mb-1">{product.name}</h4>
+                            <p className="text-xs text-blue-600 font-semibold">{product.grade}</p>
+                        </div>
+                    ))}
+                </div>
+
+                {/* How it works for buyers */}
+                <h3 className="text-2xl font-bold text-center text-slate-900 mb-8">How Buying Works</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <FileCheck className="w-7 h-7 text-blue-600" />
+                        </div>
+                        <h4 className="font-bold text-slate-900 mb-2">Request a Quote</h4>
+                        <p className="text-sm text-slate-600">Submit your product requirements, quantities, and delivery specifications</p>
+                    </div>
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <CheckCircle className="w-7 h-7 text-blue-600" />
+                        </div>
+                        <h4 className="font-bold text-slate-900 mb-2">Quality Verification</h4>
+                        <p className="text-sm text-slate-600">Products are inspected and certified to meet international export standards</p>
+                    </div>
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Shield className="w-7 h-7 text-blue-600" />
+                        </div>
+                        <h4 className="font-bold text-slate-900 mb-2">Secure Payment</h4>
+                        <p className="text-sm text-slate-600">Pay securely through escrow — funds released only after quality confirmation</p>
+                    </div>
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Truck className="w-7 h-7 text-blue-600" />
+                        </div>
+                        <h4 className="font-bold text-slate-900 mb-2">Shipping & Delivery</h4>
+                        <p className="text-sm text-slate-600">Full logistics support with real-time tracking to your destination</p>
+                    </div>
+                </div>
+
+                {/* Buyer benefits */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                    <div className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-slate-900 text-sm mb-1">Direct Sourcing</h4>
+                            <p className="text-xs text-slate-600">Buy directly from verified Nigerian producers</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-slate-900 text-sm mb-1">Quality Certificates</h4>
+                            <p className="text-xs text-slate-600">NAFDAC, SON, phytosanitary certificates included</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-slate-900 text-sm mb-1">Competitive Pricing</h4>
+                            <p className="text-xs text-slate-600">Factory-gate prices with volume discounts</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <CheckCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-bold text-slate-900 text-sm mb-1">Logistics Support</h4>
+                            <p className="text-xs text-slate-600">FOB, CIF, and door-to-door delivery options</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="text-center">
+                    <Link
+                        href="/export/buyer"
+                        className="group inline-flex items-center gap-3 bg-blue-600 text-white px-10 py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700 transition-all hover:scale-105"
+                    >
+                        <ShoppingBag className="w-5 h-5" />
+                        Start Buying Nigerian Products
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </Link>
                 </div>
             </div>
 

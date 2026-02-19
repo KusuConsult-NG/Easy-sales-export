@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, deleteDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Delete Product
@@ -27,27 +26,24 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get product
-        const productRef = doc(db, "products", productId);
-        const productDoc = await getDoc(productRef);
+        const productRef = db.collection("products").doc(productId);
+        const productDoc = await productRef.get();
 
-        if (!productDoc.exists()) {
+        if (!productDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Product not found" },
                 { status: 404 }
             );
         }
 
-        // Check ownership
-        if (productDoc.data().sellerId !== userId) {
+        if (productDoc.data()!.sellerId !== userId) {
             return NextResponse.json(
                 { success: false, message: "You can only delete your own products" },
                 { status: 403 }
             );
         }
 
-        // Delete product
-        await deleteDoc(productRef);
+        await productRef.delete();
 
         return NextResponse.json({
             success: true,

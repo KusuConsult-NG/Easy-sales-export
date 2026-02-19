@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get Seller's Products
@@ -19,14 +18,11 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Get seller's products
-        const productsRef = collection(db, "products");
-        const q = query(
-            productsRef,
-            where("sellerId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
-        const snapshot = await getDocs(q);
+        // Get seller's products (Admin SDK)
+        const snapshot = await db.collection("products")
+            .where("sellerId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .get();
 
         const products = snapshot.docs.map(doc => ({
             id: doc.id,

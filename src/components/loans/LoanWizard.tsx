@@ -35,7 +35,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const methods = useForm<LoanApplicationData>({
-        resolver: zodResolver(loanApplicationSchema),
+        resolver: zodResolver(loanApplicationSchema as any),
         mode: "onChange",
         defaultValues: {
             amount: 10000,

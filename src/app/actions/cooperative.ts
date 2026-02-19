@@ -250,17 +250,13 @@ export async function registerCooperativeMemberAction(
         // Save to Firestore (Merge)
         await existingMemberRef.update(updatedData);
 
-        // Update user service registration
-        await db.collection(COLLECTIONS.USERS).doc(userId).set({
-            serviceRegistrations: {
-                cooperatives: {
-                    status: "pending",
-                    membershipTier: validatedData.membershipTier,
-                    onboardingCompletedAt: FieldValue.serverTimestamp(),
-                }
-            },
+        // Update user service registration (dot notation prevents cross-module data loss)
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            "serviceRegistrations.cooperatives.status": "pending",
+            "serviceRegistrations.cooperatives.membershipTier": validatedData.membershipTier,
+            "serviceRegistrations.cooperatives.onboardingCompletedAt": FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        });
 
         return {
             error: null,

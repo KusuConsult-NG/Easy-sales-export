@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, deleteDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Delete Loan Product (Admin Only)
@@ -17,8 +16,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!session.user.roles?.includes("admin")) {
+        // Check if user is admin or super_admin
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -34,11 +34,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get product
-        const productRef = doc(db, "loan_products", productId);
-        const productDoc = await getDoc(productRef);
+        // Get product (Admin SDK)
+        const productRef = db.collection("loan_products").doc(productId);
+        const productDoc = await productRef.get();
 
-        if (!productDoc.exists()) {
+        if (!productDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Product not found" },
                 { status: 404 }
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Delete product
-        await deleteDoc(productRef);
+        await productRef.delete();
 
         return NextResponse.json({
             success: true,

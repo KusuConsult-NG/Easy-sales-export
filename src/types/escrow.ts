@@ -1,24 +1,38 @@
-import { Timestamp } from "firebase/firestore";
-
-export type EscrowStatus = "pending" | "funded" | "in_transit" | "delivered" | "completed" | "disputed" | "cancelled";
+export enum EscrowStatus {
+    PENDING = 'pending',
+    FUNDED = 'funded',
+    IN_TRANSIT = 'in_transit',
+    DELIVERED = 'delivered',
+    COMPLETED = 'completed',
+    DISPUTED = 'disputed',
+    CANCELLED = 'cancelled'
+}
 
 export interface EscrowTransaction {
-    id?: string;
+    id: string;
     buyerId: string;
-    buyerEmail: string;
+    buyerEmail?: string;
     sellerId: string;
-    sellerEmail: string;
+    sellerEmail?: string;
     amount: number;
     productName: string;
-    productDescription: string;
+    productDescription?: string;
     status: EscrowStatus;
     paymentReference?: string;
-    createdAt: Timestamp | Date;
-    paidAt?: Timestamp | Date;
-    releasedAt?: Timestamp | Date;
-    refundedAt?: Timestamp | Date;
-    releaseRequestedAt?: Timestamp | Date;
+
+    // Dispute & Release logic
     releaseRequestedBy?: string;
+    releaseRequestedAt?: Date;
     releasedBy?: string;
-    updatedAt?: Timestamp | Date;
+    releasedAt?: Date;
+
+    disputeId?: string;
+    refundedAt?: Date;
+    refundedBy?: string;
+
+    createdAt: Date;
+    updatedAt: Date;
+    paidAt?: Date;
+
+    participants: string[];
 }

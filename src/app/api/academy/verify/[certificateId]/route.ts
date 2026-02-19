@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Verify Certificate (Public)
@@ -12,17 +11,18 @@ export async function GET(
 ) {
     try {
         const { certificateId } = await params;
-        const certificateRef = doc(db, "certificates", certificateId);
-        const certificateDoc = await getDoc(certificateRef);
 
-        if (!certificateDoc.exists()) {
+        // Get certificate (Admin SDK)
+        const certificateDoc = await db.collection("certificates").doc(certificateId).get();
+
+        if (!certificateDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Certificate not found or invalid" },
                 { status: 404 }
             );
         }
 
-        const certData = certificateDoc.data();
+        const certData = certificateDoc.data()!;
 
         const certificate = {
             id: certificateDoc.id,

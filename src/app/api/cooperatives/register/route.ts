@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, doc, setDoc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { generateReference } from "@/lib/paystack";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -42,9 +42,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user already has a membership application
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, session.user.id));
-        if (userDoc.exists() && userDoc.data().cooperativeMembershipId) {
+        // Check if user already has a membership application (Admin SDK)
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (userDoc.exists && userDoc.data()?.cooperativeMembershipId) {
             return NextResponse.json(
                 { success: false, error: "You already have a cooperative membership" },
                 { status: 400 }
@@ -53,16 +53,16 @@ export async function POST(request: NextRequest) {
 
         // Generate payment reference
         const paymentReference = generateReference("COOP");
-        const membershipId = doc(collection(db, COLLECTIONS.COOPERATIVE_MEMBERS)).id;
+        const membershipId = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc().id;
 
         // Determine registration fee based on tier
         const registrationFee = tier === "premium" ? 20000 : 10000;
 
-        // Create pending membership record
+        // Create pending membership record (Admin SDK with server timestamps)
         const memberData = {
             id: membershipId,
             userId: session.user.id,
-            cooperativeId: "default", // You can implement multiple cooperatives later
+            cooperativeId: "default",
             firstName,
             middleName: middleName || "",
             lastName,
@@ -85,12 +85,12 @@ export async function POST(request: NextRequest) {
             paymentReference,
             savingsBalance: 0,
             loanBalance: 0,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
-        // Save to Firestore
-        await setDoc(doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, membershipId), memberData);
+        // Save to Firestore (Admin SDK)
+        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(membershipId).set(memberData);
 
         // Initialize Paystack payment
         const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({
                 email: session.user.email,
-                amount: registrationFee * 100, // Convert to kobo
+                amount: registrationFee * 100,
                 reference: paymentReference,
                 callback_url: `${process.env.NEXTAUTH_URL}/cooperatives/verify-payment?reference=${paymentReference}&type=registration`,
                 metadata: {
@@ -116,7 +116,6 @@ export async function POST(request: NextRequest) {
         const paystackData = await paystackResponse.json();
 
         if (!paystackData.status) {
-            // Clean up if payment initialization fails
             return NextResponse.json(
                 { success: false, error: "Payment initialization failed" },
                 { status: 500 }

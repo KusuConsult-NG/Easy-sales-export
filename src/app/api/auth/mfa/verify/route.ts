@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 // Force server-side execution
@@ -35,18 +34,17 @@ async function verifyMFAHandler(request: NextRequest) {
             );
         }
 
-        // Get user's MFA secret from Firestore
-        const userRef = doc(db, COLLECTIONS.USERS, session.user.id);
-        const userDoc = await getDoc(userRef);
+        // Get user's MFA secret from Firestore (Admin SDK)
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
 
-        if (!userDoc.exists()) {
+        if (!userDoc.exists) {
             return NextResponse.json(
                 { success: false, error: "User not found" },
                 { status: 404 }
             );
         }
 
-        const userData = userDoc.data();
+        const userData = userDoc.data()!;
 
         if (!userData.mfaEnabled || !userData.mfaSecret) {
             return NextResponse.json(
@@ -55,10 +53,8 @@ async function verifyMFAHandler(request: NextRequest) {
             );
         }
 
-        // Lazy-load crypto-dependent function
         const { verifyTOTPToken } = await import("@/lib/mfa");
 
-        // Verify the TOTP code
         const isValid = verifyTOTPToken(code, userData.mfaSecret);
 
         if (!isValid) {
@@ -74,7 +70,7 @@ async function verifyMFAHandler(request: NextRequest) {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
-            maxAge: 30 * 60, // 30 minutes
+            maxAge: 30 * 60,
         });
 
         return response;

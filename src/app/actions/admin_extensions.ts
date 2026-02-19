@@ -83,7 +83,7 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
         try {
             const { invalidateUserCache } = await import('@/lib/cache-invalidation');
             await invalidateUserCache(targetUserId);
-        } catch (e) { }
+        } catch (e: any) { logger.warn("Cache invalidation skipped:", e?.message); }
 
         await logAuditAction("user_delete", targetUserId, "user", {
             adminId: session.user.id,

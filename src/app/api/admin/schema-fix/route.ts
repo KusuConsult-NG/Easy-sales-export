@@ -1,5 +1,6 @@
 
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { runSchemaStandardizationAction } from "@/app/actions/schema-standardization";
 
 export const dynamic = 'force-dynamic';
@@ -9,10 +10,15 @@ export async function GET(request: Request) {
     const dryRun = searchParams.get("dryRun") !== "false"; // Default to true (safe)
     const secret = searchParams.get("secret");
 
-    // Simple security
-    if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
-        // Allow running without secret only in development if needed, but safer to block
-        // return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // 🔒 SECURITY: Require CRON_SECRET or authenticated super_admin
+    const hasValidSecret = process.env.CRON_SECRET && secret === process.env.CRON_SECRET;
+
+    if (!hasValidSecret) {
+        // Fall back to session-based auth for admin users
+        const session = await auth();
+        if (!session?.user?.roles?.includes("super_admin")) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
     }
 
     try {

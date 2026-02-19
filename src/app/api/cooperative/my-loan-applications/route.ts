@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get User's Loan Applications
@@ -19,14 +18,11 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Get all applications for this user
-        const applicationsRef = collection(db, "loan_applications");
-        const q = query(
-            applicationsRef,
-            where("userId", "==", userId),
-            orderBy("appliedAt", "desc")
-        );
-        const snapshot = await getDocs(q);
+        // Get all applications for this user (Admin SDK)
+        const snapshot = await db.collection("loan_applications")
+            .where("userId", "==", userId)
+            .orderBy("appliedAt", "desc")
+            .get();
 
         const applications = snapshot.docs.map(doc => {
             const data = doc.data();

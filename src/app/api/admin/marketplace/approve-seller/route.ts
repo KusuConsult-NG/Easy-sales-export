@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!session.user.roles?.includes("admin")) {
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -47,36 +47,35 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get verification
-        const verificationRef = doc(db, "seller_verifications", verificationId);
-        const verificationDoc = await getDoc(verificationRef);
+        // Get verification (Admin SDK)
+        const verificationRef = db.collection("seller_verifications").doc(verificationId);
+        const verificationDoc = await verificationRef.get();
 
-        if (!verificationDoc.exists()) {
+        if (!verificationDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Verification not found" },
                 { status: 404 }
             );
         }
 
-        const verificationData = verificationDoc.data();
+        const verificationData = verificationDoc.data()!;
 
         // Update verification status
-        await updateDoc(verificationRef, {
+        await verificationRef.update({
             status: "approved",
-            reviewedAt: new Date(),
+            reviewedAt: FieldValue.serverTimestamp(),
             reviewedBy: session.user.id,
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Update marketplace_sellers record
-        const sellerRef = doc(db, "marketplace_sellers", verificationData.userId);
-        await updateDoc(sellerRef, {
+        await db.collection("marketplace_sellers").doc(verificationData.userId).update({
             verificationStatus: "approved",
             businessName: verificationData.businessName,
             rating: 0,
             totalSales: 0,
-            approvedAt: new Date(),
-            updatedAt: new Date(),
+            approvedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

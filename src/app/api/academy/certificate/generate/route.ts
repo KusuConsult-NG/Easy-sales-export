@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc, updateDoc, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Generate Certificate on Course Completion
@@ -28,29 +28,27 @@ export async function POST(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Get user details
-        const userRef = doc(db, "users", userId);
-        const userDoc = await getDoc(userRef);
-
-        if (!userDoc.exists()) {
+        // Get user details (Admin SDK)
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (!userDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "User not found" },
                 { status: 404 }
             );
         }
 
-        // Get course progress
-        const progressRef = doc(db, "course_progress", `${userId}_${courseId}`);
-        const progressDoc = await getDoc(progressRef);
+        // Get course progress (Admin SDK)
+        const progressRef = db.collection("course_progress").doc(`${userId}_${courseId}`);
+        const progressDoc = await progressRef.get();
 
-        if (!progressDoc.exists()) {
+        if (!progressDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Course progress not found" },
                 { status: 404 }
             );
         }
 
-        const progressData = progressDoc.data();
+        const progressData = progressDoc.data()!;
 
         // Validate course completion
         if (progressData.completionPercentage < 100 || !progressData.completed) {
@@ -69,31 +67,31 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Get course details
-        const courseRef = doc(db, "courses", courseId);
-        const courseDoc = await getDoc(courseRef);
-        const courseTitle = courseDoc.exists() ? courseDoc.data().title : "Course Completion";
+        // Get course details (Admin SDK)
+        const courseDoc = await db.collection("courses").doc(courseId).get();
+        const courseTitle = courseDoc.exists ? courseDoc.data()!.title : "Course Completion";
 
-        // Create certificate
-        const certificateRef = doc(collection(db, "certificates"));
+        // Create certificate (Admin SDK)
+        const certificateRef = db.collection("certificates").doc();
+        const userData = userDoc.data()!;
         const certificateData = {
             userId,
-            userName: userDoc.data().name || userDoc.data().email,
+            userName: userData.name || userData.email,
             courseId,
             courseTitle,
-            completionDate: progressData.completedAt || new Date(),
+            completionDate: progressData.completedAt || FieldValue.serverTimestamp(),
             grade: quizScore || progressData.quizScores?.[0]?.bestScore,
-            issuedAt: new Date(),
-            qrCodeUrl: "", // Generated on certificate page
-            pdfUrl: "", // Generated on certificate page
+            issuedAt: FieldValue.serverTimestamp(),
+            qrCodeUrl: "",
+            pdfUrl: "",
         };
 
-        await setDoc(certificateRef, certificateData);
+        await certificateRef.set(certificateData);
 
         // Update course progress with certificate ID
-        await updateDoc(progressRef, {
+        await progressRef.update({
             certificateId: certificateRef.id,
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

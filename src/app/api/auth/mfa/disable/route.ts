@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -19,8 +18,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Disable MFA and clear secrets
-        await updateDoc(doc(db, COLLECTIONS.USERS, session.user.id), {
+        // Disable MFA and clear secrets (Admin SDK)
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
             mfaEnabled: false,
             totpSecret: null,
             mfaRecoveryCodes: null,

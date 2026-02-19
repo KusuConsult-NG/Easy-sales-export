@@ -1,8 +1,23 @@
-export default function DashboardLayout({
+/**
+ * Dashboard Layout
+ * 
+ * Server-side auth guard for the user dashboard.
+ * Ensures unauthenticated users are redirected to login BEFORE the page renders.
+ */
+
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+
+export default async function DashboardLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    // No sidebar layout - just render children directly for website-style landing page
+    const session = await auth();
+
+    if (!session?.user) {
+        redirect("/auth/login?callbackUrl=/dashboard");
+    }
+
     return <>{children}</>;
 }

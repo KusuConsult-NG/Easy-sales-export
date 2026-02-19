@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Check WAVE Eligibility and Application Status
@@ -19,27 +18,25 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Get user profile for gender
-        const userRef = doc(db, "users", userId);
-        const userDoc = await getDoc(userRef);
+        // Get user profile for gender (Admin SDK)
+        const userDoc = await db.collection("users").doc(userId).get();
 
-        if (!userDoc.exists()) {
+        if (!userDoc.exists) {
             return NextResponse.json({
                 success: false,
                 message: "User profile not found"
             }, { status: 404 });
         }
 
-        const userData = userDoc.data();
+        const userData = userDoc.data()!;
         const gender = userData.gender || null;
 
-        // Check WAVE application status
-        const waveRef = doc(db, "wave_applications", userId);
-        const waveDoc = await getDoc(waveRef);
+        // Check WAVE application status (Admin SDK)
+        const waveDoc = await db.collection("wave_applications").doc(userId).get();
 
         let applicationStatus = "not_applied";
-        if (waveDoc.exists()) {
-            const waveData = waveDoc.data();
+        if (waveDoc.exists) {
+            const waveData = waveDoc.data()!;
             applicationStatus = waveData.status || "pending";
         }
 

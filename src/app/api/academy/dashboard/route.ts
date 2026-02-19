@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get Student Dashboard Data
@@ -19,10 +18,10 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Get course progress
-        const progressRef = collection(db, "course_progress");
-        const progressQuery = query(progressRef, where("userId", "==", userId));
-        const progressSnapshot = await getDocs(progressQuery);
+        // Get course progress (Admin SDK)
+        const progressSnapshot = await db.collection("course_progress")
+            .where("userId", "==", userId)
+            .get();
 
         const courses = progressSnapshot.docs.map(doc => ({
             ...doc.data(),
@@ -31,10 +30,10 @@ export async function GET(request: NextRequest) {
             completedAt: doc.data().completedAt?.toDate?.() || null,
         }));
 
-        // Get certificates
-        const certificatesRef = collection(db, "certificates");
-        const certQuery = query(certificatesRef, where("userId", "==", userId));
-        const certSnapshot = await getDocs(certQuery);
+        // Get certificates (Admin SDK)
+        const certSnapshot = await db.collection("certificates")
+            .where("userId", "==", userId)
+            .get();
 
         const certificates = certSnapshot.docs.map(doc => ({
             id: doc.id,
@@ -42,7 +41,6 @@ export async function GET(request: NextRequest) {
             completionDate: doc.data().completionDate?.toDate?.() || new Date(),
         }));
 
-        // Calculate stats
         const stats = {
             totalCourses: courses.length,
             inProgress: courses.filter(c => !c.completedAt).length,

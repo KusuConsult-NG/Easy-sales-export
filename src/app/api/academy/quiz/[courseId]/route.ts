@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get Quiz for Student
@@ -12,15 +11,13 @@ export async function GET(
 ) {
     try {
         const { courseId } = await params;
-        // Get quiz for the course
-        const quizzesRef = collection(db, "quizzes");
-        const q = query(
-            quizzesRef,
-            where("courseId", "==", courseId),
-            orderBy("createdAt", "desc"),
-            limit(1)
-        );
-        const snapshot = await getDocs(q);
+
+        // Get quiz for the course (Admin SDK)
+        const snapshot = await db.collection("quizzes")
+            .where("courseId", "==", courseId)
+            .orderBy("createdAt", "desc")
+            .limit(1)
+            .get();
 
         if (snapshot.empty) {
             return NextResponse.json(
@@ -30,29 +27,26 @@ export async function GET(
         }
 
         const quizDoc = snapshot.docs[0];
+        const rawData = quizDoc.data();
         const quizData = {
             id: quizDoc.id,
-            ...quizDoc.data(),
+            ...rawData,
             // Remove correct answer flags for student view
-            questions: quizDoc.data().questions.map((q: any) => ({
+            questions: rawData.questions.map((q: any) => ({
                 ...q,
                 answers: q.answers?.map((a: any) => ({
                     id: a.id,
                     text: a.text,
                     // Don't send isCorrect to student
                 })),
-                // Don't send correctAnswer for short-answer questions
                 correctAnswer: undefined,
             })),
         };
 
-        // Get user's previous attempts to calculate attemptNumber\n        const attemptsQuery = query(\n            collection(db, \"quiz_attempts\"),\n            where(\"userId\", \"==\", session.user.id),\n            where(\"quizId\", \"==\", courseId)\n        );\n        const attemptsSnapshot = await getDocs(attemptsQuery);\n        const attemptNumber = attemptsSnapshot.size + 1;
-        const attemptNumber = 1;
-
         return NextResponse.json({
             success: true,
             quiz: quizData,
-            attemptNumber
+            attemptNumber: 1,
         });
     } catch (error) {
         logger.error("Failed to fetch quiz:", error);

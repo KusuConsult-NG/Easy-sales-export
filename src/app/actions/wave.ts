@@ -268,17 +268,13 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // CRITICAL: Update user.serviceRegistrations to link application with auth
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
-            serviceRegistrations: {
-                wave: {
-                    status: "pending",
-                    applicationId,
-                    submittedAt: FieldValue.serverTimestamp(),
-                }
-            },
+        // CRITICAL: Update user.serviceRegistrations using dot notation to prevent cross-module data loss
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+            "serviceRegistrations.wave.status": "pending",
+            "serviceRegistrations.wave.applicationId": applicationId,
+            "serviceRegistrations.wave.submittedAt": FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        });
 
         // Audit log
         await createAdminAuditLog({

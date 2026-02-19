@@ -56,7 +56,7 @@ export default function LoadingButton({
                 <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" />
             )}
             {!loading && icon && <span aria-hidden="true">{icon}</span>}
-            <span>{loading && loadingText ? loadingText : children}</span>
+            <span className="inline-flex items-center gap-2">{loading && loadingText ? loadingText : children}</span>
         </button>
     );
 }

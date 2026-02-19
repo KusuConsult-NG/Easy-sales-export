@@ -1,80 +1,45 @@
-// ============================================
-// STRICT TYPESCRIPT TYPES - NO ANY ALLOWED
-// ============================================
 
-// User Roles Enum
-export enum UserRole {
-    USER = 'user',
-    VENDOR = 'vendor',
-    ADMIN = 'admin',
-    SUPER_ADMIN = 'super_admin',
-    COOPERATIVE_MEMBER = 'cooperative_member',
-    SELLER = 'seller',
-    STUDENT = 'student'
+import { FieldValue, Timestamp, GeoPoint } from "firebase-admin/firestore";
+
+export enum AuditActionType {
+    LAND_VERIFIED = 'land_verified',
+    COURSE_ENROLLED = 'course_enrolled',
+    COURSE_COMPLETED = 'course_completed',
+    USER_UPDATE = 'user_update',
+    EXPORT_WINDOW_CREATE = 'export_window_create',
+    EXPORT_INVESTMENT = 'export_investment',
+    MARKETPLACE_ORDER = 'marketplace_order',
+    COOPERATIVE_REGISTRATION = 'cooperative_registration',
+    SYSTEM_ERROR = 'system_error'
 }
 
-// User Interface
-export interface User {
-    id: string;
-    email: string;
-    displayName: string | null;
-    role: UserRole;
-    createdAt: Date;
-    updatedAt: Date;
-    isVerified: boolean;
-    onboardingComplete: boolean;
-    metadata?: {
-        lastLoginIP?: string;
-        loginCount?: number;
-        lastLoginAt?: Date;
-    };
-}
-
-// Escrow System Types
-export enum EscrowStatus {
-    PENDING = 'PENDING',
-    HELD = 'HELD',
-    DISPUTED = 'DISPUTED',
-    RELEASED = 'RELEASED',
-    CANCELLED = 'CANCELLED'
-}
-
-export interface Transaction {
-    id: string;
-    buyerId: string;
-    sellerId: string;
-    productId: string;
-    amount: number;
-    status: EscrowStatus;
-    createdAt: Date;
-    updatedAt: Date;
-    heldAt: Date | null;
-    releasedAt: Date | null;
-    disputeReason?: string;
-    disputedAt?: Date;
-    metadata?: {
-        paymentMethod?: string;
-        deliveryConfirmed?: boolean;
-        releaseApprovedBy?: string;
-    };
-}
-
-// Course/LMS Types
-export interface Course {
+export interface LandListing {
     id: string;
     title: string;
     description: string;
-    videoUrl: string;
-    thumbnailUrl?: string;
-    duration: number; // in seconds
-    instructor: string;
-    instructorId: string;
-    enrolledStudents: number;
-    published: boolean;
-    category: string;
-    level: 'beginner' | 'intermediate' | 'advanced';
+    price: number;
+    size: number; // in acres
+    location: {
+        address: string;
+        city: string;
+        state: string;
+        lat: number;
+        lng: number;
+        geopoint?: GeoPoint;
+    };
+    soilQuality: SoilQuality;
+    waterAccess: boolean;
+    electricityAccess: boolean;
+    roadAccess: boolean;
+    ownerId: string;
+    status: 'pending_verification' | 'verified' | 'rejected' | 'deleted';
     createdAt: Date;
     updatedAt: Date;
+    verifiedAt: Date | null;
+    verifiedBy: string | null;
+    rejectionReason: string | null;
+    images: string[];
+    documents?: string[];
 }
 
 export interface CourseProgress {
@@ -88,50 +53,22 @@ export interface CourseProgress {
     updatedAt: Date;
 }
 
-// Land Listing Types
 export enum SoilQuality {
-    EXCELLENT = 'excellent',
+    FERTILE = 'fertile',
+    SANDY = 'sandy',
+    LOAMY = 'loamy',
+    CLAY = 'clay',
+    MIXED = 'mixed',
+    UNKNOWN = 'unknown',
+    EXCELLENT = 'excellent', // Added based on usage in verify/page.tsx
     GOOD = 'good',
     FAIR = 'fair',
     POOR = 'poor'
 }
 
-export interface LandListing {
-    id: string;
-    title: string;
-    description: string;
-    location: {
-        lat: number;
-        lng: number;
-        address: string;
-        city: string;
-        state: string;
-    };
-    size: number;
-    soilQuality: SoilQuality;
-    price: number;
-    ownerId: string;
-    status: 'pending_verification' | 'verified' | 'rejected';
-    images: string[];
-    features?: string[];
-    waterAccess: boolean;
-    electricityAccess: boolean;
-    roadAccess: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-// Loan Application Types
-export enum LoanPurpose {
-    AGRICULTURE = 'agriculture',
-    EQUIPMENT = 'equipment',
-    LAND = 'land',
-    WORKING_CAPITAL = 'working_capital',
-    OTHER = 'other'
-}
-
 export enum LoanStatus {
     PENDING = 'pending',
+    REVIEWING = 'reviewing',
     APPROVED = 'approved',
     REJECTED = 'rejected',
     DISBURSED = 'disbursed',
@@ -139,105 +76,64 @@ export enum LoanStatus {
     DEFAULTED = 'defaulted'
 }
 
+export enum LoanPurpose {
+    SEEDS = 'seeds',
+    FERTILIZER = 'fertilizer',
+    EQUIPMENT = 'equipment',
+    IRRIGATION = 'irrigation',
+    LABOR = 'labor',
+    PROCESSING = 'processing',
+    MARKETING = 'marketing',
+    EXPANSION = 'expansion',
+    OTHER = 'other',
+    AGRICULTURE = 'agriculture',
+    LAND = 'land',
+    WORKING_CAPITAL = 'working_capital'
+}
+
 export interface LoanApplication {
     id: string;
     userId: string;
     amount: number;
     purpose: LoanPurpose;
-    repaymentPeriod: number; // in months
+    duration: number; // in months
+    repaymentPeriod: number;
+    interestRate: number;
     status: LoanStatus;
-    collateral: {
+    guarantors?: string[];
+    collateral?: {
         type: string;
         value: number;
         description: string;
     };
-    businessDetails: {
+    creditScore?: number;
+    businessDetails?: {
         name: string;
         type: string;
         yearsInOperation: number;
         annualRevenue: number;
     };
-    documents: Array<{
-        name: string;
-        url: string;
-        type: 'id' | 'business_reg' | 'financial_statement' | 'other';
-    }>;
+    repaymentSchedule?: {
+        dueDate: Date;
+        amount: number;
+        status: 'pending' | 'paid' | 'overdue';
+    }[];
     approvedBy?: string;
     approvedAt?: Date;
-    rejectionReason?: string;
+    rejectedReason?: string;
     createdAt: Date;
     updatedAt: Date;
-}
-
-// Audit Log Types
-export enum AuditActionType {
-    // Auth actions
-    USER_LOGIN = 'user_login',
-    USER_LOGOUT = 'user_logout',
-    USER_REGISTER = 'user_register',
-
-    // Escrow actions
-    ESCROW_CREATE = 'escrow_create',
-    ESCROW_HOLD = 'escrow_hold',
-    ESCROW_RELEASE = 'escrow_release',
-    ESCROW_REFUND = 'escrow_refund',
-    ESCROW_DISPUTE = 'escrow_dispute',
-
-    // Admin actions
-    USER_VERIFY = 'user_verify',
-    USER_UNVERIFY = 'user_unverify',
-    LOAN_APPROVE = 'loan_approve',
-    LOAN_REJECT = 'loan_reject',
-    LAND_VERIFY = 'land_verify',
-    CONTENT_APPROVE = 'content_approve',
-
-    // Content actions
-    PRODUCT_CREATE = 'product_create',
-    PRODUCT_UPDATE = 'product_update',
-    PRODUCT_DELETE = 'product_delete',
-
-    // Course actions
-    COURSE_ENROLL = 'course_enroll',
-    COURSE_COMPLETE = 'course_complete',
-
-    // System actions
-    SYSTEM_ERROR = 'system_error',
-    SECURITY_ALERT = 'security_alert'
 }
 
 export interface AuditLog {
     id: string;
     userId: string;
-    actionType: AuditActionType;
-    resourceId?: string;
-    resourceType?: string;
-    metadata: Record<string, unknown>;
+    action: string;
+    targetId?: string;
+    targetType?: string;
+    details?: string;
+    metadata?: Record<string, any>;
     ipAddress?: string;
     userAgent?: string;
-    timestamp: Date;
-    immutable: true; // Prevents any modifications
-}
-
-// API Response Types
-export interface ApiResponse<T = unknown> {
-    success: boolean;
-    data?: T;
-    error?: string;
-    message?: string;
-}
-
-export interface PaginatedResponse<T> {
-    items: T[];
-    total: number;
-    page: number;
-    pageSize: number;
-    hasMore: boolean;
-}
-
-// Form State Types
-export interface FormState<T = unknown> {
-    data: T;
-    errors: Record<string, string>;
-    isSubmitting: boolean;
-    isValid: boolean;
+    createdAt: Date;
 }

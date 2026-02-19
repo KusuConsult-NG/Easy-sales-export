@@ -109,7 +109,7 @@ export async function getAuditLogs(filters?: {
             id: doc.id,
             ...doc.data(),
             timestamp: (doc.data().timestamp as Timestamp)?.toDate() || new Date(),
-        })) as AuditLog[];
+        })) as unknown as AuditLog[];
     } catch (error) {
         console.error('[GET_AUDIT_LOGS_ERROR]', error);
         return [];

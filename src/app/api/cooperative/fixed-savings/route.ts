@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get User's Fixed Savings Plans
@@ -19,22 +18,22 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Fetch user's fixed savings plans
-        const plansRef = collection(db, "fixed_savings_plans");
-        const q = query(
-            plansRef,
-            where("memberId", "==", userId),
-            orderBy("createdAt", "desc")
-        );
-        const snapshot = await getDocs(q);
+        // Fetch user's fixed savings plans (Admin SDK)
+        const snapshot = await db.collection("fixed_savings_plans")
+            .where("memberId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .get();
 
-        const plans = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            startDate: doc.data().startDate?.toDate?.() || new Date(),
-            maturityDate: doc.data().maturityDate?.toDate?.() || new Date(),
-            createdAt: doc.data().createdAt?.toDate?.() || new Date(),
-        }));
+        const plans = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                startDate: data.startDate?.toDate?.() || new Date(),
+                maturityDate: data.maturityDate?.toDate?.() || new Date(),
+                createdAt: data.createdAt?.toDate?.() || new Date(),
+            };
+        });
 
         return NextResponse.json({
             success: true,

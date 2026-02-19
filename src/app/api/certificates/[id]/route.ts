@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db, storage } from "@/lib/firebase";
-import { doc, getDoc, deleteDoc } from "firebase/firestore";
-import { ref, deleteObject } from "firebase/storage";
+import { db, adminStorage } from "@/lib/firebase-admin";
 
 /**
  * DELETE - Delete certificate
@@ -23,16 +21,17 @@ export async function DELETE(
             );
         }
 
-        const certDoc = await getDoc(doc(db, "user_certificates", id));
+        // Get certificate (Admin SDK)
+        const certDoc = await db.collection("user_certificates").doc(id).get();
 
-        if (!certDoc.exists()) {
+        if (!certDoc.exists) {
             return NextResponse.json(
                 { success: false, error: "Certificate not found" },
                 { status: 404 }
             );
         }
 
-        const certData = certDoc.data();
+        const certData = certDoc.data()!;
 
         // Access control
         if (certData.userId !== session.user.id &&
@@ -44,12 +43,17 @@ export async function DELETE(
             );
         }
 
-        // Delete from storage
-        const fileRef = ref(storage, certData.fileUrl);
-        await deleteObject(fileRef);
+        // Delete from storage (Admin SDK)
+        try {
+            const bucket = adminStorage.bucket();
+            const file = bucket.file(certData.storagePath || certData.fileUrl);
+            await file.delete();
+        } catch (storageError: any) {
+            logger.warn("Storage delete failed (file may not exist):", storageError);
+        }
 
-        // Delete from Firestore
-        await deleteDoc(doc(db, "user_certificates", id));
+        // Delete from Firestore (Admin SDK)
+        await db.collection("user_certificates").doc(id).delete();
 
         return NextResponse.json({
             success: true,

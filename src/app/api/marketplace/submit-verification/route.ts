@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
-// Rate limiter for seller verification submissions (prevent spam)
 const verificationLimiter = rateLimit(rateLimitConfig.serverAction);
 
 /**
  * API Route: Submit Seller Verification
- * Note: File uploads are simplified for now. In production, integrate with cloud storage (Firebase Storage/Cloudinary)
  */
 export async function POST(request: NextRequest) {
-    // RATE LIMITING - Prevent verification submission spam
     const clientIp = getClientIp(request);
     const rateLimitResult = await verificationLimiter.check(clientIp);
 
@@ -33,10 +30,10 @@ export async function POST(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Check if user already has a verification request
-        const existingVerificationQuery = await getDoc(doc(db, "seller_verifications", userId));
-        if (existingVerificationQuery.exists()) {
-            const existingData = existingVerificationQuery.data();
+        // Check if user already has a verification request (Admin SDK)
+        const existingDoc = await db.collection("seller_verifications").doc(userId).get();
+        if (existingDoc.exists) {
+            const existingData = existingDoc.data()!;
             if (existingData.status === "pending") {
                 return NextResponse.json(
                     { success: false, message: "You already have a pending verification request" },
@@ -47,7 +44,6 @@ export async function POST(request: NextRequest) {
 
         const formData = await request.formData();
 
-        // Extract form fields
         const businessName = formData.get("businessName") as string;
         const businessType = formData.get("businessType") as string;
         const businessDescription = formData.get("businessDescription") as string;
@@ -60,13 +56,10 @@ export async function POST(request: NextRequest) {
         const accountNumber = formData.get("accountNumber") as string;
         const accountName = formData.get("accountName") as string;
 
-        // In production: Upload files to Firebase Storage or Cloudinary
-        // For now, we'll store placeholder URLs
         const businessDoc = formData.get("businessDoc") as File;
         const idDoc = formData.get("idDoc") as File;
         const addressProof = formData.get("addressProof") as File;
 
-        // Validate required fields
         if (!businessName || !businessType || !businessDescription ||
             !phone || !email || !address || !state || !lga ||
             !bankName || !accountNumber || !accountName) {
@@ -83,9 +76,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create verification record
-        const verificationRef = doc(db, "seller_verifications", userId);
-        const verificationData = {
+        // Create verification record (Admin SDK)
+        await db.collection("seller_verifications").doc(userId).set({
             userId,
             businessName,
             businessType,
@@ -96,9 +88,9 @@ export async function POST(request: NextRequest) {
             state,
             lga,
             documents: {
-                businessDoc: `placeholder_${businessDoc.name} `, // In production: actual storage URL
-                idDoc: `placeholder_${idDoc.name} `,
-                addressProof: `placeholder_${addressProof.name} `,
+                businessDoc: `placeholder_${businessDoc.name}`,
+                idDoc: `placeholder_${idDoc.name}`,
+                addressProof: `placeholder_${addressProof.name}`,
             },
             bankDetails: {
                 bankName,
@@ -106,19 +98,16 @@ export async function POST(request: NextRequest) {
                 accountName,
             },
             status: "pending",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
-
-        await setDoc(verificationRef, verificationData);
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
 
         // Update marketplace_sellers with pending status
-        const sellerRef = doc(db, "marketplace_sellers", userId);
-        await setDoc(sellerRef, {
+        await db.collection("marketplace_sellers").doc(userId).set({
             userId,
             verificationStatus: "pending",
             verificationId: userId,
-            createdAt: new Date(),
+            createdAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Reject Loan Application (Admin Only)
@@ -17,8 +17,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!session.user.roles?.includes("admin")) {
+        // Check if user is admin or super_admin
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -34,11 +35,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get application
-        const applicationRef = doc(db, "loan_applications", applicationId);
-        const applicationDoc = await getDoc(applicationRef);
+        // Get application (Admin SDK)
+        const applicationRef = db.collection("loan_applications").doc(applicationId);
+        const applicationDoc = await applicationRef.get();
 
-        if (!applicationDoc.exists()) {
+        if (!applicationDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Application not found" },
                 { status: 404 }
@@ -46,12 +47,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Update application status
-        await updateDoc(applicationRef, {
+        await applicationRef.update({
             status: "rejected",
             rejectionReason: reason,
-            rejectedAt: new Date(),
+            rejectedAt: FieldValue.serverTimestamp(),
             rejectedBy: session.user.id,
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

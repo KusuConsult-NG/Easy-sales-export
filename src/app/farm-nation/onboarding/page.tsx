@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
-import { Home, TrendingUp, Shield, CheckCircle } from "lucide-react";
+import { Home, TrendingUp, Shield, CheckCircle, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 import { submitFarmNationOnboardingAction, checkFarmNationStatusAction } from "@/app/actions/farm-nation";
 
@@ -191,8 +192,23 @@ export default function FarmNationOnboardingPage() {
             {/* Header */}
             <div className="bg-linear-to-r from-teal-600 to-cyan-600 text-white py-6 px-4 md:px-8">
                 <div className="max-w-4xl mx-auto">
+                    <div className="flex items-center justify-between mb-3">
+                        <Link
+                            href="/farm-nation"
+                            className="inline-flex items-center gap-2 text-teal-100 hover:text-white text-sm font-medium transition-colors"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back
+                        </Link>
+                        <Link
+                            href="/dashboard"
+                            className="inline-flex items-center gap-2 text-teal-100 hover:text-white text-sm font-medium transition-colors"
+                        >
+                            <Home className="w-4 h-4" />
+                            Hub
+                        </Link>
+                    </div>
                     <div className="flex items-center gap-3 mb-2">
-                        <Home className="w-6 h-6" />
                         <h1 className="text-2xl md:text-3xl font-bold">Farm Nation Onboarding</h1>
                     </div>
                     <p className="text-teal-100">

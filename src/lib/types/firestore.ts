@@ -312,6 +312,7 @@ export const COLLECTIONS = {
 
 
     // Education & Training
+    ACADEMY_APPLICATIONS: "ACADEMY_APPLICATIONS",
     COURSES: "courses",
     ENROLLMENTS: "enrollments",
     ACADEMY_COURSES: "academy_courses",

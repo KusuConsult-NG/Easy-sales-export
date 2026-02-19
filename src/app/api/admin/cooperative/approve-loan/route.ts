@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Approve Loan Application (Admin Only)
+ * Uses a Firestore transaction for atomic status + balance update
  */
 export async function POST(request: NextRequest) {
     try {
@@ -17,8 +18,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!session.user.roles?.includes("admin")) {
+        // Check if user is admin or super_admin
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -34,31 +36,51 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get application
-        const applicationRef = doc(db, "loan_applications", applicationId);
-        const applicationDoc = await getDoc(applicationRef);
+        // 🔒 Use a transaction for atomic loan approval + balance update
+        await db.runTransaction(async (transaction) => {
+            const applicationRef = db.collection("loan_applications").doc(applicationId);
+            const applicationDoc = await transaction.get(applicationRef);
 
-        if (!applicationDoc.exists()) {
-            return NextResponse.json(
-                { success: false, message: "Application not found" },
-                { status: 404 }
-            );
-        }
+            if (!applicationDoc.exists) {
+                throw new Error("Application not found");
+            }
 
-        // Update application status
-        await updateDoc(applicationRef, {
-            status: "approved",
-            approvedAt: new Date(),
-            approvedBy: session.user.id,
-            updatedAt: new Date(),
+            const appData = applicationDoc.data()!;
+
+            if (appData.status !== "pending") {
+                throw new Error(`Application is already ${appData.status}`);
+            }
+
+            // Update application status
+            transaction.update(applicationRef, {
+                status: "approved",
+                approvedAt: FieldValue.serverTimestamp(),
+                approvedBy: session.user.id,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // Update member's loan balance
+            const memberRef = db.collection("cooperative_members").doc(appData.userId);
+            transaction.update(memberRef, {
+                loanBalance: FieldValue.increment(appData.amount),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         return NextResponse.json({
             success: true,
             message: "Loan application approved successfully"
         });
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Failed to approve loan:", error);
+
+        if (error instanceof Error) {
+            return NextResponse.json(
+                { success: false, message: error.message },
+                { status: 400 }
+            );
+        }
+
         return NextResponse.json(
             { success: false, message: "Internal server error" },
             { status: 500 }

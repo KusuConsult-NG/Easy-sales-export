@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Create Quiz (Admin)
@@ -17,8 +17,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Admin role check
-        if (!session.user.roles?.includes("admin")) {
+        // Admin role check (includes super_admin)
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -35,13 +36,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create quiz document
-        const quizRef = doc(collection(db, "quizzes"));
-        await setDoc(quizRef, {
+        // Create quiz document (Admin SDK)
+        const quizRef = db.collection("quizzes").doc();
+        await quizRef.set({
             ...quizData,
             createdBy: session.user.id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

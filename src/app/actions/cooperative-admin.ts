@@ -258,6 +258,11 @@ export async function updateMemberStatusAction(
                 roles: FieldValue.arrayUnion("cooperative_member"),
                 updatedAt: FieldValue.serverTimestamp(),
             }, { merge: true });
+            // Also sync serviceRegistrations status (dot notation to avoid cross-module data loss)
+            await db.collection("users").doc(memberId).update({
+                "serviceRegistrations.cooperatives.status": "active",
+                "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
+            });
         }
 
         return { success: true };

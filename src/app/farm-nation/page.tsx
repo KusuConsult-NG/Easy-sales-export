@@ -67,10 +67,10 @@ export default function FarmNationLandingPage() {
                         </p>
                         <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4">
                             <Link
-                                href="/farm-nation/properties"
+                                href="/farm-nation/onboarding"
                                 className="group inline-flex items-center justify-center gap-2 md:gap-3 bg-white text-teal-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-teal-500/50 transition-all hover:scale-105"
                             >
-                                Get Started
+                                Register Your Farm Here
                                 <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
                             </Link>
                         </div>
@@ -173,10 +173,11 @@ export default function FarmNationLandingPage() {
 
                 <div className="text-center">
                     <Link
-                        href="/auth/register?callbackUrl=/farm-nation/onboarding"
+                        href="/farm-nation/onboarding"
                         className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition shadow-lg shadow-emerald-200 group"
-                    >                  View All Farms
-                        <ArrowRight className="w-5 h-5" />
+                    >
+                        Register Your Farm Here
+                        <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                     </Link>
                 </div>
             </div>
@@ -238,10 +239,10 @@ export default function FarmNationLandingPage() {
                             Browse over 1,200 verified agricultural properties across Nigeria. Start building your agribusiness empire today.
                         </p>
                         <Link
-                            href="/farm-nation/properties"
+                            href="/farm-nation/onboarding"
                             className="group inline-flex items-center gap-3 bg-white text-teal-600 px-10 py-5 rounded-xl font-bold text-lg shadow-2xl hover:shadow-white/50 transition-all hover:scale-105"
                         >
-                            Explore Farms
+                            Register Your Farm Here
                             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                         </Link>
                     </div>

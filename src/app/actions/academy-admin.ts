@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
@@ -28,7 +29,7 @@ export async function approveAcademyApplicationAction(
         }
 
         // 1. Get Application
-        const appRef = db.collection("ACADEMY_APPLICATIONS").doc(applicationId);
+        const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
@@ -49,21 +50,20 @@ export async function approveAcademyApplicationAction(
             reviewedAt: FieldValue.serverTimestamp(),
         });
 
-        // 3. Update User Profile (Verify, Add Role, Activate Service)
+        // 3. Update User Profile (Verify, Add Role, Activate Service) - dot notation prevents cross-module data loss
         await db.collection("users").doc(userId).set({
             isVerified: true,
             verifiedBy: session.user.id,
             verifiedAt: FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("academy_participant"),
-            serviceRegistrations: {
-                academy: {
-                    status: "approved",
-                    applicationId: applicationId,
-                    approvedAt: FieldValue.serverTimestamp(),
-                }
-            },
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+        // Separate dot-notation update for nested serviceRegistrations to avoid overwriting other services
+        await db.collection("users").doc(userId).update({
+            "serviceRegistrations.academy.status": "approved",
+            "serviceRegistrations.academy.applicationId": applicationId,
+            "serviceRegistrations.academy.approvedAt": FieldValue.serverTimestamp(),
+        });
 
         // 4. CLEAR CACHE - User now has Academy access
         try {
@@ -151,7 +151,7 @@ export async function rejectAcademyApplicationAction(
         }
 
         // 1. Get Application
-        const appRef = db.collection("ACADEMY_APPLICATIONS").doc(applicationId);
+        const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
@@ -238,7 +238,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
 
-        const snapshot = await db.collection("ACADEMY_APPLICATIONS")
+        const snapshot = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where("status", "==", "pending")
             .orderBy("submittedAt", "desc")
             .get();

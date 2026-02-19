@@ -54,13 +54,19 @@ export default function LandVerificationPage() {
     }
 
     const getSoilQualityColor = (quality: SoilQuality) => {
-        const colors = {
+        const colors: Record<string, string> = {
             [SoilQuality.EXCELLENT]: 'bg-green-100 text-green-800',
             [SoilQuality.GOOD]: 'bg-lime-100 text-lime-800',
             [SoilQuality.FAIR]: 'bg-yellow-100 text-yellow-800',
             [SoilQuality.POOR]: 'bg-red-100 text-red-800',
+            [SoilQuality.FERTILE]: 'bg-emerald-100 text-emerald-800',
+            [SoilQuality.SANDY]: 'bg-orange-100 text-orange-800',
+            [SoilQuality.LOAMY]: 'bg-amber-100 text-amber-800',
+            [SoilQuality.CLAY]: 'bg-stone-100 text-stone-800',
+            [SoilQuality.MIXED]: 'bg-cyan-100 text-cyan-800',
+            [SoilQuality.UNKNOWN]: 'bg-gray-100 text-gray-800',
         };
-        return colors[quality];
+        return colors[quality] || 'bg-gray-100 text-gray-800';
     };
 
     return (

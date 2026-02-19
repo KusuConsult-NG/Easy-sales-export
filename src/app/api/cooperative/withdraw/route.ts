@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection } from 'firebase/firestore';
+import { db } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -49,18 +49,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check membership status
-        const membershipRef = doc(db, 'cooperative_members', userId);
-        const membershipDoc = await getDoc(membershipRef);
+        // Check membership status (Admin SDK)
+        const membershipDoc = await db.collection('cooperative_members').doc(userId).get();
 
-        if (!membershipDoc.exists()) {
+        if (!membershipDoc.exists) {
             return NextResponse.json(
                 { success: false, message: 'You must be a cooperative member to request withdrawal' },
                 { status: 403 }
             );
         }
 
-        const membershipData = membershipDoc.data();
+        const membershipData = membershipDoc.data()!;
 
         // Check if member is active
         if (membershipData.membershipStatus !== 'active') {
@@ -84,14 +83,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check for existing pending withdrawal requests
-        const { collection: collectionFn, query, where, getDocs } = await import('firebase/firestore');
-        const existingWithdrawalsQuery = query(
-            collectionFn(db, 'withdrawal_requests'),
-            where('userId', '==', userId),
-            where('status', '==', 'pending')
-        );
-        const existingWithdrawalsSnapshot = await getDocs(existingWithdrawalsQuery);
+        // Check for existing pending withdrawal requests (Admin SDK)
+        const existingWithdrawalsSnapshot = await db.collection('withdrawal_requests')
+            .where('userId', '==', userId)
+            .where('status', '==', 'pending')
+            .get();
 
         if (!existingWithdrawalsSnapshot.empty) {
             return NextResponse.json(
@@ -103,8 +99,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create withdrawal request
-        const withdrawalRef = doc(collection(db, 'withdrawal_requests'));
+        // Create withdrawal request (Admin SDK with server timestamps)
+        const withdrawalRef = db.collection('withdrawal_requests').doc();
         const withdrawalData = {
             userId,
             userEmail: session.user.email,
@@ -117,13 +113,13 @@ export async function POST(request: NextRequest) {
                 accountName
             },
             status: 'pending',
-            requestedAt: new Date(),
-            createdAt: new Date(),
+            requestedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             currentBalance: totalSavings,
             balanceAfterWithdrawal: totalSavings - amount,
         };
 
-        await setDoc(withdrawalRef, withdrawalData);
+        await withdrawalRef.set(withdrawalData);
 
         return NextResponse.json({
             success: true,
@@ -132,7 +128,7 @@ export async function POST(request: NextRequest) {
             data: {
                 amount,
                 status: 'pending',
-                requestedAt: withdrawalData.requestedAt
+                requestedAt: new Date().toISOString(),
             }
         });
 

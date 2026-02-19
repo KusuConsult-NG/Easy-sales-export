@@ -691,7 +691,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
             roles.push("farm-nation-seller");
         }
 
-        // Update user document in Firestore
+        // Update user document in Firestore - separate top-level and nested updates
         await db.collection(COLLECTIONS.USERS).doc(userId).set(
             {
                 farmNation: {
@@ -701,20 +701,19 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
                     onboardingCompletedAt: new Date().toISOString(),
                     termsAcceptedAt: new Date().toISOString(),
                 },
-                serviceRegistrations: {
-                    farmNation: {
-                        status: "pending", // Strict gating: Admin must approve
-                        role: data.role,
-                        completedAt: FieldValue.serverTimestamp(),
-                        submittedAt: FieldValue.serverTimestamp(),
-                    }
-                },
                 // isVerified: true, // REMOVED: User must be verified by Admin
                 roles: FieldValue.arrayUnion(...roles),
                 updatedAt: FieldValue.serverTimestamp(),
             },
             { merge: true }
         );
+        // Dot notation update for serviceRegistrations to prevent wiping other modules
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            "serviceRegistrations.farmNation.status": "pending",
+            "serviceRegistrations.farmNation.role": data.role,
+            "serviceRegistrations.farmNation.completedAt": FieldValue.serverTimestamp(),
+            "serviceRegistrations.farmNation.submittedAt": FieldValue.serverTimestamp(),
+        });
 
         return {
             success: true,

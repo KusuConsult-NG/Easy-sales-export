@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Submit Quiz Attempt
@@ -26,18 +26,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get quiz data to calculate score
-        const quizRef = doc(db, "quizzes", quizId);
-        const quizDoc = await getDoc(quizRef);
+        // Get quiz data to calculate score (Admin SDK)
+        const quizDoc = await db.collection("quizzes").doc(quizId).get();
 
-        if (!quizDoc.exists()) {
+        if (!quizDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Quiz not found" },
                 { status: 404 }
             );
         }
 
-        const quizData = quizDoc.data();
+        const quizData = quizDoc.data()!;
 
         // Calculate score
         let totalPoints = 0;
@@ -45,7 +44,6 @@ export async function POST(request: NextRequest) {
 
         quizData.questions.forEach((question: any) => {
             totalPoints += question.points;
-
             const userAnswer = answers[question.id];
 
             if (question.type === "mcq-single") {
@@ -69,15 +67,14 @@ export async function POST(request: NextRequest) {
                     earnedPoints += question.points;
                 }
             }
-            // Short-answer questions require manual grading
         });
 
         const scorePercentage = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
         const passed = scorePercentage >= quizData.passingScore;
 
-        // Save quiz attempt
-        const attemptRef = doc(collection(db, "quiz_attempts"));
-        await setDoc(attemptRef, {
+        // Save quiz attempt (Admin SDK)
+        const attemptRef = db.collection("quiz_attempts").doc();
+        await attemptRef.set({
             quizId,
             userId: session.user.id,
             courseId,
@@ -88,41 +85,35 @@ export async function POST(request: NextRequest) {
             totalPoints,
             passed,
             autoSubmit,
-            startedAt: new Date(), // Start time should be tracked on quiz page load (client-side), sent with submission
-            completedAt: new Date(),
-            createdAt: new Date(),
+            completedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
         });
 
-
-        //Update course progress if passed
+        // Update course progress if passed
         if (passed) {
-            const progressRef = doc(db, "courseProgress", `${session.user.id}_${courseId}`);
-            const progressDoc = await getDoc(progressRef);
+            const progressRef = db.collection("courseProgress").doc(`${session.user.id}_${courseId}`);
+            const progressDoc = await progressRef.get();
 
             const moduleId = quizData.moduleId || "module_unknown";
             const updateData: any = {
                 [`quizScores.${moduleId}`]: scorePercentage,
-                lastAccessedAt: new Date(),
+                lastAccessedAt: FieldValue.serverTimestamp(),
             };
 
-            if (progressDoc.exists()) {
-                // Update existing progress
-                const currentData = progressDoc.data();
+            if (progressDoc.exists) {
+                const currentData = progressDoc.data()!;
                 const completedQuizzes = new Set(currentData.completedQuizzes || []);
                 completedQuizzes.add(moduleId);
-
                 updateData.completedQuizzes = Array.from(completedQuizzes);
-                await setDoc(progressRef, updateData, { merge: true });
+                await progressRef.set(updateData, { merge: true });
             } else {
-                // Create new progress record
                 updateData.userId = session.user.id;
                 updateData.courseId = courseId;
                 updateData.completedQuizzes = [moduleId];
-                updateData.createdAt = new Date();
-                await setDoc(progressRef, updateData);
+                updateData.createdAt = FieldValue.serverTimestamp();
+                await progressRef.set(updateData);
             }
         }
-
 
         return NextResponse.json({
             success: true,

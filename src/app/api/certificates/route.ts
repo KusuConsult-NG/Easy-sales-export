@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db, storage } from "@/lib/firebase";
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, Timestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * GET - List user's certificates
@@ -20,12 +17,11 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const certificatesQuery = query(
-            collection(db, "user_certificates"),
-            where("userId", "==", session.user.id)
-        );
+        // List certificates (Admin SDK)
+        const snapshot = await db.collection("user_certificates")
+            .where("userId", "==", session.user.id)
+            .get();
 
-        const snapshot = await getDocs(certificatesQuery);
         const certificates = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),

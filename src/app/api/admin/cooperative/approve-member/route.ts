@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Approve Cooperative Membership Application
@@ -17,8 +17,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!session.user.roles?.includes("admin")) {
+        // Check if user is admin or super_admin
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -34,31 +35,35 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Update membership status
-        const memberRef = doc(db, "cooperative_members", memberId);
-        const memberDoc = await getDoc(memberRef);
+        // Update membership status (Admin SDK)
+        const memberRef = db.collection("cooperative_members").doc(memberId);
+        const memberDoc = await memberRef.get();
 
-        if (!memberDoc.exists()) {
+        if (!memberDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Member not found" },
                 { status: 404 }
             );
         }
 
-        await updateDoc(memberRef, {
+        await memberRef.update({
             membershipStatus: "approved",
             approvedBy: session.user.id,
-            approvedAt: new Date(),
-            updatedAt: new Date(),
+            approvedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Send approval email notification
         const memberData = memberDoc.data();
-        const { sendMembershipApprovalEmail } = await import('@/lib/email-notifications');
-        await sendMembershipApprovalEmail(
-            memberData.email || '',
-            memberData.name || 'Member'
-        );
+        try {
+            const { sendMembershipApprovalEmail } = await import('@/lib/email-notifications');
+            await sendMembershipApprovalEmail(
+                memberData?.email || '',
+                memberData?.name || 'Member'
+            );
+        } catch (emailError) {
+            logger.error("Failed to send approval email (non-blocking):", emailError);
+        }
 
         return NextResponse.json({
             success: true,

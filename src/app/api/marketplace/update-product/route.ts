@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Update Product
@@ -28,29 +28,26 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get product
-        const productRef = doc(db, "products", productId);
-        const productDoc = await getDoc(productRef);
+        const productRef = db.collection("products").doc(productId);
+        const productDoc = await productRef.get();
 
-        if (!productDoc.exists()) {
+        if (!productDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Product not found" },
                 { status: 404 }
             );
         }
 
-        // Check ownership
-        if (productDoc.data().sellerId !== userId) {
+        if (productDoc.data()!.sellerId !== userId) {
             return NextResponse.json(
                 { success: false, message: "You can only update your own products" },
                 { status: 403 }
             );
         }
 
-        // Update product
-        await updateDoc(productRef, {
+        await productRef.update({
             ...updateData,
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 // Force server-side execution (prevents build-time crypto errors)
@@ -23,7 +22,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Lazy-load crypto-dependent functions to prevent build-time execution
+        // Lazy-load crypto-dependent functions
         const {
             generateTOTPSecret,
             generateTOTPQRCode,
@@ -32,33 +31,26 @@ export async function POST(request: NextRequest) {
         } = await import("@/lib/mfa");
         const { encryptData } = await import("@/lib/security");
 
-        // Generate TOTP secret
         const secret = generateTOTPSecret();
-
-        // Generate QR code
         const qrCode = await generateTOTPQRCode(session.user.email!, secret);
-
-        // Generate recovery codes
         const recoveryCodes = generateBackupCodes(8);
 
-        // Encrypt secret before storing
         const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
         const encryptedSecret = encryptData(secret, secretKey);
 
-        // Store encrypted secret temporarily (will be confirmed on verification)
-        await updateDoc(doc(db, COLLECTIONS.USERS, session.user.id), {
+        // Store encrypted secret (Admin SDK)
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
             totpSecret: encryptedSecret,
-            mfaEnabled: false, // Not enabled until verified
+            mfaEnabled: false,
             updatedAt: new Date(),
         });
 
-        // Store recovery codes
         await storeBackupCodes(session.user.id, recoveryCodes);
 
         return NextResponse.json({
             success: true,
             qrCode,
-            secret, // Send unencrypted for QR display
+            secret,
             recoveryCodes,
         });
     } catch (error: any) {

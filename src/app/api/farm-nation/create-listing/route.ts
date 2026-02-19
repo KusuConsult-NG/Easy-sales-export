@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Create Land Listing
@@ -19,11 +19,9 @@ export async function POST(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Get user details
-        const userRef = doc(db, "users", userId);
-        const userDoc = await getDoc(userRef);
-
-        if (!userDoc.exists()) {
+        // Get user details (Admin SDK)
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (!userDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "User not found" },
                 { status: 404 }
@@ -47,7 +45,7 @@ export async function POST(request: NextRequest) {
         const longitude = formData.get("longitude") as string;
         const availableForSale = formData.get("availableForSale") === "true";
         const availableForRent = formData.get("availableForRent") === "true";
-        const escrowAvailable = formData.get("escrow Available") === "true";
+        const escrowAvailable = formData.get("escrowAvailable") === "true";
 
         // Validate required fields
         if (!title || !category || !description || !state || !lga || !address ||
@@ -58,11 +56,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Extract media files
+        // Extract media files (placeholder for cloud storage upload)
         const images: string[] = [];
         let videoUrl = "";
 
-        // Process images (simplified - in production, upload to cloud storage)
         for (let i = 0; i < 8; i++) {
             const image = formData.get(`image${i}`) as File;
             if (image) {
@@ -70,7 +67,6 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Process video
         const video = formData.get("video") as File;
         if (video) {
             videoUrl = `placeholder_${video.name}`;
@@ -86,7 +82,6 @@ export async function POST(request: NextRequest) {
         if (surveyPlan) documents.surveyPlan = `placeholder_${surveyPlan.name}`;
         if (taxClearance) documents.taxClearance = `placeholder_${taxClearance.name}`;
 
-        // Validate documents
         if (!documents.landTitle || !documents.surveyPlan) {
             return NextResponse.json(
                 { success: false, message: "Land title and survey plan are required" },
@@ -94,17 +89,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create GPS coordinates object
         const gpsCoordinates = latitude && longitude ? {
             latitude: parseFloat(latitude),
             longitude: parseFloat(longitude)
         } : null;
 
-        // Create land listing
-        const listingRef = doc(collection(db, "land_listings"));
-        const listingData = {
+        const userData = userDoc.data()!;
+
+        // Create land listing (Admin SDK)
+        const listingRef = db.collection("land_listings").doc();
+        await listingRef.set({
             userId,
-            ownerName: userDoc.data().name || userDoc.data().email,
+            ownerName: userData.name || userData.email,
             title,
             category,
             description,
@@ -123,11 +119,9 @@ export async function POST(request: NextRequest) {
             availableForRent,
             escrowAvailable,
             verificationStatus: "pending",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
-
-        await setDoc(listingRef, listingData);
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
 
         return NextResponse.json({
             success: true,

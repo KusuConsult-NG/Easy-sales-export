@@ -54,8 +54,8 @@ export default function AcademyLandingPage() {
     ];
 
     const bonuses = [
-        "Speed Selling 101",
-        "Export Intelligence Guide"
+        "7 Things Nobody Told You About Starting a Successful Export Business from Nigeria",
+        "Speed Selling 101: How to Sell Faster and Dominate Your Market"
     ];
 
     return (
@@ -170,7 +170,7 @@ export default function AcademyLandingPage() {
                                     </ul>
                                     <div className="text-center">
                                         <Link
-                                            href={`/auth/register?callbackUrl=/academy/application&plan=${tier.title.toLowerCase().replace(' ', '-')}`}
+                                            href={`/auth/register?callbackUrl=/academy/setup&plan=${tier.title.toLowerCase().replace(' ', '-')}`}
                                             className={`block w-full py-3 rounded-xl font-bold text-center transition ${tier.highlight
                                                 ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200'
                                                 : 'bg-slate-100 text-slate-900 hover:bg-slate-200'

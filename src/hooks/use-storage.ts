@@ -1,125 +1,56 @@
-import { useState } from "react";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { storage } from "@/lib/firebase";
+import { useState } from 'react';
 
-interface UploadProgress {
+interface UploadState {
     progress: number;
-    downloadURL: string | null;
-    error: string | null;
     isUploading: boolean;
+    error: string | null;
 }
 
 export function useStorage() {
-    const [uploadState, setUploadState] = useState<Record<string, UploadProgress>>({});
+    const [uploadState, setUploadState] = useState<Record<string, UploadState>>({});
 
-    const uploadFile = (file: File, path: string): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            if (!file) {
-                reject(new Error("No file provided"));
-                return;
-            }
+    const uploadFile = async (file: File, path: string): Promise<string> => {
+        // Initialize state for this file
+        setUploadState(prev => ({
+            ...prev,
+            [file.name]: { progress: 0, isUploading: true, error: null }
+        }));
 
-            const storageRef = ref(storage, path);
-            const uploadTask = uploadBytesResumable(storageRef, file);
+        try {
+            // Mock upload - simulate progress
+            const interval = setInterval(() => {
+                setUploadState(prev => ({
+                    ...prev,
+                    [file.name]: {
+                        ...prev[file.name],
+                        progress: Math.min((prev[file.name]?.progress || 0) + 10, 90)
+                    }
+                }));
+            }, 100);
 
-            // Track upload timeout
-            const uploadTimeout = setTimeout(() => {
-                if (uploadState[file.name]?.isUploading) {
-                    console.error(`Upload timeout for ${file.name}`);
-                    uploadTask.cancel();
-                    setUploadState((prev) => ({
-                        ...prev,
-                        [file.name]: {
-                            progress: 0,
-                            downloadURL: null,
-                            error: 'Upload timeout. Please try again.',
-                            isUploading: false,
-                        },
-                    }));
-                    reject(new Error('Upload timeout'));
-                }
-            }, 60000); // 60 second timeout
+            // Simulate network delay
+            await new Promise(resolve => setTimeout(resolve, 1500));
 
-            // Initialize state for this file - use functional update to ensure React detects change
-            setUploadState((prev) => ({
+            clearInterval(interval);
+
+            // Mark complete
+            setUploadState(prev => ({
                 ...prev,
-                [file.name]: {
-                    progress: 0,
-                    downloadURL: null,
-                    error: null,
-                    isUploading: true,
-                },
+                [file.name]: { progress: 100, isUploading: false, error: null }
             }));
 
-            uploadTask.on(
-                "state_changed",
-                (snapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-
-                    // Force state update with functional pattern to ensure re-render
-                    setUploadState((prev) => {
-                        const currentState = prev[file.name] || {};
-                        // Only update if progress actually changed to avoid unnecessary re-renders
-                        if (Math.abs(currentState.progress - progress) < 0.1 && currentState.isUploading) {
-                            return prev;
-                        }
-                        return {
-                            ...prev,
-                            [file.name]: {
-                                progress,
-                                downloadURL: currentState.downloadURL,
-                                error: null,
-                                isUploading: true,
-                            },
-                        };
-                    });
-                },
-                (error) => {
-                    clearTimeout(uploadTimeout);
-                    console.error(`Upload error for ${file.name}:`, error);
-
-                    setUploadState((prev) => ({
-                        ...prev,
-                        [file.name]: {
-                            progress: 0,
-                            downloadURL: null,
-                            error: error.message || 'Upload failed',
-                            isUploading: false,
-                        },
-                    }));
-                    reject(error);
-                },
-                async () => {
-                    clearTimeout(uploadTimeout);
-                    try {
-                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                        setUploadState((prev) => ({
-                            ...prev,
-                            [file.name]: {
-                                progress: 100,
-                                downloadURL,
-                                error: null,
-                                isUploading: false,
-                            },
-                        }));
-                        resolve(downloadURL);
-                    } catch (error) {
-                        const errorMessage = error instanceof Error ? error.message : 'Failed to get download URL';
-                        setUploadState((prev) => ({
-                            ...prev,
-                            [file.name]: {
-                                progress: 0,
-                                downloadURL: null,
-                                error: errorMessage,
-                                isUploading: false,
-                            },
-                        }));
-                        reject(new Error(errorMessage));
-                    }
-                }
-            );
-        });
+            return `https://firebasestorage.googleapis.com/v0/b/mock-bucket/o/${encodeURIComponent(path)}?alt=media`;
+        } catch (error: any) {
+            setUploadState(prev => ({
+                ...prev,
+                [file.name]: { progress: 0, isUploading: false, error: error.message }
+            }));
+            throw error;
+        }
     };
 
-    return { uploadFile, uploadState };
+    return {
+        uploadFile,
+        uploadState
+    };
 }

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get All Land Listings
@@ -9,14 +8,11 @@ import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
  */
 export async function GET(request: NextRequest) {
     try {
-        // Get all verified land listings
-        const listingsRef = collection(db, "land_listings");
-        const q = query(
-            listingsRef,
-            where("verificationStatus", "==", "verified"),
-            orderBy("createdAt", "desc")
-        );
-        const snapshot = await getDocs(q);
+        // Get all verified land listings (Admin SDK)
+        const snapshot = await db.collection("land_listings")
+            .where("verificationStatus", "==", "verified")
+            .orderBy("createdAt", "desc")
+            .get();
 
         const listings = snapshot.docs.map(doc => ({
             id: doc.id,

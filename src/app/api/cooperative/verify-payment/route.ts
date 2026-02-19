@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -12,7 +12,8 @@ const paymentVerifyLimiter = rateLimit(rateLimitConfig.payment);
 /**
  * API Route: Verify Paystack Payment for Cooperative Membership
  * 
- * This endpoint verifies the payment with Paystack and updates the membership record
+ * This endpoint verifies the payment with Paystack and updates the membership record.
+ * Includes idempotency guard to prevent double-processing.
  */
 export async function POST(request: NextRequest) {
     // RATE LIMITING - Prevent payment verification abuse
@@ -39,6 +40,29 @@ export async function POST(request: NextRequest) {
                 { success: false, message: "Payment reference is required" },
                 { status: 400 }
             );
+        }
+
+        const userId = session.user.id;
+        const membershipRef = db.collection("cooperative_members").doc(userId);
+
+        // 🔒 IDEMPOTENCY GUARD: Check if already verified before hitting Paystack
+        const membershipDoc = await membershipRef.get();
+        if (!membershipDoc.exists) {
+            return NextResponse.json(
+                { success: false, message: "Membership record not found" },
+                { status: 404 }
+            );
+        }
+
+        const membershipData = membershipDoc.data()!;
+
+        // If already completed, return success without re-processing
+        if (membershipData.paymentStatus === "completed") {
+            return NextResponse.json({
+                success: true,
+                message: "Payment already verified. Your application is pending approval.",
+                alreadyVerified: true,
+            });
         }
 
         // Verify payment with Paystack
@@ -75,25 +99,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Update membership record
-        const userId = session.user.id;
-        const membershipRef = doc(db, "cooperative_members", userId);
-        const membershipDoc = await getDoc(membershipRef);
-
-        if (!membershipDoc.exists()) {
-            return NextResponse.json(
-                { success: false, message: "Membership record not found" },
-                { status: 404 }
-            );
-        }
-
-        const membershipData = membershipDoc.data();
         const tier = membershipData.membershipTier || "basic";
         const expectedAmount = tier === "premium" ? 20000 : 10000;
         const paidAmount = verifyData.data.amount / 100; // Paystack amount is in kobo
 
         // 🔒 SECURITY FIX: Validate Amount
-        // Allow 1 naira variance for potential rounding issues, though unlikely with Paystack
+        // Allow 1 naira variance for potential rounding issues
         if (paidAmount < expectedAmount - 1) {
             return NextResponse.json(
                 {
@@ -104,11 +115,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Update payment status
-        await updateDoc(membershipRef, {
+        // Update payment status (Admin SDK with server timestamps)
+        await membershipRef.update({
             paymentStatus: "completed",
-            paymentVerifiedAt: new Date(),
-            updatedAt: new Date(),
+            paymentVerifiedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
             // Ensure savings/loan balances are initialized if not already
             savingsBalance: membershipData.savingsBalance || 0,
             loanBalance: membershipData.loanBalance || 0,

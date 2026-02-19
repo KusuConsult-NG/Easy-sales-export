@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Get All Loan Products
@@ -9,9 +8,9 @@ import { collection, getDocs, query, orderBy } from "firebase/firestore";
  */
 export async function GET(request: NextRequest) {
     try {
-        const productsRef = collection(db, "loan_products");
-        const q = query(productsRef, orderBy("minAmount", "asc"));
-        const snapshot = await getDocs(q);
+        const snapshot = await db.collection("loan_products")
+            .orderBy("minAmount", "asc")
+            .get();
 
         const products = snapshot.docs.map(doc => ({
             id: doc.id,

@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { storage } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { adminStorage } from "@/lib/firebase-admin";
 import { withRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST - Generic File Upload
- * 
- * Uploads a file to Firebase Storage.
+ *
+ * Uploads a file to Firebase Storage (Admin SDK).
  * Requires Authentication.
- * 
+ *
  * Form Data:
  * - file: File (Required) - Max 5MB, Images or PDF
  * - folder: string (Optional) - Default 'uploads'
@@ -55,23 +54,30 @@ async function uploadHandler(request: NextRequest) {
             );
         }
 
-        // Sanitize filename and folder (alphanumeric only, prevent path traversal)
+        // Sanitize filename and folder
         const sanitizedFolder = folder.replace(/[^a-zA-Z0-9]/g, "");
         const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
         const fileName = `${Date.now()}_${safeName}`;
 
         // Path: uploads/{userId}/{folder}/{timestamp}_{filename}
         const storagePath = `uploads/${session.user.id}/${sanitizedFolder}/${fileName}`;
-        const storageRef = ref(storage, storagePath);
+        const bucket = adminStorage.bucket();
+        const fileRef = bucket.file(storagePath);
 
-        const buffer = await file.arrayBuffer();
-        await uploadBytes(storageRef, buffer, { contentType: file.type });
+        const buffer = Buffer.from(await file.arrayBuffer());
+        await fileRef.save(buffer, {
+            metadata: { contentType: file.type },
+        });
 
-        const fileUrl = await getDownloadURL(storageRef);
+        // Generate signed URL (valid for 7 days)
+        const [signedUrl] = await fileRef.getSignedUrl({
+            action: "read",
+            expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        });
 
         return NextResponse.json({
             success: true,
-            url: fileUrl,
+            url: signedUrl,
             filename: fileName,
             path: storagePath
         });

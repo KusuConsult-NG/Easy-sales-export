@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Submit Loan Application
@@ -29,18 +29,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check membership status
-        const membershipRef = doc(db, "cooperative_members", userId);
-        const membershipDoc = await getDoc(membershipRef);
+        // Check membership status (Admin SDK)
+        const membershipDoc = await db.collection("cooperative_members").doc(userId).get();
 
-        if (!membershipDoc.exists()) {
+        if (!membershipDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "You must be a cooperative member to apply for loans" },
                 { status: 403 }
             );
         }
 
-        const membershipData = membershipDoc.data();
+        const membershipData = membershipDoc.data()!;
 
         // Check membership status - must be active (not just approved)
         if (membershipData.membershipStatus !== "active") {
@@ -58,18 +57,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get loan product details
-        const productRef = doc(db, "loan_products", productId);
-        const productDoc = await getDoc(productRef);
+        // Get loan product details (Admin SDK)
+        const productDoc = await db.collection("loan_products").doc(productId).get();
 
-        if (!productDoc.exists()) {
+        if (!productDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Loan product not found" },
                 { status: 404 }
             );
         }
 
-        const product = productDoc.data();
+        const product = productDoc.data()!;
 
         // Validate amount range
         if (amount < product.minAmount || amount > product.maxAmount) {
@@ -96,14 +94,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // ELIGIBILITY CHECK #2: Check for existing active loans
-        const { collection: collectionFn, query, where, getDocs } = await import("firebase/firestore");
-        const existingLoansQuery = query(
-            collectionFn(db, "loan_applications"),
-            where("userId", "==", userId),
-            where("status", "in", ["pending", "approved", "active"])
-        );
-        const existingLoansSnapshot = await getDocs(existingLoansQuery);
+        // ELIGIBILITY CHECK #2: Check for existing active loans (Admin SDK)
+        const existingLoansSnapshot = await db.collection("loan_applications")
+            .where("userId", "==", userId)
+            .where("status", "in", ["pending", "approved", "active"])
+            .get();
 
         if (!existingLoansSnapshot.empty) {
             return NextResponse.json(
@@ -131,8 +126,8 @@ export async function POST(request: NextRequest) {
         const monthlyPayment = (amount * monthlyRate * Math.pow(1 + monthlyRate, product.durationMonths)) /
             (Math.pow(1 + monthlyRate, product.durationMonths) - 1);
 
-        // Create loan application
-        const applicationRef = doc(collection(db, "loan_applications"));
+        // Create loan application (Admin SDK)
+        const applicationRef = db.collection("loan_applications").doc();
         const applicationData = {
             userId,
             productId,
@@ -143,17 +138,21 @@ export async function POST(request: NextRequest) {
             durationMonths: product.durationMonths,
             monthlyPayment: Math.round(monthlyPayment),
             status: "pending",
-            appliedAt: new Date(),
-            createdAt: new Date(),
+            appliedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
         };
 
-        await setDoc(applicationRef, applicationData);
+        await applicationRef.set(applicationData);
 
         return NextResponse.json({
             success: true,
             message: "Loan application submitted successfully",
             applicationId: applicationRef.id,
-            data: applicationData
+            data: {
+                ...applicationData,
+                appliedAt: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
+            }
         });
     } catch (error) {
         logger.error("Failed to submit loan application:", error);

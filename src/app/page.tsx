@@ -6,13 +6,6 @@ import ModuleCard from "@/components/hub/ModuleCard";
 import PlatformStats from "@/components/hub/PlatformStats";
 import Link from "next/link";
 import {
-    Package,
-    ShoppingCart,
-    Map,
-    GraduationCap,
-    Users,
-    Building2,
-    Wallet,
     ArrowRight
 } from "lucide-react";
 
@@ -21,7 +14,8 @@ export default function HubPage() {
         {
             title: "WAVE Program",
             description: "RH-WAVE 774: Presidential mandate empowering Nigerian women in agriculture through training, funding, and market access",
-            iconImage: "/images/modules/wave.png",
+            iconImage: "/images/modules/wave-v3.png",
+            iconSize: "lg" as const,
             href: "/wave/landing",
             gradient: "from-pink-500 to-rose-500",
             stats: "10M Women Target",
@@ -29,7 +23,7 @@ export default function HubPage() {
         {
             title: "Cooperatives",
             description: "Join farming communities for shared resources, knowledge, and collective bargaining",
-            iconImage: "/images/modules/cooperative.png",
+            iconImage: "/images/modules/cooperative-v3.png",
             href: "/cooperatives",
             gradient: "from-indigo-500 to-blue-500",
             stats: "89 Active Groups",
@@ -37,7 +31,7 @@ export default function HubPage() {
         {
             title: "Marketplace",
             description: "Buy and sell agricultural products directly from verified farmers and traders",
-            iconImage: "/images/modules/marketplace.png",
+            iconImage: "/images/modules/marketplace-v3.png",
             href: "/marketplace",
             gradient: "from-orange-500 to-amber-500",
             stats: "3,856 Products Listed",
@@ -45,7 +39,7 @@ export default function HubPage() {
         {
             title: "Export Windows",
             description: "Manage international agricultural exports with escrow protection and collective opportunities",
-            iconImage: "/images/modules/export.png",
+            iconImage: "/images/modules/export-v3.png",
             href: "/export",
             gradient: "from-blue-500 to-cyan-500",
             stats: "1,247 Active Exports",
@@ -53,7 +47,8 @@ export default function HubPage() {
         {
             title: "Farm Nation",
             description: "Invest in premium farmland and earn guaranteed returns on agricultural real estate",
-            iconImage: "/images/modules/farm-nation.png",
+            iconImage: "/images/modules/farm-nation-v3.png",
+            iconSize: "lg" as const,
             href: "/farm-nation",
             gradient: "from-green-500 to-emerald-500",
             stats: "156 Land Parcels",
@@ -61,11 +56,11 @@ export default function HubPage() {
         {
             title: "Academy",
             description: "Learn modern farming techniques and earn certifications from industry experts",
-            iconImage: "/images/modules/academy.png",
+            iconImage: "/images/modules/academy-v3.png",
+            iconSize: "lg" as const,
             href: "/academy",
             gradient: "from-purple-500 to-pink-500",
             stats: "8,932 Courses Completed",
-            isNew: true,
         },
     ];
 

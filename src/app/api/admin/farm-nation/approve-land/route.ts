@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Approve Land Listing (Admin)
@@ -17,11 +17,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check admin role
-        const userRef = doc(db, "users", session.user.id);
-        const userDoc = await getDoc(userRef);
-
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -37,23 +34,21 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Get listing
-        const listingRef = doc(db, "land_listings", verificationId);
-        const listingDoc = await getDoc(listingRef);
+        const listingRef = db.collection("land_listings").doc(verificationId);
+        const listingDoc = await listingRef.get();
 
-        if (!listingDoc.exists()) {
+        if (!listingDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "Listing not found" },
                 { status: 404 }
             );
         }
 
-        // Approve listing
-        await updateDoc(listingRef, {
+        await listingRef.update({
             verificationStatus: "verified",
             verifiedBy: session.user.id,
-            verifiedAt: new Date(),
-            updatedAt: new Date(),
+            verifiedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

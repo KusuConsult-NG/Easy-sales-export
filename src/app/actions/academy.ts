@@ -644,7 +644,9 @@ const ACADEMY_REGISTRATION_FEE = 5000; // ₦5,000
 /**
  * Initiate academy onboarding payment (must pay before submitting application)
  */
-export async function initiateAcademyPaymentAction(): Promise<{
+export async function initiateAcademyPaymentAction(
+    plan?: "foundation" | "advanced" | "elite" | "registration"
+): Promise<{
     success: boolean;
     paymentUrl?: string;
     error?: string;
@@ -658,7 +660,7 @@ export async function initiateAcademyPaymentAction(): Promise<{
         const userId = session.user.id;
 
         // Check if already paid
-        const existingApp = await db.collection("ACADEMY_APPLICATIONS")
+        const existingApp = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where("userId", "==", userId)
             .where("paymentStatus", "==", "completed")
             .limit(1)
@@ -673,6 +675,17 @@ export async function initiateAcademyPaymentAction(): Promise<{
             return { error: "Payment system not configured", success: false };
         }
 
+        let amount = ACADEMY_REGISTRATION_FEE; // Default to 5000 (Registration)
+        let purpose = "academy_registration";
+
+        if (plan && plan !== "registration") {
+            if (plan === "foundation") amount = 25000;
+            else if (plan === "advanced") amount = 50000;
+            else if (plan === "elite") amount = 100000;
+        } else {
+            plan = "registration";
+        }
+
         const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
             method: "POST",
             headers: {
@@ -681,10 +694,11 @@ export async function initiateAcademyPaymentAction(): Promise<{
             },
             body: JSON.stringify({
                 email: session.user.email,
-                amount: ACADEMY_REGISTRATION_FEE * 100, // Kobo
+                amount: amount * 100, // Kobo
                 metadata: {
                     userId,
                     purpose: "academy_registration",
+                    plan, // Store the plan!
                 },
                 callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/payment/callback`,
             }),
@@ -732,17 +746,15 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
         }
 
         // Mark payment as completed for the user
-        await db.collection("users").doc(session.user.id).set({
-            serviceRegistrations: {
-                academy: {
-                    paymentStatus: "completed",
-                    paymentReference: reference,
-                    paymentAmount: verify.data.amount / 100,
-                    paidAt: FieldValue.serverTimestamp(),
-                }
-            },
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        // Mark payment as completed for the user using dot notation to prevent overwriting
+        await db.collection("users").doc(session.user.id).update({
+            "serviceRegistrations.academy.paymentStatus": "completed",
+            "serviceRegistrations.academy.paymentReference": reference,
+            "serviceRegistrations.academy.paymentAmount": verify.data.amount / 100,
+            "serviceRegistrations.academy.plan": metadata.plan || "foundation",
+            "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
+            "updatedAt": FieldValue.serverTimestamp(),
+        });
 
         return { success: true };
     } catch (error: any) {
@@ -789,7 +801,7 @@ export async function submitAcademyApplicationAction(
         const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         // Save to Firestore
-        await db.collection("ACADEMY_APPLICATIONS").doc(applicationId).set({
+        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).set({
             ...applicationData,
             userId: session.user.id,
             applicationId,
@@ -801,16 +813,13 @@ export async function submitAcademyApplicationAction(
         });
 
         // CRITICAL: Update user.serviceRegistrations to link application with auth
-        await db.collection("users").doc(session.user.id).set({
-            serviceRegistrations: {
-                academy: {
-                    status: "pending",
-                    applicationId,
-                    submittedAt: FieldValue.serverTimestamp(),
-                }
-            },
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        // CRITICAL: Update user.serviceRegistrations to link application with auth using dot notation
+        await db.collection("users").doc(session.user.id).update({
+            "serviceRegistrations.academy.status": "pending",
+            "serviceRegistrations.academy.applicationId": applicationId,
+            "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
+            "updatedAt": FieldValue.serverTimestamp(),
+        });
 
         // Create audit log
         await createAdminAuditLog({

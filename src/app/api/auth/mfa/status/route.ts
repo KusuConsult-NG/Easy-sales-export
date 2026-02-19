@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -13,7 +12,6 @@ export async function GET(request: NextRequest) {
         const session = await auth();
 
         // Return non-error response when not authenticated
-        // This prevents console errors during page load
         if (!session?.user) {
             return NextResponse.json({
                 success: true,
@@ -22,9 +20,10 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, session.user.id));
+        // Get user MFA status (Admin SDK)
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
 
-        if (!userDoc.exists()) {
+        if (!userDoc.exists) {
             return NextResponse.json({
                 success: true,
                 enabled: false,
@@ -32,7 +31,7 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        const userData = userDoc.data();
+        const userData = userDoc.data()!;
 
         return NextResponse.json({
             success: true,
@@ -41,7 +40,6 @@ export async function GET(request: NextRequest) {
         });
     } catch (error: any) {
         logger.error("MFA status check error:", error);
-        // Return graceful error response instead of 500
         return NextResponse.json({
             success: true,
             enabled: false,

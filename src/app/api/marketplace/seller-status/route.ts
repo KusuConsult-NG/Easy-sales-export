@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Check Marketplace Seller Status
@@ -19,11 +18,10 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Check seller verification status
-        const sellerRef = doc(db, "marketplace_sellers", userId);
-        const sellerDoc = await getDoc(sellerRef);
+        // Check seller verification status (Admin SDK)
+        const sellerDoc = await db.collection("marketplace_sellers").doc(userId).get();
 
-        if (!sellerDoc.exists()) {
+        if (!sellerDoc.exists) {
             return NextResponse.json({
                 success: true,
                 status: "not_verified",
@@ -31,7 +29,7 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        const sellerData = sellerDoc.data();
+        const sellerData = sellerDoc.data()!;
 
         return NextResponse.json({
             success: true,

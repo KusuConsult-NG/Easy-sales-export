@@ -53,14 +53,21 @@ export default function LoanApprovalPage() {
     }
 
     const getPurposeColor = (purpose: LoanPurpose) => {
-        const colors = {
+        const colors: Record<string, string> = {
             [LoanPurpose.AGRICULTURE]: 'bg-green-100 text-green-800',
             [LoanPurpose.EQUIPMENT]: 'bg-blue-100 text-blue-800',
             [LoanPurpose.LAND]: 'bg-purple-100 text-purple-800',
             [LoanPurpose.WORKING_CAPITAL]: 'bg-orange-100 text-orange-800',
             [LoanPurpose.OTHER]: 'bg-slate-100 text-slate-800',
+            [LoanPurpose.SEEDS]: 'bg-emerald-100 text-emerald-800',
+            [LoanPurpose.FERTILIZER]: 'bg-lime-100 text-lime-800',
+            [LoanPurpose.IRRIGATION]: 'bg-cyan-100 text-cyan-800',
+            [LoanPurpose.LABOR]: 'bg-gray-100 text-gray-800',
+            [LoanPurpose.PROCESSING]: 'bg-indigo-100 text-indigo-800',
+            [LoanPurpose.MARKETING]: 'bg-pink-100 text-pink-800',
+            [LoanPurpose.EXPANSION]: 'bg-violet-100 text-violet-800',
         };
-        return colors[purpose];
+        return colors[purpose] || 'bg-slate-100 text-slate-800';
     };
 
     return (
@@ -191,11 +198,11 @@ export default function LoanApprovalPage() {
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Business</p>
-                                        <p className="font-semibold text-slate-900">{loan.businessDetails.name}</p>
+                                        <p className="font-semibold text-slate-900">{loan.businessDetails?.name || 'N/A'}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Years Operating</p>
-                                        <p className="font-semibold text-slate-900">{loan.businessDetails.yearsInOperation} years</p>
+                                        <p className="font-semibold text-slate-900">{loan.businessDetails?.yearsInOperation || 0} years</p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Applied</p>
@@ -213,14 +220,14 @@ export default function LoanApprovalPage() {
                                         <div>
                                             <p className="font-semibold text-slate-900">Collateral</p>
                                             <p className="text-slate-600">
-                                                Type: {loan.collateral.type} | Value: ₦{loan.collateral.value.toLocaleString()}
+                                                Type: {loan.collateral?.type || 'N/A'} | Value: ₦{loan.collateral?.value?.toLocaleString() || '0'}
                                             </p>
-                                            <p className="text-slate-600">{loan.collateral.description}</p>
+                                            <p className="text-slate-600">{loan.collateral?.description || 'No description'}</p>
                                         </div>
                                         <div>
                                             <p className="font-semibold text-slate-900">Business Details</p>
                                             <p className="text-slate-600">
-                                                Type: {loan.businessDetails.type} | Revenue: ₦{loan.businessDetails.annualRevenue.toLocaleString()}
+                                                Type: {loan.businessDetails?.type || 'N/A'} | Revenue: ₦{loan.businessDetails?.annualRevenue?.toLocaleString() || '0'}
                                             </p>
                                         </div>
                                     </div>

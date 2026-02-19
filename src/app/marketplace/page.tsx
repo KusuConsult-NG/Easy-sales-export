@@ -34,7 +34,7 @@ export default async function MarketplaceLandingPage() {
                             Agricultural Marketplace
                         </div>
                         <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 leading-tight">
-                            Digital Marketplace
+                            Easy Market Nigeria
                         </h1>
                         <p className="text-lg md:text-xl lg:text-2xl mb-3 md:mb-4 text-green-50">
                             Buy & Sell Quality Agricultural Products

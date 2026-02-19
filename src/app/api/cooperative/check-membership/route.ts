@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Check Cooperative Membership Status
@@ -19,11 +18,10 @@ export async function GET(request: NextRequest) {
 
         const userId = session.user.id;
 
-        // Check if user is a member
-        const membershipRef = doc(db, "cooperative_members", userId);
-        const membershipDoc = await getDoc(membershipRef);
+        // Check if user is a member (Admin SDK)
+        const membershipDoc = await db.collection("cooperative_members").doc(userId).get();
 
-        if (!membershipDoc.exists()) {
+        if (!membershipDoc.exists) {
             return NextResponse.json({
                 success: true,
                 isMember: false,
@@ -36,7 +34,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             isMember: true,
-            status: membershipData.membershipStatus || "pending",
+            status: membershipData?.membershipStatus || "pending",
             data: membershipData
         });
     } catch (error) {

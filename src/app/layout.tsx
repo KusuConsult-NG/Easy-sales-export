@@ -87,7 +87,7 @@ export default function RootLayout({
                   if (shouldBeDark) {
                     document.documentElement.classList.add('dark');
                   }
-                } catch (e) {}
+                } catch (e) { console.warn('Theme init:', e); }
               })();
             `,
           }}

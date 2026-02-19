@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
 
 /**
  * API Route: Export WAVE Compliance Reports (PDF/CSV)
@@ -17,11 +16,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check admin role
-        const userRef = doc(db, "users", session.user.id);
-        const userDoc = await getDoc(userRef);
-
-        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        // Check admin role from session (not from DB query)
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -49,18 +46,14 @@ export async function POST(request: NextRequest) {
                 break;
         }
 
-        // Fetch WAVE applications
-        const applicationsRef = collection(db, "wave_applications");
-        let applicationsQuery = query(applicationsRef);
+        // Fetch WAVE applications (Admin SDK)
+        let query: FirebaseFirestore.Query = db.collection("wave_applications");
 
         if (dateFilter) {
-            applicationsQuery = query(
-                applicationsRef,
-                where("createdAt", ">=", dateFilter)
-            );
+            query = query.where("createdAt", ">=", dateFilter);
         }
 
-        const applicationsSnapshot = await getDocs(applicationsQuery);
+        const applicationsSnapshot = await query.get();
         const applications = applicationsSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
@@ -87,7 +80,6 @@ export async function POST(request: NextRequest) {
 }
 
 function generateCSV(applications: any[], timeframe: string) {
-    // CSV Headers
     const headers = [
         "Application ID",
         "Full Name",
@@ -104,7 +96,6 @@ function generateCSV(applications: any[], timeframe: string) {
         "Application Date",
     ];
 
-    // CSV Rows
     const rows = applications.map(app => [
         app.id,
         app.fullName || "",
@@ -121,13 +112,11 @@ function generateCSV(applications: any[], timeframe: string) {
         app.createdAt ? new Date(app.createdAt).toLocaleDateString() : "",
     ]);
 
-    // Build CSV content
     const csvContent = [
         headers.join(","),
         ...rows.map(row => row.map(cell => `"${cell}"`).join(",")),
     ].join("\n");
 
-    // Return CSV response
     return new NextResponse(csvContent, {
         status: 200,
         headers: {
@@ -138,7 +127,6 @@ function generateCSV(applications: any[], timeframe: string) {
 }
 
 function generatePDFReport(applications: any[], timeframe: string) {
-    // Calculate stats
     const totalApplications = applications.length;
     const approved = applications.filter(app => app.status === "approved").length;
     const rejected = applications.filter(app => app.status === "rejected").length;
@@ -148,7 +136,6 @@ function generatePDFReport(applications: any[], timeframe: string) {
         .filter(app => app.status === "approved" && app.amountDisbursed)
         .reduce((sum, app) => sum + (app.amountDisbursed || 0), 0);
 
-    // Generate simple HTML report (can be converted to PDF using a library)
     const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -156,65 +143,17 @@ function generatePDFReport(applications: any[], timeframe: string) {
     <meta charset="UTF-8">
     <title>WAVE Compliance Report</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 40px;
-            color: #333;
-        }
-        h1 {
-            color: #059669;
-            border-bottom: 3px solid #059669;
-            padding-bottom: 10px;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-            margin: 30px 0;
-        }
-        .stat-card {
-            border: 1px solid #e5e7eb;
-            padding: 20px;
-            border-radius: 8px;
-            background: #f9fafb;
-        }
-        .stat-label {
-            font-size: 14px;
-            color: #6b7280;
-            margin-bottom: 5px;
-        }
-        .stat-value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #059669;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 30px;
-        }
-        th {
-            background: #059669;
-            color: white;
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-        }
-        td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        tr:nth-child(even) {
-            background: #f9fafb;
-        }
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #e5e7eb;
-            font-size: 12px;
-            color: #6b7280;
-            text-align: center;
-        }
+        body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+        h1 { color: #059669; border-bottom: 3px solid #059669; padding-bottom: 10px; }
+        .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 30px 0; }
+        .stat-card { border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px; background: #f9fafb; }
+        .stat-label { font-size: 14px; color: #6b7280; margin-bottom: 5px; }
+        .stat-value { font-size: 32px; font-weight: bold; color: #059669; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th { background: #059669; color: white; padding: 12px; text-align: left; font-weight: 600; }
+        td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
+        tr:nth-child(even) { background: #f9fafb; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }
     </style>
 </head>
 <body>
@@ -223,22 +162,10 @@ function generatePDFReport(applications: any[], timeframe: string) {
     <p><strong>Generated:</strong> ${new Date().toLocaleDateString()}</p>
 
     <div class="stats">
-        <div class="stat-card">
-            <div class="stat-label">Total Applications</div>
-            <div class="stat-value">${totalApplications}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Approved</div>
-            <div class="stat-value">${approved}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Pending</div>
-            <div class="stat-value">${pending}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">Rejected</div>
-            <div class="stat-value">${rejected}</div>
-        </div>
+        <div class="stat-card"><div class="stat-label">Total Applications</div><div class="stat-value">${totalApplications}</div></div>
+        <div class="stat-card"><div class="stat-label">Approved</div><div class="stat-value">${approved}</div></div>
+        <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value">${pending}</div></div>
+        <div class="stat-card"><div class="stat-label">Rejected</div><div class="stat-value">${rejected}</div></div>
     </div>
 
     <h2>Financial Summary</h2>
@@ -248,13 +175,7 @@ function generatePDFReport(applications: any[], timeframe: string) {
     <h2>Application Details</h2>
     <table>
         <thead>
-            <tr>
-                <th>Name</th>
-                <th>Business</th>
-                <th>Status</th>
-                <th>Amount</th>
-                <th>Date</th>
-            </tr>
+            <tr><th>Name</th><th>Business</th><th>Status</th><th>Amount</th><th>Date</th></tr>
         </thead>
         <tbody>
             ${applications.slice(0, 50).map(app => `
@@ -281,7 +202,6 @@ function generatePDFReport(applications: any[], timeframe: string) {
 </html>
     `;
 
-    // Return HTML response (in production, convert to PDF using puppeteer or similar)
     return new NextResponse(htmlContent, {
         status: 200,
         headers: {

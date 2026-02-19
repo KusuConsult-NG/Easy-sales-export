@@ -33,19 +33,20 @@ export default function MyLoansPage() {
     }
 
     const getStatusColor = (status: LoanStatus) => {
-        const colors = {
+        const colors: Record<string, string> = {
             [LoanStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
+            [LoanStatus.REVIEWING]: 'bg-orange-100 text-orange-800',
             [LoanStatus.APPROVED]: 'bg-green-100 text-green-800',
             [LoanStatus.REJECTED]: 'bg-red-100 text-red-800',
             [LoanStatus.DISBURSED]: 'bg-blue-100 text-blue-800',
             [LoanStatus.REPAID]: 'bg-purple-100 text-purple-800',
             [LoanStatus.DEFAULTED]: 'bg-slate-100 text-slate-800',
         };
-        return colors[status];
+        return colors[status] || 'bg-slate-100 text-slate-800';
     };
 
     const getStatusIcon = (status: LoanStatus) => {
-        if (status === LoanStatus.PENDING) return <Clock className="w-4 h-4" />;
+        if (status === LoanStatus.PENDING || status === LoanStatus.REVIEWING) return <Clock className="w-4 h-4" />;
         if (status === LoanStatus.APPROVED || status === LoanStatus.DISBURSED || status === LoanStatus.REPAID)
             return <CheckCircle className="w-4 h-4" />;
         if (status === LoanStatus.REJECTED || status === LoanStatus.DEFAULTED)
@@ -149,17 +150,17 @@ export default function MyLoansPage() {
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl">
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Collateral</p>
-                                        <p className="font-semibold text-slate-900 text-sm">{loan.collateral.type}</p>
+                                        <p className="font-semibold text-slate-900 text-sm">{loan.collateral?.type || 'N/A'}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Value</p>
                                         <p className="font-semibold text-slate-900 text-sm">
-                                            ₦{loan.collateral.value.toLocaleString()}
+                                            ₦{loan.collateral?.value?.toLocaleString() || '0'}
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Business</p>
-                                        <p className="font-semibold text-slate-900 text-sm">{loan.businessDetails.name}</p>
+                                        <p className="font-semibold text-slate-900 text-sm">{loan.businessDetails?.name || 'N/A'}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500 mb-1">Application ID</p>
@@ -170,12 +171,12 @@ export default function MyLoansPage() {
                                 </div>
 
                                 {/* Rejection Reason */}
-                                {loan.status === LoanStatus.REJECTED && loan.rejectionReason && (
+                                {loan.status === LoanStatus.REJECTED && loan.rejectedReason && (
                                     <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
                                         <p className="text-sm font-semibold text-red-900 mb-1">
                                             Rejection Reason:
                                         </p>
-                                        <p className="text-sm text-red-700">{loan.rejectionReason}</p>
+                                        <p className="text-sm text-red-700">{loan.rejectedReason}</p>
                                     </div>
                                 )}
 

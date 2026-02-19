@@ -45,14 +45,20 @@ function AutoFitBounds({ listings }: { listings: LandListing[] }) {
 
 // Custom marker icon based on soil quality
 function getMarkerIcon(soilQuality: SoilQuality): Icon {
-    const colors = {
+    const colors: Record<string, string> = {
         [SoilQuality.EXCELLENT]: '#22c55e', // green
         [SoilQuality.GOOD]: '#84cc16',      // lime
         [SoilQuality.FAIR]: '#eab308',      // yellow
         [SoilQuality.POOR]: '#ef4444',      // red
+        [SoilQuality.FERTILE]: '#10b981',   // emerald
+        [SoilQuality.SANDY]: '#f97316',     // orange
+        [SoilQuality.LOAMY]: '#f59e0b',     // amber
+        [SoilQuality.CLAY]: '#78716c',      // stone
+        [SoilQuality.MIXED]: '#06b6d4',     // cyan
+        [SoilQuality.UNKNOWN]: '#6b7280',   // gray
     };
 
-    const color = colors[soilQuality];
+    const color = colors[soilQuality] || '#6b7280';
 
     return new Icon({
         iconUrl: `data:image/svg+xml;utf8,${encodeURIComponent(`
@@ -69,13 +75,19 @@ function getMarkerIcon(soilQuality: SoilQuality): Icon {
 }
 
 function getSoilQualityColor(quality: SoilQuality): string {
-    const colors = {
+    const colors: Record<string, string> = {
         [SoilQuality.EXCELLENT]: 'bg-green-100 text-green-800',
         [SoilQuality.GOOD]: 'bg-lime-100 text-lime-800',
         [SoilQuality.FAIR]: 'bg-yellow-100 text-yellow-800',
         [SoilQuality.POOR]: 'bg-red-100 text-red-800',
+        [SoilQuality.FERTILE]: 'bg-emerald-100 text-emerald-800',
+        [SoilQuality.SANDY]: 'bg-orange-100 text-orange-800',
+        [SoilQuality.LOAMY]: 'bg-amber-100 text-amber-800',
+        [SoilQuality.CLAY]: 'bg-stone-100 text-stone-800',
+        [SoilQuality.MIXED]: 'bg-cyan-100 text-cyan-800',
+        [SoilQuality.UNKNOWN]: 'bg-gray-100 text-gray-800',
     };
-    return colors[quality];
+    return colors[quality] || 'bg-gray-100 text-gray-800';
 }
 
 export function LandMap({

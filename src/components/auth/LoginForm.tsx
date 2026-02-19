@@ -235,6 +235,9 @@ export default function LoginForm() {
                                     )}
                                 </button>
                             </div>
+                            <p className="text-xs text-slate-400 mt-1">
+                                Minimum 8 characters, including uppercase, number, and special character
+                            </p>
                         </div>
 
                         <div className="flex items-center">

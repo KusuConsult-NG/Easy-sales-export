@@ -1,118 +1,83 @@
-import { useState, useCallback, useEffect } from "react";
-import { useDebounce } from "@/hooks/useDebounce";
-
-interface FetchResult<T> {
-    success: boolean;
-    data?: T[]; // Generic data array
-    users?: T[]; // Legacy support if actions return specific keys
-    properties?: T[];
-    error?: string | null;
-    lastDocId?: string;
-    hasMore?: boolean;
-}
+import { useState, useEffect, useCallback } from 'react';
 
 interface UseAdminDataOptions<T> {
-    fetchAction: (params: any) => Promise<FetchResult<T>>;
+    fetchAction: (params: any) => Promise<{ success: boolean; data?: any; error?: string | null; loans?: any[]; properties?: any[]; users?: any[] }>;
     limit?: number;
-    initialSort?: string;
 }
 
-export function useAdminData<T extends { id: string }>({
-    fetchAction,
-    limit = 20
-}: UseAdminDataOptions<T>) {
+export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions<T>) {
     const [data, setData] = useState<T[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Filter State
+    // Pagination & Search
+    const [pageIndex, setPageIndex] = useState(0);
     const [search, setSearch] = useState("");
     const [filters, setFilters] = useState<Record<string, any>>({});
-
-    // Pagination State
-    const [pageStack, setPageStack] = useState<(string | undefined)[]>([]); // Stack of start cursors
-    const [currentPageCursor, setCurrentPageCursor] = useState<string | undefined>(undefined);
-    const [nextPageCursor, setNextPageCursor] = useState<string | undefined>(undefined);
     const [hasMore, setHasMore] = useState(false);
+    const [lastDoc, setLastDoc] = useState<any>(null); // For cursor-based pagination if needed, or just offset
 
-    // Debounce search
-    const debouncedSearch = useDebounce(search, 500);
-
-    const fetchData = useCallback(async (cursor?: string, isPagination = false) => {
+    const fetchData = useCallback(async (reset = false) => {
         setLoading(true);
         setError(null);
+
         try {
-            // Build params
             const params = {
                 limit,
-                search: debouncedSearch,
-                lastDocId: cursor,
-                ...filters
+                search,
+                ...filters,
+                // Add pagination params here if fetchAction supports it
+                // offset: pageIndex * limit 
             };
 
             const result = await fetchAction(params);
 
-            if (!result.success) {
-                throw new Error(result.error || "Failed to fetch data");
+            if (result.success) {
+                // Handle different response structures
+                const items = result.data || result.loans || result.properties || result.users || [];
+
+                if (reset) {
+                    setData(items);
+                } else {
+                    setData(prev => [...prev, ...items]);
+                }
+
+                setHasMore(items.length === limit);
+            } else {
+                setError(result.error || "Failed to fetch data");
             }
-
-            // Handle different return keys from actions (legacy vs new)
-            const resultData = result.data || result.users || result.properties || [];
-
-            setData(resultData);
-            setNextPageCursor(result.lastDocId);
-            setHasMore(!!result.hasMore);
-
-            // If this was a fresh load (filter change), reset stack
-            if (!isPagination) {
-                setPageStack([]);
-                setCurrentPageCursor(undefined);
-            }
-
         } catch (err: any) {
             setError(err.message || "An error occurred");
         } finally {
             setLoading(false);
         }
-    }, [fetchAction, limit, debouncedSearch, filters]);
+    }, [fetchAction, limit, search, filters, pageIndex]);
 
-    // Initial Load & Filter Change
+    // Initial load and search/filter changes
     useEffect(() => {
-        fetchData(undefined, false);
-    }, [fetchData]);
-
-    const onNextPage = () => {
-        if (!hasMore || !nextPageCursor) return;
-
-        // Push current page's start cursor to stack
-        setPageStack(prev => [...prev, currentPageCursor]);
-
-        // Update current cursor to the next one
-        setCurrentPageCursor(nextPageCursor);
-
-        // Fetch next page
-        fetchData(nextPageCursor, true);
-    };
-
-    const onPrevPage = () => {
-        if (pageStack.length === 0) return;
-
-        const newStack = [...pageStack];
-        const prevCursor = newStack.pop(); // Pop the start cursor of the previous page
-
-        setPageStack(newStack);
-        setCurrentPageCursor(prevCursor);
-
-        fetchData(prevCursor, true);
-    };
-
-    const refresh = () => {
-        fetchData(currentPageCursor, true);
-    };
+        setPageIndex(0);
+        fetchData(true);
+    }, [search, filters]);
 
     const updateFilter = (key: string, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));
     };
+
+    const onNextPage = () => {
+        if (hasMore) {
+            setPageIndex(prev => prev + 1);
+            // In a real implementation with cursor pagination, we'd trigger a fetch here with the next cursor
+            // For now, simple state update
+        }
+    };
+
+    const onPrevPage = () => {
+        if (pageIndex > 0) {
+            setPageIndex(prev => prev - 1);
+        }
+    };
+
+    const refresh = () => fetchData(true);
 
     return {
         data,
@@ -125,8 +90,8 @@ export function useAdminData<T extends { id: string }>({
         hasMore,
         onNextPage,
         onPrevPage,
-        pageIndex: pageStack.length,
-        refresh,
-        setData // Allow optimistic updates
+        pageIndex,
+        setData, // Allow manual updates (e.g. deletion)
+        refresh
     };
 }

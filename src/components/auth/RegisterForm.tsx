@@ -208,6 +208,51 @@ export default function RegisterForm() {
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
                             </div>
+
+                            {/* Password Strength Indicator */}
+                            {formData.password.length > 0 && (() => {
+                                const checks = {
+                                    length: formData.password.length >= 8,
+                                    uppercase: /[A-Z]/.test(formData.password),
+                                    number: /[0-9]/.test(formData.password),
+                                    special: /[^A-Za-z0-9]/.test(formData.password),
+                                };
+                                const passed = Object.values(checks).filter(Boolean).length;
+                                const strength = passed <= 1 ? "Weak" : passed <= 2 ? "Fair" : passed <= 3 ? "Good" : "Strong";
+                                const color = passed <= 1 ? "bg-red-500" : passed <= 2 ? "bg-yellow-500" : passed <= 3 ? "bg-blue-500" : "bg-green-500";
+                                const textColor = passed <= 1 ? "text-red-600" : passed <= 2 ? "text-yellow-600" : passed <= 3 ? "text-blue-600" : "text-green-600";
+
+                                return (
+                                    <div className="mt-2 space-y-2">
+                                        {/* Strength Bar */}
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full transition-all duration-300 ${color}`}
+                                                    style={{ width: `${(passed / 4) * 100}%` }}
+                                                />
+                                            </div>
+                                            <span className={`text-xs font-semibold ${textColor}`}>{strength}</span>
+                                        </div>
+                                        {/* Requirement Checklist */}
+                                        <div className="grid grid-cols-2 gap-1">
+                                            {[
+                                                { label: "8+ characters", met: checks.length },
+                                                { label: "Uppercase letter", met: checks.uppercase },
+                                                { label: "Number", met: checks.number },
+                                                { label: "Special character", met: checks.special },
+                                            ].map((req) => (
+                                                <div key={req.label} className="flex items-center gap-1.5">
+                                                    <div className={`w-3 h-3 rounded-full flex items-center justify-center ${req.met ? "bg-green-500" : "bg-slate-200"}`}>
+                                                        {req.met && <CheckCircle className="w-2.5 h-2.5 text-white" />}
+                                                    </div>
+                                                    <span className={`text-xs ${req.met ? "text-green-700" : "text-slate-400"}`}>{req.label}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         {/* Confirm Password Field */}

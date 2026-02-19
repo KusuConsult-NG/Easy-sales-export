@@ -68,9 +68,9 @@ export default function PropertyDetailsPage() {
             try {
                 getUserTierAction().then((res) => {
                     if (res && res.tier) setUserTier(res.tier as any);
-                }).catch(() => { });
+                }).catch((err: any) => { console.warn("Failed to fetch user tier:", err?.message); });
             } catch (e) {
-                // Ignore if action doesn't exist or fails
+                // Tier check is non-critical; page still works without it
             }
         }
     }, [status, session]);

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Create Loan Product (Admin Only)
@@ -17,8 +17,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!session.user.roles?.includes("admin")) {
+        // Check if user is admin or super_admin
+        const roles = session.user.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }
@@ -43,9 +44,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create loan product
-        const productRef = doc(collection(db, "loan_products"));
-        const productData = {
+        // Create loan product (Admin SDK)
+        const productRef = db.collection("loan_products").doc();
+        await productRef.set({
             name,
             description,
             minAmount: Number(minAmount),
@@ -53,12 +54,10 @@ export async function POST(request: NextRequest) {
             interestRate: Number(interestRate),
             durationMonths: Number(durationMonths),
             isActive: Boolean(isActive),
-            createdAt: new Date(),
+            createdAt: FieldValue.serverTimestamp(),
             createdBy: session.user.id,
-            updatedAt: new Date(),
-        };
-
-        await setDoc(productRef, productData);
+            updatedAt: FieldValue.serverTimestamp(),
+        });
 
         return NextResponse.json({
             success: true,
