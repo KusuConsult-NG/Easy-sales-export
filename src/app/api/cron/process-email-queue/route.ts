@@ -15,11 +15,9 @@ export const maxDuration = 60; // Extend timeout for processing
  */
 export async function GET(request: Request) {
     // Check Authorization (Vercel Cron Header)
-    // In production, Vercel adds this header. Locally we might want to skip or simulate.
     const authHeader = request.headers.get('authorization');
     if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        // return new NextResponse('Unauthorized', { status: 401 });
-        // For now, let's be lenient or check environment (production enforcement usually handled by Vercel protection)
+        return new NextResponse('Unauthorized', { status: 401 });
     }
 
     try {
@@ -42,7 +40,7 @@ export async function GET(request: Request) {
 
         // Setup Resend
         if (!process.env.RESEND_API_KEY) {
-            console.error('[CRON] RESEND_API_KEY missing, skipping processing.');
+            logger.error('[CRON] RESEND_API_KEY missing, skipping processing.');
             return NextResponse.json({ success: false, error: "Configuration missing" }, { status: 500 });
         }
         const { Resend } = await import('resend');
@@ -83,7 +81,7 @@ export async function GET(request: Request) {
                 successCount++;
 
             } catch (error: any) {
-                console.error(`[CRON] Failed to send email (ID: ${doc.id}):`, error.message);
+                logger.error(`[CRON] Failed to send email (ID: ${doc.id}):`, error.message);
                 failCount++;
 
                 // Handle Check for Max Attempts
@@ -127,7 +125,7 @@ export async function GET(request: Request) {
         });
 
     } catch (error: any) {
-        console.error("[CRON] processing error:", error);
+        logger.error("[CRON] processing error:", error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

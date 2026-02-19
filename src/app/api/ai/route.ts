@@ -1,6 +1,7 @@
 
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
+import { auth } from "@/lib/auth";
 
 // Fallback rules if AI fails or key missing
 const RULES = [
@@ -34,6 +35,12 @@ Guidelines:
 
 export async function POST(req: Request) {
     try {
+        // Require authenticated user to prevent abuse of OpenAI credits
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+        }
+
         const { message } = await req.json();
 
         if (!message) {

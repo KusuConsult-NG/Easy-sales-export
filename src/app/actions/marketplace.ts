@@ -248,13 +248,13 @@ export async function submitMarketplaceOnboardingAction(
         let location = { state: "", lga: "", address: "" };
         try {
             location = JSON.parse(locationStr);
-        } catch (e) { console.warn("Failed to parse location JSON, using defaults"); }
+        } catch (e) { logger.warn("Failed to parse location JSON, using defaults"); }
 
         const bankAccountStr = formData.get("bankAccount") as string;
         let bankAccount = { bankName: "", accountNumber: "", accountName: "" };
         try {
             bankAccount = JSON.parse(bankAccountStr);
-        } catch (e) { console.warn("Failed to parse bankAccount JSON, using defaults"); }
+        } catch (e) { logger.warn("Failed to parse bankAccount JSON, using defaults"); }
 
         const verificationId = `seller_${userId}_${timestamp}`;
         const verificationRef = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
@@ -382,7 +382,7 @@ export async function createProductAction(
         let certifications = [];
         try {
             certifications = JSON.parse(formData.get("certifications") as string || "[]");
-        } catch (e) { console.warn("Failed to parse certifications JSON, using defaults"); }
+        } catch (e) { logger.warn("Failed to parse certifications JSON, using defaults"); }
 
         const rawData = {
             title: formData.get("title"),

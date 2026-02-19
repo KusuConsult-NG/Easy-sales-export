@@ -235,7 +235,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         return { success: true, reports };
 
     } catch (error: any) {
-        console.error("[SCHEMA FIX] Failed:", error);
+        logger.error("[SCHEMA FIX] Failed:", error);
         return { success: false, reports: [] }; // Should probably return partial reports
     }
 }

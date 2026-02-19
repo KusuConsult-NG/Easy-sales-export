@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 
 /**
@@ -10,6 +11,14 @@ export async function GET(
     { params }: { params: Promise<{ courseId: string }> }
 ) {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json(
+                { success: false, message: "Authentication required" },
+                { status: 401 }
+            );
+        }
+
         const { courseId } = await params;
 
         // Get quiz for the course (Admin SDK)

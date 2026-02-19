@@ -52,7 +52,7 @@ export async function updateLessonProgress(
             completed: validated.progressPercent >= 95,
         };
     } catch (error) {
-        console.error("Lesson progress error:", error);
+        logger.error("Lesson progress error:", error);
         if (error instanceof z.ZodError) {
             return {
                 success: false,
@@ -203,7 +203,7 @@ export async function getLessonProgress(lessonId: string) {
             },
         };
     } catch (error) {
-        console.error("Failed to fetch lesson progress:", error);
+        logger.error("Failed to fetch lesson progress:", error);
         return { success: false, error: "Failed to fetch lesson progress", progress: null };
     }
 }

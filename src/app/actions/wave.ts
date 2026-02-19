@@ -357,7 +357,7 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
         if (!memberDoc.exists || !memberDoc.data()?.active) {
             // Check if admin, otherwise deny
             if (!session.user.roles?.includes("admin")) {
-                console.warn(`Unauthorized WAVE resource access attempt by ${session.user.id}`);
+                logger.warn(`Unauthorized WAVE resource access attempt by ${session.user.id}`);
                 return [];
             }
         }
