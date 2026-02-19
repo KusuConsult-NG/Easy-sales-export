@@ -112,3 +112,80 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData> {
         recentTransactions,
     };
 }
+
+export interface FinancialOverview {
+    totalRevenue: number;
+    totalEscrowVolume: number;
+    totalLoansDisbursed: number;
+    recentTransactions: Array<{
+        id: string;
+        type: string;
+        amount: number;
+        timestamp: any;
+    }>;
+}
+
+export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
+    const session = await auth();
+    if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+        throw new Error("Unauthorized");
+    }
+
+    let totalRevenue = 0;
+    let totalEscrowVolume = 0;
+    let totalLoansDisbursed = 0;
+    const recentTransactions: FinancialOverview["recentTransactions"] = [];
+
+    // Sum escrow volumes
+    try {
+        const escrowSnap = await db.collection("escrows").get();
+        escrowSnap.docs.forEach(doc => {
+            const data = doc.data();
+            const amount = Number(data.amount) || 0;
+            totalEscrowVolume += amount;
+            if (data.status === "completed") {
+                totalRevenue += amount * 0.025; // 2.5% commission
+            }
+        });
+    } catch {
+        // Collection may not exist
+    }
+
+    // Sum loans disbursed
+    try {
+        const loanSnap = await db.collection("loan_applications")
+            .where("status", "==", "disbursed")
+            .get();
+        loanSnap.docs.forEach(doc => {
+            totalLoansDisbursed += Number(doc.data().amount) || 0;
+        });
+    } catch {
+        // Collection may not exist
+    }
+
+    // Get recent financial transactions from audit logs
+    try {
+        const logsSnap = await db.collection("audit_logs")
+            .orderBy("timestamp", "desc")
+            .limit(20)
+            .get();
+        logsSnap.docs.forEach(doc => {
+            const data = doc.data();
+            recentTransactions.push({
+                id: doc.id,
+                type: data.action || "unknown",
+                amount: Number(data.amount) || 0,
+                timestamp: data.timestamp || null,
+            });
+        });
+    } catch {
+        // Collection may not exist
+    }
+
+    return {
+        totalRevenue,
+        totalEscrowVolume,
+        totalLoansDisbursed,
+        recentTransactions,
+    };
+}
