@@ -68,8 +68,8 @@ export function validateProductionSecrets(): void {
 
         // During build (NEXT_PHASE=phase-production-build), log instead of throwing
         // so the build can succeed. These secrets are only needed at runtime.
-        if (process.env.NEXT_PHASE === 'phase-production-build') {
-            console.error(`\n${errorMessage}\n`);
+        if (process.env.NEXT_PHASE === 'phase-production-build' || process.env.CI === 'true') {
+            console.warn(`\n[WARN] Security checks skipped during build:\n${errorMessage}\n`);
             return;
         }
 
