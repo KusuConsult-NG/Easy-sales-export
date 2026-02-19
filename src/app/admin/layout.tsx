@@ -15,9 +15,9 @@ export default async function AdminLayout({
         redirect("/auth/login?callbackUrl=/admin");
     }
 
-    // Strict Role Check - Allow 'admin' and 'super_admin' (if exists)
+    // Strict Role Check - Allow 'admin' and 'super_admin'
     // Note: session.user.roles is an array
-    const isAdmin = session.user.roles.includes("admin");
+    const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
 
     if (!isAdmin) {
         redirect("/dashboard");

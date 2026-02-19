@@ -22,7 +22,9 @@ interface User {
 }
 
 const ROLES_LIST = [
-    "admin", "farmer", "buyer", "seller", "exporter", "vendor", "member", "cooperative_member", "logistics", "field_officer"
+    "general_user", "buyer", "seller", "farmer", "land_owner", "investor",
+    "export_participant", "cooperative_member", "wave_participant", "academy_participant",
+    "field_officer", "admin", "super_admin"
 ];
 
 export default function AdminUsersPage() {
@@ -165,8 +167,8 @@ export default function AdminUsersPage() {
                         onClick={(e) => { e.stopPropagation(); handleToggleVerification(user.id); }}
                         disabled={processingId === user.id}
                         className={`p-1.5 rounded-lg transition disabled:opacity-50 ${user.isVerified
-                                ? "text-red-600 hover:bg-red-50"
-                                : "text-green-600 hover:bg-green-50"
+                            ? "text-red-600 hover:bg-red-50"
+                            : "text-green-600 hover:bg-green-50"
                             }`}
                         title={user.isVerified ? "Unverify" : "Verify"}
                     >
