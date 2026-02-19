@@ -61,8 +61,8 @@ export default function WaveLandingPage() {
         <div className="min-h-screen">
 
 
-            {/* Hero Section with Carousel */}
-            <section className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
+            {/* Hero Section — 2-column: text left, slider right */}
+            <section className="relative min-h-screen flex items-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
                 <BackToHub className="top-4 left-4" />
                 {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-5">
@@ -72,36 +72,96 @@ export default function WaveLandingPage() {
                     }} />
                 </div>
 
-                <div className="relative max-w-7xl mx-auto px-6 py-20 text-center">
-                    {/* Presidential Badge */}
-                    <div className="inline-flex items-center gap-2 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-6 py-2 rounded-full text-sm font-semibold mb-8 shadow-lg">
-                        <Shield className="w-4 h-4" />
-                        <span>Presidential Mandate • Renewed Hope Agenda</span>
+                <div className="relative max-w-7xl mx-auto px-6 py-24 w-full">
+                    <div className="grid lg:grid-cols-2 gap-12 items-center">
+
+                        {/* LEFT — Text */}
+                        <div>
+                            <div className="inline-flex items-center gap-2 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-6 py-2 rounded-full text-sm font-semibold mb-8 shadow-lg">
+                                <Shield className="w-4 h-4" />
+                                <span>Presidential Mandate • Renewed Hope Agenda</span>
+                            </div>
+
+                            <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-4 leading-tight">
+                                RH-WAVE 774
+                            </h1>
+                            <h2 className="text-2xl sm:text-3xl font-bold bg-linear-to-r from-green-700 via-green-600 to-green-500 bg-clip-text text-transparent mb-6">
+                                Women Agro-Value Expansion Program
+                            </h2>
+
+                            <p className="text-lg md:text-xl text-slate-700 mb-10">
+                                A National Movement. A Presidential Mandate. <br />
+                                <span className="font-semibold text-green-700">A Women-Led Revolution in Agribusiness.</span>
+                            </p>
+
+                            <Link
+                                href="/wave/application"
+                                className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-green-500/50 transition-all hover:scale-105"
+                            >
+                                <span>Apply Now</span>
+                                <ArrowRight className="w-6 h-6" />
+                            </Link>
+                        </div>
+
+                        {/* RIGHT — Image Slider */}
+                        <div className="relative">
+                            <div className="relative aspect-4/3 rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-slate-900">
+                                {images.map((img, index) => {
+                                    const isNext = index === (currentImage + 1) % images.length;
+                                    const isPrev = index === (currentImage - 1 + images.length) % images.length;
+                                    const isCurrent = index === currentImage;
+                                    if (!isCurrent && !isNext && !isPrev) return null;
+                                    return (
+                                        <div
+                                            key={index}
+                                            className={`absolute inset-0 transition-opacity duration-1000 ${index === currentImage ? 'opacity-100' : 'opacity-0'}`}
+                                        >
+                                            <Image
+                                                src={img}
+                                                alt={`RH-WAVE 774 Program ${index + 1}`}
+                                                fill
+                                                className="object-cover"
+                                                priority={index === 0}
+                                                loading={index === 0 ? 'eager' : 'lazy'}
+                                                sizes="(max-width: 1024px) 100vw, 50vw"
+                                            />
+                                        </div>
+                                    );
+                                })}
+
+                                <button
+                                    onClick={prevImage}
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-3 rounded-full shadow-lg transition z-10"
+                                    aria-label="Previous image"
+                                >
+                                    <ChevronLeft className="w-5 h-5 text-green-700" />
+                                </button>
+                                <button
+                                    onClick={nextImage}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-3 rounded-full shadow-lg transition z-10"
+                                    aria-label="Next image"
+                                >
+                                    <ChevronRight className="w-5 h-5 text-green-700" />
+                                </button>
+
+                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                                    {images.map((_, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => setCurrentImage(index)}
+                                            className={`h-2 rounded-full transition-all ${index === currentImage ? 'bg-white w-6' : 'bg-white/60 w-2 hover:bg-white/80'}`}
+                                            aria-label={`Go to image ${index + 1}`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                            <p className="text-center text-slate-500 text-sm font-medium mt-3">
+                                {currentImage + 1} / {images.length} &nbsp;•&nbsp; RH-WAVE 774 in Action
+                            </p>
+                        </div>
+
                     </div>
-
-                    {/* Main Headline */}
-                    <h1 className="text-5xl md:text-7xl font-bold text-slate-900 mb-6 leading-tight">
-                        RH-WAVE 774
-                    </h1>
-                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-linear-to-r from-green-700 via-green-600 to-green-500 bg-clip-text text-transparent mb-6 whitespace-nowrap">
-                        Women Agro-Value Expansion Program
-                    </h2>
-
-                    {/* Subheadline */}
-                    <p className="text-xl md:text-2xl text-slate-700 max-w-4xl mx-auto mb-12">
-                        A National Movement. A Presidential Mandate. <br />
-                        <span className="font-semibold text-green-700">A Women-Led Revolution in Agribusiness.</span>
-                    </p>
-
-                    {/* CTA Button */}
-                    <Link
-                        href="/wave/application"
-                        className="inline-flex items-center gap-3 bg-linear-to-r from-green-700 via-green-600 to-green-500 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-green-500/50 transition-all hover:scale-105"
-                    >
-                        <span>Apply Now</span>
-                        <ArrowRight className="w-6 h-6" />
-                    </Link>                </div>
-
+                </div>
             </section>
 
             {/* WAVE Program Video - Strategic Placement */}
@@ -148,88 +208,7 @@ export default function WaveLandingPage() {
                 </div>
             </section>
 
-            {/* Image Carousel Section */}
-            <section className="py-16 bg-linear-to-br from-green-50 via-green-100 to-white">
-                <div className="max-w-6xl mx-auto px-6">
-                    <div className="text-center mb-8">
-                        <h3 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">
-                            <span className="text-green-700">RH-WAVE 774</span> in Action
-                        </h3>
-                        <p className="text-lg text-slate-700">Witness the transformation happening across Nigeria</p>
-                    </div>
 
-                    <div className="relative">
-                        <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-slate-900">
-                            {/* Images - Only load current, next, and previous for performance */}
-                            {images.map((img, index) => {
-                                // Only render current, next, and previous images
-                                const isNext = index === (currentImage + 1) % images.length;
-                                const isPrev = index === (currentImage - 1 + images.length) % images.length;
-                                const isCurrent = index === currentImage;
-                                const shouldLoad = isCurrent || isNext || isPrev;
-
-                                if (!shouldLoad) return null;
-
-                                return (
-                                    <div
-                                        key={index}
-                                        className={`absolute inset-0 transition-opacity duration-1000 ${index === currentImage ? 'opacity-100' : 'opacity-0'
-                                            }`}
-                                    >
-                                        <Image
-                                            src={img}
-                                            alt={`RH-WAVE 774 Program - Women in Agriculture Training and Development ${index + 1}`}
-                                            fill
-                                            className="object-contain"
-                                            priority={index === 0}
-                                            loading={index === 0 ? 'eager' : 'lazy'}
-                                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
-                                        />
-                                    </div>
-                                );
-                            })}
-
-                            {/* Navigation Buttons */}
-                            <button
-                                onClick={prevImage}
-                                className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-4 rounded-full shadow-lg transition z-10"
-                                aria-label="Previous image"
-                            >
-                                <ChevronLeft className="w-6 h-6 text-green-700" />
-                            </button>
-                            <button
-                                onClick={nextImage}
-                                className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white p-4 rounded-full shadow-lg transition z-10"
-                                aria-label="Next image"
-                            >
-                                <ChevronRight className="w-6 h-6 text-green-700" />
-                            </button>
-
-                            {/*Indicators */}
-                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                                {images.map((_, index) => (
-                                    <button
-                                        key={index}
-                                        onClick={() => setCurrentImage(index)}
-                                        className={`w-3 h-3 rounded-full transition ${index === currentImage
-                                            ? 'bg-white w-12'
-                                            : 'bg-white/60 hover:bg-white/80'
-                                            }`}
-                                        aria-label={`Go to image ${index + 1}`}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Image Counter */}
-                        <div className="text-center mt-6">
-                            <p className="text-slate-900 text-xl font-bold bg-white/90 rounded-xl px-5 py-2.5 inline-block shadow-lg">
-                                {currentImage + 1} / {images.length}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
 
             {/* Introduction Section */}
             <section className="py-20 bg-slate-50">
