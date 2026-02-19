@@ -407,8 +407,7 @@ export default function WaveBriefingPage() {
             {/* ───────────────── LAND ALLOCATION URGENCY BAND ───────────────── */}
             <section className="py-10 bg-green-950 text-white border-y border-green-800">
                 <div className="max-w-4xl mx-auto px-6 text-center">
-                    <p className="text-lg md:text-xl font-bold text-white leading-relaxed">
-                        �� <em>Land allocation discussions are happening now.</em>
+                    <p className="text-lg md:text-xl font-bold text-white leading-relaxed">                        <em>Land allocation discussions are happening now.</em>
                     </p>
                     <p className="text-lg md:text-xl font-bold text-green-300 mt-1">
                         <em>Only positioned members will be considered.</em>
