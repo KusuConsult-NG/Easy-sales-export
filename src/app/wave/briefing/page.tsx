@@ -476,8 +476,10 @@ export default function WaveBriefingPage() {
                                     <label htmlFor="fullName" className="block text-sm font-bold text-slate-700 mb-2">Full Name</label>
                                     <input
                                         id="fullName"
+                                        name="fullName"
                                         type="text"
                                         required
+                                        autoComplete="name"
                                         value={formData.fullName}
                                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-900/20 focus:border-green-900 transition-all font-medium"
@@ -490,8 +492,10 @@ export default function WaveBriefingPage() {
                                     <label htmlFor="phone" className="block text-sm font-bold text-slate-700 mb-2">Phone Number</label>
                                     <input
                                         id="phone"
+                                        name="phone"
                                         type="tel"
                                         required
+                                        autoComplete="tel"
                                         maxLength={14}
                                         value={formData.phoneNumber}
                                         onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
@@ -505,8 +509,10 @@ export default function WaveBriefingPage() {
                                     <label htmlFor="email" className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
                                     <input
                                         id="email"
+                                        name="email"
                                         type="email"
                                         required
+                                        autoComplete="email"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-900/20 focus:border-green-900 transition-all font-medium"
@@ -520,7 +526,9 @@ export default function WaveBriefingPage() {
                                     <div className="relative">
                                         <select
                                             id="state"
+                                            name="state"
                                             required
+                                            autoComplete="address-level1"
                                             value={formData.state}
                                             onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-900/20 focus:border-green-900 transition-all appearance-none cursor-pointer font-medium"
@@ -538,14 +546,14 @@ export default function WaveBriefingPage() {
 
                                 {/* Role */}
                                 <div>
-                                    <label className="block text-sm font-bold text-slate-700 mb-4">I am primarily a:</label>
+                                    <p className="block text-sm font-bold text-slate-700 mb-4">I am primarily a:</p>
                                     <div className="space-y-3">
                                         {ROLES.map((role) => (
                                             <label
                                                 key={role.value}
                                                 className={`flex items-center gap-4 border rounded-xl px-5 py-4 cursor-pointer transition-all hover:bg-slate-50 ${formData.role === role.value
-                                                        ? "border-green-900 bg-green-50/50 shadow-sm"
-                                                        : "border-slate-200"
+                                                    ? "border-green-900 bg-green-50/50 shadow-sm"
+                                                    : "border-slate-200"
                                                     }`}
                                             >
                                                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${formData.role === role.value ? "border-green-900" : "border-slate-300"
