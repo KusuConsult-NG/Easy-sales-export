@@ -3,6 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
+import { sendBriefingConfirmationEmail } from "@/lib/email-notifications";
 
 // Status type for strict typing
 export type BriefingStatus = "registered" | "attended" | "cancelled";
@@ -51,9 +52,11 @@ export async function registerForBriefingAction(
             return { success: false, error: "This email is already registered for the briefing" };
         }
 
+        // ... (existing helper functions if any)
+
         // Store registration with standardized schema
         const status: BriefingStatus = "registered";
-        await db.collection("wave_briefing_registrations").add({
+        const docRef = await db.collection("wave_briefing_registrations").add({
             fullName: data.fullName.trim(),
             phoneNumber: phone,
             email: data.email.trim().toLowerCase(),
@@ -67,6 +70,24 @@ export async function registerForBriefingAction(
         });
 
         logger.info(`[WAVE Briefing] New registration: ${data.email.trim().toLowerCase()}`);
+
+        // Send confirmation email
+        try {
+            const emailResult = await sendBriefingConfirmationEmail(
+                data.email.trim(),
+                data.fullName.trim()
+            );
+
+            if (emailResult.success) {
+                await docRef.update({ confirmationSent: true });
+                logger.info(`[WAVE Briefing] Confrimation email sent to ${data.email.trim()}`);
+            } else {
+                logger.warn(`[WAVE Briefing] Email failed for ${data.email.trim()}: ${emailResult.error}`);
+            }
+        } catch (emailError) {
+            logger.error(`[WAVE Briefing] Email system error for ${data.email.trim()}:`, emailError);
+            // Non-blocking: We still return success for the registration itself
+        }
 
         return { success: true };
     } catch (error) {

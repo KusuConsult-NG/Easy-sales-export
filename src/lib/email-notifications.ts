@@ -252,3 +252,39 @@ export async function sendWithdrawalRejectedEmail(
         metadata: { type: 'withdrawal_rejected', reason },
     });
 }
+/**
+ * Send Briefing Confirmation Email
+ */
+export async function sendBriefingConfirmationEmail(
+    userEmail: string,
+    userName: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: 'Registration Confirmed - WAVE National Awareness Briefing',
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #14532d;">Registration Confirmed ✅</h2>
+                <p>Hello ${userName},</p>
+                <p>Your seat for the <strong>WAVE National Awareness & Opportunity Briefing</strong> has been successfully reserved.</p>
+                
+                <div style="background-color: #f0fdf4; border: 1px solid #dcfce7; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="color: #166534; margin-top: 0;">What Happens Next?</h3>
+                    <ul style="color: #15803d; padding-left: 20px;">
+                        <li>You have been added to the priority guest list.</li>
+                        <li>Venue details and time verification will be sent to this email.</li>
+                        <li>Prepare to learn about the government-backed agricultural structure.</li>
+                    </ul>
+                </div>
+
+                <p>This is a strategic session. Please prioritize your attendance.</p>
+                
+                <p style="margin-top: 30px;">
+                    <strong>Women Agro-Value Expansion (WAVE)</strong><br />
+                    <em>Powered by Easy Sales Export</em>
+                </p>
+            </div>
+        `,
+        metadata: { type: 'briefing_confirmation' },
+    });
+}
