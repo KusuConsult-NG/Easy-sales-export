@@ -17,16 +17,17 @@ type MembershipApplication = {
     registrationFee: number;
     membershipStatus: "pending" | "approved" | "suspended";
     paymentStatus: "pending" | "completed" | "failed";
+    onboardingCompleted?: boolean;
     createdAt: Date;
     // Full details
     middleName?: string;
-    dateOfBirth: string;
-    gender: "male" | "female";
-    stateOfOrigin: string;
-    lga: string;
-    residentialAddress: string;
-    occupation: string;
-    nextOfKin: {
+    dateOfBirth?: string;
+    gender?: "male" | "female" | "";
+    stateOfOrigin?: string;
+    lga?: string;
+    residentialAddress?: string;
+    occupation?: string;
+    nextOfKin?: {
         name: string;
         phone: string;
         address: string;
@@ -101,10 +102,10 @@ export default function CooperativeMembersPage() {
         if (!searchQuery) return true;
         const query = searchQuery.toLowerCase();
         return (
-            app.firstName.toLowerCase().includes(query) ||
-            app.lastName.toLowerCase().includes(query) ||
-            app.email.toLowerCase().includes(query) ||
-            app.phone.includes(query)
+            (app.firstName || "").toLowerCase().includes(query) ||
+            (app.lastName || "").toLowerCase().includes(query) ||
+            (app.email || "").toLowerCase().includes(query) ||
+            (app.phone || "").includes(query)
         );
     });
 
@@ -310,7 +311,9 @@ export default function CooperativeMembersPage() {
                                         <td className="px-6 py-4">
                                             <div>
                                                 <p className="font-semibold text-slate-900">
-                                                    {app.firstName} {app.lastName}
+                                                    {app.firstName || app.lastName
+                                                        ? `${app.firstName} ${app.lastName}`.trim()
+                                                        : <span className="text-amber-600 italic">Incomplete registration</span>}
                                                 </p>
                                                 <p className="text-sm text-slate-500">
                                                     {new Date(app.createdAt).toLocaleDateString()}
@@ -319,8 +322,8 @@ export default function CooperativeMembersPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <div>
-                                                <p className="text-sm text-slate-900">{app.email}</p>
-                                                <p className="text-sm text-slate-500">{app.phone}</p>
+                                                <p className="text-sm text-slate-900">{app.email || "—"}</p>
+                                                <p className="text-sm text-slate-500">{app.phone || "—"}</p>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -331,7 +334,7 @@ export default function CooperativeMembersPage() {
                                         <td className="px-6 py-4">
                                             <div>
                                                 <p className="font-semibold text-slate-900">
-                                                    ₦{app.registrationFee.toLocaleString()}
+                                                    ₦{(app.registrationFee || 0).toLocaleString()}
                                                 </p>
                                                 <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${app.paymentStatus === "completed"
                                                     ? "bg-green-100 text-green-700"
@@ -449,20 +452,24 @@ export default function CooperativeMembersPage() {
                         {/* Next of Kin */}
                         <div>
                             <h3 className="font-bold text-slate-900 mb-3">Next of Kin</h3>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <p className="text-slate-500">Name</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.name}</p>
+                            {selectedApplication.nextOfKin?.name ? (
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-slate-500">Name</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.name}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Phone</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.phone || "—"}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <p className="text-slate-500">Address</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.address || "—"}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-slate-500">Phone</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.phone}</p>
-                                </div>
-                                <div className="col-span-2">
-                                    <p className="text-slate-500">Address</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.address}</p>
-                                </div>
-                            </div>
+                            ) : (
+                                <p className="text-sm text-amber-600 italic">Not yet provided (onboarding incomplete)</p>
+                            )}
                         </div>
 
                         {/* Membership Details */}

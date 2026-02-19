@@ -50,11 +50,37 @@ export async function GET(request: NextRequest) {
 
         const snapshot = await query.get();
 
-        const members = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate?.() || new Date(),
-        }));
+        const members = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                userId: data.userId || doc.id,
+                firstName: data.firstName || "",
+                lastName: data.lastName || "",
+                middleName: data.middleName || "",
+                email: data.email || "",
+                phone: data.phone || "",
+                membershipTier: data.membershipTier || "basic",
+                registrationFee: data.registrationFee || 0,
+                membershipStatus: data.membershipStatus || "pending",
+                paymentStatus: data.paymentStatus || "pending",
+                onboardingCompleted: data.onboardingCompleted || false,
+                dateOfBirth: data.dateOfBirth || "",
+                gender: data.gender || "",
+                stateOfOrigin: data.stateOfOrigin || "",
+                lga: data.lga || "",
+                residentialAddress: data.residentialAddress || "",
+                occupation: data.occupation || "",
+                nextOfKin: {
+                    name: data.nextOfKin?.name || data.nextOfKinName || "",
+                    phone: data.nextOfKin?.phone || data.nextOfKinPhone || "",
+                    address: data.nextOfKin?.address || data.nextOfKinAddress || "",
+                },
+                documents: data.documents || {},
+                createdAt: data.createdAt?.toDate?.() || new Date(),
+                updatedAt: data.updatedAt?.toDate?.() || new Date(),
+            };
+        });
 
         const hasMore = members.length === limitParam;
         const newLastCreatedAt = members.length > 0 ? members[members.length - 1].createdAt : undefined;
