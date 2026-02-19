@@ -30,6 +30,7 @@ export const authConfig = {
                 "/get-started",
                 // Module landing pages (public marketing pages)
                 "/wave/landing",
+                "/wave/briefing",
                 "/wave/access-denied",
                 "/cooperatives/landing",
                 "/farm-nation",       // farm-nation root is a public landing

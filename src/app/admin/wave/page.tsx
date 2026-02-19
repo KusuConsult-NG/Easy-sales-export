@@ -6,6 +6,14 @@ import Link from "next/link";
 export default function AdminWavePage() {
     const cards = [
         {
+            title: "Briefing Registrations",
+            description: "View National Awareness Briefing guest list",
+            icon: Users,
+            href: "/admin/wave/registrations",
+            color: "text-orange-600",
+            bg: "bg-orange-100"
+        },
+        {
             title: "Pending Applications",
             description: "Review new WAVE program applications",
             icon: FileText,
