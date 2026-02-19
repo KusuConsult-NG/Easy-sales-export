@@ -66,6 +66,13 @@ export function validateProductionSecrets(): void {
             'Update your environment variables before deploying.',
         ].join('\n');
 
+        // During build (NEXT_PHASE=phase-production-build), log instead of throwing
+        // so the build can succeed. These secrets are only needed at runtime.
+        if (process.env.NEXT_PHASE === 'phase-production-build') {
+            console.error(`\n${errorMessage}\n`);
+            return;
+        }
+
         throw new Error(errorMessage);
     }
 }
