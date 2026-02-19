@@ -16,7 +16,6 @@ export default function WaveLandingPage() {
     // Image Slider State
     const images = [
         "/images/wave/photo_2026-02-14 12.47.29.jpeg", // 4th image moved to 1st
-        "/images/wave/photo_2026-02-14 12.46.49.jpeg",
         "/images/wave/photo_2026-02-14 12.47.22.jpeg",
         "/images/wave/photo_2026-02-14 12.47.24.jpeg",
         // 5th image removed
