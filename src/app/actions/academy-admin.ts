@@ -69,7 +69,7 @@ export async function approveAcademyApplicationAction(
         try {
             const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
             await invalidateServiceCache(userId, 'academy');
-            console.log(`[Academy Approval] Cache cleared for user: ${userId}`);
+            logger.info(`[Academy Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
             logger.error('[Academy Approval] Cache clear error:', cacheError);
         }

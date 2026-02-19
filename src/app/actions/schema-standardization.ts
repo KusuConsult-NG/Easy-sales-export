@@ -1,6 +1,6 @@
-
 "use server";
 
+import { logger } from "@/lib/logger";
 import { db, adminAuth } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -22,7 +22,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
     const reports: StandardizationReport[] = [];
 
     try {
-        console.log(`[SCHEMA FIX] Starting Standardization (DryRun: ${dryRun})...`);
+        logger.info(`[SCHEMA FIX] Starting Standardization (DryRun: ${dryRun})...`);
 
         // ============================================================================
         // 1. USERS COLLECTION

@@ -82,7 +82,7 @@ export default function AdminLoansPage() {
         }
 
         setIsProcessing(true);
-        const result = await approveLoanApplication(selectedLoan.id!); // Using original action name
+        const result = await approveLoanApplication(selectedLoan.id || ""); // Using original action name
 
         if (result.success) {
             showToast("Loan approved successfully! Applicant has been notified.", "success");
@@ -104,7 +104,7 @@ export default function AdminLoansPage() {
         }
 
         setIsProcessing(true);
-        const result = await rejectLoanApplication(selectedLoan.id!, rejectionReason); // Using original action name
+        const result = await rejectLoanApplication(selectedLoan.id || "", rejectionReason); // Using original action name
 
         if (result.success) {
             showToast("Loan rejected. Applicant has been notified.", "success");

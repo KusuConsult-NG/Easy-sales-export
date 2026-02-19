@@ -41,7 +41,7 @@ export async function initializeContributionPaymentAction(
 
         // Initialize payment with Paystack (Paystack generates the reference)
         const { authorizationUrl, reference } = await initializePaystackPayment(
-            session.user.email!,
+            session.user.email || "",
             nairaToKobo(amount),
             {
                 type: 'contribution',
@@ -176,7 +176,7 @@ export async function verifyContributionPaymentAction(
         await createAdminAuditLog({
             action: 'contribution_made',
             userId,
-            userEmail: session.user.email!,
+            userEmail: session.user.email || "",
             targetId: reference,
             targetType: 'payment',
             metadata: {

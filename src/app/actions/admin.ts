@@ -91,7 +91,7 @@ export async function approveWaveApplicationAction(
         try {
             const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
             await invalidateServiceCache(userId, 'wave');
-            console.log(`[Wave Approval] Cache cleared for user: ${userId}`);
+            logger.info(`[Wave Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
             logger.error('[Wave Approval] Cache clear error:', cacheError);
         }
@@ -303,7 +303,7 @@ export async function toggleUserVerificationAction(
         try {
             const { invalidateUserCache } = await import('@/lib/cache-invalidation');
             await invalidateUserCache(userId);
-            console.log(`[User Verification] Cache cleared for user: ${userId}`);
+            logger.info(`[User Verification] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
             logger.error('[User Verification] Cache clear error:', cacheError);
         }
@@ -507,7 +507,7 @@ export async function verifyLandListing(
             try {
                 const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
                 await invalidateServiceCache(ownerId, 'farmNation');
-                console.log(`[Land Verification] Cache cleared for user: ${ownerId}`);
+                logger.info(`[Land Verification] Cache cleared for user: ${ownerId}`);
             } catch (cacheError) {
                 logger.error('[Land Verification] Cache clear error:', cacheError);
             }
@@ -777,7 +777,7 @@ export async function approveLoanApplication(
         try {
             const { invalidateCooperativeCache } = await import('@/lib/cache-invalidation');
             await invalidateCooperativeCache(loanData.userId);
-            console.log(`[Loan Approval] Cache cleared for user: ${loanData.userId}`);
+            logger.info(`[Loan Approval] Cache cleared for user: ${loanData.userId}`);
         } catch (cacheError) {
             logger.error('[Loan Approval] Cache clear error:', cacheError);
         }
@@ -1225,7 +1225,7 @@ export async function approveSellerVerificationAction(
         try {
             const { invalidateSellerCache } = await import('@/lib/cache-invalidation');
             await invalidateSellerCache(userId);
-            console.log(`[Seller Approval] Cache cleared for user: ${userId}`);
+            logger.info(`[Seller Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
             logger.error('[Seller Approval] Cache clear error:', cacheError);
         }
@@ -1347,7 +1347,7 @@ export async function approveExportOnboardingAction(
         try {
             const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
             await invalidateServiceCache(userId, 'export');
-            console.log(`[Export Approval] Cache cleared for user: ${userId}`);
+            logger.info(`[Export Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
             logger.error('[Export Approval] Cache clear error:', cacheError);
         }

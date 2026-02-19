@@ -318,7 +318,7 @@ export default function LandVerificationPage() {
                             </button>
                             <div className="flex items-center space-x-3">
                                 <button
-                                    onClick={() => handleReject(selectedListing.id!)}
+                                    onClick={() => handleReject(selectedListing.id || "")}
                                     disabled={actionLoading}
                                     className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
@@ -330,7 +330,7 @@ export default function LandVerificationPage() {
                                     <span>Reject</span>
                                 </button>
                                 <button
-                                    onClick={() => handleApprove(selectedListing.id!)}
+                                    onClick={() => handleApprove(selectedListing.id || "")}
                                     disabled={actionLoading}
                                     className="flex items-center space-x-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 >

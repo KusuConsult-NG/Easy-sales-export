@@ -733,7 +733,7 @@ export async function investInExportAction(
         // Initialize Paystack
         const { initializePaystackPayment } = await import("@/lib/paystack-server");
         const initResult = await initializePaystackPayment(
-            session.user.email!,
+            session.user.email || "",
             Math.round(amount * 100), // Kobo
             {
                 type: "export_investment",

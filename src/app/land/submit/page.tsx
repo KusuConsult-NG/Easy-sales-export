@@ -104,9 +104,9 @@ export default function SubmitLandListingPage() {
 
         try {
             const result = await submitLandListingAction({
-                ownerId: session.user.id!,
+                ownerId: session.user.id || "",
                 ownerName: session.user.name || "Unknown",
-                ownerEmail: session.user.email!,
+                ownerEmail: session.user.email || "",
                 title: formData.title,
                 description: formData.description,
                 location: {

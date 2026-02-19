@@ -37,7 +37,7 @@ export async function submitWithdrawalRequestAction(
         }
 
         const userId = session.user.id;
-        const userEmail = session.user.email!;
+        const userEmail = session.user.email || "";
 
         // Validate Input with Zod
         // We omit cooperativeId because this action infers it from the user's membership record

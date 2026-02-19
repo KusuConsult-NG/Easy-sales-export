@@ -73,7 +73,7 @@ export async function updateFeatureToggle(
         await createAdminAuditLog({
             action: "feature_toggled",
             userId: session.user.id,
-            userEmail: session.user.email!,
+            userEmail: session.user.email || "",
             targetId: featureName,
             targetType: "feature_toggle",
             metadata: {

@@ -31,7 +31,7 @@ export async function checkWaveMembershipAction(): Promise<{
             const hasRole = session.user.roles?.includes("wave_participant");
 
             if (hasRole) {
-                console.log(`[Auto-Heal] Creating missing wave_members doc for ${session.user.id}`);
+                logger.info(`[Auto-Heal] Creating missing wave_members doc for ${session.user.id}`);
                 const now = new Date();
                 const memberData = {
                     userId: session.user.id,

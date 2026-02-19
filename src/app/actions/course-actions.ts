@@ -331,13 +331,13 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             courseTitle,
             completedAt: progressData.completedAt || FieldValue.serverTimestamp(),
             issuedAt: FieldValue.serverTimestamp(),
-            certificateNumber: `CERT-${Date.now()}-${session.user.id!.substring(0, 8)}`,
+            certificateNumber: `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}`,
         });
 
         // Create notification
         const { createNotificationAction } = await import('./notifications');
         await createNotificationAction({
-            userId: session.user.id!,
+            userId: session.user.id || "",
             type: "success",
             title: "🎉 Certificate Issued!",
             message: `Congratulations! You've completed "${courseTitle}" and earned your certificate.`,
@@ -347,14 +347,14 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
 
         // Audit log
         await createAdminAuditLog({
-            userId: session.user.id!,
+            userId: session.user.id || "",
             action: 'course_completed',
             targetId: certificateRef.id,
             targetType: 'certificate',
             metadata: {
                 courseId,
                 courseTitle,
-                certificateNumber: `CERT-${Date.now()}-${session.user.id!.substring(0, 8)}`,
+                certificateNumber: `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}`,
             },
         });
 

@@ -1,5 +1,6 @@
 
 import { db } from "@/lib/firebase-admin";
+import { logger } from "@/lib/logger";
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
     }
 
     try {
-        console.log("[CRON] Starting Email Queue Processing...");
+        logger.info("[CRON] Starting Email Queue Processing...");
         const now = new Date();
 
         // Fetch Pending Emails ready for retry
@@ -33,11 +34,11 @@ export async function GET(request: Request) {
             .get();
 
         if (snapshot.empty) {
-            console.log("[CRON] No pending emails found.");
+            logger.info("[CRON] No pending emails found.");
             return NextResponse.json({ success: true, processed: 0 });
         }
 
-        console.log(`[CRON] Found ${snapshot.size} emails to retry.`);
+        logger.info(`[CRON] Found ${snapshot.size} emails to retry.`);
 
         // Setup Resend
         if (!process.env.RESEND_API_KEY) {
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
                 // We'll delete to keep collection clean, or move to 'sent_log' if audit needed.
                 // For resilience, let's just delete the queue item.
                 await db.collection("email_queue").doc(doc.id).delete();
-                console.log(`[CRON] Successfully sent email to ${data.to} (ID: ${doc.id})`);
+                logger.info(`[CRON] Successfully sent email to ${data.to} (ID: ${doc.id})`);
                 successCount++;
 
             } catch (error: any) {
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
                         failedAt: FieldValue.serverTimestamp(),
                         updatedAt: FieldValue.serverTimestamp()
                     });
-                    console.log(`[CRON] Email (ID: ${doc.id}) marked as FAILED after ${attempts} attempts.`);
+                    logger.info(`[CRON] Email (ID: ${doc.id}) marked as FAILED after ${attempts} attempts.`);
                 } else {
                     // Backoff (Exponential: 5m, 15m, 45m, etc.)
                     // attempts starts at 1. next retry logic:
@@ -112,7 +113,7 @@ export async function GET(request: Request) {
                         nextRetry: nextRetry,
                         updatedAt: FieldValue.serverTimestamp()
                     });
-                    console.log(`[CRON] Email (ID: ${doc.id}) re-queued. Next retry in 15m.`);
+                    logger.info(`[CRON] Email (ID: ${doc.id}) re-queued. Next retry in 15m.`);
                 }
             }
             processedCount++;

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         const { encryptData } = await import("@/lib/security");
 
         const secret = generateTOTPSecret();
-        const qrCode = await generateTOTPQRCode(session.user.email!, secret);
+        const qrCode = await generateTOTPQRCode(session.user.email || "", secret);
         const recoveryCodes = generateBackupCodes(8);
 
         const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';

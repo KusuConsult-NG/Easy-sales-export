@@ -63,7 +63,7 @@ export async function initializePropertyPaymentAction(
 
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
-            session.user.email!,
+            session.user.email || "",
             nairaToKobo(amount),
             {
                 userId: session.user.id,

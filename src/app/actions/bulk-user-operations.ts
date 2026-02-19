@@ -400,7 +400,7 @@ export async function bulkDeleteUsersAction(
         }
 
         // Prevent self-deletion
-        if (userIds.includes(session.user.id!)) {
+        if (userIds.includes(session.user.id || "")) {
             return {
                 success: false,
                 deleted: 0,

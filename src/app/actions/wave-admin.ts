@@ -323,7 +323,7 @@ export async function approveWaveApplicationAction(
             try {
                 const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
                 await invalidateServiceCache(appData.userId, 'wave');
-                console.log(`[Wave Approval] Cleared cache for user: ${appData.userId}`);
+                logger.info(`[Wave Approval] Cleared cache for user: ${appData.userId}`);
             } catch (cacheError) {
                 // Non-critical - continue even if cache clear fails
                 logger.error('[Wave Approval] Cache invalidation error:', cacheError);

@@ -91,7 +91,7 @@ export default function PropertyDetailsPage() {
         setSubmittingInquiry(true);
         try {
             const result = await submitLandInquiryAction({
-                listingId: property.id!,
+                listingId: property.id || "",
                 listingTitle: property.title,
                 listingOwnerId: property.ownerId,
                 buyerName: inquiryForm.name,

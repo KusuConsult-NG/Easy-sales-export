@@ -74,7 +74,7 @@ export async function initializeInvestmentPaymentAction(
 
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
-            session.user.email!,
+            session.user.email || "",
             nairaToKobo(investmentAmount),
             {
                 userId: session.user.id,
@@ -234,7 +234,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             });
 
             // Update or create investor portfolio
-            const portfolioId = session.user.id!;
+            const portfolioId = session.user.id || "";
             const portfolioRef = db.collection("investorPortfolios").doc(portfolioId);
             const portfolioSnap = await transaction.get(portfolioRef);
 

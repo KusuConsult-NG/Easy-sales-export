@@ -186,7 +186,7 @@ export async function initializeCoursePaymentAction(courseId: string): Promise<{
 
         // Initialize Paystack
         const result = await initializePaystackPayment(
-            session.user.email!,
+            session.user.email || "",
             Math.round(course.price * 100), // Kobo
             {
                 type: "academy_enrollment",

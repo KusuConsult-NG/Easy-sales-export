@@ -52,7 +52,7 @@ export default function MyLoansPage() {
                 // Fetch repayment schedule for each disbursed loan
                 const loansWithSchedules = await Promise.all(
                     disbursedLoans.map(async (loan) => {
-                        const scheduleResult = await getRepaymentScheduleAction(loan.id!);
+                        const scheduleResult = await getRepaymentScheduleAction(loan.id || "");
 
                         if (scheduleResult.success && scheduleResult.schedule) {
                             const schedule = scheduleResult.schedule;
