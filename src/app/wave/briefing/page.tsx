@@ -615,7 +615,7 @@ export default function WaveBriefingPage() {
                 }} />
 
                 <div className="relative max-w-4xl mx-auto px-6">
-                    <h2 className="text-3xl md:text-5xl font-black mb-8 leading-tight">
+                    <h2 className="text-3xl md:text-5xl font-black mb-8 leading-tight text-white">
                         This Is Your Moment To <br /> <span className="text-green-500">Enter The Structure.</span>
                     </h2>
 
