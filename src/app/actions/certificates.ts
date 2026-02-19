@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
+import { auth } from "@/lib/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -39,6 +40,10 @@ export async function uploadCertificateAction(
     }
 ): Promise<{ success: boolean; error?: string; certificateId?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false, error: "Unauthorized" };
+        }
         // Validate file size (10MB max)
         const maxSize = parseInt(process.env.MAX_CERTIFICATE_SIZE_MB || "10", 10) * 1024 * 1024;
         if (file.size > maxSize) {
@@ -117,6 +122,10 @@ export async function deleteCertificateAction(
     userId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false, error: "Unauthorized" };
+        }
         const certRef = db.collection("certificates").doc(certificateId);
         const certDoc = await certRef.get();
 
@@ -159,6 +168,10 @@ export async function deleteCertificateAction(
  */
 export async function completeOnboardingAction(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== userId) {
+            return { success: false, error: "Unauthorized" };
+        }
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
         await userRef.update({

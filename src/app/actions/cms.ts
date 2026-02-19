@@ -2,8 +2,19 @@
 
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
+import { auth } from "@/lib/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
+
+/** Helper: verify admin session */
+async function requireAdmin(): Promise<{ id: string } | null> {
+    const session = await auth();
+    const roles = session?.user?.roles || [];
+    if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
+        return null;
+    }
+    return { id: session.user.id };
+}
 
 /**
  * Content Management System (CMS)
@@ -53,6 +64,8 @@ export async function createAnnouncementAction(data: {
     adminId: string;
 }): Promise<{ success: boolean; error?: string; announcementId?: string }> {
     try {
+        const admin = await requireAdmin();
+        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
         const announcement: Omit<Announcement, "id"> = {
             title: data.title,
             content: data.content,
@@ -139,6 +152,8 @@ export async function deactivateAnnouncementAction(
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const admin = await requireAdmin();
+        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
         const announcementRef = db.collection("announcements").doc(announcementId);
 
         await announcementRef.update({
@@ -175,6 +190,8 @@ export async function createBannerAction(data: {
     adminId: string;
 }): Promise<{ success: boolean; error?: string; bannerId?: string }> {
     try {
+        const admin = await requireAdmin();
+        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
         const banner: Omit<Banner, "id"> = {
             title: data.title,
             message: data.message,
@@ -255,6 +272,8 @@ export async function deactivateBannerAction(
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const admin = await requireAdmin();
+        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
         const bannerRef = db.collection("banners").doc(bannerId);
 
         await bannerRef.update({

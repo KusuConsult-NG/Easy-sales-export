@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
+import { auth } from "@/lib/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log-admin";
 
@@ -68,6 +69,10 @@ export async function createEscrowAction(data: {
     productDescription: string;
 }): Promise<{ success: boolean; error?: string; escrowId?: string }> {
     try {
+        const session = await auth();
+        if (!session?.user?.id || session.user.id !== data.buyerId) {
+            return { success: false, error: "Unauthorized" };
+        }
         const escrow: Omit<EscrowTransaction, "id"> = {
             ...data,
             status: "pending_payment",
@@ -178,6 +183,11 @@ export async function releaseEscrowAction(
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        const roles = session?.user?.roles || [];
+        if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized: Admin access required" };
+        }
         const escrowRef = db.collection("escrow_transactions").doc(escrowId);
         const escrowDoc = await escrowRef.get();
 
@@ -275,6 +285,11 @@ export async function resolveDisputeAction(
     outcome: "release_to_seller" | "refund_to_buyer"
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        const session = await auth();
+        const roles = session?.user?.roles || [];
+        if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized: Admin access required" };
+        }
         const disputeRef = db.collection("disputes").doc(disputeId);
         const disputeDoc = await disputeRef.get();
 
