@@ -114,8 +114,31 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                     )}
                 </div>
 
-                {/* Polling Unit & Ward */}
+                {/* Ward & Polling Unit */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                            Ward (based on Residence) *
+                        </label>
+                        <select
+                            value={data.ward}
+                            onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            disabled={!data.lgaOfResidence}
+                        >
+                            <option value="">Select Ward</option>
+                            {data.lgaOfResidence && getWards(data.lgaOfResidence).map((ward) => (
+                                <option key={ward} value={ward}>{ward}</option>
+                            )) || []}
+                        </select>
+                        {errors.ward && (
+                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                {errors.ward}
+                            </p>
+                        )}
+                    </div>
+
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Polling Unit *
@@ -135,29 +158,6 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                                 <AlertCircle className="w-4 h-4" />
                                 {errors.pollingUnit}
-                            </p>
-                        )}
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-900 mb-2">
-                            Ward (based on Residence) *
-                        </label>
-                        <select
-                            value={data.ward}
-                            onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })} // Reset PU when ward changes
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data.lgaOfResidence}
-                        >
-                            <option value="">Select Ward</option>
-                            {data.lgaOfResidence && getWards(data.lgaOfResidence).map((ward) => (
-                                <option key={ward} value={ward}>{ward}</option>
-                            )) || []}
-                        </select>
-                        {errors.ward && (
-                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                                <AlertCircle className="w-4 h-4" />
-                                {errors.ward}
                             </p>
                         )}
                     </div>
