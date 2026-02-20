@@ -183,6 +183,17 @@ export default function WaveBriefingPage() {
                         <h2 className="text-3xl md:text-5xl font-black text-slate-900 mb-6">
                             1-Day Live Awareness Briefing
                         </h2>
+
+                        {/* ─── LAND ALLOCATION URGENCY BANNER ─── */}
+                        <div className="max-w-xl mx-auto bg-yellow-50 border-2 border-yellow-200 rounded-xl p-5 mb-8 shadow-sm">
+                            <p className="text-yellow-900 font-bold text-lg">
+                                <em>*Land allocation discussions are happening now.*</em>
+                            </p>
+                            <p className="text-yellow-800 font-bold text-lg mt-1">
+                                <em>*Only positioned members will be considered*</em>
+                            </p>
+                        </div>
+
                         <div className="w-24 h-1.5 bg-green-900 mx-auto rounded-full" />
                     </div>
 
@@ -465,6 +476,16 @@ export default function WaveBriefingPage() {
                         /* ─── Registration Form (White/Green) ─── */
                         <div className="bg-white border border-slate-200 rounded-3xl p-8 md:p-12 shadow-2xl shadow-slate-200/50 relative">
                             <div className="absolute top-0 left-0 w-full h-2 bg-green-900" /> {/* Accent bar */}
+
+                            {/* ─── LAND ALLOCATION URGENCY BANNER (Specifically for the form) ─── */}
+                            <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-5 mb-8 text-center shadow-sm">
+                                <p className="text-yellow-900 font-bold text-lg">
+                                    <em>*Land allocation discussions are happening now.*</em>
+                                </p>
+                                <p className="text-yellow-800 font-bold text-lg mt-1">
+                                    <em>*Only positioned members will be considered*</em>
+                                </p>
+                            </div>
 
                             <div className="text-center mb-10">
                                 <p className="text-green-700 font-bold text-xs uppercase tracking-widest mb-3">Free Registration</p>
