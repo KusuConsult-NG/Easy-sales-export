@@ -328,16 +328,18 @@ export async function sendBriefing24HourReminderEmail(
         subject: 'Tomorrow Changes Your Financial Direction',
         message: `
             <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; color: #1a1a1a; line-height: 1.8;">
-                <p style="font-size: 16px;">Dear ${userName},</p>
-
-                <p style="font-size: 16px;">Tomorrow, you will see:</p>
+                <p style="font-size: 16px;">
+                    Tomorrow, you will see:
+                </p>
 
                 <p style="font-size: 16px;">
                     Why agriculture is no longer for survival…<br />
-                    But for <strong>structured wealth.</strong>
+                    But for structured wealth.
                 </p>
 
-                <p style="font-size: 16px;">Come with:</p>
+                <p style="font-size: 16px;">
+                    Come with:
+                </p>
 
                 <ul style="font-size: 16px; padding-left: 24px; line-height: 2.2;">
                     <li>Notebook</li>
@@ -345,20 +347,20 @@ export async function sendBriefing24HourReminderEmail(
                     <li>Serious mindset</li>
                 </ul>
 
-                <div style="background-color: #fefce8; border-left: 4px solid #ca8a04; padding: 20px 24px; margin: 28px 0; border-radius: 4px;">
-                    <p style="font-size: 16px; margin: 4px 0;">Those who come casually will leave confused.</p>
-                    <p style="font-size: 16px; margin: 4px 0;"><strong>Those who come serious will leave positioned.</strong></p>
-                </div>
+                <p style="font-size: 16px; margin: 28px 0;">
+                    Those who come casually will leave confused.
+                </p>
 
-                <p style="font-size: 16px;">See you inside.</p>
+                <p style="font-size: 16px; margin: 28px 0;">
+                    Those who come serious will leave positioned.
+                </p>
+
+                <p style="font-size: 16px;">
+                    See you inside.
+                </p>
 
                 <br />
                 <p style="font-size: 16px;">— <strong>Sir Abdallah</strong></p>
-
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
-                <p style="font-size: 12px; color: #9ca3af;">
-                    Women Agro-Value Expansion (WAVE) &nbsp;|&nbsp; Powered by Easy Sales Export
-                </p>
             </div>
         `,
         metadata: { type: 'briefing_24hr_reminder' },
