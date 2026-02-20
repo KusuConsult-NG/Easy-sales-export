@@ -41,6 +41,7 @@ export default function WaveBriefingPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isRegistered, setIsRegistered] = useState(false);
     const [error, setError] = useState("");
+    const [isOfflinePending, setIsOfflinePending] = useState(false);
     const formRef = useRef<HTMLDivElement>(null);
     const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
 
@@ -63,6 +64,34 @@ export default function WaveBriefingPage() {
         return () => observer.disconnect();
     }, []);
 
+    // Offline sync listener
+    useEffect(() => {
+        const handleOnline = async () => {
+            const pendingData = localStorage.getItem("wave_briefing_pending_sync");
+            if (pendingData && !isSubmitting) {
+                try {
+                    const data = JSON.parse(pendingData);
+                    setIsOfflinePending(false);
+                    setIsSubmitting(true);
+                    const result = await registerForBriefingAction(data);
+                    if (result.success) {
+                        setIsRegistered(true);
+                        localStorage.removeItem("wave_briefing_pending_sync");
+                    } else {
+                        setError(result.error || "Registration failed on sync");
+                    }
+                } catch {
+                    setError("Failed to sync registration.");
+                } finally {
+                    setIsSubmitting(false);
+                }
+            }
+        };
+
+        window.addEventListener("online", handleOnline);
+        return () => window.removeEventListener("online", handleOnline);
+    }, [isSubmitting]);
+
     const scrollToForm = () => {
         formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     };
@@ -70,6 +99,13 @@ export default function WaveBriefingPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+            localStorage.setItem("wave_briefing_pending_sync", JSON.stringify(formData));
+            setIsOfflinePending(true);
+            return;
+        }
+
         setIsSubmitting(true);
 
         try {
@@ -614,13 +650,20 @@ export default function WaveBriefingPage() {
                                 {/* Submit */}
                                 <button
                                     type="submit"
-                                    disabled={isSubmitting}
+                                    disabled={isSubmitting || isOfflinePending}
                                     className="w-full bg-green-900 text-white py-4 rounded-xl text-lg font-bold shadow-lg shadow-green-900/20 hover:bg-green-800 hover:shadow-green-900/30 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3 mt-4"
                                 >
                                     {isSubmitting ? (
                                         <>
                                             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                             <span>Processing...</span>
+                                        </>
+                                    ) : isOfflinePending ? (
+                                        <>
+                                            <div className="w-5 h-5 flex items-center justify-center mt-0.5">
+                                                <Clock className="w-5 h-5 text-white" />
+                                            </div>
+                                            <span>Pending Sync (Offline)</span>
                                         </>
                                     ) : (
                                         <>

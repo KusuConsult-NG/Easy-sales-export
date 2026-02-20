@@ -3,6 +3,11 @@
  * 
  * This file documents the complete Firestore database schema
  * for the Easy Sales Export platform.
+ * 
+ * NDPR / SECURITY COMPLIANCE NOTE:
+ * All PII (Personally Identifiable Information) including banking details,
+ * names, and addresses stored within these collections are automatically
+ * Encrypted At Rest using AES-256 by the Firebase/Google Cloud infrastructure.
  */
 
 // Export PRD-required interfaces
@@ -55,6 +60,12 @@ export interface User {
     totpSecret?: string; // Encrypted TOTP secret
     mfaRecoveryCodes?: string[]; // Encrypted recovery codes
     onboardingCompleted?: boolean; // For onboarding tour
+
+    // NDPR / GDPR Compliance Tracking
+    consentVersion?: string; // e.g., "1.0.0"
+    consentDate?: Date;
+    marketingOptIn?: boolean;
+
     createdAt: Date;
     updatedAt: Date;
 }

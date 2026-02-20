@@ -3,25 +3,43 @@ import { GoogleAuth } from "google-auth-library";
 import * as fs from "fs";
 import * as path from "path";
 import chalk from "chalk";
+import dotenv from "dotenv";
 
-async function addLocalhost() {
+// Load environment variables from .env.local
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+
+const NEW_DOMAINS = [
+    "localhost",
+    "easysalesexport.com",
+    "easysalescooperative.com",
+    "easysalesexportacademy.com",
+    "easysalesmarket.com",
+    "waveprogramme.gov.ng",
+    "farmnation.ng",
+    "easysalesexportng.com"
+];
+
+async function addDomains() {
     console.log(chalk.blue.bold("\n🌐 Automating Firebase Authorized Domains Configuration\n"));
 
-    const keyPath = path.resolve(process.cwd(), "service-account.json");
-    if (!fs.existsSync(keyPath)) {
-        console.error(chalk.red("❌ service-account.json not found"));
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+
+    if (!projectId || !clientEmail || !privateKey) {
+        console.error(chalk.red("❌ Firebase credentials (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY) not found in .env.local"));
         process.exit(1);
     }
-
-    const serviceAccount = JSON.parse(fs.readFileSync(keyPath, "utf-8"));
-    const projectId = serviceAccount.project_id;
 
     console.log(chalk.cyan(`🔹 Project: ${projectId}`));
 
     try {
         // 1. Get Access Token
         const auth = new GoogleAuth({
-            keyFile: keyPath,
+            credentials: {
+                client_email: clientEmail,
+                private_key: privateKey
+            },
             scopes: ["https://www.googleapis.com/auth/cloud-platform", "https://www.googleapis.com/auth/firebase"]
         });
         const client = await auth.getClient();
@@ -49,14 +67,16 @@ async function addLocalhost() {
 
         console.log(chalk.gray(`   Current Domains: ${currentDomains.join(", ")}`));
 
-        // 3. Check and Add Localhost
-        if (currentDomains.includes("localhost")) {
-            console.log(chalk.green("\n✅ 'localhost' is ALREADY authorized!"));
+        // 3. Check and Add Domains
+        const missingDomains = NEW_DOMAINS.filter(domain => !currentDomains.includes(domain));
+
+        if (missingDomains.length === 0) {
+            console.log(chalk.green("\n✅ All target domains are ALREADY authorized!"));
             return;
         }
 
-        console.log(chalk.yellow("\n   Adding 'localhost' to authorized domains..."));
-        const newDomains = [...currentDomains, "localhost"];
+        console.log(chalk.yellow(`\n   Adding ${missingDomains.length} domains to authorized domains (${missingDomains.join(", ")})...`));
+        const newDomains = [...currentDomains, ...missingDomains];
 
         // 4. Update Config
         const updateUrl = `https://identitytoolkit.googleapis.com/admin/v2/projects/${projectId}/config?updateMask=authorizedDomains`;
@@ -75,8 +95,8 @@ async function addLocalhost() {
             throw new Error(`Failed to update config: ${updateResponse.status} ${updateResponse.statusText} - ${await updateResponse.text()}`);
         }
 
-        console.log(chalk.green("\n🎉 Success! Added 'localhost' to Authorized Domains."));
-        console.log(chalk.green("   You should now be able to login without 'Network Request Failed' errors."));
+        console.log(chalk.green(`\n🎉 Success! Added new domains: ${missingDomains.join(", ")}`));
+        console.log(chalk.green("   You should now be able to login across all 7 platforms without 'Network Request Failed' errors."));
 
     } catch (error: any) {
         console.error(chalk.red("\n❌ Failed to update configuration automatically:"));
@@ -85,4 +105,4 @@ async function addLocalhost() {
     }
 }
 
-addLocalhost();
+addDomains();

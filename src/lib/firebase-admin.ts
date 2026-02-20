@@ -10,19 +10,24 @@ import { getStorage } from 'firebase-admin/storage';
  * This prevents private key parsing during build process.
  */
 
-let adminApp: App | null = null;
-let firestoreInstance: Firestore | null = null;
+// Define global interface for Next.js hot-reload persistence
+declare global {
+    var __FIREBASE_ADMIN_APP__: App | undefined;
+    var __FIRESTORE_INSTANCE__: Firestore | undefined;
+    var __FIREBASE_AUTH_INSTANCE__: Auth | undefined;
+    var __FIREBASE_STORAGE_INSTANCE__: ReturnType<typeof getStorage> | undefined;
+}
 
-function initializeFirebaseAdmin(): App {
-    if (adminApp) {
-        return adminApp;
+export function initializeFirebaseAdmin(): App {
+    if (globalThis.__FIREBASE_ADMIN_APP__) {
+        return globalThis.__FIREBASE_ADMIN_APP__;
     }
 
     // Check if already initialized by another instance
     const apps = getApps();
     if (apps.length > 0) {
-        adminApp = apps[0];
-        return adminApp;
+        globalThis.__FIREBASE_ADMIN_APP__ = apps[0];
+        return globalThis.__FIREBASE_ADMIN_APP__;
     }
 
     // RUNTIME ONLY: Parse private key here, not at module scope
@@ -63,7 +68,7 @@ function initializeFirebaseAdmin(): App {
     }
 
     try {
-        adminApp = initializeApp({
+        globalThis.__FIREBASE_ADMIN_APP__ = initializeApp({
             credential: cert({
                 projectId: process.env.FIREBASE_PROJECT_ID,
                 clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -78,7 +83,7 @@ function initializeFirebaseAdmin(): App {
         );
     }
 
-    return adminApp;
+    return globalThis.__FIREBASE_ADMIN_APP__;
 }
 
 /**
@@ -86,11 +91,11 @@ function initializeFirebaseAdmin(): App {
  * This function should ONLY be called inside API routes or server actions
  */
 export function getAdminDb(): Firestore {
-    if (!firestoreInstance) {
+    if (!globalThis.__FIRESTORE_INSTANCE__) {
         initializeFirebaseAdmin();
-        firestoreInstance = getFirestore();
+        globalThis.__FIRESTORE_INSTANCE__ = getFirestore();
     }
-    return firestoreInstance;
+    return globalThis.__FIRESTORE_INSTANCE__;
 }
 
 // Legacy export for backward compatibility

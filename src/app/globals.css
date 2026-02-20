@@ -28,6 +28,7 @@
   --animate-shimmer: shimmer 2s ease-in-out infinite;
 }
 
+/* Disabled dark mode to prevent UI text illegibility 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0f172a;
@@ -35,11 +36,11 @@
   }
 }
 
-/* Check for class-based dark mode (set by ThemeContext) */
 .dark {
   --background: #0f172a;
   --foreground: #f1f5f9;
 }
+*/
 
 /* Animations */
 @keyframes slideInUp {
@@ -160,16 +161,16 @@ body {
 @layer base {
   /* Global accessibility fix for form controls */
   input, textarea, select {
-    @apply text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400;
+    @apply text-slate-900 placeholder:text-slate-500 bg-white border-slate-300;
   }
 
-  /* Ensure labels are always high contrast as requested */
+  /* Ensure labels are always high contrast */
   label {
-    @apply text-slate-900 dark:text-white font-semibold;
+    @apply text-slate-900 font-semibold;
   }
   
   /* Heading visibility fix */
   h1, h2, h3, h4, h5, h6 {
-    @apply text-slate-900 dark:text-white;
+    @apply text-slate-900;
   }
 }
