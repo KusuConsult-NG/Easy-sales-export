@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClientLayout } from "@/components/layout/ClientLayout";
 import { validateProductionSecrets, checkForExposedKeys } from "@/lib/security-checks";
+import GlobalScrollWatcher from "@/components/common/GlobalScrollWatcher";
 
 // Run security checks on app initialization
 if (process.env.NODE_ENV === 'production') {
@@ -106,6 +107,7 @@ export default function RootLayout({
         className={inter.variable}
         suppressHydrationWarning
       >
+        <GlobalScrollWatcher />
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

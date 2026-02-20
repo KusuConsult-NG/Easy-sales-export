@@ -2,8 +2,6 @@
 
 import { Download, ShieldCheck } from "lucide-react";
 import { useState } from "react";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
 
 interface DigitalIDCardProps {
     memberNumber: string;
@@ -32,6 +30,9 @@ export default function DigitalIDCard({
             const cardElement = document.getElementById("digital-id-card");
             if (!cardElement) return;
 
+            // Dynamically import heavy library only on click
+            const html2canvas = (await import("html2canvas")).default;
+
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
                 backgroundColor: null,
@@ -53,6 +54,10 @@ export default function DigitalIDCard({
         try {
             const cardElement = document.getElementById("digital-id-card");
             if (!cardElement) return;
+
+            // Dynamically import heavy libraries only on click
+            const html2canvas = (await import("html2canvas")).default;
+            const { jsPDF } = await import("jspdf");
 
             const canvas = await html2canvas(cardElement, {
                 scale: 2,

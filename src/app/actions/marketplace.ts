@@ -840,33 +840,41 @@ export async function getBuyerStatsAction() {
 /**
  * Get single product by ID
  */
-export async function getProductAction(productId: string) {
-    try {
-        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
-        const productSnap = await productRef.get();
+const getCachedProduct = (productId: string) => unstable_cache(
+    async () => {
+        try {
+            const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
+            const productSnap = await productRef.get();
 
-        if (!productSnap.exists) {
-            return { success: false, error: "Product not found" };
-        }
-
-        const product = productSnap.data() as Product;
-
-        // Optionally fetch seller name
-        let sellerName = "Unknown Seller";
-        if (product.sellerId) {
-            const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
-            const userSnap = await userRef.get();
-            if (userSnap.exists) {
-                const userData = userSnap.data();
-                sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
+            if (!productSnap.exists) {
+                return { success: false, error: "Product not found" };
             }
-        }
 
-        return { success: true, product: { ...product, sellerName } };
-    } catch (error: any) {
-        logger.error("Get product error:", error);
-        return { success: false, error: error.message };
-    }
+            const product = productSnap.data() as Product;
+
+            // Optionally fetch seller name
+            let sellerName = "Unknown Seller";
+            if (product.sellerId) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
+                const userSnap = await userRef.get();
+                if (userSnap.exists) {
+                    const userData = userSnap.data();
+                    sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
+                }
+            }
+
+            return { success: true, product: { ...product, sellerName } };
+        } catch (error: any) {
+            logger.error("Get product error:", error);
+            return { success: false, error: error.message };
+        }
+    },
+    [`product-${productId}`],
+    { revalidate: 3600, tags: [`product-${productId}`] }
+)();
+
+export async function getProductAction(productId: string) {
+    return getCachedProduct(productId);
 }
 
 /**

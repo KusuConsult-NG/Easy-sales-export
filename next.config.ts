@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 import withBundleAnalyzer from '@next/bundle-analyzer';
 
 const nextConfig: NextConfig = {
+  // Experimental
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts'],
+  },
+
   // Image optimization
   images: {
     formats: ['image/webp', 'image/avif'],

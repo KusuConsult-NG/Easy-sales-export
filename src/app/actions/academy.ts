@@ -6,7 +6,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_cache } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -114,54 +114,70 @@ export async function getCoursesAction(
     limit: number = 12,
     lastDocId?: string
 ): Promise<{ courses: Course[]; lastDocId: string | null }> {
-    try {
-        let q = db.collection("academy_courses")
-            .orderBy("createdAt", "desc");
+    const getCachedCourses = unstable_cache(
+        async () => {
+            try {
+                let q = db.collection("academy_courses")
+                    .orderBy("createdAt", "desc");
 
-        if (lastDocId) {
-            const lastDoc = await db.collection("academy_courses").doc(lastDocId).get();
-            if (lastDoc.exists) {
-                q = q.startAfter(lastDoc);
+                if (lastDocId) {
+                    const lastDoc = await db.collection("academy_courses").doc(lastDocId).get();
+                    if (lastDoc.exists) {
+                        q = q.startAfter(lastDoc);
+                    }
+                }
+
+                q = q.limit(limit);
+
+                const snapshot = await q.get();
+
+                const courses = snapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                })) as Course[];
+
+                const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+                return { courses, lastDocId: newLastDocId };
+            } catch (error) {
+                logger.error("Failed to fetch courses:", error);
+                return { courses: [], lastDocId: null };
             }
-        }
+        },
+        [`academy-courses`, limit.toString(), lastDocId || "none"],
+        { revalidate: 3600, tags: ["academy-courses"] }
+    );
 
-        q = q.limit(limit);
-
-        const snapshot = await q.get();
-
-        const courses = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as Course[];
-
-        const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
-
-        return { courses, lastDocId: newLastDocId };
-    } catch (error) {
-        logger.error("Failed to fetch courses:", error);
-        return { courses: [], lastDocId: null };
-    }
+    return getCachedCourses();
 }
 
 /**
  * Get course by ID
  */
-export async function getCourseByIdAction(courseId: string): Promise<Course | null> {
-    try {
-        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+const getCachedCourseById = (courseId: string) => unstable_cache(
+    async () => {
+        try {
+            const courseDoc = await db.collection("academy_courses").doc(courseId).get();
 
-        if (!courseDoc.exists) {
+            if (!courseDoc.exists) {
+                return null;
+            }
+
+            return {
+                id: courseDoc.id,
+                ...courseDoc.data(),
+            } as Course;
+        } catch (error) {
+            logger.error("Failed to fetch course:", error);
             return null;
         }
+    },
+    [`academy-course-${courseId}`],
+    { revalidate: 3600, tags: [`academy-course-${courseId}`] }
+)();
 
-        return {
-            id: courseDoc.id,
-            ...courseDoc.data(),
-        } as Course;
-    } catch (error) {
-        logger.error("Failed to fetch course:", error);
-        return null;
-    }
+export async function getCourseByIdAction(courseId: string): Promise<Course | null> {
+    return getCachedCourseById(courseId);
 }
 
 /**

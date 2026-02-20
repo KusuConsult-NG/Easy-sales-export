@@ -5,8 +5,7 @@ import Link from "next/link";
 import { getRecommendedProductsAction } from "@/app/actions/marketplace";
 import BackToHub from "@/components/common/BackToHub";
 
-// Force dynamic rendering (prevent static generation at build time)
-export const dynamic = 'force-dynamic';
+// Removed force-dynamic to allow static rendering
 
 export default async function MarketplaceLandingPage() {
     // Fetch real products (wrapped in try-catch to handle build-time errors gracefully)

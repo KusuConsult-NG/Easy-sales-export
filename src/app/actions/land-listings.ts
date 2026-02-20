@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 import { createNotificationAction } from "@/app/actions/notifications";
+import { unstable_cache } from "next/cache";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -222,64 +223,85 @@ export async function searchLandListingsAction(filters: {
     limit?: number;
     lastDocId?: string;
 }): Promise<{ listings: LandListing[]; lastDocId: string | null }> {
-    try {
-        let q = db.collection("land_listings")
-            .where("status", "==", "verified")
-            .orderBy("createdAt", "desc"); // Ensure stable ordering
+    // Generate cache key from filters
+    const cacheKeyParts = [
+        "land-listings",
+        filters.state || "all",
+        filters.category || "all",
+        filters.minSize?.toString() || "0",
+        filters.maxSize?.toString() || "max",
+        filters.minPrice?.toString() || "0",
+        filters.maxPrice?.toString() || "max",
+        filters.soilType || "all",
+        filters.waterSource || "all",
+        filters.limit?.toString() || "12",
+        filters.lastDocId || "start"
+    ];
 
-        if (filters.state) {
-            // Note: Mixing equality and range/inequality filters requires composite indexes
-            // or client-side filtering. For now, strict equality is fine with orderBy.
-            q = q.where("location.state", "==", filters.state);
-        }
-        if (filters.category) {
-            q = q.where("category", "==", filters.category);
-        }
+    const getCachedListings = unstable_cache(
+        async () => {
+            try {
+                let q = db.collection("land_listings")
+                    .where("status", "==", "verified")
+                    .orderBy("createdAt", "desc"); // Ensure stable ordering
 
-        // Pagination
-        if (filters.lastDocId) {
-            const lastDoc = await db.collection("land_listings").doc(filters.lastDocId).get();
-            if (lastDoc.exists) {
-                q = q.startAfter(lastDoc);
+                if (filters.state) {
+                    q = q.where("location.state", "==", filters.state);
+                }
+                if (filters.category) {
+                    q = q.where("category", "==", filters.category);
+                }
+
+                // Pagination
+                if (filters.lastDocId) {
+                    const lastDoc = await db.collection("land_listings").doc(filters.lastDocId).get();
+                    if (lastDoc.exists) {
+                        q = q.startAfter(lastDoc);
+                    }
+                }
+
+                const limit = filters.limit || 12;
+                q = q.limit(limit);
+
+                const snapshot = await q.get();
+                let results = snapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...doc.data(),
+                })) as LandListing[];
+
+                // Client-side filtering for numeric ranges
+                if (filters.minSize) {
+                    results = results.filter((l) => l.size >= filters.minSize!);
+                }
+                if (filters.maxSize) {
+                    results = results.filter((l) => l.size <= filters.maxSize!);
+                }
+                if (filters.minPrice) {
+                    results = results.filter((l) => l.price >= filters.minPrice!);
+                }
+                if (filters.maxPrice) {
+                    results = results.filter((l) => l.price <= filters.maxPrice!);
+                }
+                if (filters.soilType) {
+                    results = results.filter((l) => l.soilType === filters.soilType);
+                }
+                if (filters.waterSource) {
+                    results = results.filter((l) => l.waterSource === filters.waterSource);
+                }
+
+                const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+                return { listings: results, lastDocId };
+            } catch (error) {
+                logger.error("Land search error:", error);
+                return { listings: [], lastDocId: null };
             }
-        }
+        },
+        cacheKeyParts,
+        { revalidate: 3600, tags: ["land-listings"] }
+    );
 
-        const limit = filters.limit || 12;
-        q = q.limit(limit);
-
-        const snapshot = await q.get();
-        let results = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as LandListing[];
-
-        // Client-side filtering for numeric ranges (until complex indexes are built)
-        if (filters.minSize) {
-            results = results.filter((l) => l.size >= filters.minSize!);
-        }
-        if (filters.maxSize) {
-            results = results.filter((l) => l.size <= filters.maxSize!);
-        }
-        if (filters.minPrice) {
-            results = results.filter((l) => l.price >= filters.minPrice!);
-        }
-        if (filters.maxPrice) {
-            results = results.filter((l) => l.price <= filters.maxPrice!);
-        }
-        if (filters.soilType) {
-            results = results.filter((l) => l.soilType === filters.soilType);
-        }
-        if (filters.waterSource) {
-            results = results.filter((l) => l.waterSource === filters.waterSource);
-        }
-
-        const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
-
-        return { listings: results, lastDocId };
-    } catch (error) {
-        logger.error("Land search error:", error);
-        return { listings: [], lastDocId: null };
-    }
+    return getCachedListings();
 }
 
 
@@ -386,20 +408,28 @@ export async function submitLandListingAction(data: {
 /**
  * Get single land listing by ID
  */
-export async function getPropertyByIdAction(id: string): Promise<LandListing | null> {
-    try {
-        const docRef = db.collection("land_listings").doc(id);
-        const docSnap = await docRef.get();
+const getCachedPropertyById = (id: string) => unstable_cache(
+    async () => {
+        try {
+            const docRef = db.collection("land_listings").doc(id);
+            const docSnap = await docRef.get();
 
-        if (docSnap.exists) {
-            return { id: docSnap.id, ...docSnap.data() } as LandListing;
-        } else {
+            if (docSnap.exists) {
+                return { id: docSnap.id, ...docSnap.data() } as LandListing;
+            } else {
+                return null;
+            }
+        } catch (error) {
+            logger.error("Error fetching property:", error);
             return null;
         }
-    } catch (error) {
-        logger.error("Error fetching property:", error);
-        return null;
-    }
+    },
+    [`property-${id}`],
+    { revalidate: 3600, tags: [`property-${id}`] }
+)();
+
+export async function getPropertyByIdAction(id: string): Promise<LandListing | null> {
+    return getCachedPropertyById(id);
 }
 
 /**

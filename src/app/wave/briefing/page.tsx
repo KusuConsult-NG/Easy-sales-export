@@ -112,6 +112,8 @@ export default function WaveBriefingPage() {
             const result = await registerForBriefingAction(formData);
             if (result.success) {
                 setIsRegistered(true);
+                // Scroll up so user sees the success message right above the form area
+                setTimeout(() => scrollToForm(), 100);
             } else {
                 setError(result.error || "Registration failed");
             }
