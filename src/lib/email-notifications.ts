@@ -265,15 +265,21 @@ export async function sendBriefingConfirmationEmail(
         subject: '⚠ You Are Now Officially Positioned',
         message: `
             <div style="font-family: Georgia, serif; max-width: 600px; margin: 0 auto; color: #1a1a1a; line-height: 1.8;">
-                <p style="font-size: 16px;">Dear ${userName},</p>
+                <p style="font-size: 16px;">
+                    You have just done something most Nigerians will ignore.
+                </p>
 
-                <p style="font-size: 16px;">You have just done something most Nigerians will ignore.</p>
+                <p style="font-size: 16px;">
+                    You positioned yourself early.
+                </p>
 
-                <p style="font-size: 16px;"><strong>You positioned yourself early.</strong></p>
+                <p style="font-size: 16px;">
+                    This briefing is not motivational talk.
+                </p>
 
-                <p style="font-size: 16px;">This briefing is not motivational talk.</p>
-
-                <p style="font-size: 16px;">It is structural insight into:</p>
+                <p style="font-size: 16px;">
+                    It is structural insight into:
+                </p>
 
                 <ul style="font-size: 16px; padding-left: 24px; line-height: 2.2;">
                     <li>How WAVE capital works</li>
@@ -282,24 +288,25 @@ export async function sendBriefingConfirmationEmail(
                     <li>How cooperative positioning gives advantage</li>
                 </ul>
 
-                <div style="background-color: #f0fdf4; border-left: 4px solid #15803d; padding: 20px 24px; margin: 28px 0; border-radius: 4px;">
-                    <p style="font-size: 16px; font-weight: bold; margin: 0 0 12px 0;">Important:</p>
+                <p style="font-size: 16px; font-weight: bold; margin-top: 28px;">
+                    Important:
+                </p>
+                <div style="margin-bottom: 28px;">
                     <p style="font-size: 16px; margin: 4px 0;">Arrive prepared.</p>
                     <p style="font-size: 16px; margin: 4px 0;">Arrive attentive.</p>
                     <p style="font-size: 16px; margin: 4px 0;">Arrive ready to act.</p>
                 </div>
 
-                <p style="font-size: 16px;">The link / venue details will be sent 24 hours before the event.</p>
+                <p style="font-size: 16px;">
+                    The link / venue details will be sent 24 hours before the event.
+                </p>
 
-                <p style="font-size: 16px;"><strong>Watch your inbox carefully.</strong></p>
+                <p style="font-size: 16px;">
+                    Watch your inbox carefully.
+                </p>
 
                 <br />
                 <p style="font-size: 16px;">— <strong>Sir Abdallah</strong></p>
-
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
-                <p style="font-size: 12px; color: #9ca3af;">
-                    Women Agro-Value Expansion (WAVE) &nbsp;|&nbsp; Powered by Easy Sales Export
-                </p>
             </div>
         `,
         metadata: { type: 'briefing_confirmation' },
