@@ -104,7 +104,7 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
                             )}
 
                             {/* Icon */}
-                            <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${type.color} flex items-center justify-center mb-4`}>
+                            <div className={`w-16 h-16 rounded-xl bg-linear-to-br ${type.color} flex items-center justify-center mb-4`}>
                                 <Icon className="w-8 h-8 text-white" />
                             </div>
 

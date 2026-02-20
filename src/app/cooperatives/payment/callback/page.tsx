@@ -76,7 +76,7 @@ function PaymentCallbackContent() {
                 {status === "success" && (
                     <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
                         {/* Top banner */}
-                        <div className="bg-gradient-to-r from-purple-600 to-violet-600 px-8 py-10 text-center text-white">
+                        <div className="bg-linear-to-r from-purple-600 to-violet-600 px-8 py-10 text-center text-white">
                             <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <PartyPopper className="w-10 h-10 text-white" />
                             </div>

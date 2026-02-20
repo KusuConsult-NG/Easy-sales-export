@@ -201,6 +201,23 @@ export async function submitMarketplaceOnboardingAction(
         const userId = session.user.id;
         const timestamp = Date.now();
 
+        // Check for existing application
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.marketplace?.status;
+
+        if (existingStatus === 'pending' || existingStatus === 'under_review') {
+            return {
+                success: false,
+                error: "Your previous application is still being processed."
+            };
+        }
+        if (existingStatus === 'approved') {
+            return {
+                success: false,
+                error: "You are already registered for Marketplace."
+            };
+        }
+
         // 1. Handle File Uploads (Admin SDK Storage)
         const uploadFile = async (file: File, path: string) => {
             const extension = file.name.split('.').pop();

@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail, MapPin, Phone, Send } from "lucide-react";
+import { Mail, MapPin, Phone, Send, MessageCircle } from "lucide-react";
 import { logger } from '@/lib/logger';
 import { useState } from "react";
 import { COMPANY_INFO } from "@/lib/constants";
@@ -103,6 +103,24 @@ export default function ContactPage() {
                                             className="text-primary hover:underline"
                                         >
                                             {COMPANY_INFO.contact.general.phone}
+                                        </a>
+                                    </div>
+                                </div>
+
+                                {/* WhatsApp */}
+                                <div className="flex items-start gap-4">
+                                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+                                        <MessageCircle className="w-6 h-6 text-primary" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-slate-900 mb-1">
+                                            WhatsApp
+                                        </h3>
+                                        <a
+                                            href={`https://wa.me/${COMPANY_INFO.contact.general.whatsapp}`}
+                                            className="text-primary hover:underline"
+                                        >
+                                            {COMPANY_INFO.contact.general.whatsapp}
                                         </a>
                                     </div>
                                 </div>

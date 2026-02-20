@@ -18,7 +18,7 @@ export default function CooperativePendingPage() {
                 <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
 
                     {/* Top banner */}
-                    <div className="bg-gradient-to-r from-purple-600 to-violet-600 px-8 py-12 text-center text-white relative overflow-hidden">
+                    <div className="bg-linear-to-r from-purple-600 to-violet-600 px-8 py-12 text-center text-white relative overflow-hidden">
                         {/* Decorative circles */}
                         <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full" />
                         <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-white/10 rounded-full" />

@@ -200,7 +200,7 @@ export default function CertificatesPage() {
             )}
 
             {/* Information Card */}
-            <div className="bg-gradient-to-br from-emerald-50 to-emerald-50 border border-emerald-300 rounded-2xl p-6">
+            <div className="bg-linear-to-br from-emerald-50 to-emerald-50 border border-emerald-300 rounded-2xl p-6">
                 <div className="flex gap-4">
                     <div className="w-12 h-12 bg-emerald-700 rounded-xl flex items-center justify-center shrink-0">
                         <Star className="w-6 h-6 text-white" />

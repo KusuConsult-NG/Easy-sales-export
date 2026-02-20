@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export default function AcademyApplicationSuccessPage() {
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-6">
+        <div className="min-h-screen bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-6">
             <div className="max-w-2xl w-full">
                 <div className="bg-white rounded-3xl p-12 shadow-2xl text-center">
                     {/* Success Icon */}

@@ -441,6 +441,23 @@ export async function submitExportOnboardingAction(
 
         const userId = session.user.id;
 
+        // Check for existing application
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.export?.status;
+
+        if (existingStatus === 'pending_approval' || existingStatus === 'under_review') {
+            return {
+                success: false,
+                error: "Your previous application is still being processed."
+            };
+        }
+        if (existingStatus === 'approved') {
+            return {
+                success: false,
+                error: "You are already registered for Export."
+            };
+        }
+
         // Extract Data
         const profile = JSON.parse(formData.get("profile") as string || "{}");
         const kycData = JSON.parse(formData.get("kycData") as string || "{}");

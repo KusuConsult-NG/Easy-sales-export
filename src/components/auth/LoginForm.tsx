@@ -116,6 +116,18 @@ export default function LoginForm() {
         }
     }, [errorParam, showToast]);
 
+    // Auto-scroll to error message when it appears
+    useEffect(() => {
+        if (error) {
+            setTimeout(() => {
+                const errorElement = document.getElementById('login-form-message');
+                if (errorElement) {
+                    errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+    }, [error]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -166,7 +178,7 @@ export default function LoginForm() {
                         <input type="hidden" name="redirectTo" value={callbackUrl} />
 
                         {error && (
-                            <div className="bg-red-50 border-red-200 border rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                            <div id="login-form-message" className="bg-red-50 border-red-200 border rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                                 <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                                 <p className="text-sm text-red-600">{error}</p>
                             </div>

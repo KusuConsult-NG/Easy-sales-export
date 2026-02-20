@@ -74,7 +74,7 @@ export default function HeroSlider() {
                         />
 
                         {/* Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/40 to-transparent" />
+                        <div className="absolute inset-0 bg-linear-to-t from-slate-900/80 via-slate-900/40 to-transparent" />
 
                         {/* Content */}
                         <div className="absolute bottom-0 left-0 right-0 p-8 text-white">

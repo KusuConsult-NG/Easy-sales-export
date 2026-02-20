@@ -85,8 +85,9 @@ export default function PrivacyPolicyPage() {
                         <p className="text-slate-600">
                             <strong>Easy Sales Export LTD.</strong><br />
                             No. 68 Murtala Mohammed Way, Jos, Plateau State, Nigeria<br />
-                            Email: <a href="mailto:info@easysalesexport.com" className="text-primary hover:underline">info@easysalesexport.com</a><br />
-                            Phone: <a href="tel:09161440202" className="text-primary hover:underline">09161440202</a>
+                            Email: <a href={`mailto:${COMPANY_INFO.contact.general.email}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.email}</a><br />
+                            Phone: <a href={`tel:${COMPANY_INFO.contact.general.phone}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.phone}</a><br />
+                            WhatsApp: <a href={`https://wa.me/${COMPANY_INFO.contact.general.whatsapp}`} className="text-primary hover:underline">{COMPANY_INFO.contact.general.whatsapp}</a>
                         </p>
                     </section>
                 </div>

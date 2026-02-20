@@ -97,7 +97,7 @@ export default function ChatPage() {
                     <Link href="/messages" className="md:hidden p-2 hover:bg-slate-100 rounded-full">
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
+                    <div className="w-10 h-10 rounded-full bg-linear-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold">
                         U
                     </div>
                     <div>

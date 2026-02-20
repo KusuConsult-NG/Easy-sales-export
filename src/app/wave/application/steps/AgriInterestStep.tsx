@@ -45,8 +45,15 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
         if (validateForm()) {
             onNext();
         } else {
-            showToast("Please select your agricultural interests", "error");
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            showToast("Please correct the errors in the form", "error");
+            setTimeout(() => {
+                const firstError = document.querySelector('.text-red-600');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+            }, 100);
         }
     };
 

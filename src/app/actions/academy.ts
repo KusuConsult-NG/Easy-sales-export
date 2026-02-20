@@ -797,6 +797,23 @@ export async function submitAcademyApplicationAction(
             return { success: false, error: "Authentication required" };
         }
 
+        // Check for existing application
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.academy?.status;
+
+        if (existingStatus === 'pending' || existingStatus === 'under_review') {
+            return {
+                success: false,
+                error: "Your previous application is still being processed."
+            };
+        }
+        if (existingStatus === 'approved') {
+            return {
+                success: false,
+                error: "You are already enrolled in the Academy program."
+            };
+        }
+
         // Generate unique application ID
         const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 

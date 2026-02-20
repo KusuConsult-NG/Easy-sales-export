@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { Resend } from "resend";
+import { COMPANY_INFO } from "@/lib/constants";
 
 const resend = new Resend(process.env.RESEND_API_KEY || "re_mock_key_for_build");
 
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
         // Send email to admin
         const { data, error } = await resend.emails.send({
             from: "Easy Sales Export Contact Form <noreply@easysalesexport.com>",
-            to: "info@easysalesexport.com",
+            to: COMPANY_INFO.contact.general.email,
             replyTo: email,
             subject: `[Contact Form] ${subject}`,
             html: `

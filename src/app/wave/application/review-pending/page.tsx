@@ -14,7 +14,7 @@ export default function ReviewPendingPage() {
     const expectedReviewDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-emerald-50 to-emerald-50 px-4 py-12">
+        <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 px-4 py-12">
             <div className="max-w-3xl mx-auto">
                 {/* Back Link */}
                 <Link

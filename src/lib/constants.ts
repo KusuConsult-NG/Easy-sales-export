@@ -42,7 +42,8 @@ export const COMPANY_INFO = {
         },
         general: {
             email: "info@easysalesexport.com",
-            phone: "+234 123 456 7890",
+            phone: "02013309593",
+            whatsapp: "07076988080",
         },
     },
     copyright: `© ${new Date().getFullYear()} EASY SALES EXPORT & AGRICULTURE. All rights reserved.`,

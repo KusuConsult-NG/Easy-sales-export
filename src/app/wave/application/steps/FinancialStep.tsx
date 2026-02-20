@@ -45,8 +45,15 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
         if (validateForm()) {
             onNext();
         } else {
-            showToast("Please provide all required financial details", "error");
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            showToast("Please correct the errors in the form", "error");
+            setTimeout(() => {
+                const firstError = document.querySelector('.text-red-600');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+            }, 100);
         }
     };
 

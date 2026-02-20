@@ -50,8 +50,15 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         if (validateForm()) {
             onNext();
         } else {
-            showToast("Please provide all required civic information", "error");
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            showToast("Please correct the errors in the form", "error");
+            setTimeout(() => {
+                const firstError = document.querySelector('.text-red-600');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+            }, 100);
         }
     };
 

@@ -235,13 +235,10 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.wave?.status;
 
-        if (existingStatus === 'pending') {
-            // IDEMPOTENCY CHECK: If already pending, treat as success (likely double-submission)
-            // This prevents the "You already have a pending application" error when users double-click
-            // or when network latency causes retries.
+        if (existingStatus === 'pending' || existingStatus === 'under_review') {
             return {
-                success: true,
-                applicationId: userDoc.data()?.serviceRegistrations?.wave?.applicationId
+                success: false,
+                error: "Your previous application is still being processed."
             };
         }
         if (existingStatus === 'approved') {

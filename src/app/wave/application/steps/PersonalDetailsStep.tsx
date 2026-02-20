@@ -78,7 +78,14 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
             onNext();
         } else {
             showToast("Please correct the errors in the form", "error");
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            setTimeout(() => {
+                const firstError = document.querySelector('.text-red-600');
+                if (firstError) {
+                    firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+            }, 100);
         }
     };
 

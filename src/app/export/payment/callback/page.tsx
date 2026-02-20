@@ -131,7 +131,7 @@ function PaymentCallbackContent() {
 export default function ExportPaymentCallback() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
             </div>
         }>

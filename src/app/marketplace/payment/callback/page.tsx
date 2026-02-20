@@ -145,7 +145,7 @@ function PaymentCallbackContent() {
 export default function MarketplacePaymentCallback() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 flex items-center justify-center">
+            <div className="min-h-screen bg-linear-to-br from-orange-50 via-amber-50 to-yellow-50 flex items-center justify-center">
                 <Loader2 className="w-12 h-12 animate-spin text-orange-600" />
             </div>
         }>

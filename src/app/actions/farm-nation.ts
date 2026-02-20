@@ -666,6 +666,23 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
 
         const userId = session.user.id;
 
+        // Check for existing application
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.farmNation?.status;
+
+        if (existingStatus === 'pending' || existingStatus === 'under_review') {
+            return {
+                success: false,
+                error: "Your previous application is still being processed."
+            };
+        }
+        if (existingStatus === 'approved') {
+            return {
+                success: false,
+                error: "You are already registered for Farm Nation."
+            };
+        }
+
         // Validate required fields
         if (!data.role || !data.profile || !data.terms) {
             return {

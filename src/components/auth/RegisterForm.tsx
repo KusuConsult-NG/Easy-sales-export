@@ -68,6 +68,18 @@ export default function RegisterForm() {
         }
     }, [state.error, isPending, showToast]);
 
+    // Auto-scroll to error message when it appears
+    useEffect(() => {
+        if (state.error) {
+            setTimeout(() => {
+                const errorElement = document.getElementById('register-form-message');
+                if (errorElement) {
+                    errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+    }, [state.error]);
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormData({
@@ -112,7 +124,7 @@ export default function RegisterForm() {
                         <input type="hidden" name="callbackUrl" value={callbackUrl} />
 
                         {state.error && (
-                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                            <div id="register-form-message" className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                                 <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                                 <p className="text-sm text-red-600">{state.error}</p>
                             </div>
