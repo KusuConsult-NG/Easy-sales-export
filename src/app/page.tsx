@@ -249,8 +249,8 @@ export default function HubPage() {
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-80 hover:opacity-100 transition-opacity">
-                        <div className="relative w-32 h-16 md:w-40 md:h-20 grayscale hover:grayscale-0 transition-all duration-300">
+                    <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10">
+                        <div className="relative w-40 h-20 md:w-56 md:h-28 transition-transform duration-300 hover:scale-105">
                             <Image
                                 src="/images/partners/photo_2026-02-21 14.56.33.jpeg"
                                 alt="Partner Logo 1"
@@ -258,7 +258,7 @@ export default function HubPage() {
                                 className="object-contain"
                             />
                         </div>
-                        <div className="relative w-32 h-16 md:w-40 md:h-20 grayscale hover:grayscale-0 transition-all duration-300">
+                        <div className="relative w-40 h-20 md:w-56 md:h-28 transition-transform duration-300 hover:scale-105">
                             <Image
                                 src="/images/partners/photo_2026-02-21 14.56.34.jpeg"
                                 alt="Partner Logo 2"
@@ -266,7 +266,7 @@ export default function HubPage() {
                                 className="object-contain"
                             />
                         </div>
-                        <div className="relative w-32 h-16 md:w-40 md:h-20 grayscale hover:grayscale-0 transition-all duration-300">
+                        <div className="relative w-40 h-20 md:w-56 md:h-28 transition-transform duration-300 hover:scale-105">
                             <Image
                                 src="/images/partners/photo_2026-02-21 14.56.35.jpeg"
                                 alt="Partner Logo 3"

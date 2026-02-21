@@ -63,7 +63,7 @@ export default function HubHero() {
                                 src={img}
                                 alt="Hub Background"
                                 fill
-                                className="object-cover"
+                                className="object-contain object-center"
                                 priority={index === 0}
                                 loading={index === 0 ? "eager" : "lazy"}
                                 sizes="100vw"
