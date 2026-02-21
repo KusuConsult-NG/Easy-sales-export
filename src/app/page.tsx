@@ -17,7 +17,7 @@ export default function HubPage() {
             title: "WAVE Program",
             description: "RH-WAVE 774: Presidential mandate empowering Nigerian women in agriculture through training, funding, and market access",
             iconImage: "/images/modules/wave-v3.png",
-            iconSize: "xl" as const,
+            iconSize: "lg" as const,
             href: "/wave/landing",
             gradient: "from-pink-500 to-rose-500",
             stats: "10M Women Target",
