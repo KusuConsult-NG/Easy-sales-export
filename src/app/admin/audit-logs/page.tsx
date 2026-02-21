@@ -220,7 +220,7 @@ export default function AdminAuditLogsPage() {
                             <label className="block text-sm text-blue-200 mb-2">Severity</label>
                             <select
                                 value={filters.severity}
-                                onChange={(e) => setFilters({ ...filters, severity: e.target.value as any })}
+                                onChange={(e) => setFilters({ ...filters, severity: e.target.value as "info" | "warning" | "critical" | "" })}
                                 className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
                             >
                                 <option value="">All</option>

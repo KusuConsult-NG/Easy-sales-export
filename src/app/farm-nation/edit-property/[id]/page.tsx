@@ -114,7 +114,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                 category: formData.category,
                 features: formData.features,
                 leaseDuration: formData.leaseDuration,
-            } as any);
+            } as Parameters<typeof updatePropertyAction>[1]);
 
             if (result.success) {
                 showToast("Property updated successfully", "success");

@@ -59,7 +59,7 @@ export default function ExportWindowDetailPage() {
 
             if (result.success && result.data) {
                 // Redirect to Paystack for payment
-                (window as any).location.href = result.data.authorizationUrl;
+                globalThis.window.location.href = result.data.authorizationUrl;
             } else {
                 setError(result.error || "Failed to initialize investment");
                 setInvesting(false);

@@ -175,7 +175,7 @@ export default function NotificationsPage() {
                         ].map((f) => (
                             <button
                                 key={f.key}
-                                onClick={() => setFilter(f.key as any)}
+                                onClick={() => setFilter(f.key as "all" | "unread" | Notification["type"])}
                                 className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${filter === f.key
                                     ? "bg-blue-600 text-white"
                                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"

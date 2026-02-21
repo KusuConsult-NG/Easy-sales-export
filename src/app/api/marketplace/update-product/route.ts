@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (productDoc.data()!.sellerId !== userId) {
+        if (productDoc.data()?.sellerId !== userId) {
             return NextResponse.json(
                 { success: false, message: "You can only update your own products" },
                 { status: 403 }

@@ -245,9 +245,9 @@ export async function getDisputeByIdAction(disputeId: string) {
         const disputeData: Dispute = {
             ...dispute,
             id: disputeDoc.id,
-            createdAt: (dispute.createdAt as any)?.toDate ? (dispute.createdAt as any).toDate() : dispute.createdAt,
-            updatedAt: (dispute.updatedAt as any)?.toDate ? (dispute.updatedAt as any).toDate() : dispute.updatedAt,
-            resolvedAt: (dispute.resolvedAt as any)?.toDate ? (dispute.resolvedAt as any).toDate() : dispute.resolvedAt,
+            createdAt: (dispute.createdAt as unknown as Timestamp)?.toDate ? (dispute.createdAt as unknown as Timestamp).toDate() : dispute.createdAt,
+            updatedAt: (dispute.updatedAt as unknown as Timestamp)?.toDate ? (dispute.updatedAt as unknown as Timestamp).toDate() : dispute.updatedAt,
+            resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt,
         } as Dispute;
 
         return { success: true, dispute: disputeData };

@@ -55,7 +55,10 @@ export async function initializeInvestmentPaymentAction(
             return { error: "Export window not found", success: false };
         }
 
-        const windowData = windowDoc.data()!;
+        const windowData = windowDoc.data();
+        if (!windowData) {
+            return { error: "Export window data is corrupted", success: false };
+        }
 
         if (windowData.status !== "open" && windowData.status !== "active") {
             return { error: "This export window is no longer accepting investments", success: false };
@@ -162,7 +165,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         }
 
         // Get metadata
-        const metadata = paymentData.data.metadata as any;
+        const metadata = paymentData.data.metadata as Record<string, any>;
         const windowId = metadata.windowId;
         const userId = metadata.userId;
         const amountInNaira = paymentData.data.amount / 100;
@@ -239,22 +242,25 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             const portfolioSnap = await transaction.get(portfolioRef);
 
             if (portfolioSnap.exists) {
-                const currentInvested = portfolioSnap.data()!.totalInvested || 0;
-                const currentReturns = portfolioSnap.data()!.totalExpectedReturns || 0;
-                const activeCount = portfolioSnap.data()!.activeInvestments || 0;
+                const pData = portfolioSnap.data();
+                if (pData) {
+                    const currentInvested = pData.totalInvested || 0;
+                    const currentReturns = pData.totalExpectedReturns || 0;
+                    const activeCount = pData.activeInvestments || 0;
 
-                transaction.update(portfolioRef, {
-                    totalInvested: currentInvested + amountInNaira,
-                    totalExpectedReturns: currentReturns + investmentData.expectedReturn,
-                    activeInvestments: activeCount + 1,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    transaction.update(portfolioRef, {
+                        totalInvested: currentInvested + amountInNaira,
+                        totalExpectedReturns: currentReturns + (investmentData?.expectedReturn || 0),
+                        activeInvestments: activeCount + 1,
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                }
             } else {
                 transaction.set(portfolioRef, {
                     investorId: session.user.id,
                     investorEmail: session.user.email,
                     totalInvested: amountInNaira,
-                    totalExpectedReturns: investmentData.expectedReturn,
+                    totalExpectedReturns: investmentData?.expectedReturn || 0,
                     totalReturned: 0,
                     activeInvestments: 1,
                     completedInvestments: 0,

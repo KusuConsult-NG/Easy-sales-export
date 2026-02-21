@@ -12,7 +12,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "@/lib/firebase-admin"; // Use Admin DB
 import { uploadFileToStorage } from "@/lib/storage-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import type { SellerVerification, Product, CartItem, Order } from "@/lib/types/marketplace";
+import type { SellerVerification, Product, CartItem, Order, ProductCategory, DeliveryMethod } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { unstable_cache } from "next/cache";
 
@@ -485,7 +485,7 @@ export async function createProductAction(
             sellerId: userId,
             title: validatedData.title,
             description: validatedData.description,
-            category: validatedData.category as any, // Cast to generic or specific enum if needed
+            category: validatedData.category as ProductCategory,
             images: imageUrls,
             videoUrl: validatedData.videoUrl || undefined,
             pricingTiers,
@@ -496,7 +496,7 @@ export async function createProductAction(
                 state: validatedData.state,
                 lga: validatedData.lga,
             },
-            deliveryMethod: validatedData.deliveryMethod as any,
+            deliveryMethod: validatedData.deliveryMethod as DeliveryMethod,
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
             certifications: validatedData.certifications,
             bulkAvailable: validatedData.bulkAvailable || false,
@@ -712,7 +712,7 @@ export async function getSellerAnalyticsAction() {
         const currentMonth = new Date().getMonth();
         const monthlyRevenue = orders
             .filter(o => {
-                const date = o.createdAt instanceof Date ? o.createdAt : (o.createdAt as any).toDate();
+                const date = o.createdAt instanceof Date ? o.createdAt : (o.createdAt as unknown as import('firebase-admin/firestore').Timestamp).toDate();
                 return date.getMonth() === currentMonth && o.status !== "cancelled";
             })
             .reduce((sum, o) => sum + o.totalAmount, 0);

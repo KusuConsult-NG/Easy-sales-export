@@ -59,8 +59,8 @@ export default function CreateProductPage() {
         if (state.success) {
             showToast("Product created successfully!", "success");
             setTimeout(() => router.push("/marketplace/sell"), 2000);
-        } else if ((state as any).error) {
-            showToast((state as any).error, "error");
+        } else if ((state as { error?: string }).error) {
+            showToast((state as { error?: string }).error!, "error");
         }
     }, [state, showToast, router]);
 

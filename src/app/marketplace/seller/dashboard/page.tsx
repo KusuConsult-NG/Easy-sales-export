@@ -44,8 +44,8 @@ export default function SellerDashboard() {
                     // Sort by date desc and take top 5
                     const sortedOrders = ordersRes.orders
                         .sort((a, b) => {
-                            const dateA = a.createdAt instanceof Date ? a.createdAt : new Date((a.createdAt as any).seconds * 1000);
-                            const dateB = b.createdAt instanceof Date ? b.createdAt : new Date((b.createdAt as any).seconds * 1000);
+                            const dateA = a.createdAt instanceof Date ? a.createdAt : new Date((a.createdAt as unknown as { seconds: number }).seconds * 1000);
+                            const dateB = b.createdAt instanceof Date ? b.createdAt : new Date((b.createdAt as unknown as { seconds: number }).seconds * 1000);
                             return dateB.getTime() - dateA.getTime();
                         })
                         .slice(0, 5);

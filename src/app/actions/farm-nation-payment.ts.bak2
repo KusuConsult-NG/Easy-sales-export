@@ -138,7 +138,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         }
 
         // Get metadata
-        const metadata = paymentData.data.metadata as any;
+        const metadata = paymentData.data.metadata as Record<string, any>;
         const propertyId = metadata.propertyId;
         const userId = metadata.userId;
 

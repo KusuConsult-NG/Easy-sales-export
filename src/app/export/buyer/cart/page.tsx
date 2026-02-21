@@ -110,7 +110,7 @@ export default function ExportCartPage() {
                 clearCart();
 
                 // Redirect to Paystack
-                (window as any).location.href = result.data.authorizationUrl;
+                window.location.href = result.data.authorizationUrl;
             } else {
                 setError(result.error || "Failed to initialize payment");
                 setIsSubmitting(false);

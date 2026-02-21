@@ -920,7 +920,7 @@ export async function createCourseAction(data: any): Promise<{ success: boolean;
 export async function updateCourseAction(courseId: string, data: Partial<Course>): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -947,7 +947,7 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
 export async function updateCourseModulesAction(courseId: string, modules: CourseModule[]): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 

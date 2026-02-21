@@ -136,7 +136,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         }
 
         // Get metadata
-        const metadata = paymentData.data.metadata as any;
+        const metadata = paymentData.data.metadata as Record<string, any>;
         const enrollmentId = `${metadata.userId}_${metadata.courseId}`;
         const amountInNaira = paymentData.data.amount / 100;
 
@@ -179,10 +179,13 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             const courseRef = db.collection(COLLECTIONS.COURSES).doc(metadata.courseId);
             const courseSnap = await transaction.get(courseRef);
             if (courseSnap.exists) {
-                const currentStudents = courseSnap.data()!.students || 0;
-                transaction.update(courseRef, {
-                    students: currentStudents + 1,
-                });
+                const cData = courseSnap.data();
+                if (cData) {
+                    const currentStudents = cData.students || 0;
+                    transaction.update(courseRef, {
+                        students: currentStudents + 1,
+                    });
+                }
             }
 
             // Mark payment as processed

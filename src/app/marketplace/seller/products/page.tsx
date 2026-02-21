@@ -215,9 +215,9 @@ export default function SellerProductsPage() {
                             ) : (
                                 products.map((product) => {
                                     // Determine display status (check for low stock overrides)
-                                    let displayStatus = product.status;
+                                    let displayStatus: string = product.status;
                                     if (product.status === "active" && product.availableQuantity < 50 && product.availableQuantity > 0) {
-                                        displayStatus = "low_stock" as any;
+                                        displayStatus = "low_stock";
                                     }
 
                                     const statusConfig = getStatusConfig(displayStatus);

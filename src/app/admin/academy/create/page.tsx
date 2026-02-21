@@ -31,9 +31,8 @@ export default function CreateCoursePage() {
                 thumbnail: formData.thumbnail,
                 level: "beginner",
                 duration: "4 weeks",
-                modules: [],
-                createdAt: undefined as any,
-                updatedAt: undefined as any,
+                createdAt: new Date(),
+                updatedAt: new Date(),
             });
 
             if (result.success && result.id) {

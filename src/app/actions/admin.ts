@@ -1,5 +1,7 @@
 "use server";
 
+import { ZodError } from "zod";
+
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -12,7 +14,8 @@ import {
     WithdrawalProcessingSchema,
     UserVerificationToggleSchema,
     LandListingVerificationSchema,
-    LoanApplicationReviewSchema
+    LoanApplicationReviewSchema,
+    ExportOnboardingReviewSchema
 } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 
@@ -42,7 +45,7 @@ export async function approveWaveApplicationAction(
 
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
         if (!valid.success) {
-            return { error: (valid.error as any).errors[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
         // Get application first to identify user
@@ -167,7 +170,7 @@ export async function rejectWaveApplicationAction(
 
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
         if (!valid.success) {
-            return { error: (valid.error as any).errors[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
         await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).update({
@@ -177,6 +180,67 @@ export async function rejectWaveApplicationAction(
             reviewedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // Get application first to identify user
+        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
+        const appDoc = await appRef.get();
+        const appData = appDoc.data();
+        const userId = appData?.userId;
+
+        if (userId) {
+            // Update User Profile (Mark as rejected)
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                "serviceRegistrations.wave.status": "rejected",
+                "serviceRegistrations.wave.rejectedAt": FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // CLEAR CACHE
+            try {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(userId, 'wave');
+                logger.info(`[Wave Rejection] Cache cleared for user: ${userId}`);
+            } catch (cacheError) {
+                logger.error('[Wave Rejection] Cache clear error:', cacheError);
+            }
+        }
+
+        // Send Rejection Email
+        if (process.env.RESEND_API_KEY && appData?.userEmail) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+
+                await resend.emails.send({
+                    from: "WAVE Program <noreply@easysalesexport.com>",
+                    to: appData.userEmail,
+                    subject: "WAVE Application Update",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #dc2626;">WAVE Application Update</h2>
+                            <p>Thank you for your interest in the Women Agro-Value Expansion (WAVE) program.</p>
+                            
+                            <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                                <p>Unfortunately, we are unable to approve your application at this time.</p>
+                                <p><strong>Reason provided:</strong></p>
+                                <p style="font-style: italic;">"${reason}"</p>
+                            </div>
+
+                            <p><strong>What You Can Do:</strong></p>
+                            <ul>
+                                <li>Review the feedback provided</li>
+                                <li>Address the concerns mentioned</li>
+                                <li>Re-apply when you have made the necessary adjustments</li>
+                            </ul>
+
+                            <p>If you have any questions or need clarification, please contact our support team.</p>
+                        </div>
+                    `
+                });
+            } catch (emailError) {
+                logger.error("Failed to send WAVE rejection email:", emailError);
+            }
+        }
 
         // Log audit
         await logAuditAction("wave_reject", applicationId, "application", {
@@ -212,7 +276,7 @@ export async function processWithdrawalAction(
 
         const valid = WithdrawalProcessingSchema.safeParse({ withdrawalId, action, reasoning });
         if (!valid.success) {
-            return { error: (valid.error as any).errors[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
         const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
@@ -278,7 +342,7 @@ export async function toggleUserVerificationAction(
 
         const valid = UserVerificationToggleSchema.safeParse({ userId });
         if (!valid.success) {
-            return { error: (valid.error as any).errors[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
         // Get current user doc
@@ -485,7 +549,7 @@ export async function verifyLandListing(
 
         const valid = LandListingVerificationSchema.safeParse({ listingId, decision, reason });
         if (!valid.success) {
-            return { error: (valid.error as any).errors[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
         // Update listing status
@@ -690,7 +754,7 @@ export async function approveLoanApplication(
 
         const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
         if (!valid.success) {
-            return { error: (valid.error as any).errors[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
         // Get loan data for validation
@@ -864,7 +928,7 @@ export async function rejectLoanApplication(
 
         const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
         if (!valid.success) {
-            return { error: (valid.error as any).errors[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
         // Get loan data for email
@@ -1144,7 +1208,7 @@ export async function updateUserRolesAction(
         const valid = UpdateUserRolesSchema.safeParse({ userId, roles });
 
         if (!valid.success) {
-            return { error: (valid.error as any).errors[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
         // Prevent admin from removing their own admin role
@@ -1401,6 +1465,117 @@ export async function approveExportOnboardingAction(
         return { error: "Failed to approve export application", success: false };
     }
 }
+
+export async function rejectExportApplicationAction(
+    applicationId: string,
+    reason: string
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        // Use general user update permission or create a new one. Using users:update for now.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
+                return { error: "Unauthorized: Permission required - users:update", success: false };
+            }
+        }
+
+        const valid = ExportOnboardingReviewSchema.safeParse({ applicationId, status: "rejected", reason });
+        if (!valid.success) {
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
+        }
+
+        // 1. Get Application Doc
+        const appRef = db.collection("export_onboarding").where("applicationId", "==", applicationId).limit(1);
+        const appSnapshot = await appRef.get();
+
+        if (appSnapshot.empty) {
+            return { error: "Application not found", success: false };
+        }
+
+        const appDoc = appSnapshot.docs[0];
+        const appData = appDoc.data();
+        const userId = appData.userId;
+
+        if (!userId) {
+            return { error: "Invalid application: Missing User ID", success: false };
+        }
+
+        // 2. Update Application Status
+        await appDoc.ref.update({
+            status: "rejected",
+            rejectionReason: reason,
+            reviewedBy: session.user.id,
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // 3. Update User Profile (Mark as rejected)
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            "serviceRegistrations.export.status": "rejected",
+            "serviceRegistrations.export.rejectedAt": FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // CLEAR CACHE
+        try {
+            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+            await invalidateServiceCache(userId, 'export');
+            logger.info(`[Export Rejection] Cache cleared for user: ${userId}`);
+        } catch (cacheError) {
+            logger.error('[Export Rejection] Cache clear error:', cacheError);
+        }
+
+        // 4. Send Rejection Email
+        if (process.env.RESEND_API_KEY && appData.userEmail) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+
+                await resend.emails.send({
+                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    to: appData.userEmail,
+                    subject: "Export Application Update",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #ea580c;">Export Application Update</h2>
+                            <p>Your recent application for Export Services has been reviewed.</p>
+                            
+                            <div style="background: #fff7ed; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #ffedd5;">
+                                <p style="margin: 0; color: #9a3412;"><strong>Status:</strong> Action Required</p>
+                                <p style="margin: 10px 0 0; color: #9a3412;"><strong>Reason provided:</strong></p>
+                                <p style="margin: 5px 0 0; color: #7c2d12; font-style: italic;">"${reason}"</p>
+                            </div>
+
+                            <p>To proceed, please log in to your dashboard and re-submit your application with the requested updates or corrections.</p>
+
+                            <div style="text-align: center; margin-top: 30px;">
+                                <a href="https://easysalesexport.com/export/onboarding/rejected" style="background-color: #ea580c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Details</a>
+                            </div>
+                        </div>
+                    `
+                });
+            } catch (emailError) {
+                logger.error("Failed to send export rejection email:", emailError);
+            }
+        }
+
+        // Log audit
+        await logAuditAction("export_reject", applicationId, "export_onboarding", {
+            adminId: session.user.id,
+            userId: userId,
+            reason: reason
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: "Export application rejected successfully",
+        };
+    } catch (error: any) {
+        logger.error("Reject export application error:", error);
+        return { error: "Failed to reject export application", success: false };
+    }
+}
 // ============================================
 // Academy Application Management (Admin)
 // ============================================
@@ -1416,7 +1591,7 @@ export async function getAcademyApplicationsAction(
         const session = await auth();
         if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
             // Fallback for now/testing or add permission
-            if (!session?.user?.roles?.includes("admin")) {
+            if ((!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) {
                 return { error: "Unauthorized: Permission required - academy:approve_applications", success: false };
             }
         }
@@ -1454,7 +1629,7 @@ export async function approveAcademyApplicationAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
+        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized", success: false };
         }
 
@@ -1527,7 +1702,7 @@ export async function rejectAcademyApplicationAction(
 ): Promise<ActionState> {
     try {
         const session = await auth();
-        if (!session?.user || !session.user.roles?.includes("admin")) {
+        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized", success: false };
         }
 

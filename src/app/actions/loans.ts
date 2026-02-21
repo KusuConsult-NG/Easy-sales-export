@@ -159,7 +159,7 @@ export async function submitLoanApplicationAction(formData: {
 export async function getUserLoanApplicationsAction(userId: string): Promise<LoanApplication[]> {
     try {
         const session = await auth();
-        if (!session?.user?.id || (session.user.id !== userId && !session.user.roles?.includes("admin"))) {
+        if (!session?.user?.id || (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")))) {
             return [];
         }
 
@@ -183,7 +183,7 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
 export async function getPendingLoanApplicationsAction(): Promise<LoanApplication[]> {
     try {
         const session = await auth();
-        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return [];
         }
 
@@ -210,7 +210,7 @@ export async function approveLoanAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -289,7 +289,7 @@ export async function rejectLoanAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -338,7 +338,7 @@ export async function disburseLoanAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -439,7 +439,7 @@ export async function getRepaymentScheduleAction(
         const loanData = loanDoc.data() as LoanApplication;
 
         const session = await auth();
-        if (!session?.user?.id || (session.user.id !== loanData.userId && !session.user.roles?.includes("admin"))) {
+        if (!session?.user?.id || (session.user.id !== loanData.userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -562,7 +562,7 @@ export async function submitRepaymentAction(data: {
                 throw new Error("Installment not found");
             }
 
-            const installmentData = installmentDoc.data() as any;
+            const installmentData = installmentDoc.data() as Record<string, any>;
             const dueDate = (installmentData.dueDate as Timestamp).toDate();
 
             // Check if already paid inside transaction
@@ -693,7 +693,7 @@ export async function getRepaymentHistoryAction(
         const loanDoc = await db.collection("loan_applications").doc(loanId).get();
         if (loanDoc.exists) {
             const loanData = loanDoc.data();
-            if (loanData && loanData.userId !== session.user.id && !session.user.roles?.includes("admin")) {
+            if (loanData && loanData.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
                 return { success: false, error: "Unauthorized" };
             }
         }

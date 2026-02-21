@@ -242,7 +242,7 @@ export default function WAVECompliancePage() {
                                         <div className="w-full bg-slate-200 rounded-full h-2">
                                             <div
                                                 className="bg-primary h-2 rounded-full transition-all"
-                                                style={{ width: `${(count / stats!.totalApplications) * 100}%` }}
+                                                style={{ width: `${(count / Math.max(stats?.totalApplications || 1, 1)) * 100}%` }}
                                             />
                                         </div>
                                     </div>
@@ -269,7 +269,7 @@ export default function WAVECompliancePage() {
                                             <div className="w-full bg-slate-200 rounded-full h-2">
                                                 <div
                                                     className="bg-primary h-2 rounded-full transition-all"
-                                                    style={{ width: `${(count / stats!.totalApplications) * 100}%` }}
+                                                    style={{ width: `${(count / Math.max(stats?.totalApplications || 1, 1)) * 100}%` }}
                                                 />
                                             </div>
                                         </div>
@@ -293,7 +293,7 @@ export default function WAVECompliancePage() {
                                         <div className="w-full bg-slate-200 rounded-full h-2">
                                             <div
                                                 className="bg-primary h-2 rounded-full transition-all"
-                                                style={{ width: `${(count / stats!.totalApplications) * 100}%` }}
+                                                style={{ width: `${(count / Math.max(stats?.totalApplications || 1, 1)) * 100}%` }}
                                             />
                                         </div>
                                     </div>

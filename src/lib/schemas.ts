@@ -146,6 +146,15 @@ export const WaveApplicationReviewSchema = z.object({
     path: ["reason"],
 });
 
+export const ExportOnboardingReviewSchema = z.object({
+    applicationId: z.string().min(1),
+    status: z.enum(["approved", "rejected"]),
+    reason: z.string().optional(),
+}).refine(data => data.status !== "rejected" || !!data.reason, {
+    message: "Reason is required when rejecting",
+    path: ["reason"],
+});
+
 export const WithdrawalProcessingSchema = z.object({
     withdrawalId: z.string().min(1),
     action: z.enum(["approve", "reject"]),

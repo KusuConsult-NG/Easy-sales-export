@@ -132,7 +132,7 @@ export async function approveContentAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -187,7 +187,7 @@ export async function rejectContentAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const session = await auth();
-        if (!session?.user?.id || !session.user.roles?.includes("admin")) {
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 

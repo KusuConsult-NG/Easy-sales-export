@@ -183,7 +183,7 @@ export async function updateExportStatusAction(
 
         const data = exportDoc.data();
         // Verify ownership (unless admin)
-        if (data?.userId !== session.user.id && !session.user.roles?.includes("admin")) {
+        if (data?.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized to update this export", success: false };
         }
 
@@ -219,7 +219,7 @@ export async function updateExportWindowAction(
         }
 
         // Verify Admin
-        if (!session.user.roles?.includes("admin")) {
+        if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized access", success: false };
         }
 
@@ -379,7 +379,7 @@ export async function getExportWindowDetailsAction(
         }
 
         // Verify ownership (unless admin)
-        if (data.userId !== session.user.id && !session.user.roles?.includes("admin")) {
+        if (data.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized to view this export", success: false };
         }
 

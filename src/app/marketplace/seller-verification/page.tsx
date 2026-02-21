@@ -134,10 +134,10 @@ export default function SellerVerificationPage() {
                                     <div key={step.number} className="flex items-center flex-1">
                                         <div className="flex flex-col items-center flex-1">
                                             <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 transition-all ${isCompleted
-                                                    ? "bg-green-600 text-white"
-                                                    : isActive
-                                                        ? "bg-primary text-white"
-                                                        : "bg-slate-200 text-slate-400"
+                                                ? "bg-green-600 text-white"
+                                                : isActive
+                                                    ? "bg-primary text-white"
+                                                    : "bg-slate-200 text-slate-400"
                                                 }`}>
                                                 {isCompleted ? (
                                                     <Check className="w-6 h-6" />
@@ -189,7 +189,7 @@ export default function SellerVerificationPage() {
                                     </label>
                                     <select
                                         value={formData.businessType}
-                                        onChange={(e) => setFormData({ ...formData, businessType: e.target.value as any })}
+                                        onChange={(e) => setFormData({ ...formData, businessType: e.target.value as "individual" | "company" | "cooperative" })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                     >
                                         <option value="individual">Individual/Sole Proprietor</option>

@@ -147,7 +147,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
         }
 
         // Allow checking own eligibility or admin checking others
-        if (session.user.id !== userId && !session.user.roles?.includes("admin")) {
+        if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { eligible: false, reason: "Unauthorized" };
         }
 
@@ -353,7 +353,7 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
         const memberDoc = await db.collection("wave_members").doc(session.user.id).get();
         if (!memberDoc.exists || !memberDoc.data()?.active) {
             // Check if admin, otherwise deny
-            if (!session.user.roles?.includes("admin")) {
+            if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
                 logger.warn(`Unauthorized WAVE resource access attempt by ${session.user.id}`);
                 return [];
             }
@@ -397,7 +397,7 @@ export async function getWaveTrainingEventsAction(): Promise<WaveTrainingEvent[]
 
         return snapshot.docs.map((doc) => ({
             id: doc.id,
-            ...(doc.data() as any),
+            ...doc.data(),
             // Handle date conversion if needed, Firestore timestamps need .toDate()
             date: doc.data().date?.toDate ? doc.data().date.toDate() : doc.data().date
         })) as WaveTrainingEvent[];
@@ -587,7 +587,7 @@ export async function calculateEarningsAction(userId: string): Promise<MemberEar
             throw new Error("Unauthorized");
         }
 
-        if (session.user.id !== userId && !session.user.roles?.includes("admin")) {
+        if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             throw new Error("Unauthorized");
         }
 

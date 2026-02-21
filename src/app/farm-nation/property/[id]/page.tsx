@@ -67,7 +67,7 @@ export default function PropertyDetailsPage() {
             // Check tier
             try {
                 getUserTierAction().then((res) => {
-                    if (res && res.tier) setUserTier(res.tier as any);
+                    if (res && res.tier) setUserTier(res.tier as "Basic" | "Premium");
                 }).catch((err: any) => { console.warn("Failed to fetch user tier:", err?.message); });
             } catch (e) {
                 // Tier check is non-critical; page still works without it

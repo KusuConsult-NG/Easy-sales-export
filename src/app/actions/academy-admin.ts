@@ -168,6 +168,24 @@ export async function rejectAcademyApplicationAction(
             reviewedAt: FieldValue.serverTimestamp(),
         });
 
+        const userId = appData.userId;
+        if (userId) {
+            // 3. Update User Profile (Mark as rejected)
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                "serviceRegistrations.academy.status": "rejected",
+                "serviceRegistrations.academy.rejectedAt": FieldValue.serverTimestamp(),
+            });
+
+            // CLEAR CACHE
+            try {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(userId, 'academy');
+                logger.info(`[Academy Rejection] Cache cleared for user: ${userId}`);
+            } catch (cacheError) {
+                logger.error('[Academy Rejection] Cache clear error:', cacheError);
+            }
+        }
+
         // 3. Send Rejection Email
         if (process.env.RESEND_API_KEY && appData.personalInfo?.email) {
             try {

@@ -66,7 +66,7 @@ export default function LessonPage(props: LessonPageProps) {
                 // Fetch Course, User Progress (Course-level), and Lesson Progress (Video-level)
                 const [courseData, progressData, lessonProgressData] = await Promise.all([
                     getCourseByIdAction(courseId),
-                    getUserProgressAction(session!.user.id, courseId),
+                    getUserProgressAction(session.user.id, courseId),
                     getLessonProgress(lessonId)
                 ]);
 
@@ -120,7 +120,7 @@ export default function LessonPage(props: LessonPageProps) {
         try {
             const [courseData, progressData] = await Promise.all([
                 getCourseByIdAction(courseId),
-                getUserProgressAction(session!.user.id, courseId),
+                getUserProgressAction(session.user.id, courseId),
             ]);
 
             if (courseData) {

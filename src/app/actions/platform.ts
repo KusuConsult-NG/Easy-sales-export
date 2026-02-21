@@ -10,6 +10,7 @@ import {
     withdrawalSchema,
 } from "@/lib/schemas";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { ZodError } from "zod";
 
 /**
  * Server Actions for Platform Forms
@@ -110,8 +111,8 @@ export async function submitWaveApplicationAction(
         logger.error("WAVE application error:", error);
 
         if (error.name === "ZodError") {
-            const zodError = error as any;
-            const firstError = zodError.errors[0];
+            const zodError = error as ZodError;
+            const firstError = zodError.issues[0];
             return {
                 error: firstError?.message || "Please fill in all required fields correctly",
                 success: false,

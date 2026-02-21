@@ -35,7 +35,7 @@ export default function ChatPage() {
             const result = await getConversationMessagesAction(conversationId);
 
             if (result.success && result.messages) {
-                setMessages(result.messages as any[]);
+                setMessages(result.messages as MessageData[]);
                 // Mark as read
                 await markMessagesAsReadAction(conversationId);
             }
@@ -75,7 +75,7 @@ export default function ChatPage() {
             setTimeout(async () => {
                 const refreshResult = await getConversationMessagesAction(conversationId);
                 if (refreshResult.success && refreshResult.messages) {
-                    setMessages(refreshResult.messages as any[]);
+                    setMessages(refreshResult.messages as MessageData[]);
                 }
             }, 500);
         }

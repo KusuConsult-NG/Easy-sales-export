@@ -104,7 +104,7 @@ export default function CheckoutPage() {
 
             if (result.success && result.data) {
                 // Redirect to Paystack for payment
-                (window as any).location.href = result.data.authorizationUrl;
+                window.location.href = result.data.authorizationUrl;
             } else {
                 setError(result.error || "Failed to initialize payment");
                 setIsProcessing(false);

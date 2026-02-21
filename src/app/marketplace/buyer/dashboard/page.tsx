@@ -41,8 +41,8 @@ export default function BuyerDashboard() {
                 if (ordersResult.success && ordersResult.orders) {
                     // Sort by newest first and take top 5
                     const sorted = ordersResult.orders.sort((a, b) => {
-                        const dateA = a.createdAt instanceof Date ? a.createdAt : new Date((a.createdAt as any).seconds * 1000);
-                        const dateB = b.createdAt instanceof Date ? b.createdAt : new Date((b.createdAt as any).seconds * 1000);
+                        const dateA = a.createdAt instanceof Date ? a.createdAt : new Date((a.createdAt as unknown as { seconds: number }).seconds * 1000);
+                        const dateB = b.createdAt instanceof Date ? b.createdAt : new Date((b.createdAt as unknown as { seconds: number }).seconds * 1000);
                         return dateB.getTime() - dateA.getTime();
                     });
                     setRecentOrders(sorted.slice(0, 5));
@@ -219,7 +219,7 @@ export default function BuyerDashboard() {
                                     const badge = getStatusBadge(order.status);
                                     const formattedDate = order.createdAt instanceof Date
                                         ? order.createdAt.toLocaleDateString()
-                                        : new Date((order.createdAt as any).seconds * 1000).toLocaleDateString();
+                                        : new Date((order.createdAt as unknown as { seconds: number }).seconds * 1000).toLocaleDateString();
 
                                     return (
                                         <div

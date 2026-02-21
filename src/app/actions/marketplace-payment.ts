@@ -231,7 +231,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         }
 
         // Get metadata
-        const metadata = paymentData.data.metadata as any;
+        const metadata = paymentData.data.metadata as Record<string, any>;
         const userId = metadata.userId;
         const amountInNaira = paymentData.data.amount / 100;
         const expectedAmount = metadata.totalAmount;

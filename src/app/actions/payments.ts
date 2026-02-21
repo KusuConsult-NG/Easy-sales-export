@@ -36,8 +36,8 @@ export async function createPaymentRecordAction(data: {
     amount: number;
     currency: string;
     paymentReference: string;
-    paymentMethod: string;
-    purpose: string;
+    paymentMethod: "paystack" | "bank_transfer" | "cash";
+    purpose: "loan_repayment" | "escrow_payment" | "cooperative_contribution" | "export_slot" | "training_fee";
     relatedId?: string;
     metadata?: Record<string, any>;
 }): Promise<{ success: boolean; error?: string; paymentId?: string }> {
@@ -45,8 +45,8 @@ export async function createPaymentRecordAction(data: {
         const payment: Omit<PaymentRecord, "id"> = {
             ...data,
             status: "pending",
-            paymentMethod: data.paymentMethod as any,
-            purpose: data.purpose as any,
+            paymentMethod: data.paymentMethod,
+            purpose: data.purpose,
             initiatedAt: FieldValue.serverTimestamp(),
         };
 

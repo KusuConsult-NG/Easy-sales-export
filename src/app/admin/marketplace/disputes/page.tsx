@@ -196,7 +196,7 @@ export default function AdminDisputesPage() {
                                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <select
                                     value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                                    onChange={(e) => setStatusFilter(e.target.value as "all" | "open" | "under_review" | "resolved" | "closed")}
                                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary appearance-none"
                                 >
                                     <option value="all">All Statuses</option>
@@ -221,7 +221,7 @@ export default function AdminDisputesPage() {
                             const statusColor = getStatusColor(dispute.status);
                             const StatusIcon = getStatusIcon(dispute.status);
                             const daysAgo = Math.floor(
-                                (Date.now() - new Date(dispute.createdAt as any).getTime()) / (1000 * 60 * 60 * 24)
+                                (Date.now() - new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate() : dispute.createdAt as unknown as Date | number | string).getTime()) / (1000 * 60 * 60 * 24)
                             );
 
                             return (

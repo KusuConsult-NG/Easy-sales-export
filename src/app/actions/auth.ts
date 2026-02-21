@@ -94,7 +94,7 @@ export async function getPostLoginRedirect(email: string) {
         if (!userSnapshot.empty) {
             const userData = userSnapshot.docs[0].data() as FirestoreUser;
             const userRoles = userData.roles || ['general_user'];
-            const serviceRegistrations = (userData as any).serviceRegistrations || {};
+            const serviceRegistrations = (userData as FirestoreUser & { serviceRegistrations?: any }).serviceRegistrations || {};
 
             // CRITICAL: Check application status and redirect accordingly
             // Priority: Approved > Pending > No Applications
@@ -240,8 +240,8 @@ export async function registerAction(prevState: any, formData: FormData) {
         logger.error("Registration error", error);
 
         if (error instanceof ZodError) {
-            const zodError = error as any;
-            const errorMessage = zodError.errors?.map((e: any) => e.message).join(", ") || "Validation error";
+            const zodError = error as ZodError;
+            const errorMessage = zodError.issues?.map(e => e.message).join(", ") || "Validation error";
             return { error: errorMessage, success: false, redirectUrl: "" };
         }
 

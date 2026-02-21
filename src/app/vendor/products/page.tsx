@@ -156,7 +156,7 @@ export default function VendorProductsPage() {
                             ].map((f) => (
                                 <button
                                     key={f.key}
-                                    onClick={() => setFilterStatus(f.key as any)}
+                                    onClick={() => setFilterStatus(f.key as "all" | "active" | "inactive" | "out_of_stock")}
                                     className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${filterStatus === f.key
                                         ? "bg-blue-600 text-white"
                                         : "bg-gray-100 text-gray-600"

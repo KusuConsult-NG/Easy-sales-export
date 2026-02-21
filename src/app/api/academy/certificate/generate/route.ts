@@ -48,7 +48,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const progressData = progressDoc.data()!;
+        const progressData = progressDoc.data();
+        if (!progressData) {
+            return NextResponse.json(
+                { success: false, message: "Course progress data is corrupted" },
+                { status: 500 }
+            );
+        }
 
         // Validate course completion
         if (progressData.completionPercentage < 100 || !progressData.completed) {
@@ -69,11 +75,19 @@ export async function POST(request: NextRequest) {
 
         // Get course details (Admin SDK)
         const courseDoc = await db.collection("courses").doc(courseId).get();
-        const courseTitle = courseDoc.exists ? courseDoc.data()!.title : "Course Completion";
+        const courseData = courseDoc.data();
+        const courseTitle = courseDoc.exists && courseData ? courseData.title : "Course Completion";
 
         // Create certificate (Admin SDK)
         const certificateRef = db.collection("certificates").doc();
-        const userData = userDoc.data()!;
+        const userData = userDoc.data();
+        if (!userData) {
+            return NextResponse.json(
+                { success: false, message: "User data is corrupted" },
+                { status: 500 }
+            );
+        }
+
         const certificateData = {
             userId,
             userName: userData.name || userData.email,

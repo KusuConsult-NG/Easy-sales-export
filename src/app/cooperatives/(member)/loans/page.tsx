@@ -406,10 +406,10 @@ function LoanApplicationModal({
     onSuccess: () => void;
 }) {
     const initialState = {
-        error: null,
-        success: false,
+        error: "",
+        success: false as const,
         message: ""
-    } as any; // Casting to avoid strict type issues with generic ActionState vs specific
+    } as unknown as Awaited<ReturnType<typeof applyForLoanAction>>;
 
     const [state, action, isPending] = useActionState(applyForLoanAction, initialState);
 

@@ -367,7 +367,7 @@ export async function submitLandListingAction(data: {
 
         if (data.gpsCoordinates) {
             // @ts-ignore - Adding dynamic property
-            (listing as any).gpsCoordinates = data.gpsCoordinates;
+            (listing as LandListing & { gpsCoordinates?: { latitude: number; longitude: number } }).gpsCoordinates = data.gpsCoordinates;
         }
 
         const docRef = await db.collection("land_listings").add(listing);

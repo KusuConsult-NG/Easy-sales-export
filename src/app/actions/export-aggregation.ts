@@ -159,6 +159,7 @@ export async function bookExportSlotAction(data: {
         // Update window volume
         await windowRef.update({
             currentVolume: windowData.currentVolume + data.volume,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await createAdminAuditLog({

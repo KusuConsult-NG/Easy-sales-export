@@ -138,7 +138,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
 
     // Sum escrow volumes
     try {
-        const escrowSnap = await db.collection("escrows").get();
+        const escrowSnap = await db.collection("escrows").limit(5000).get();
         escrowSnap.docs.forEach(doc => {
             const data = doc.data();
             const amount = Number(data.amount) || 0;
@@ -155,6 +155,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     try {
         const loanSnap = await db.collection("loan_applications")
             .where("status", "==", "disbursed")
+            .limit(5000)
             .get();
         loanSnap.docs.forEach(doc => {
             totalLoansDisbursed += Number(doc.data().amount) || 0;

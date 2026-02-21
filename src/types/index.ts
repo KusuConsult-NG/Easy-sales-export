@@ -5,13 +5,31 @@
 export interface User {
     id: string;
     email: string;
+    originalEmail?: string;
     firstName: string;
     lastName: string;
+    displayName?: string;
     phoneNumber?: string;
-    role: "member" | "admin" | "super_admin";
+    phone?: string;
+    role: "member" | "admin" | "super_admin" | string;
+    roles?: string[];
     membershipTier?: "Basic" | "Premium" | "Gold";
-    memberSince?: Date;
+    memberSince?: Date | any;
     profileImage?: string;
+    isVerified?: boolean;
+    verifiedBy?: string;
+    verifiedAt?: Date | any;
+    sellerVerificationStatus?: string;
+    sellerVerificationId?: string;
+    serviceRegistrations?: Record<string, any>;
+    deleted?: boolean;
+    deletedAt?: Date | any;
+    deletedBy?: string;
+    deletionReason?: string;
+    suspended?: boolean;
+    isActive?: boolean;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 export interface AuthSession {
@@ -41,6 +59,8 @@ export interface ExportWindow {
     startDate: Date;
     endDate: Date;
     imageUrl?: string;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 export interface UserExportParticipation {
@@ -52,6 +72,8 @@ export interface UserExportParticipation {
     status: "pending" | "active" | "completed" | "disputed";
     expectedReturn: number;
     actualReturn?: number;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 // ===========================
@@ -71,6 +93,8 @@ export interface Product {
     inStock: boolean;
     sellerId: string;
     quality: "Standard" | "Premium" | "Organic";
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 export interface Order {
@@ -100,6 +124,8 @@ export interface CooperativeMember {
     totalExports: number;
     totalRevenue: number;
     status: "active" | "inactive" | "suspended";
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 export interface Transaction {
@@ -111,6 +137,8 @@ export interface Transaction {
     status: "pending" | "completed" | "failed";
     date: Date;
     reference?: string;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 // ===========================
@@ -130,6 +158,8 @@ export interface WAVEApplication {
     submittedAt?: Date;
     reviewedAt?: Date;
     reviewNotes?: string;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 // ===========================
@@ -188,6 +218,8 @@ export interface Course {
     enrollmentCount: number;
     rating: number; // 0-5
     status: "upcoming" | "open" | "in_progress" | "completed";
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 export interface Enrollment {
@@ -200,6 +232,8 @@ export interface Enrollment {
     totalModules: number;
     status: "active" | "completed" | "dropped";
     certificateUrl?: string;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 // ===========================

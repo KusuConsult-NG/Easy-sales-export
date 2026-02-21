@@ -475,7 +475,7 @@ export default function AdminWaveTrainingPage() {
                                         <select
                                             value={formData.status}
                                             onChange={(e) =>
-                                                setFormData({ ...formData, status: e.target.value as any })
+                                                setFormData({ ...formData, status: e.target.value as "upcoming" | "ongoing" | "completed" | "cancelled" })
                                             }
                                             className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-pink-600"
                                         >

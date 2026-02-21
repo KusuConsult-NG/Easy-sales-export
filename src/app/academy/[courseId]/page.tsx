@@ -51,7 +51,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
             try {
                 const [courseData, progressData] = await Promise.all([
                     getCourseByIdAction(courseId),
-                    getUserProgressAction(session!.user.id, courseId),
+                    getUserProgressAction(session.user.id, courseId),
                 ]);
 
                 if (mounted) {
@@ -80,7 +80,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
         if (!session?.user) return;
         const [courseData, progressData] = await Promise.all([
             getCourseByIdAction(courseId),
-            getUserProgressAction(session!.user.id, courseId),
+            getUserProgressAction(session.user.id, courseId),
         ]);
         if (courseData) {
             setCourse(courseData);

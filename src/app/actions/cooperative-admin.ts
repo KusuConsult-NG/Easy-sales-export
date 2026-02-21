@@ -120,7 +120,7 @@ export async function getCooperativeStatsAction(): Promise<{
         // Get loans (Scoped via memberId mapping is hard without joins, assuming loans have coopId or we filter by member list)
         // Ideally loans should have cooperativeId. Checking Schema...
         // If not, we filter in memory against the 'members' list we already fetched.
-        const loansSnap = await db.collection("cooperative_loans").get();
+        const loansSnap = await db.collection("cooperative_loans").limit(5000).get();
         let loans = loansSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         if (adminScope) {
@@ -391,7 +391,7 @@ export async function getContributionReportsAction(options?: {
 
         // Calculate top contributors
         const contributorMap = new Map<string, number>();
-        for (const c of contributions as any[]) {
+        for (const c of contributions as unknown as { userId: string; amount: number }[]) {
             const current = contributorMap.get(c.userId) || 0;
             contributorMap.set(c.userId, current + c.amount);
         }

@@ -66,8 +66,8 @@ export default function SellerVerificationPage() {
         if (state.success) {
             showToast("Verification application submitted successfully!", "success");
             setTimeout(() => router.push("/marketplace"), 2000);
-        } else if ((state as any).error) {
-            showToast((state as any).error, "error");
+        } else if ((state as { error?: string }).error) {
+            showToast((state as { error?: string }).error!, "error");
         }
     }, [state, showToast, router]);
 

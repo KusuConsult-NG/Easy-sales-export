@@ -39,7 +39,7 @@ export default function MessagesLayout({
             const result = await getConversationsAction();
 
             if (result.success && result.conversations) {
-                setConversations(result.conversations as any[]);
+                setConversations(result.conversations as ConversationData[]);
             }
             setLoading(false);
         }

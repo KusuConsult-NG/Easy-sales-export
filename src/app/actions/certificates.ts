@@ -68,7 +68,7 @@ export async function uploadCertificateAction(
             fileName: file.name,
             fileUrl,
             fileType: file.type,
-            certificateType: metadata.certificateType as any,
+            certificateType: metadata.certificateType as Certificate["certificateType"],
             issueDate: metadata.issueDate ? new Date(metadata.issueDate) : undefined,
             expiryDate: metadata.expiryDate ? new Date(metadata.expiryDate) : undefined,
             issuer: metadata.issuer,

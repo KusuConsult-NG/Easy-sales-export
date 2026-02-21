@@ -121,7 +121,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     if (!dispute || !order) return null;
 
     const daysAgo = Math.floor(
-        (Date.now() - new Date(dispute.createdAt as any).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate() : dispute.createdAt as unknown as Date | number | string).getTime()) / (1000 * 60 * 60 * 24)
     );
 
     return (
@@ -156,7 +156,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                     </div>
                     <p className="text-gray-600">
                         Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago •{" "}
-                        {new Date(dispute.createdAt as any).toLocaleString()}
+                        {new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate() : dispute.createdAt as unknown as Date | number | string).toLocaleString()}
                     </p>
                 </div>
 

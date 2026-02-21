@@ -19,7 +19,7 @@ export default function ExportWindowsPage() {
             endDate: new Date("2026-03-15"),
             destination: "Rotterdam, Netherlands",
             status: "open",
-            createdAt: { seconds: Date.now() / 1000 } as any,
+            createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as unknown as import("firebase/firestore").Timestamp,
             createdBy: "admin",
         },
         {
@@ -33,7 +33,7 @@ export default function ExportWindowsPage() {
             endDate: new Date("2026-03-01"),
             destination: "Dubai, UAE",
             status: "open",
-            createdAt: { seconds: Date.now() / 1000 } as any,
+            createdAt: { seconds: Date.now() / 1000, nanoseconds: 0 } as unknown as import("firebase/firestore").Timestamp,
             createdBy: "admin",
         },
     ]);

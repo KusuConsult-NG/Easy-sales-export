@@ -30,7 +30,7 @@ export async function createResourceAction(data: {
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || !userDoc.data()?.roles?.includes("admin")) {
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -74,7 +74,7 @@ export async function updateResourceAction(
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || !userDoc.data()?.roles?.includes("admin")) {
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -108,11 +108,15 @@ export async function deleteResourceAction(
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || !userDoc.data()?.roles?.includes("admin")) {
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection("wave_resources").doc(resourceId).delete();
+        await db.collection("wave_resources").doc(resourceId).update({
+            deleted: true,
+            deletedAt: FieldValue.serverTimestamp(),
+            deletedBy: session.user.id,
+        });
 
         await createAdminAuditLog({
             action: "resource_delete",
@@ -149,7 +153,7 @@ export async function createTrainingEventAction(data: {
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || !userDoc.data()?.roles?.includes("admin")) {
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -196,7 +200,7 @@ export async function updateTrainingEventAction(
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || !userDoc.data()?.roles?.includes("admin")) {
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -263,11 +267,11 @@ export async function getWaveApplicationsAction(): Promise<{
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || !userDoc.data()?.roles?.includes("admin")) {
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
-        const snapshot = await db.collection("wave_applications").get();
+        const snapshot = await db.collection("wave_applications").limit(1000).get();
         const applications = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -291,7 +295,7 @@ export async function approveWaveApplicationAction(
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || !userDoc.data()?.roles?.includes("admin")) {
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -368,7 +372,7 @@ export async function rejectWaveApplicationAction(
 
         // Check admin role
         const userDoc = await db.collection("users").doc(session.user.id).get();
-        if (!userDoc.exists || !userDoc.data()?.roles?.includes("admin")) {
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 

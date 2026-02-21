@@ -260,7 +260,7 @@ export async function updateLandListing(
             updateData.location = {
                 ...updateData.location,
                 geopoint: geoPoint,
-            } as any;
+            } as typeof updateData.location & { geopoint: any };
         }
 
         await db.collection('land_listings').doc(listingId).update({
@@ -410,7 +410,7 @@ export async function getLandStatistics() {
     }
 
     try {
-        const snapshot = await db.collection('land_listings').get();
+        const snapshot = await db.collection('land_listings').limit(5000).get();
 
         const stats = {
             total: 0,

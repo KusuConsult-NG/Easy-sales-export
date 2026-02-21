@@ -69,9 +69,9 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                 return {
                     id: doc.id,
                     commodity: data.commodity,
-                    destination: (data as any).destination || "International",
-                    openDate: (data.startDate as any)?.toDate?.().toISOString() || new Date().toISOString(),
-                    closeDate: (data.endDate as any)?.toDate?.().toISOString() || new Date().toISOString(),
+                    destination: (data as ExportWindow & { destination?: string }).destination || "International",
+                    openDate: (data.startDate as unknown as Timestamp)?.toDate ? (data.startDate as unknown as Timestamp).toDate().toISOString() : new Date(data.startDate || Date.now()).toISOString(),
+                    closeDate: (data.endDate as unknown as Timestamp)?.toDate ? (data.endDate as unknown as Timestamp).toDate().toISOString() : new Date(data.endDate || Date.now()).toISOString(),
                     minInvestment: data.amount,
                     projectedROI: data.roi,
                     status: data.status === "active" ? "Opening Soon" : "Open",
@@ -83,8 +83,8 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                     specifications: data.specifications || [],
                     benefits: data.benefits || [],
                     documents: data.documents || [],
-                    timeline: data.timeline?.map((t: any) => ({
-                        phase: t.phase,
+                    timeline: (data.timeline as unknown as Array<Record<string, string>>)?.map(t => ({
+                        phase: t.phase || "",
                         duration: t.date || t.duration || "TBD",
                         description: t.description || "",
                         status: t.status || "pending"
@@ -139,9 +139,9 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
             const opportunity: ExportOpportunity = {
                 id: snapshot.id,
                 commodity: data.commodity,
-                destination: (data as any).destination || "International",
-                openDate: (data.startDate as any)?.toDate?.().toISOString() || new Date().toISOString(),
-                closeDate: (data.endDate as any)?.toDate?.().toISOString() || new Date().toISOString(),
+                destination: (data as ExportWindow & { destination?: string }).destination || "International",
+                openDate: (data.startDate as unknown as Timestamp)?.toDate ? (data.startDate as unknown as Timestamp).toDate().toISOString() : new Date(data.startDate || Date.now()).toISOString(),
+                closeDate: (data.endDate as unknown as Timestamp)?.toDate ? (data.endDate as unknown as Timestamp).toDate().toISOString() : new Date(data.endDate || Date.now()).toISOString(),
                 minInvestment: data.amount,
                 projectedROI: data.roi,
                 status: data.status === "active" ? "Opening Soon" : "Open",
@@ -153,8 +153,8 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
                 specifications: data.specifications || [],
                 benefits: data.benefits || [],
                 documents: data.documents || [],
-                timeline: data.timeline?.map((t: any) => ({
-                    phase: t.phase,
+                timeline: (data.timeline as unknown as Array<Record<string, string>>)?.map(t => ({
+                    phase: t.phase || "",
                     duration: t.date || t.duration || "TBD",
                     description: t.description || "",
                     status: t.status || "pending"

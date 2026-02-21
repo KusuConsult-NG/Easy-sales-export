@@ -83,7 +83,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                     </label>
                     <select
                         value={data.highestEducation}
-                        onChange={(e) => updateData({ highestEducation: e.target.value as any })}
+                        onChange={(e) => updateData({ highestEducation: e.target.value as "none" | "primary" | "secondary" | "tertiary" | "vocational" })}
                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     >
                         <option value="">Select education level</option>
@@ -128,7 +128,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                     </label>
                     <select
                         value={data.averageMonthlyIncome}
-                        onChange={(e) => updateData({ averageMonthlyIncome: e.target.value as any })}
+                        onChange={(e) => updateData({ averageMonthlyIncome: e.target.value as "below_50k" | "50k_100k" | "100k_250k" | "above_250k" })}
                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     >
                         <option value="">Select income range</option>

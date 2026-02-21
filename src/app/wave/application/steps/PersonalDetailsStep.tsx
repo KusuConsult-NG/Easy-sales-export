@@ -384,7 +384,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                     name="maritalStatus"
                                     value={status.value}
                                     checked={data.maritalStatus === status.value}
-                                    onChange={(e) => updateData({ maritalStatus: e.target.value as any })}
+                                    onChange={(e) => updateData({ maritalStatus: e.target.value as "single" | "married" | "widowed" | "divorced" })}
                                     className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                                 />
                                 <span className="font-medium">{status.label}</span>

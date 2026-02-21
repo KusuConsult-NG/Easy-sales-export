@@ -35,7 +35,7 @@ export default function CertificatePage() {
             try {
                 const [courseData, progressData] = await Promise.all([
                     getCourseByIdAction(courseId),
-                    getUserProgressAction(session!.user.id, courseId),
+                    getUserProgressAction(session.user.id, courseId),
                 ]);
 
                 if (mounted) {

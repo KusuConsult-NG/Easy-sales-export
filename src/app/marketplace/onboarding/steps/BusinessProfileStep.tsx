@@ -111,7 +111,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         ].map((type) => (
                             <button
                                 key={type.value}
-                                onClick={() => onChange({ businessType: type.value as any })}
+                                onClick={() => onChange({ businessType: type.value as "individual" | "company" | "cooperative" })}
                                 className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${data.businessType === type.value
                                     ? "border-green-500 bg-green-50 text-green-700"
                                     : "border-slate-300 hover:border-green-300"

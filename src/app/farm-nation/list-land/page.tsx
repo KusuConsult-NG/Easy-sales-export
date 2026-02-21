@@ -168,7 +168,7 @@ export default function ListLandPage() {
                 availableForSale: formData.availableForSale,
                 availableForRent: formData.availableForRent,
                 escrowAvailable: formData.escrowAvailable,
-            } as any); // Type cast due to minor discrepancies in action signature vs local state
+            } as Parameters<typeof submitLandListingAction>[0]); // Type cast due to minor discrepancies in action signature vs local state
 
             if (result.success) {
                 showToast("Land Listing Submitted! Your listing has been submitted for verification.", "success");

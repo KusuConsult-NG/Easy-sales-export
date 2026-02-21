@@ -30,7 +30,7 @@ export async function getVendorSalesStatsAction() {
 
         const orders = ordersSnapshot.docs.map(doc => ({
             ...doc.data(),
-            createdAt: (doc.data().createdAt as any)?.toDate(),
+            createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : doc.data().createdAt,
         }));
 
         const stats = {
@@ -85,7 +85,7 @@ export async function getVendorRevenueTrendsAction() {
 
         ordersSnapshot.docs.forEach(doc => {
             const data = doc.data();
-            const createdAt = (data.createdAt as any)?.toDate();
+            const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
             const dateKey = createdAt.toISOString().split('T')[0];
 
             if (!dailyData[dateKey]) {
@@ -200,7 +200,7 @@ export async function getVendorInventoryStatsAction() {
             }
         });
 
-       stats.lowStockProducts.sort((a, b) => a.stock - b.stock);
+        stats.lowStockProducts.sort((a, b) => a.stock - b.stock);
         return { success: true, stats };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -281,7 +281,7 @@ export async function getVendorActivityFeedAction(limit: number = 20) {
                 type: "order",
                 title: `New Order #${data.orderNumber}`,
                 description: `Order from ${data.customerName} - ₦${data.totalAmount?.toLocaleString()}`,
-                timestamp: (data.createdAt as any)?.toDate() || new Date(),
+                timestamp: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
                 metadata: { orderId: doc.id, status: data.status },
             });
         });
@@ -299,9 +299,9 @@ export async function getVendorActivityFeedAction(limit: number = 20) {
                 activities.push({
                     id: `stock-${doc.id}`,
                     type: "stock",
-title: "Low Stock Alert",
+                    title: "Low Stock Alert",
                     description: `${data.name} is running low (${stock} ${data.unit || 'units'} remaining)`,
-                    timestamp: (data.updatedAt as any)?.toDate() || new Date(),
+                    timestamp: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : new Date()),
                     metadata: { productId: doc.id, stock },
                 });
             }

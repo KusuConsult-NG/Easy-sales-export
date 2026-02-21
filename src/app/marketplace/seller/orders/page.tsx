@@ -219,7 +219,7 @@ export default function SellerOrdersPage() {
                             const StatusIcon = statusConfig.icon;
                             const formattedDate = order.createdAt instanceof Date
                                 ? order.createdAt.toLocaleDateString()
-                                : new Date((order.createdAt as any)?.seconds * 1000 || Date.now()).toLocaleDateString();
+                                : new Date((order.createdAt as unknown as { seconds?: number })?.seconds ? (order.createdAt as unknown as { seconds: number }).seconds * 1000 : Date.now()).toLocaleDateString();
 
                             return (
                                 <div

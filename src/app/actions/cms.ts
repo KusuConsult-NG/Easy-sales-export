@@ -132,8 +132,13 @@ export async function getActiveAnnouncementsAction(
                 }
 
                 // Filter by expiry
-                if (announcement.expiresAt && new Date(announcement.expiresAt as any).getTime() < now.getTime()) {
-                    return false;
+                if (announcement.expiresAt) {
+                    const expDate = typeof announcement.expiresAt.toDate === 'function'
+                        ? announcement.expiresAt.toDate()
+                        : new Date(announcement.expiresAt as string | number | Date);
+                    if (expDate.getTime() < now.getTime()) {
+                        return false;
+                    }
                 }
 
                 return true;
@@ -158,6 +163,7 @@ export async function deactivateAnnouncementAction(
 
         await announcementRef.update({
             active: false,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await logAdminAction(
@@ -278,6 +284,7 @@ export async function deactivateBannerAction(
 
         await bannerRef.update({
             active: false,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await logAdminAction(

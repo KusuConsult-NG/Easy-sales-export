@@ -316,7 +316,7 @@ export default function AdminWaveResourcesPage() {
                                         onChange={(e) =>
                                             setFormData({
                                                 ...formData,
-                                                category: e.target.value as any,
+                                                category: e.target.value as "document" | "video" | "template" | "guide",
                                             })
                                         }
                                         className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
