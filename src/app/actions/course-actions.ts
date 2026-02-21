@@ -94,6 +94,8 @@ export async function enrollInCourse(
             courseId: validated.courseId,
             enrolledAt: FieldValue.serverTimestamp(),
             status: 'active',
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Initialize progress record
@@ -104,6 +106,7 @@ export async function enrollInCourse(
             lastWatchedSecond: 0,
             completed: false,
             completedAt: null,
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -332,6 +335,8 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             completedAt: progressData.completedAt || FieldValue.serverTimestamp(),
             issuedAt: FieldValue.serverTimestamp(),
             certificateNumber: `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}`,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Create notification

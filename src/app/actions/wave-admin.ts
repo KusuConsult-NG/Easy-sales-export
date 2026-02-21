@@ -35,10 +35,11 @@ export async function createResourceAction(data: {
         }
 
         const resourceRef = await db.collection("wave_resources").add({
-            ...data,
             downloads: 0,
             uploadedAt: FieldValue.serverTimestamp(),
             uploadedBy: session.user.id,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await createAdminAuditLog({
@@ -158,11 +159,11 @@ export async function createTrainingEventAction(data: {
         }
 
         const eventRef = await db.collection("wave_training_events").add({
-            ...data,
             currentParticipants: 0,
             status: "upcoming",
             createdAt: FieldValue.serverTimestamp(),
             createdBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await createAdminAuditLog({

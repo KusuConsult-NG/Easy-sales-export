@@ -11,6 +11,7 @@ import {
 } from "@/lib/schemas";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { ZodError } from "zod";
+import { revalidatePath } from "next/cache";
 
 /**
  * Server Actions for Platform Forms
@@ -98,6 +99,7 @@ export async function submitWaveApplicationAction(
             userId: session.user.id,
             status: "pending", // pending | approved | rejected
             applicationDate: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -168,6 +170,7 @@ export async function enrollInCourseAction(
             enrollmentDate: FieldValue.serverTimestamp(),
             status: "active", // active | completed | dropped
             progress: 0,
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -212,6 +215,11 @@ export async function submitWithdrawalAction(
             return { error: "You must be logged in to request withdrawal", success: false };
         }
 
+        const idempotencyKey = formData.get("idempotencyKey") as string;
+        if (!idempotencyKey) {
+            return { error: "Missing security token. Please refresh the page.", success: false };
+        }
+
         // Extract and validate form data
         const withdrawalData = {
             cooperativeId: formData.get("cooperativeId") as string,
@@ -230,6 +238,14 @@ export async function submitWithdrawalAction(
 
         // Transactional execution for Financial Integrity
         await db.runTransaction(async (transaction) => {
+            // 0. Idempotency Check
+            const idempotencyRef = db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).doc(idempotencyKey);
+            const idempotencyDoc = await transaction.get(idempotencyRef);
+
+            if (idempotencyDoc.exists) {
+                throw new Error("Duplicate transaction detected. Please wait.");
+            }
+
             // CORRECT PATTERN: Use Root Collection for members (Standardized)
             const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
             const memberDoc = await transaction.get(memberRef);
@@ -279,9 +295,21 @@ export async function submitWithdrawalAction(
                 reason: validatedData.reason,
                 status: "pending", // pending | approved | rejected | completed
                 requestDate: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
+
+            // 3. Lock Key
+            transaction.set(idempotencyRef, {
+                userId: session.user.id,
+                action: "submit_withdrawal",
+                createdAt: FieldValue.serverTimestamp(),
+            });
         });
+
+        revalidatePath("/cooperatives");
+        revalidatePath("/dashboard/cooperatives");
+        revalidatePath("/admin/withdrawals");
 
         return {
             error: null,

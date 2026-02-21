@@ -157,7 +157,8 @@
             priority,
             active: true,
             createdBy: session.user.id,
-            createdAt: FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
         });
 ```
 
@@ -313,7 +314,7 @@
         });
 ```
 
-### Match at line 560:
+### Match at line 559:
 ```typescript
         await listingRef.update({
             verificationStatus: decision,
@@ -325,7 +326,7 @@
         });
 ```
 
-### Match at line 790:
+### Match at line 788:
 ```typescript
                 await loanRef.update({
                     approvalChain: {
@@ -338,7 +339,7 @@
                 });
 ```
 
-### Match at line 822:
+### Match at line 820:
 ```typescript
                 await loanRef.update({
                     "approvalChain.secondApprover": session.user.id,
@@ -347,7 +348,7 @@
                 });
 ```
 
-### Match at line 833:
+### Match at line 831:
 ```typescript
         await loanRef.update({
             status: "approved",
@@ -357,7 +358,7 @@
         });
 ```
 
-### Match at line 945:
+### Match at line 943:
 ```typescript
         await loanRef.update({
             status: "rejected",
@@ -368,7 +369,7 @@
         });
 ```
 
-### Match at line 1219:
+### Match at line 1220:
 ```typescript
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             roles: roles,
@@ -377,7 +378,7 @@
         });
 ```
 
-### Match at line 1268:
+### Match at line 1269:
 ```typescript
         await verificationRef.update({
             status: "approved",
@@ -387,7 +388,7 @@
         });
 ```
 
-### Match at line 1276:
+### Match at line 1277:
 ```typescript
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             isVerified: true,
@@ -402,7 +403,7 @@
         });
 ```
 
-### Match at line 1392:
+### Match at line 1393:
 ```typescript
         await appDoc.ref.update({
             status: "approved",
@@ -412,7 +413,7 @@
         });
 ```
 
-### Match at line 1400:
+### Match at line 1401:
 ```typescript
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             isVerified: true,
@@ -425,7 +426,7 @@
         });
 ```
 
-### Match at line 1504:
+### Match at line 1505:
 ```typescript
         await appDoc.ref.update({
             status: "rejected",
@@ -436,7 +437,7 @@
         });
 ```
 
-### Match at line 1513:
+### Match at line 1514:
 ```typescript
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             "serviceRegistrations.export.status": "rejected",
@@ -445,7 +446,7 @@
         });
 ```
 
-### Match at line 1653:
+### Match at line 1654:
 ```typescript
         await appRef.update({
             status: "approved",
@@ -455,7 +456,7 @@
         });
 ```
 
-### Match at line 1661:
+### Match at line 1662:
 ```typescript
         await db.collection(COLLECTIONS.USERS).doc(userId).set({
             serviceRegistrations: {
@@ -469,7 +470,7 @@
         }, { merge: true });
 ```
 
-### Match at line 1709:
+### Match at line 1710:
 ```typescript
         await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).update({
             status: "rejected",
@@ -480,7 +481,7 @@
         });
 ```
 
-### Match at line 1721:
+### Match at line 1722:
 ```typescript
                 await db.collection(COLLECTIONS.USERS).doc(userId).set({
                     serviceRegistrations: {
@@ -541,6 +542,8 @@
             targetType,
             details,
             timestamp: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
@@ -620,13 +623,15 @@
 ```typescript
         await announcementRef.update({
             active: false,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 284:
+### Match at line 285:
 ```typescript
         await bannerRef.update({
             active: false,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
@@ -805,10 +810,12 @@
             courseId: validated.courseId,
             enrolledAt: FieldValue.serverTimestamp(),
             status: 'active',
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 100:
+### Match at line 102:
 ```typescript
         await db.collection('course_progress').add({
             userId: session.user.id,
@@ -817,11 +824,12 @@
             lastWatchedSecond: 0,
             completed: false,
             completedAt: null,
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 261:
+### Match at line 264:
 ```typescript
         await progressDoc.ref.update({
             completed: true,
@@ -831,7 +839,7 @@
         });
 ```
 
-### Match at line 326:
+### Match at line 329:
 ```typescript
         const certificateRef = await db.collection('course_certificates').add({
             userId: session.user.id,
@@ -842,6 +850,8 @@
             completedAt: progressData.completedAt || FieldValue.serverTimestamp(),
             issuedAt: FieldValue.serverTimestamp(),
             certificateNumber: `CERT-${Date.now()}-${session.user.id?.substring(0, 8)}`,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
@@ -964,6 +974,7 @@
 ```typescript
         await windowRef.update({
             currentVolume: windowData.currentVolume + data.volume,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
@@ -1570,11 +1581,12 @@
             userId: session.user.id,
             status: "pending", // pending | approved | rejected
             applicationDate: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 162:
+### Match at line 163:
 ```typescript
         await enrollmentRef.set({
             userId: session.user.id,
@@ -1585,11 +1597,12 @@
             enrollmentDate: FieldValue.serverTimestamp(),
             status: "active", // active | completed | dropped
             progress: 0,
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 178:
+### Match at line 180:
 ```typescript
             await courseRef.update({
                 students: FieldValue.increment(1),
@@ -1616,26 +1629,30 @@
 
 ## File: `src/app/actions/resource-actions.ts`
 
-### Match at line 187:
+### Match at line 189:
 ```typescript
         await resourceRef.update({
             downloads: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 231:
+### Match at line 234:
 ```typescript
         await resourceRef.update({
             isActive: false,
+            updatedAt: FieldValue.serverTimestamp(),
+            deletedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 279:
+### Match at line 284:
 ```typescript
         await resourceRef.update({
             title,
             description,
             tags: tags ? tags.split(",").map(t => t.trim()) : [],
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
@@ -1779,11 +1796,12 @@
                 logo: profileData.logo || null,
                 banner: profileData.banner || null,
             },
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 ```
 
-### Match at line 65:
+### Match at line 66:
 ```typescript
         await vendorRef.set({
             paymentConfig: {
@@ -1798,15 +1816,16 @@
         }, { merge: true });
 ```
 
-### Match at line 99:
+### Match at line 100:
 ```typescript
         await vendorRef.set({
             notifications: prefs,
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 ```
 
-### Match at line 125:
+### Match at line 127:
 ```typescript
         await vendorRef.set({
             shipping: {
@@ -1852,14 +1871,15 @@
 ### Match at line 37:
 ```typescript
         const resourceRef = await db.collection("wave_resources").add({
-            ...data,
             downloads: 0,
             uploadedAt: FieldValue.serverTimestamp(),
             uploadedBy: session.user.id,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 81:
+### Match at line 82:
 ```typescript
         await db.collection("wave_resources").doc(resourceId).update({
             ...data,
@@ -1867,18 +1887,27 @@
         });
 ```
 
-### Match at line 156:
+### Match at line 116:
+```typescript
+        await db.collection("wave_resources").doc(resourceId).update({
+            deleted: true,
+            deletedAt: FieldValue.serverTimestamp(),
+            deletedBy: session.user.id,
+        });
+```
+
+### Match at line 161:
 ```typescript
         const eventRef = await db.collection("wave_training_events").add({
-            ...data,
             currentParticipants: 0,
             status: "upcoming",
             createdAt: FieldValue.serverTimestamp(),
             createdBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 203:
+### Match at line 208:
 ```typescript
         await db.collection("wave_training_events").doc(eventId).update({
             ...data,
@@ -1886,7 +1915,7 @@
         });
 ```
 
-### Match at line 308:
+### Match at line 313:
 ```typescript
         await appRef.update({
             status: "approved",
@@ -1895,7 +1924,7 @@
         });
 ```
 
-### Match at line 316:
+### Match at line 321:
 ```typescript
             await db.collection("wave_members").add({
                 userId: appData.userId,
@@ -1904,7 +1933,7 @@
             });
 ```
 
-### Match at line 395:
+### Match at line 400:
 ```typescript
         await appRef.update({
             status: "rejected",
@@ -1916,25 +1945,28 @@
 
 ## File: `src/app/actions/wave-member.ts`
 
-### Match at line 154:
+### Match at line 156:
 ```typescript
             await db.collection("wave_resource_access").add({
                 userId: session.user.id,
                 resourceId,
                 accessedAt: new Date(),
                 accessCount: 1,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
 ```
 
-### Match at line 163:
+### Match at line 167:
 ```typescript
             await accessDoc.ref.update({
                 accessCount: FieldValue.increment(1),
                 lastAccessedAt: new Date(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
 ```
 
-### Match at line 170:
+### Match at line 175:
 ```typescript
         await db.collection("wave_resources").doc(resourceId).update({
             downloads: FieldValue.increment(1),
@@ -1956,10 +1988,11 @@
             reviewedBy: null,
             rejectionReason: null,
             updatedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
         });
 ```
 
-### Match at line 269:
+### Match at line 270:
 ```typescript
         await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
             "serviceRegistrations.wave.status": "pending",
@@ -1969,15 +2002,17 @@
         });
 ```
 
-### Match at line 326:
+### Match at line 327:
 ```typescript
         await db.collection("wave_members").doc(userId).set({
             enrolledAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
             active: true,
         }, { merge: true });
 ```
 
-### Match at line 544:
+### Match at line 547:
 ```typescript
             await shipmentRef.update({
                 status: latest.status,
@@ -1986,7 +2021,7 @@
             });
 ```
 
-### Match at line 816:
+### Match at line 819:
 ```typescript
         await resourceRef.update({
             downloads: FieldValue.increment(1)
@@ -2244,6 +2279,8 @@
             fileType: file.type,
             uploadedBy: session.user.id,
             uploadedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 ```
 

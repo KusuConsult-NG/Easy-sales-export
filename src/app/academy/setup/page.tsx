@@ -21,7 +21,7 @@ export default function AcademyOnboardingPage() {
     const { data: session, status: sessionStatus } = useSession();
     const { showToast } = useToast();
     const [step, setStep] = useState(1);
-    const totalSteps = 3;
+    const totalSteps = 4;
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,6 +30,13 @@ export default function AcademyOnboardingPage() {
     const [paymentStatus, setPaymentStatus] = useState<string>("pending");
 
     // Form state
+    const [phone, setPhone] = useState("");
+    const [dateOfBirth, setDateOfBirth] = useState("");
+    const [gender, setGender] = useState("");
+    const [state, setState] = useState("");
+    const [lga, setLga] = useState("");
+    const [occupation, setOccupation] = useState("");
+
     const [skillLevel, setSkillLevel] = useState<SkillLevel | "">("");
     const [learningPreference, setLearningPreference] = useState<LearningPreference | "">("");
     const [interests, setInterests] = useState<InterestArea[]>([]);
@@ -108,12 +115,12 @@ export default function AcademyOnboardingPage() {
                 personalInfo: {
                     fullName: session.user.name || "",
                     email: session.user.email || "",
-                    phone: "", // TODO: Should collect phone
-                    dateOfBirth: "", // TODO: Should collect DOB
-                    gender: "", // TODO: Should collect gender
-                    state: "", // TODO: Should collect state
-                    lga: "", // TODO: Should collect LGA
-                    occupation: "", // TODO: Should collect occupation
+                    phone: phone,
+                    dateOfBirth: dateOfBirth,
+                    gender: gender,
+                    state: state,
+                    lga: lga,
+                    occupation: occupation,
                 },
                 education: {
                     educationLevel: "",
@@ -146,9 +153,10 @@ export default function AcademyOnboardingPage() {
 
     const isStepValid = () => {
         switch (step) {
-            case 1: return skillLevel !== "";
-            case 2: return learningPreference !== "";
-            case 3: return interests.length > 0;
+            case 1: return phone !== "" && dateOfBirth !== "" && gender !== "" && state !== "" && lga !== "" && occupation !== "";
+            case 2: return skillLevel !== "";
+            case 3: return learningPreference !== "";
+            case 4: return interests.length > 0;
             default: return false;
         }
     };
@@ -378,7 +386,7 @@ export default function AcademyOnboardingPage() {
                     {/* Progress Bar */}
                     <div className="mb-8">
                         <div className="flex items-center justify-between mb-2">
-                            {[1, 2, 3].map(s => (
+                            {[1, 2, 3, 4].map(s => (
                                 <div key={s} className="flex items-center flex-1">
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${s <= step
                                         ? 'bg-blue-600 text-white'
@@ -394,6 +402,7 @@ export default function AcademyOnboardingPage() {
                             ))}
                         </div>
                         <div className="flex justify-between text-xs text-slate-600">
+                            <span>Profile</span>
                             <span>Skill Level</span>
                             <span>Preferences</span>
                             <span>Interests</span>
@@ -402,8 +411,87 @@ export default function AcademyOnboardingPage() {
 
                     {/* Main Card */}
                     <div className="bg-white rounded-2xl shadow-xl p-8">
-                        {/* Step 1: Skill Level */}
+                        {/* Step 1: Personal Details */}
                         {step === 1 && (
+                            <div className="space-y-6">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                                        Let's get to know you
+                                    </h2>
+                                    <p className="text-slate-600">
+                                        Please provide some basic details for your Academy profile
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-semibold text-slate-900">Phone Number</label>
+                                        <input
+                                            type="tel"
+                                            value={phone}
+                                            onChange={(e) => setPhone(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                            placeholder="+234 XXX XXX XXXX"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-semibold text-slate-900">Date of Birth</label>
+                                        <input
+                                            type="date"
+                                            value={dateOfBirth}
+                                            onChange={(e) => setDateOfBirth(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-semibold text-slate-900">Gender</label>
+                                        <select
+                                            value={gender}
+                                            onChange={(e) => setGender(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                        >
+                                            <option value="">Select gender...</option>
+                                            <option value="male">Male</option>
+                                            <option value="female">Female</option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-semibold text-slate-900">Occupation</label>
+                                        <input
+                                            type="text"
+                                            value={occupation}
+                                            onChange={(e) => setOccupation(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                            placeholder="e.g. Farmer, Consultant"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-semibold text-slate-900">State of Residence</label>
+                                        <input
+                                            type="text"
+                                            value={state}
+                                            onChange={(e) => setState(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                            placeholder="e.g. Lagos"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-semibold text-slate-900">LGA</label>
+                                        <input
+                                            type="text"
+                                            value={lga}
+                                            onChange={(e) => setLga(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                            placeholder="e.g. Ikeja"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 2: Skill Level */}
+                        {step === 2 && (
                             <div className="space-y-6">
                                 <div>
                                     <h2 className="text-2xl font-bold text-slate-900 mb-2">
@@ -440,8 +528,8 @@ export default function AcademyOnboardingPage() {
                             </div>
                         )}
 
-                        {/* Step 2: Learning Preference */}
-                        {step === 2 && (
+                        {/* Step 3: Learning Preference */}
+                        {step === 3 && (
                             <div className="space-y-6">
                                 <div>
                                     <h2 className="text-2xl font-bold text-slate-900 mb-2">
@@ -477,8 +565,8 @@ export default function AcademyOnboardingPage() {
                             </div>
                         )}
 
-                        {/* Step 3: Interest Areas */}
-                        {step === 3 && (
+                        {/* Step 4: Interest Areas */}
+                        {step === 4 && (
                             <div className="space-y-6">
                                 <div>
                                     <h2 className="text-2xl font-bold text-slate-900 mb-2">

@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { ArrowLeft, CreditCard, CheckCircle, ShieldCheck, Loader2, Home } from "lucide-react";
 import Link from "next/link";
@@ -63,6 +63,31 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         proofOfAddress: undefined as { name: string; url: string } | undefined,
         bvn: ""
     });
+
+    // --- Persist state across Paystack redirect ---
+    useEffect(() => {
+        const savedPersonalInfo = localStorage.getItem("coop_onboarding_personal");
+        if (savedPersonalInfo) setPersonalInfo(JSON.parse(savedPersonalInfo));
+
+        const savedNextOfKin = localStorage.getItem("coop_onboarding_nok");
+        if (savedNextOfKin) setNextOfKin(JSON.parse(savedNextOfKin));
+
+        const savedDocuments = localStorage.getItem("coop_onboarding_docs");
+        if (savedDocuments) setDocuments(JSON.parse(savedDocuments));
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem("coop_onboarding_personal", JSON.stringify(personalInfo));
+    }, [personalInfo]);
+
+    useEffect(() => {
+        localStorage.setItem("coop_onboarding_nok", JSON.stringify(nextOfKin));
+    }, [nextOfKin]);
+
+    useEffect(() => {
+        localStorage.setItem("coop_onboarding_docs", JSON.stringify(documents));
+    }, [documents]);
+    // ----------------------------------------------
 
     const isPaid = paymentStatus === "completed";
     const totalSteps = 4;
@@ -134,6 +159,11 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             const result = await registerCooperativeMemberAction(formData);
 
             if (result.success) {
+                // Clear local storage upon successful submission
+                localStorage.removeItem("coop_onboarding_personal");
+                localStorage.removeItem("coop_onboarding_nok");
+                localStorage.removeItem("coop_onboarding_docs");
+
                 showToast("Application submitted successfully!", "success");
                 router.push("/cooperatives/onboarding/pending");
             } else {

@@ -5,6 +5,8 @@ import { ArrowLeft, Download, Users } from "lucide-react";
 import Link from "next/link";
 import { BriefingRegistration } from "@/app/actions/briefing-admin";
 
+export const dynamic = "force-dynamic";
+
 export default async function BriefingRegistrationsPage() {
     const { data, success, error } = await getBriefingRegistrationsAction();
 
@@ -51,8 +53,8 @@ export default async function BriefingRegistrationsPage() {
             header: "Status",
             accessor: (item: BriefingRegistration) => (
                 <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${item.status === 'attended' ? 'bg-green-100 text-green-700' :
-                        item.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                            'bg-blue-100 text-blue-700'
+                    item.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                        'bg-blue-100 text-blue-700'
                     }`}>
                     {item.status}
                 </span>

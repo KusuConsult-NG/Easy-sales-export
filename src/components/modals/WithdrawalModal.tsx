@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useActionState } from "react";
 import { Wallet, Loader2, AlertCircle, CheckCircle, Info } from "lucide-react";
 import Modal from "@/components/ui/Modal";
@@ -26,6 +26,14 @@ export default function WithdrawalModal({
 }: WithdrawalModalProps) {
     const [state, formAction, isPending] = useActionState(submitWithdrawalAction, initialState);
     const { showToast } = useToast();
+    const [idempotencyKey, setIdempotencyKey] = useState("");
+
+    // Generate unique lock key on mount or when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setIdempotencyKey(crypto.randomUUID());
+        }
+    }, [isOpen]);
 
     // Handle success/error with toasts
     useEffect(() => {
@@ -33,7 +41,6 @@ export default function WithdrawalModal({
             showToast(state.message, "success");
             setTimeout(() => {
                 onClose();
-                window.location.reload();
             }, 1500);
         } else if (state.error && !state.success && state.error !== "Initializing...") {
             showToast(state.error, "error");
@@ -43,6 +50,9 @@ export default function WithdrawalModal({
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Request Withdrawal">
             <form action={formAction} className="space-y-6">
+                {/* Security Lock */}
+                <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+
                 {/* Hidden cooperativeId field */}
                 <input type="hidden" name="cooperativeId" value={cooperativeId} />
 

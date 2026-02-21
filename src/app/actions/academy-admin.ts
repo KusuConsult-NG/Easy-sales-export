@@ -258,14 +258,13 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
 
         const snapshot = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where("status", "==", "pending")
-            .orderBy("submittedAt", "desc")
             .get();
 
         const applications = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
             submittedAt: doc.data().submittedAt?.toDate() || new Date(),
-        }));
+        })).sort((a: any, b: any) => b.submittedAt.getTime() - a.submittedAt.getTime());
 
         return {
             error: null,

@@ -80,6 +80,11 @@ export async function createExportWindowAction(
             return { error: "You must be logged in to create an export window", success: false };
         }
 
+        const idempotencyKey = formData.get("idempotencyKey") as string;
+        if (!idempotencyKey) {
+            return { error: "Missing security token. Please refresh the page.", success: false };
+        }
+
         // Extract and validate form data
         const exportData = {
             commodity: formData.get("commodity") as string,
@@ -92,52 +97,69 @@ export async function createExportWindowAction(
         // Validate with Zod
         const validatedData = exportWindowSchema.parse(exportData);
 
-        // 🔒 SECURITY: KYC & Compliance Enforcement
-        // 1. Check if user is verified (KYC)
-        // Note: We need to fetch the fresh user doc to be sure, session might be stale.
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
+        let finalOrderId = "";
 
-        if (!userData?.isVerified) {
-            return { error: "Compliance Error: You must complete KYC verification to create Export Windows.", success: false };
-        }
+        await db.runTransaction(async (transaction) => {
+            // 0. Idempotency Check
+            const idempotencyRef = db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).doc(idempotencyKey);
+            const idempotencyDoc = await transaction.get(idempotencyRef);
 
-        // 2. Check for Service Registration (CAC/NEPC)
-        const exportReg = userData?.serviceRegistrations?.export;
-        const serviceNumber = exportReg?.registrationNumber || userData?.cacNumber; // Fallback to general CAC
+            if (idempotencyDoc.exists) {
+                throw new Error("Duplicate transaction detected. Please wait.");
+            }
 
-        if (!serviceNumber && userData?.serviceRegistrations?.export?.status !== "approved") {
-            // Strict: Must have explicit export registration OR at least a verified CAC on file if we allow that.
-            // Plan said "Validate serviceRegistrationNumber is present".
-            return { error: "Compliance Error: Missing Export Service Registration (NEPC/CAC).", success: false };
-        }
+            // 1. Check if user is verified (KYC)
+            const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
+            const userDoc = await transaction.get(userRef);
+            const userData = userDoc.data();
 
-        // Generate unique order ID
-        const orderId = `EXP-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+            if (!userData?.isVerified) {
+                throw new Error("Compliance Error: You must complete KYC verification to create Export Windows.");
+            }
 
-        // Calculate escrow release date (30 days after delivery)
-        let escrowReleaseDate = null;
-        if (validatedData.deliveryDate) {
-            const deliveryDate = new Date(validatedData.deliveryDate);
-            escrowReleaseDate = new Date(deliveryDate);
-            escrowReleaseDate.setDate(escrowReleaseDate.getDate() + 30);
-        }
+            // 2. Check for Service Registration (CAC/NEPC)
+            const exportReg = userData?.serviceRegistrations?.export;
+            const serviceNumber = exportReg?.registrationNumber || userData?.cacNumber;
 
-        // Save to Firestore
-        const exportWindowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc();
-        await exportWindowRef.set({
-            orderId,
-            commodity: validatedData.commodity,
-            quantity: validatedData.quantity,
-            amount: validatedData.amount,
-            destination: validatedData.destination || "other",
-            status: "pending",
-            userId: session.user.id,
-            orderDate: FieldValue.serverTimestamp(),
-            deliveryDate: validatedData.deliveryDate ? new Date(validatedData.deliveryDate) : null,
-            escrowReleaseDate: escrowReleaseDate,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            if (!serviceNumber && userData?.serviceRegistrations?.export?.status !== "approved") {
+                throw new Error("Compliance Error: Missing Export Service Registration (NEPC/CAC).");
+            }
+
+            // Generate unique order ID
+            const orderId = `EXP-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+            finalOrderId = orderId;
+
+            // Calculate escrow release date (30 days after delivery)
+            let escrowReleaseDate = null;
+            if (validatedData.deliveryDate) {
+                const deliveryDate = new Date(validatedData.deliveryDate);
+                escrowReleaseDate = new Date(deliveryDate);
+                escrowReleaseDate.setDate(escrowReleaseDate.getDate() + 30);
+            }
+
+            // Save to Firestore
+            const exportWindowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc();
+            transaction.set(exportWindowRef, {
+                orderId,
+                commodity: validatedData.commodity,
+                quantity: validatedData.quantity,
+                amount: validatedData.amount,
+                destination: validatedData.destination || "other",
+                status: "pending",
+                userId: session.user.id,
+                orderDate: FieldValue.serverTimestamp(),
+                deliveryDate: validatedData.deliveryDate ? new Date(validatedData.deliveryDate) : null,
+                escrowReleaseDate: escrowReleaseDate,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // 3. Lock Key
+            transaction.set(idempotencyRef, {
+                userId: session.user.id,
+                action: "create_export_window",
+                createdAt: FieldValue.serverTimestamp(),
+            });
         });
 
         revalidatePath("/export");
@@ -146,11 +168,15 @@ export async function createExportWindowAction(
         return {
             error: null,
             success: true,
-            message: `Export window created successfully! Order ID: ${orderId}`,
-            orderId,
+            message: `Export window created successfully! Order ID: ${finalOrderId}`,
+            orderId: finalOrderId,
         };
     } catch (error: any) {
         logger.error("Create export window error:", error);
+
+        if (error.message && error.message.includes("Duplicate") || error.message.includes("Compliance")) {
+            return { error: error.message, success: false };
+        }
 
         if (error.name === "ZodError") {
             return { error: "Please fill in all required fields correctly", success: false };

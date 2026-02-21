@@ -18,6 +18,14 @@ interface ExportWindowModalProps {
 export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModalProps) {
     const [state, formAction, isPending] = useActionState(createExportWindowAction, initialState);
     const { showToast } = useToast();
+    const [idempotencyKey, setIdempotencyKey] = useState("");
+
+    // Generate unique lock key on mount or when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setIdempotencyKey(crypto.randomUUID());
+        }
+    }, [isOpen]);
 
     // Handle success with toast notification
     useEffect(() => {
@@ -29,7 +37,6 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
             );
             setTimeout(() => {
                 onClose();
-                window.location.reload();
             }, 1500);
         } else if (state.error && !state.success && state.error !== "Initializing...") {
             showToast(state.error, "error");
@@ -39,6 +46,9 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Create Export Window">
             <form action={formAction} className="space-y-4">
+                {/* Security Lock */}
+                <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
+
                 {/* Error Display */}
                 {state.error && !state.success && (
                     <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
@@ -70,7 +80,8 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         id="commodity"
                         name="commodity"
                         required
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        disabled={isPending}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition disabled:opacity-50 disabled:bg-slate-50"
                     >
                         <option value="">Select commodity...</option>
                         <option value="yam">🌾 Yam Tubers</option>
@@ -90,8 +101,9 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         id="quantity"
                         name="quantity"
                         required
+                        disabled={isPending}
                         placeholder="e.g., 500 tons"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition disabled:opacity-50 disabled:bg-slate-50"
                     />
                 </div>
 
@@ -108,8 +120,9 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         required
                         min="0"
                         step="1000"
+                        disabled={isPending}
                         placeholder="e.g., 50000000"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition disabled:opacity-50 disabled:bg-slate-50"
                     />
                     <p className="text-xs text-slate-500 mt-1">
                         Total value of the export window
@@ -126,7 +139,8 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                         type="date"
                         id="deliveryDate"
                         name="deliveryDate"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        disabled={isPending}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition disabled:opacity-50 disabled:bg-slate-50"
                     />
                     <p className="text-xs text-slate-500 mt-1">
                         Escrow will be released 30 days after delivery
@@ -141,7 +155,8 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                     <select
                         id="destination"
                         name="destination"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition"
+                        disabled={isPending}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-primary focus:border-transparent transition disabled:opacity-50 disabled:bg-slate-50"
                     >
                         <option value="">Select destination...</option>
                         <option value="europe">🇪🇺 Europe</option>

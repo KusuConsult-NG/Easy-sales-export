@@ -26,6 +26,30 @@ class Logger {
     }
 
     /**
+     * Broadcasts critical errors to a Discord or Slack Webhook
+     */
+    private async broadcastAlert(level: LogLevel, message: string, payload: any): Promise<void> {
+        // Only run on the server environment
+        if (typeof window !== 'undefined') return;
+
+        const webhookUrl = process.env.TELEMETRY_WEBHOOK_URL;
+        if (!webhookUrl) return;
+
+        try {
+            await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: `🚨 **[${process.env.NODE_ENV?.toUpperCase() || 'PRODUCTION'}] CRITICAL SYSTEM ERROR**\n**Time:** ${new Date().toISOString()}\n**Environment:** ${process.env.VERCEL_ENV || 'local'}\n**Message:** ${message}\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``
+                })
+            });
+        } catch (e) {
+            // Failsafe: Do not let the logger crash the app
+            console.error("TELEMETRY DIED:", e);
+        }
+    }
+
+    /**
      * Debug level logging (development only)
      */
     debug(message: string, metadata?: LogMetadata): void {
@@ -61,7 +85,9 @@ class Logger {
             : { ...metadata, error };
 
         console.error(this.formatMessage('error', message, errorMeta));
-        // In production, you could send to Sentry/LogRocket here
+
+        // Zero-Latency Telemetry Alerting
+        this.broadcastAlert('error', message, errorMeta);
     }
 
     /**

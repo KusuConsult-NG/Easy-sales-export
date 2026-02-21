@@ -275,6 +275,7 @@ export const COLLECTIONS = {
     NOTIFICATIONS: "notifications",
     TRANSACTIONS: "transactions",
     ANALYTICS: "analytics",
+    IDEMPOTENCY_KEYS: "idempotency_keys",
 
     // Export & Agriculture
     EXPORT_WINDOWS: "export_windows",

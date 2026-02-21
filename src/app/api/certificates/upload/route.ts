@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
             fileType: file.type,
             uploadedBy: session.user.id,
             uploadedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

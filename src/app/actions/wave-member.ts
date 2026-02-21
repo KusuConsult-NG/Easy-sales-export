@@ -41,7 +41,9 @@ export async function checkWaveMembershipAction(): Promise<{
                     active: true,
                     status: "approved",
                     enrolledAt: now,
-                    lastHealedAt: now
+                    lastHealedAt: now,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
                 };
 
                 await db.collection("wave_members").doc(session.user.id).set(memberData, { merge: true });
@@ -156,6 +158,8 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{
                 resourceId,
                 accessedAt: new Date(),
                 accessCount: 1,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
         } else {
             // Increment access count
@@ -163,6 +167,7 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{
             await accessDoc.ref.update({
                 accessCount: FieldValue.increment(1),
                 lastAccessedAt: new Date(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
         }
 

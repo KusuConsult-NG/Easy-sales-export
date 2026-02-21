@@ -174,10 +174,10 @@ export default function RegisterForm() {
                             </div>
                         </div>
 
-                        {/* Phone Field (Optional) */}
+                        {/* Phone Field */}
                         <div className="space-y-2">
                             <label htmlFor="phone" className="block text-sm font-semibold text-slate-900">
-                                Phone Number <span className="text-slate-400 font-normal">(Optional)</span>
+                                Phone Number
                             </label>
                             <input
                                 id="phone"
@@ -189,6 +189,7 @@ export default function RegisterForm() {
                                 className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all"
                                 placeholder="+234 XXX XXX XXXX"
                                 disabled={isPending}
+                                required
                             />
                         </div>
 

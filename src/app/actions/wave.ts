@@ -263,6 +263,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             reviewedBy: null,
             rejectionReason: null,
             updatedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
         });
 
         // CRITICAL: Update user.serviceRegistrations using dot notation to prevent cross-module data loss
@@ -325,6 +326,8 @@ export async function enrollInWaveAction(userId: string): Promise<{
 
         await db.collection("wave_members").doc(userId).set({
             enrolledAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
             active: true,
         }, { merge: true });
 

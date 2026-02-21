@@ -22,6 +22,8 @@ export interface WaveResource {
     downloads: number;
     tags?: string[];
     isActive: boolean;
+    createdAt?: FieldValue | Timestamp;
+    updatedAt?: FieldValue | Timestamp;
 }
 
 /**
@@ -115,6 +117,8 @@ export async function uploadResourceAction(formData: FormData): Promise<{
             downloads: 0,
             tags: tags ? tags.split(",").map(t => t.trim()) : [],
             isActive: true,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         };
 
         const docRef = await db.collection("wave_resources").add(resourceData);
@@ -186,6 +190,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{
         // Increment download count
         await resourceRef.update({
             downloads: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Create audit log
@@ -230,6 +235,8 @@ export async function deleteResourceAction(resourceId: string): Promise<{
         // Soft delete
         await resourceRef.update({
             isActive: false,
+            updatedAt: FieldValue.serverTimestamp(),
+            deletedAt: FieldValue.serverTimestamp(),
         });
 
         // Create audit log
@@ -280,6 +287,7 @@ export async function updateResourceAction(
             title,
             description,
             tags: tags ? tags.split(",").map(t => t.trim()) : [],
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Create audit log

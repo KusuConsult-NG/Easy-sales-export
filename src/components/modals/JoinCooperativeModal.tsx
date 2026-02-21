@@ -112,7 +112,6 @@ export default function JoinCooperativeModal({
             showToast(state.message, "success");
             setTimeout(() => {
                 onClose();
-                window.location.reload();
             }, 1500);
         } else if (state.error && !state.success && state.error !== "Initializing...") {
             showToast(state.error, "error");

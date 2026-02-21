@@ -36,6 +36,7 @@ export async function updateVendorProfileAction(profileData: {
                 logo: profileData.logo || null,
                 banner: profileData.banner || null,
             },
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
@@ -98,6 +99,7 @@ export async function updateVendorNotificationPrefsAction(prefs: {
 
         await vendorRef.set({
             notifications: prefs,
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 

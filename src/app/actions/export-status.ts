@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { revalidatePath } from "next/cache";
 
 type UpdateExportStatusState =
     | { error: string; success: false }
@@ -50,6 +51,11 @@ export async function updateExportStatusAction(
             status: newStatus,
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // Revalidate the frontend cache so the user instantly sees the update
+        revalidatePath("/admin");
+        revalidatePath("/vendor/orders");
+        revalidatePath("/dashboard/export");
 
         return {
             error: null,

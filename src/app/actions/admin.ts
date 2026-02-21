@@ -418,7 +418,6 @@ export async function getWaveApplicationsAction(
         if (statusFilter) {
             query = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc")
                 .limit(limit);
         }
 
@@ -434,7 +433,7 @@ export async function getWaveApplicationsAction(
             ...doc.data(),
             createdAt: doc.data().createdAt?.toDate() || new Date(),
             reviewedAt: doc.data().reviewedAt?.toDate(),
-        }));
+        })).sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
 
         return {
             error: null,
@@ -711,7 +710,6 @@ export async function getAllExportRequestsAction(
         if (statusFilter && statusFilter !== "all") {
             query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
                 .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc")
                 .limit(limit);
         }
 
@@ -729,7 +727,7 @@ export async function getAllExportRequestsAction(
             escrowReleaseDate: doc.data().escrowReleaseDate?.toDate(),
             createdAt: doc.data().createdAt?.toDate() || new Date(),
             updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        }));
+        })).sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
 
         return {
             error: null,
@@ -1125,7 +1123,10 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             }
 
             // Sorting only if not searching (Firestore limitation on mixing inequality/sort with different fields sometimes)
-            query = query.orderBy("createdAt", "desc");
+            // Fix: Only apply orderBy if there are no equality filters to prevent missing composite index errors.
+            if (!options.role && !options.status) {
+                query = query.orderBy("createdAt", "desc");
+            }
         }
 
         // Pagination

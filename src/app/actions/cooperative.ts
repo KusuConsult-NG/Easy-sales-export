@@ -23,6 +23,7 @@ import type {
     GetMembershipState,
     GetTransactionsState
 } from "@/lib/types/cooperative";
+import { revalidatePath } from "next/cache";
 
 /**
  * Server Actions for Cooperative Management
@@ -342,6 +343,9 @@ export async function joinCooperativeAction(
             });
         }
 
+        revalidatePath("/cooperatives");
+        revalidatePath("/dashboard/cooperatives");
+
         return {
             error: null,
             success: true,
@@ -427,6 +431,9 @@ export async function makeContributionAction(
                 loanBalance: FieldValue.increment(-amount)
             });
         }
+
+        revalidatePath("/cooperatives");
+        revalidatePath("/dashboard/cooperatives");
 
         return {
             error: null,

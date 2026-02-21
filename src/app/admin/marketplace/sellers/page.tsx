@@ -470,19 +470,19 @@ export default function AdminSellersPage() {
                                     <div>
                                         <p className="text-sm text-slate-600">Bank Name</p>
                                         <p className="font-semibold text-slate-900">
-                                            {selectedVerification.bankDetails.bankName}
+                                            {selectedVerification.bankDetails?.bankName || "N/A"}
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-sm text-slate-600">Account Number</p>
                                         <p className="font-semibold text-slate-900">
-                                            {selectedVerification.bankDetails.accountNumber}
+                                            {selectedVerification.bankDetails?.accountNumber || "N/A"}
                                         </p>
                                     </div>
                                     <div className="col-span-2">
                                         <p className="text-sm text-slate-600">Account Name</p>
                                         <p className="font-semibold text-slate-900">
-                                            {selectedVerification.bankDetails.accountName}
+                                            {selectedVerification.bankDetails?.accountName || "N/A"}
                                         </p>
                                     </div>
                                 </div>
@@ -496,13 +496,13 @@ export default function AdminSellersPage() {
                                 </h3>
                                 <div className="space-y-2">
                                     <p className="text-sm text-slate-600">
-                                        • Business Document: {selectedVerification.documents.businessDoc}
+                                        • Business Document: {selectedVerification.documents?.businessDoc || "Not uploaded"}
                                     </p>
                                     <p className="text-sm text-slate-600">
-                                        • ID Document: {selectedVerification.documents.idDoc}
+                                        • ID Document: {selectedVerification.documents?.idDoc || "Not uploaded"}
                                     </p>
                                     <p className="text-sm text-slate-600">
-                                        • Address Proof: {selectedVerification.documents.addressProof}
+                                        • Address Proof: {selectedVerification.documents?.addressProof || "Not uploaded"}
                                     </p>
                                 </div>
                             </div>

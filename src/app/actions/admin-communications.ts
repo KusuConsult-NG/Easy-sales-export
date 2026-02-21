@@ -164,7 +164,8 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
             priority,
             active: true,
             createdBy: session.user.id,
-            createdAt: FieldValue.serverTimestamp()
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
         });
 
         return {

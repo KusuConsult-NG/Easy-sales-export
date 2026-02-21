@@ -91,6 +91,8 @@ export async function logAuditAction(
             targetType,
             details,
             timestamp: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return { error: null, success: true };
