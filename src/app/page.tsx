@@ -17,7 +17,7 @@ export default function HubPage() {
             title: "WAVE Program",
             description: "RH-WAVE 774: Presidential mandate empowering Nigerian women in agriculture through training, funding, and market access",
             iconImage: "/images/modules/wave-v3.png",
-            iconSize: "lg" as const,
+            iconSize: "xl" as const,
             href: "/wave/landing",
             gradient: "from-pink-500 to-rose-500",
             stats: "10M Women Target",
@@ -249,8 +249,8 @@ export default function HubPage() {
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10">
-                        <div className="relative w-40 h-20 md:w-56 md:h-28 transition-transform duration-300 hover:scale-105">
+                    <div className="flex flex-wrap justify-center items-center gap-2 md:gap-4">
+                        <div className="relative w-56 h-32 md:w-80 md:h-48 transition-transform duration-300 hover:scale-105">
                             <Image
                                 src="/images/partners/photo_2026-02-21 14.56.33.jpeg"
                                 alt="Partner Logo 1"
@@ -258,7 +258,7 @@ export default function HubPage() {
                                 className="object-contain"
                             />
                         </div>
-                        <div className="relative w-40 h-20 md:w-56 md:h-28 transition-transform duration-300 hover:scale-105">
+                        <div className="relative w-56 h-32 md:w-80 md:h-48 transition-transform duration-300 hover:scale-105">
                             <Image
                                 src="/images/partners/photo_2026-02-21 14.56.34.jpeg"
                                 alt="Partner Logo 2"
@@ -266,7 +266,7 @@ export default function HubPage() {
                                 className="object-contain"
                             />
                         </div>
-                        <div className="relative w-40 h-20 md:w-56 md:h-28 transition-transform duration-300 hover:scale-105">
+                        <div className="relative w-56 h-32 md:w-80 md:h-48 transition-transform duration-300 hover:scale-105">
                             <Image
                                 src="/images/partners/photo_2026-02-21 14.56.35.jpeg"
                                 alt="Partner Logo 3"

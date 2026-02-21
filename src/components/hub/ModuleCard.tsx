@@ -9,7 +9,7 @@ interface ModuleCardProps {
     description: string;
     icon?: LucideIcon;
     iconImage?: string;
-    iconSize?: "md" | "lg";
+    iconSize?: "md" | "lg" | "xl";
     href: string;
     gradient: string;
     stats?: string;
@@ -27,8 +27,8 @@ export default function ModuleCard({
     stats,
     isNew = false,
 }: ModuleCardProps) {
-    const sizeClasses = iconSize === "lg" ? "w-24 h-24" : "w-20 h-20";
-    const imgDim = iconSize === "lg" ? 96 : 80;
+    const sizeClasses = iconSize === "xl" ? "w-36 h-36" : iconSize === "lg" ? "w-24 h-24" : "w-20 h-20";
+    const imgDim = iconSize === "xl" ? 144 : iconSize === "lg" ? 96 : 80;
     return (
         <Link href={href}>
             <div className="group relative bg-white rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-slate-200 overflow-hidden">
