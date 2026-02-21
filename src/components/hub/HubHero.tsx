@@ -8,17 +8,19 @@ import { ArrowRight, Sparkles } from "lucide-react";
 export default function HubHero() {
     // Hero background image slider - lazy load most images
     const heroImages = [
-        "/images/hub/photo_2026-02-14 15.20.02.jpeg",
-        "/images/hub/photo_2026-02-14 15.20.11.jpeg",
-        // Picture 3 removed per user request
-        "/images/hub/photo_2026-02-14 15.20.27.jpeg",
-        "/images/hub/photo_2026-02-14 15.20.37.jpeg",
-        "/images/hub/photo_2026-02-14 15.20.45.jpeg",
-        "/images/hub/photo_2026-02-14 15.21.06.jpeg",
-        "/images/hub/photo_2026-02-14 15.21.14.jpeg",
-        "/images/hub/photo_2026-02-14 15.21.28.jpeg",
-        "/images/hub/photo_2026-02-14 15.21.33.jpeg",
-        "/images/hub/photo_2026-02-14 15.21.49.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.09.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.12.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.14.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.15.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.17.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.18.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.20.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.24.jpeg",
+        "/images/landing-page/photo_2026-02-21 02.05.29.jpeg",
+        "/images/landing-page/photo_2026-02-21 14.56.22.jpeg",
+        "/images/landing-page/photo_2026-02-21 14.56.25.jpeg",
+        "/images/landing-page/photo_2026-02-21 14.56.28.jpeg",
+        "/images/landing-page/photo_2026-02-21 14.56.29.jpeg"
     ];
     const [currentHeroImage, setCurrentHeroImage] = useState(0);
     const [loadedImages, setLoadedImages] = useState(2); // Only load first 2 initially

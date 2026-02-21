@@ -5,6 +5,7 @@ import HubHero from "@/components/hub/HubHero";
 import ModuleCard from "@/components/hub/ModuleCard";
 import PlatformStats from "@/components/hub/PlatformStats";
 import Link from "next/link";
+import Image from "next/image";
 import {
     ArrowRight,
     Sparkles
@@ -232,6 +233,47 @@ export default function HubPage() {
                         >
                             Explore Marketplace
                         </Link>
+                    </div>
+                </div>
+            </section>
+
+            {/* Partners Section */}
+            <section className="py-16 bg-white overflow-hidden">
+                <div className="max-w-7xl mx-auto px-4">
+                    <div className="text-center mb-10">
+                        <h2 className="text-3xl font-bold text-slate-900 mb-4">
+                            Our Trusted Partners
+                        </h2>
+                        <p className="text-lg text-slate-600 max-w-2xl mx-auto">
+                            Collaborating with industry leaders to deliver the best agricultural infrastructure.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-80 hover:opacity-100 transition-opacity">
+                        <div className="relative w-32 h-16 md:w-40 md:h-20 grayscale hover:grayscale-0 transition-all duration-300">
+                            <Image
+                                src="/images/partners/photo_2026-02-21 14.56.33.jpeg"
+                                alt="Partner Logo 1"
+                                fill
+                                className="object-contain"
+                            />
+                        </div>
+                        <div className="relative w-32 h-16 md:w-40 md:h-20 grayscale hover:grayscale-0 transition-all duration-300">
+                            <Image
+                                src="/images/partners/photo_2026-02-21 14.56.34.jpeg"
+                                alt="Partner Logo 2"
+                                fill
+                                className="object-contain"
+                            />
+                        </div>
+                        <div className="relative w-32 h-16 md:w-40 md:h-20 grayscale hover:grayscale-0 transition-all duration-300">
+                            <Image
+                                src="/images/partners/photo_2026-02-21 14.56.35.jpeg"
+                                alt="Partner Logo 3"
+                                fill
+                                className="object-contain"
+                            />
+                        </div>
                     </div>
                 </div>
             </section>
