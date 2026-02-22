@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, Loader2, CheckCircle } from "lucide-react";
 import type { WaveApplicationData } from "../page";
 
 interface Props {
@@ -20,6 +20,51 @@ import { useToast } from "@/contexts/ToastContext";
 export default function FinancialStep({ data, updateData, onNext, onBack }: Props) {
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [verifyingBvn, setVerifyingBvn] = useState(false);
+    const [bvnVerified, setBvnVerified] = useState(false);
+    const [bvnError, setBvnError] = useState("");
+
+    const handleVerifyBvn = async () => {
+        if (!data.bvn || data.bvn.length !== 11) {
+            setBvnError("Please enter a valid 11-digit BVN");
+            return;
+        }
+
+        if (!data.firstName || !data.surname) {
+            setBvnError("First name and surname required in Personal Details step to verify.");
+            return;
+        }
+
+        setVerifyingBvn(true);
+        setBvnError("");
+
+        try {
+            const response = await fetch('/api/kyc/verify-bvn', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bvn: data.bvn,
+                    firstName: data.firstName,
+                    lastName: data.surname
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.isMatch) {
+                setBvnVerified(true);
+                setBvnError("");
+                showToast("BVN Verified Successfully!", "success");
+            } else {
+                setBvnVerified(false);
+                setBvnError(result.error || result.details || "Verification failed");
+            }
+        } catch (error) {
+            setBvnError("An unexpected error occurred during verification");
+        } finally {
+            setVerifyingBvn(false);
+        }
+    };
 
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
@@ -143,14 +188,49 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 BVN (Optional but recommended)
                             </label>
-                            <input
-                                type="text"
-                                value={data.bvn}
-                                onChange={(e) => updateData({ bvn: e.target.value.replace(/\D/g, "").slice(0, 11) })}
-                                maxLength={11}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                                placeholder="11-digit BVN (optional)"
-                            />
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <input
+                                        type="text"
+                                        value={data.bvn}
+                                        onChange={(e) => {
+                                            updateData({ bvn: e.target.value.replace(/\D/g, "").slice(0, 11) });
+                                            setBvnVerified(false);
+                                            setBvnError("");
+                                        }}
+                                        disabled={bvnVerified}
+                                        maxLength={11}
+                                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 disabled:bg-slate-100 disabled:text-slate-500 ${bvnVerified ? "border-emerald-500 bg-emerald-50" : "border-slate-300"}`}
+                                        placeholder="11-digit BVN (optional)"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleVerifyBvn}
+                                    disabled={!data.bvn || data.bvn.length !== 11 || verifyingBvn || bvnVerified}
+                                    className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap font-medium flex items-center gap-2 justify-center min-w-[120px]"
+                                >
+                                    {verifyingBvn ? (
+                                        <><Loader2 className="w-4 h-4 animate-spin" /> Verifying</>
+                                    ) : bvnVerified ? (
+                                        <><CheckCircle className="w-4 h-4 text-emerald-600" /> Verified</>
+                                    ) : (
+                                        "Verify"
+                                    )}
+                                </button>
+                            </div>
+                            {bvnError && (
+                                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                    <AlertCircle className="w-4 h-4" />
+                                    {bvnError}
+                                </p>
+                            )}
+                            {bvnVerified && (
+                                <p className="mt-2 text-sm text-emerald-600 flex items-center gap-1 font-medium">
+                                    <CheckCircle className="w-4 h-4" />
+                                    BVN matches profile records
+                                </p>
+                            )}
                         </div>
                     </div>
                 )}

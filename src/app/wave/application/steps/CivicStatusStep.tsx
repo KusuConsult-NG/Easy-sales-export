@@ -6,7 +6,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, AlertCircle, ShieldCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, ShieldCheck, Loader2, CheckCircle } from "lucide-react";
 import type { WaveApplicationData } from "../page";
 
 interface Props {
@@ -22,12 +22,59 @@ import { getWards, getPollingUnits } from "@/lib/locations";
 export default function CivicStatusStep({ data, updateData, onNext, onBack }: Props) {
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [verifyingNin, setVerifyingNin] = useState(false);
+    const [ninVerified, setNinVerified] = useState(false);
+    const [ninError, setNinError] = useState("");
+
+    const handleVerifyNin = async () => {
+        if (!data.nin || data.nin.length !== 11) {
+            setNinError("Please enter a valid 11-digit NIN");
+            return;
+        }
+
+        if (!data.firstName || !data.surname) {
+            setNinError("First name and surname required in Personal Details step to verify.");
+            return;
+        }
+
+        setVerifyingNin(true);
+        setNinError("");
+
+        try {
+            const response = await fetch('/api/kyc/verify-nin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nin: data.nin,
+                    firstName: data.firstName,
+                    lastName: data.surname
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.isMatch) {
+                setNinVerified(true);
+                setNinError("");
+                showToast("NIN Verified Successfully!", "success");
+            } else {
+                setNinVerified(false);
+                setNinError(result.error || result.details || "Verification failed");
+            }
+        } catch (error) {
+            setNinError("An unexpected error occurred during verification");
+        } finally {
+            setVerifyingNin(false);
+        }
+    };
 
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
         if (!data.nin.trim() || data.nin.length !== 11) {
             newErrors.nin = "Valid 11-digit NIN is required";
+        } else if (!ninVerified) {
+            newErrors.nin = "Please verify your NIN to proceed";
         }
         if (!data.votersCardNumber.trim()) {
             newErrors.votersCardNumber = "Voter's card number is required";
@@ -85,18 +132,53 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         National Identification Number (NIN) 🔒 *
                     </label>
-                    <input
-                        type="text"
-                        value={data.nin}
-                        onChange={(e) => updateData({ nin: e.target.value.replace(/\D/g, "").slice(0, 11) })}
-                        maxLength={11}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                        placeholder="Enter your 11-digit NIN"
-                    />
-                    {errors.nin && (
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                value={data.nin}
+                                onChange={(e) => {
+                                    updateData({ nin: e.target.value.replace(/\D/g, "").slice(0, 11) });
+                                    setNinVerified(false);
+                                    setNinError("");
+                                }}
+                                disabled={ninVerified}
+                                maxLength={11}
+                                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 disabled:bg-slate-100 disabled:text-slate-500 ${ninVerified ? "border-emerald-500 bg-emerald-50" : "border-slate-300"}`}
+                                placeholder="Enter your 11-digit NIN"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleVerifyNin}
+                            disabled={!data.nin || data.nin.length !== 11 || verifyingNin || ninVerified}
+                            className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap font-medium flex items-center gap-2 justify-center min-w-[120px]"
+                        >
+                            {verifyingNin ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Verifying</>
+                            ) : ninVerified ? (
+                                <><CheckCircle className="w-4 h-4 text-emerald-600" /> Verified</>
+                            ) : (
+                                "Verify"
+                            )}
+                        </button>
+                    </div>
+                    {errors.nin && !ninError && (
                         <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                             <AlertCircle className="w-4 h-4" />
                             {errors.nin}
+                        </p>
+                    )}
+                    {ninError && (
+                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                            <AlertCircle className="w-4 h-4" />
+                            {ninError}
+                        </p>
+                    )}
+                    {ninVerified && (
+                        <p className="mt-2 text-sm text-emerald-600 flex items-center gap-1 font-medium">
+                            <CheckCircle className="w-4 h-4" />
+                            NIN matches profile records
                         </p>
                     )}
                 </div>

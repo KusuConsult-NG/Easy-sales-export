@@ -9,6 +9,8 @@ interface BankAccountVerificationProps {
 }
 
 export interface BankAccountData {
+    bvn?: string;
+    bvnVerified?: boolean;
     bankName: string;
     accountNumber: string;
     accountName: string;
@@ -23,6 +25,11 @@ interface Bank {
 }
 
 export function BankAccountVerification({ onVerified, initialData }: BankAccountVerificationProps) {
+    const [bvn, setBvn] = useState(initialData?.bvn || "");
+    const [verifyingBvn, setVerifyingBvn] = useState(false);
+    const [bvnVerified, setBvnVerified] = useState(initialData?.bvnVerified || false);
+    const [bvnError, setBvnError] = useState("");
+
     const [bankName, setBankName] = useState(initialData?.bankName || "");
     const [accountNumber, setAccountNumber] = useState(initialData?.accountNumber || "");
     const [accountName, setAccountName] = useState(initialData?.accountName || "");
@@ -104,6 +111,8 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             setError("");
 
             onVerified({
+                bvn: bvnVerified ? bvn : undefined,
+                bvnVerified: bvnVerified,
                 bankName,
                 accountNumber,
                 accountName: result.accountName,
@@ -122,6 +131,64 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         setError("");
         setVerified(false);
         setAccountName("");
+    };
+
+    const handleVerifyBvn = async () => {
+        if (!bvn || bvn.length !== 11) {
+            setBvnError("Please enter a valid 11-digit BVN");
+            return;
+        }
+
+        // We need a first name and last name to verify the BVN against.
+        // Assuming the Bank verification is done first, we can use the account Name. Or vice-versa.
+        // If they do Bank Verification first, we have `accountName`.
+        if (!verified || !accountName) {
+            setBvnError("Please verify your bank account first so we can match the names.");
+            return;
+        }
+
+        const nameParts = accountName.split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts[nameParts.length - 1] || '';
+
+        setVerifyingBvn(true);
+        setBvnError("");
+
+        try {
+            const response = await fetch('/api/kyc/verify-bvn', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bvn: bvn,
+                    firstName: firstName,
+                    lastName: lastName
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.isMatch) {
+                setBvnVerified(true);
+                setBvnError("");
+
+                // Update parent with the verified BVN
+                onVerified({
+                    bvn: bvn,
+                    bvnVerified: true,
+                    bankName,
+                    accountNumber,
+                    accountName: accountName,
+                    verified: true,
+                });
+            } else {
+                setBvnVerified(false);
+                setBvnError(result.error || result.details || "Verification failed");
+            }
+        } catch (error) {
+            setBvnError("An unexpected error occurred during verification");
+        } finally {
+            setVerifyingBvn(false);
+        }
     };
 
     return (
@@ -263,6 +330,55 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                             Your bank account has been successfully verified
                         </p>
                     </div>
+                </div>
+            )}
+            {/* BVN Verification (Only shown after successful bank verification) */}
+            {verified && (
+                <div className="mt-8 pt-6 border-t border-slate-200">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4">Identity Verification</h3>
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
+                        Bank Verification Number (BVN) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={bvn}
+                            onChange={(e) => {
+                                setBvn(e.target.value.replace(/\D/g, "").slice(0, 11));
+                                setBvnVerified(false);
+                                setBvnError("");
+                            }}
+                            disabled={bvnVerified}
+                            placeholder="11-digit BVN"
+                            maxLength={11}
+                            className={`flex-1 px-4 py-2.5 bg-white border rounded-lg focus:ring-2 disabled:bg-slate-100 disabled:text-slate-500 ${bvnVerified ? "border-green-500 focus:ring-green-500" : "border-slate-300 focus:ring-orange-500 focus:border-transparent"} disabled:opacity-50`}
+                        />
+                        <button
+                            onClick={handleVerifyBvn}
+                            disabled={verifyingBvn || !bvn || bvn.length !== 11 || bvnVerified}
+                            className="px-6 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium min-w-[120px]"
+                        >
+                            {verifyingBvn ? (
+                                <><Loader2 className="w-5 h-5 animate-spin" /> Verifying</>
+                            ) : bvnVerified ? (
+                                <><CheckCircle className="w-5 h-5 text-green-600" /> Verified</>
+                            ) : (
+                                "Verify BVN"
+                            )}
+                        </button>
+                    </div>
+                    {bvnError && (
+                        <div className="flex items-start gap-2 mt-2 text-red-600">
+                            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                            <span className="text-sm">{bvnError}</span>
+                        </div>
+                    )}
+                    {bvnVerified && (
+                        <div className="flex items-center gap-2 mt-2 text-green-600">
+                            <CheckCircle className="w-4 h-4 shrink-0" />
+                            <span className="text-sm font-medium">BVN Verified against account name successfully</span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
