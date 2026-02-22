@@ -155,6 +155,203 @@ class QoreIdService {
             return { success: false, error: 'An unexpected error occurred during verification' };
         }
     }
+
+    /**
+     * Verifies a Driver's License
+     */
+    async verifyDrivingLicense(licenseNumber: string, firstName: string, lastName: string) {
+        try {
+            const token = await this.getAuthToken();
+
+            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/drivers-license`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    idNumber: licenseNumber,
+                    firstName: firstName,
+                    lastName: lastName
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                logger.error('QoreID Driver License Verification Error', data);
+                return { success: false, error: data.message || 'Failed to verify Driver License' };
+            }
+
+            // A successful response where identity matches
+            const isMatch = data.status?.state === 'exact_match' || data.summary?.nid_match;
+
+            return {
+                success: true,
+                isMatch: isMatch,
+                details: data
+            };
+        } catch (error) {
+            logger.error('Exception during QoreID Driver License verification', error);
+            return { success: false, error: 'An unexpected error occurred during verification' };
+        }
+    }
+
+    /**
+     * Verifies a Voter's Card (PVC)
+     */
+    async verifyVotersCard(votersNumber: string, firstName: string, lastName: string) {
+        try {
+            const token = await this.getAuthToken();
+
+            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/voters-card`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    idNumber: votersNumber,
+                    firstName: firstName,
+                    lastName: lastName
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                logger.error('QoreID Voters Card Verification Error', data);
+                return { success: false, error: data.message || 'Failed to verify Voters Card' };
+            }
+
+            const isMatch = data.status?.state === 'exact_match' || data.summary?.nid_match;
+
+            return {
+                success: true,
+                isMatch: isMatch,
+                details: data
+            };
+        } catch (error) {
+            logger.error('Exception during QoreID Voters Card verification', error);
+            return { success: false, error: 'An unexpected error occurred during verification' };
+        }
+    }
+
+    /**
+     * Verifies an International Passport
+     */
+    async verifyPassport(passportNumber: string, firstName: string, lastName: string) {
+        try {
+            const token = await this.getAuthToken();
+
+            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/passport`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    idNumber: passportNumber,
+                    firstName: firstName,
+                    lastName: lastName
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                logger.error('QoreID Passport Verification Error', data);
+                return { success: false, error: data.message || 'Failed to verify Passport' };
+            }
+
+            const isMatch = data.status?.state === 'exact_match' || data.summary?.nid_match;
+
+            return {
+                success: true,
+                isMatch: isMatch,
+                details: data
+            };
+        } catch (error) {
+            logger.error('Exception during QoreID Passport verification', error);
+            return { success: false, error: 'An unexpected error occurred during verification' };
+        }
+    }
+
+    /**
+     * Verifies a Corporate Affairs Commission (CAC) Business Registration
+     */
+    async verifyCAC(rcNumber: string, companyName: string) {
+        try {
+            const token = await this.getAuthToken();
+
+            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/cac-basic`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    idNumber: rcNumber,
+                    companyName: companyName
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                logger.error('QoreID CAC Verification Error', data);
+                return { success: false, error: data.message || 'Failed to verify CAC Registration' };
+            }
+
+            // A successful response where identity matches
+            const isMatch = data.status?.state === 'exact_match' || data.summary?.nid_match;
+
+            return {
+                success: true,
+                isMatch: isMatch,
+                details: data
+            };
+        } catch (error) {
+            logger.error('Exception during QoreID CAC verification', error);
+            return { success: false, error: 'An unexpected error occurred during verification' };
+        }
+    }
+
+    /**
+     * Verifies a Tax Identification Number (TIN)
+     */
+    async verifyTIN(tin: string) {
+        try {
+            const token = await this.getAuthToken();
+
+            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/tin`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    idNumber: tin
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                logger.error('QoreID TIN Verification Error', data);
+                return { success: false, error: data.message || 'Failed to verify TIN' };
+            }
+
+            return {
+                success: true,
+                isMatch: true, // If it resolves the organization successfully
+                details: data
+            };
+        } catch (error) {
+            logger.error('Exception during QoreID TIN verification', error);
+            return { success: false, error: 'An unexpected error occurred during verification' };
+        }
+    }
 }
 
 export const qoreIdService = new QoreIdService();

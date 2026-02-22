@@ -13,9 +13,13 @@ import { uploadDocumentAction } from "@/app/actions/upload";
 interface DocumentUploadStepProps {
     data: {
         validId?: { name: string; url: string };
+        idType?: string;
+        idNumber?: string;
+        idVerified?: boolean;
         passportPhoto?: { name: string; url: string };
         proofOfAddress?: { name: string; url: string };
         bvn: string;
+        bvnVerified?: boolean;
     };
     onChange: (data: any) => void;
     onNext: () => void;
@@ -40,6 +44,17 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
         passportPhoto: { uploading: false, progress: 0 },
         proofOfAddress: { uploading: false, progress: 0 },
     });
+
+    // Verification loading states
+    const [verifyingId, setVerifyingId] = useState(false);
+    const [verifyingBvn, setVerifyingBvn] = useState(false);
+
+    const ID_TYPES = [
+        { value: "nin", label: "National Identity Number (NIN)" },
+        { value: "drivers_license", label: "Driver's License" },
+        { value: "international_passport", label: "International Passport" },
+        { value: "voters_card", label: "Voter's Card" },
+    ];
 
     const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
 
@@ -102,6 +117,16 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
 
         if (!data.validId) {
             newErrors.validId = "Valid ID is required";
+        } else if (!data.idVerified) {
+            newErrors.validId = "You must verify your uploaded ID";
+        }
+
+        if (!data.idType && data.validId) {
+            newErrors.idType = "Please select the type of ID you uploaded";
+        }
+
+        if (!data.idNumber && data.validId) {
+            newErrors.idNumber = "Please enter the ID Number of your uploaded document";
         }
 
         if (!data.passportPhoto) {
@@ -112,6 +137,8 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
             newErrors.bvn = "BVN is required";
         } else if (!/^\d{11}$/.test(data.bvn)) {
             newErrors.bvn = "BVN must be exactly 11 digits";
+        } else if (!data.bvnVerified) {
+            newErrors.bvn = "You must verify your BVN";
         }
 
         // BVN consent validation
@@ -126,6 +153,84 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
+    };
+
+    const verifyUploadedId = async () => {
+        if (!data.idType || !data.idNumber) {
+            showToast("Please enter an ID type and number to verify", "error");
+            return;
+        }
+
+        setVerifyingId(true);
+        setErrors(prev => ({ ...prev, verifyId: "" }));
+
+        try {
+            const res = await fetch('/api/kyc/verify-id', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // Note: QoreID requires First and Last Name for some ID checks, 
+                // In production you would pass down the user's name from context/previous steps.
+                // For Cooperatives we use generic verification which might not be exact match on name depending on ID type.
+                body: JSON.stringify({
+                    idType: data.idType,
+                    idNumber: data.idNumber,
+                    firstName: "Applicant", // Optional fallback
+                    lastName: "Name"       // Optional fallback
+                })
+            });
+            const resData = await res.json();
+
+            if (resData.success && resData.isMatch) {
+                onChange({ ...data, idVerified: true });
+                showToast("ID successfully verified via QoreID", "success");
+            } else {
+                onChange({ ...data, idVerified: false });
+                setErrors(prev => ({ ...prev, verifyId: resData.error || "ID Verification failed" }));
+                showToast(resData.error || "ID Verification failed", "error");
+            }
+        } catch (err) {
+            onChange({ ...data, idVerified: false });
+            setErrors(prev => ({ ...prev, verifyId: "Network error during verification" }));
+        } finally {
+            setVerifyingId(false);
+        }
+    };
+
+    const verifyBvn = async () => {
+        if (!data.bvn || data.bvn.length !== 11) {
+            showToast("Please enter a valid 11-digit BVN", "error");
+            return;
+        }
+
+        setVerifyingBvn(true);
+        setErrors(prev => ({ ...prev, verifyBvn: "" }));
+
+        try {
+            const res = await fetch('/api/kyc/verify-bvn', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bvn: data.bvn,
+                    firstName: "Applicant",
+                    lastName: "Name"
+                })
+            });
+            const resData = await res.json();
+
+            if (resData.success && resData.isMatch) {
+                onChange({ ...data, bvnVerified: true });
+                showToast("BVN successfully verified via QoreID", "success");
+            } else {
+                onChange({ ...data, bvnVerified: false });
+                setErrors(prev => ({ ...prev, verifyBvn: resData.error || "BVN Verification failed" }));
+                showToast(resData.error || "BVN Verification failed", "error");
+            }
+        } catch (err) {
+            onChange({ ...data, bvnVerified: false });
+            setErrors(prev => ({ ...prev, verifyBvn: "Network error during verification" }));
+        } finally {
+            setVerifyingBvn(false);
+        }
     };
 
     const handleContinue = () => {
@@ -226,6 +331,70 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                     </div>
                     {errors.validId && (
                         <p className="text-sm text-red-600 mt-1">{errors.validId}</p>
+                    )}
+
+                    {/* Verified ID Details Inputs */}
+                    {data.validId && (
+                        <div className="mt-4 p-4 border border-slate-200 rounded-xl bg-white space-y-4">
+                            <h4 className="font-semibold text-slate-900 text-sm">Verify Uploaded Identity</h4>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                        ID Type <span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        value={data.idType || ""}
+                                        onChange={(e) => {
+                                            onChange({ ...data, idType: e.target.value, idVerified: false });
+                                        }}
+                                        disabled={data.idVerified || verifyingId}
+                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                                    >
+                                        <option value="">Select ID type</option>
+                                        {ID_TYPES.map((type) => (
+                                            <option key={type.value} value={type.value}>
+                                                {type.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.idType && <p className="text-xs text-red-600 mt-1">{errors.idType}</p>}
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                                        ID Number <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={data.idNumber || ""}
+                                            onChange={(e) => {
+                                                onChange({ ...data, idNumber: e.target.value, idVerified: false });
+                                            }}
+                                            placeholder="Enter ID Number"
+                                            disabled={data.idVerified || verifyingId}
+                                            className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={verifyUploadedId}
+                                            disabled={!data.idType || !data.idNumber || data.idVerified || verifyingId}
+                                            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors whitespace-nowrap ${data.idVerified
+                                                    ? "bg-green-100 text-green-700 cursor-default"
+                                                    : verifyingId || !data.idType || !data.idNumber
+                                                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                                        : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                                                }`}
+                                        >
+                                            {verifyingId ? "Verifying..." : data.idVerified ? "Verified ✓" : "Verify ID"}
+                                        </button>
+                                    </div>
+                                    {errors.idNumber && <p className="text-xs text-red-600 mt-1">{errors.idNumber}</p>}
+                                    {errors.verifyId && <p className="text-xs text-red-600 mt-1">{errors.verifyId}</p>}
+                                </div>
+                            </div>
+                        </div>
                     )}
                 </div>
 
@@ -355,17 +524,38 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                     <p className="text-sm text-slate-600 mb-3">
                         Your 11-digit BVN for identity verification
                     </p>
-                    <input
-                        type="text"
-                        value={data.bvn}
-                        onChange={(e) => onChange({ ...data, bvn: e.target.value.replace(/\D/g, '').slice(0, 11) })}
-                        placeholder="12345678901"
-                        maxLength={11}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.bvn ? "border-red-500" : "border-slate-300"
-                            }`}
-                    />
+                    <div className="flex gap-3">
+                        <input
+                            type="text"
+                            value={data.bvn}
+                            onChange={(e) => {
+                                onChange({ ...data, bvn: e.target.value.replace(/\D/g, '').slice(0, 11), bvnVerified: false });
+                            }}
+                            placeholder="12345678901"
+                            maxLength={11}
+                            disabled={data.bvnVerified || verifyingBvn}
+                            className={`flex-1 px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.bvn ? "border-red-500" : "border-slate-300"
+                                }`}
+                        />
+                        <button
+                            type="button"
+                            onClick={verifyBvn}
+                            disabled={data.bvn.length !== 11 || data.bvnVerified || verifyingBvn}
+                            className={`px-6 py-3 rounded-xl font-semibold transition-colors whitespace-nowrap ${data.bvnVerified
+                                    ? "bg-green-100 text-green-700 cursor-default"
+                                    : verifyingBvn || data.bvn.length !== 11
+                                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                        : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                                }`}
+                        >
+                            {verifyingBvn ? "Verifying..." : data.bvnVerified ? "Verified ✓" : "Verify BVN"}
+                        </button>
+                    </div>
                     {errors.bvn && (
                         <p className="text-sm text-red-600 mt-1">{errors.bvn}</p>
+                    )}
+                    {errors.verifyBvn && (
+                        <p className="text-sm text-red-600 mt-1">{errors.verifyBvn}</p>
                     )}
                     <p className="text-xs text-slate-500 mt-2">
                         📞 Dial *565*0# to retrieve your BVN

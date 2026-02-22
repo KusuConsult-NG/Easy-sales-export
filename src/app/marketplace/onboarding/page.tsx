@@ -53,10 +53,14 @@ interface OnboardingData {
 
     // Step 5: Business Verification (Sellers)
     documents?: {
-        businessRegistration?: File;
+        businessRegistration?: { name: string; url: string };
+        cacNumber?: string;
+        cacVerified?: boolean;
+        companyName?: string;
         taxId?: string;
-        farmPhotos?: File[];
-        productSamples?: File[];
+        tinVerified?: boolean;
+        farmPhotos?: { name: string; url: string }[];
+        productSamples?: { name: string; url: string }[];
     };
 
     // Step 6: Bank Account (Sellers)
@@ -183,15 +187,15 @@ export default function MarketplaceOnboarding() {
 
             // Step 5: Documents
             if (formData.documents?.businessRegistration) {
-                formDataPayload.append("businessRegistration", formData.documents.businessRegistration);
+                formDataPayload.append("businessRegistration", JSON.stringify(formData.documents.businessRegistration));
             }
 
             formData.documents?.farmPhotos?.forEach((file, index) => {
-                formDataPayload.append(`farmPhotos_${index}`, file);
+                formDataPayload.append(`farmPhotos_${index}`, JSON.stringify(file));
             });
 
             formData.documents?.productSamples?.forEach((file, index) => {
-                formDataPayload.append(`productSamples_${index}`, file);
+                formDataPayload.append(`productSamples_${index}`, JSON.stringify(file));
             });
 
             // Step 6: Bank Account

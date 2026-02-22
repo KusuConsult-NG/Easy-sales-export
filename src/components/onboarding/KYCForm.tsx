@@ -19,6 +19,9 @@ export interface KYCData {
     bvn?: string;
     idType?: "nin" | "drivers_license" | "international_passport" | "voters_card";
     idNumber?: string;
+    idVerified?: boolean;
+    idError?: string;
+    verifying?: boolean;
 }
 
 interface KYCFormProps {
@@ -200,18 +203,67 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     </select>
                 </div>
 
-                {/* ID Number */}
+                {/* ID Number & Verification */}
                 <div>
                     <label className="block text-sm font-medium text-slate-900 mb-2">
                         ID Number <span className="text-red-500">*</span>
                     </label>
-                    <input
-                        type="text"
-                        value={formData.idNumber || ""}
-                        onChange={(e) => handleChange("idNumber", e.target.value)}
-                        placeholder="Enter ID number"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    />
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={formData.idNumber || ""}
+                            onChange={(e) => {
+                                handleChange("idNumber", e.target.value);
+                                handleChange("idVerified", false);
+                            }}
+                            placeholder="Enter ID number"
+                            className="flex-1 px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        />
+                        <button
+                            type="button"
+                            disabled={!formData.idType || !formData.idNumber || formData.idVerified || formData.verifying}
+                            onClick={async () => {
+                                handleChange("verifying", true);
+                                try {
+                                    const res = await fetch('/api/kyc/verify-id', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            idType: formData.idType,
+                                            idNumber: formData.idNumber,
+                                            firstName: formData.fullName?.split(' ')[0] || '',
+                                            lastName: formData.fullName?.split(' ').slice(1).join(' ') || ''
+                                        })
+                                    });
+                                    const data = await res.json();
+
+                                    if (data.success && data.isMatch) {
+                                        handleChange("idVerified", true);
+                                        handleChange("idError", "");
+                                    } else {
+                                        handleChange("idVerified", false);
+                                        handleChange("idError", data.error || "ID Verification failed");
+                                    }
+                                } catch (err) {
+                                    handleChange("idVerified", false);
+                                    handleChange("idError", "Network error during verification");
+                                } finally {
+                                    handleChange("verifying", false);
+                                }
+                            }}
+                            className={`px-4 py-2.5 rounded-lg font-medium whitespace-nowrap transition-colors ${formData.idVerified
+                                ? "bg-green-100 text-green-700 cursor-default"
+                                : formData.verifying || !formData.idType || !formData.idNumber
+                                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                    : "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                                }`}
+                        >
+                            {formData.verifying ? "Verifying..." : formData.idVerified ? "Verified ✓" : "Verify ID"}
+                        </button>
+                    </div>
+                    {formData.idError && (
+                        <p className="mt-1 text-xs text-red-600">{(formData as any).idError}</p>
+                    )}
                 </div>
             </div>
         </div>
