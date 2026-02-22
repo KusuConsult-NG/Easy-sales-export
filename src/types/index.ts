@@ -19,6 +19,21 @@ export interface User {
     isVerified?: boolean;
     verifiedBy?: string;
     verifiedAt?: Date | any;
+
+    // Identity Verification (KYC)
+    bvn?: string;
+    bvnVerified?: boolean;
+    idType?: string; // e.g. "nin"
+    idNumber?: string;
+    idVerified?: boolean;
+
+    // Business Verification (KYB)
+    taxId?: string; // TIN
+    tinVerified?: boolean;
+    cacNumber?: string; // RC Number
+    companyName?: string;
+    cacVerified?: boolean;
+
     sellerVerificationStatus?: string;
     sellerVerificationId?: string;
     serviceRegistrations?: Record<string, any>;

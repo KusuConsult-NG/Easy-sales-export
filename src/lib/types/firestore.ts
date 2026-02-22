@@ -38,6 +38,20 @@ export interface User {
     sellerVerificationId?: string; // Reference to seller_verifications collection
     sellerPhoneVerified?: boolean;
 
+    // KYC / Identity Verification
+    bvn?: string;
+    bvnVerified?: boolean;
+    idType?: string; // e.g. "nin"
+    idNumber?: string;
+    idVerified?: boolean;
+
+    // KYB / Business Verification
+    taxId?: string; // TIN
+    tinVerified?: boolean;
+    cacNumber?: string; // RC Number
+    companyName?: string;
+    cacVerified?: boolean;
+
     // Bank Details (for sellers and cooperative members)
     bankDetails?: {
         accountNumber: string;
