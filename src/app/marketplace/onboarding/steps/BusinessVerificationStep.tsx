@@ -55,19 +55,6 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
             newErrors.taxId = "You must verify your TIN";
         }
 
-        // If registration is uploaded, CAC verification is required
-        if (documents.businessRegistration) {
-            if (!documents.cacNumber) {
-                newErrors.cacNumber = "RC Number is required when uploading a business certificate";
-            }
-            if (!documents.companyName) {
-                newErrors.companyName = "Company name is required for CAC verification";
-            }
-            if (documents.cacNumber && documents.companyName && !documents.cacVerified) {
-                newErrors.cacVerified = "You must verify your CAC Registration";
-            }
-        }
-
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -240,10 +227,10 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                                         <button
                                             type="button"
                                             onClick={verifyCAC}
-                                            disabled={!documents.cacNumber || !documents.companyName || documents.cacVerified || verifyingCac}
+                                            disabled={documents.cacVerified || verifyingCac}
                                             className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors whitespace-nowrap ${documents.cacVerified
                                                 ? "bg-green-100 text-green-700 cursor-default"
-                                                : verifyingCac || !documents.cacNumber || !documents.companyName
+                                                : verifyingCac
                                                     ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                                                     : "bg-green-100 text-green-700 hover:bg-green-200"
                                                 }`}
@@ -281,10 +268,10 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                         <button
                             type="button"
                             onClick={verifyTIN}
-                            disabled={!documents.taxId || documents.tinVerified || verifyingTin}
+                            disabled={documents.tinVerified || verifyingTin}
                             className={`px-6 py-3 rounded-xl font-semibold transition-colors whitespace-nowrap ${documents.tinVerified
                                 ? "bg-green-100 text-green-700 cursor-default"
-                                : verifyingTin || !documents.taxId
+                                : verifyingTin
                                     ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                                     : "bg-green-100 text-green-700 hover:bg-green-200"
                                 }`}

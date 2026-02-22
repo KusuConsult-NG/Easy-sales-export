@@ -40,9 +40,6 @@ const NIGERIAN_STATES = [
 
 const ID_TYPES = [
     { value: "nin", label: "National Identity Number (NIN)" },
-    { value: "drivers_license", label: "Driver's License" },
-    { value: "international_passport", label: "International Passport" },
-    { value: "voters_card", label: "Voter's Card" },
 ];
 
 export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFormProps) {
@@ -221,8 +218,12 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                         />
                         <button
                             type="button"
-                            disabled={!formData.idType || !formData.idNumber || formData.idVerified || formData.verifying}
+                            disabled={formData.idVerified || formData.verifying}
                             onClick={async () => {
+                                if (!formData.idType || !formData.idNumber) {
+                                    handleChange("idError", "Please enter ID type and ID number to verify");
+                                    return;
+                                }
                                 handleChange("verifying", true);
                                 try {
                                     const res = await fetch('/api/kyc/verify-id', {
@@ -253,7 +254,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                             }}
                             className={`px-4 py-2.5 rounded-lg font-medium whitespace-nowrap transition-colors ${formData.idVerified
                                 ? "bg-green-100 text-green-700 cursor-default"
-                                : formData.verifying || !formData.idType || !formData.idNumber
+                                : formData.verifying
                                     ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                                     : "bg-orange-100 text-orange-700 hover:bg-orange-200"
                                 }`}

@@ -51,9 +51,6 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
 
     const ID_TYPES = [
         { value: "nin", label: "National Identity Number (NIN)" },
-        { value: "drivers_license", label: "Driver's License" },
-        { value: "international_passport", label: "International Passport" },
-        { value: "voters_card", label: "Voter's Card" },
     ];
 
     const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
@@ -379,12 +376,12 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                                         <button
                                             type="button"
                                             onClick={verifyUploadedId}
-                                            disabled={!data.idType || !data.idNumber || data.idVerified || verifyingId}
+                                            disabled={data.idVerified || verifyingId}
                                             className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors whitespace-nowrap ${data.idVerified
-                                                    ? "bg-green-100 text-green-700 cursor-default"
-                                                    : verifyingId || !data.idType || !data.idNumber
-                                                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                                        : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                                                ? "bg-green-100 text-green-700 cursor-default"
+                                                : verifyingId
+                                                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                                    : "bg-purple-100 text-purple-700 hover:bg-purple-200"
                                                 }`}
                                         >
                                             {verifyingId ? "Verifying..." : data.idVerified ? "Verified ✓" : "Verify ID"}
@@ -540,12 +537,12 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         <button
                             type="button"
                             onClick={verifyBvn}
-                            disabled={data.bvn.length !== 11 || data.bvnVerified || verifyingBvn}
+                            disabled={data.bvnVerified || verifyingBvn}
                             className={`px-6 py-3 rounded-xl font-semibold transition-colors whitespace-nowrap ${data.bvnVerified
-                                    ? "bg-green-100 text-green-700 cursor-default"
-                                    : verifyingBvn || data.bvn.length !== 11
-                                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                        : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                                ? "bg-green-100 text-green-700 cursor-default"
+                                : verifyingBvn
+                                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                    : "bg-purple-100 text-purple-700 hover:bg-purple-200"
                                 }`}
                         >
                             {verifyingBvn ? "Verifying..." : data.bvnVerified ? "Verified ✓" : "Verify BVN"}
