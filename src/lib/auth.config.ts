@@ -7,6 +7,7 @@ import type { NextAuthConfig } from "next-auth";
  * It MUST NOT import any Node.js libraries (like firebase-admin).
  */
 export const authConfig = {
+    trustHost: true, // IMPORTANT: Allows NextAuth to dynamically determine host in multi-domain Vercel deployments
     providers: [], // Providers are configured in auth.ts for Node runtime
     pages: {
         signIn: "/auth/login",
