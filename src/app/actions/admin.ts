@@ -15,7 +15,8 @@ import {
     UserVerificationToggleSchema,
     LandListingVerificationSchema,
     LoanApplicationReviewSchema,
-    ExportOnboardingReviewSchema
+    ExportOnboardingReviewSchema,
+    UserKycVerificationSchema
 } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 
@@ -388,6 +389,75 @@ export async function toggleUserVerificationAction(
     } catch (error: any) {
         logger.error("Toggle user verification error:", error);
         return { error: "Failed to update verification status", success: false };
+    }
+}
+
+// ============================================
+// User KYC Verification Toggle
+// ============================================
+
+export async function toggleUserKycVerificationAction(
+    userId: string,
+    field: "bvn" | "tin" | "cac",
+    currentStatus: boolean
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        // Assuming "users:update" is sufficient for KYC. Could create a stricter role if needed.
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            return { error: "Unauthorized: Permission required - users:update", success: false };
+        }
+
+        const valid = UserKycVerificationSchema.safeParse({ userId, field, currentStatus });
+        if (!valid.success) {
+            return { error: (valid.error as ZodError).issues[0].message, success: false };
+        }
+
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
+
+        if (!userDoc.exists) {
+            return { error: "User not found", success: false };
+        }
+
+        const newVerificationStatus = !currentStatus;
+        const verificationFieldMap = {
+            "bvn": "bvnVerified",
+            "tin": "tinVerified",
+            "cac": "cacVerified"
+        };
+        const targetField = verificationFieldMap[field];
+
+        await userRef.update({
+            [targetField]: newVerificationStatus,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // CLEAR CACHE
+        try {
+            const { invalidateUserCache } = await import('@/lib/cache-invalidation');
+            await invalidateUserCache(userId);
+            logger.info(`[User KYC Verification] Cache cleared for user: ${userId}`);
+        } catch (cacheError) {
+            logger.error('[User KYC Verification] Cache clear error:', cacheError);
+        }
+
+        // Log audit
+        await logAuditAction(
+            newVerificationStatus ? `user_kyc_verify_${field}` : `user_kyc_unverify_${field}`,
+            userId,
+            "user",
+            { adminId: session.user.id }
+        );
+
+        return {
+            error: null,
+            success: true,
+            message: `${field.toUpperCase()} ${newVerificationStatus ? "verified" : "unverified"} successfully`,
+        };
+    } catch (error: any) {
+        logger.error(`Toggle user KYC verification error (${field}):`, error);
+        return { error: `Failed to update ${field.toUpperCase()} verification status`, success: false };
     }
 }
 

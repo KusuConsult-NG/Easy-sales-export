@@ -37,10 +37,12 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
     const [verifyingTin, setVerifyingTin] = useState(false);
     const [verifyingCac, setVerifyingCac] = useState(false);
 
-    const updateDocument = (field: keyof BusinessVerificationData, value: any) => {
-        const updated = { ...documents, [field]: value };
-        setDocuments(updated);
-        onChange(updated);
+    const updateDocuments = (updates: Partial<BusinessVerificationData>) => {
+        setDocuments(prev => {
+            const next = { ...prev, ...updates };
+            onChange(next);
+            return next;
+        });
     };
 
     const { showToast } = useToast();
@@ -80,15 +82,15 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
             const resData = await res.json();
 
             if (resData.success && resData.isMatch) {
-                updateDocument("tinVerified", true);
+                updateDocuments({ tinVerified: true });
                 showToast("TIN successfully verified via QoreID", "success");
             } else {
-                updateDocument("tinVerified", false);
+                updateDocuments({ tinVerified: false });
                 setErrors(prev => ({ ...prev, verifyTin: resData.error || "TIN Verification failed" }));
                 showToast(resData.error || "TIN Verification failed", "error");
             }
         } catch (err) {
-            updateDocument("tinVerified", false);
+            updateDocuments({ tinVerified: false });
             setErrors(prev => ({ ...prev, verifyTin: "Network error during verification" }));
         } finally {
             setVerifyingTin(false);
@@ -117,15 +119,15 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
             const resData = await res.json();
 
             if (resData.success && resData.isMatch) {
-                updateDocument("cacVerified", true);
+                updateDocuments({ cacVerified: true });
                 showToast("CAC successfully verified via QoreID", "success");
             } else {
-                updateDocument("cacVerified", false);
+                updateDocuments({ cacVerified: false });
                 setErrors(prev => ({ ...prev, verifyCac: resData.error || "CAC Verification failed" }));
                 showToast(resData.error || "CAC Verification failed", "error");
             }
         } catch (err) {
-            updateDocument("cacVerified", false);
+            updateDocuments({ cacVerified: false });
             setErrors(prev => ({ ...prev, verifyCac: "Network error during verification" }));
         } finally {
             setVerifyingCac(false);
@@ -184,7 +186,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                         label=""
                         accept=".pdf,.jpg,.jpeg,.png"
                         maxSize={5}
-                        onUpload={(file) => updateDocument("businessRegistration", { name: file.name, url: URL.createObjectURL(file) })}
+                        onUpload={(file) => updateDocuments({ businessRegistration: { name: file.name, url: URL.createObjectURL(file) } })}
                     />
 
                     {documents.businessRegistration && (
@@ -199,8 +201,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                                         type="text"
                                         value={documents.companyName || ""}
                                         onChange={(e) => {
-                                            updateDocument("companyName", e.target.value);
-                                            updateDocument("cacVerified", false);
+                                            updateDocuments({ companyName: e.target.value, cacVerified: false });
                                         }}
                                         disabled={documents.cacVerified || verifyingCac}
                                         placeholder="Enter full company name"
@@ -217,8 +218,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                                             type="text"
                                             value={documents.cacNumber || ""}
                                             onChange={(e) => {
-                                                updateDocument("cacNumber", e.target.value);
-                                                updateDocument("cacVerified", false);
+                                                updateDocuments({ cacNumber: e.target.value, cacVerified: false });
                                             }}
                                             placeholder="RC-123456"
                                             disabled={documents.cacVerified || verifyingCac}
@@ -257,8 +257,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                             type="text"
                             value={documents.taxId || ""}
                             onChange={(e) => {
-                                updateDocument("taxId", e.target.value);
-                                updateDocument("tinVerified", false);
+                                updateDocuments({ taxId: e.target.value, tinVerified: false });
                             }}
                             disabled={documents.tinVerified || verifyingTin}
                             placeholder="Enter your TIN"
@@ -309,7 +308,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                             onUpload={(file) => {
                                 const photos = documents.farmPhotos ? [...documents.farmPhotos] : [];
                                 photos[0] = { name: file.name, url: URL.createObjectURL(file) };
-                                updateDocument("farmPhotos", photos);
+                                updateDocuments({ farmPhotos: photos });
                             }}
                         />
                         <DocumentUpload
@@ -319,7 +318,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                             onUpload={(file) => {
                                 const photos = documents.farmPhotos ? [...documents.farmPhotos] : [];
                                 photos[1] = { name: file.name, url: URL.createObjectURL(file) };
-                                updateDocument("farmPhotos", photos);
+                                updateDocuments({ farmPhotos: photos });
                             }}
                         />
                     </div>
@@ -344,7 +343,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                             onUpload={(file) => {
                                 const samples = documents.productSamples ? [...documents.productSamples] : [];
                                 samples[0] = { name: file.name, url: URL.createObjectURL(file) };
-                                updateDocument("productSamples", samples);
+                                updateDocuments({ productSamples: samples });
                             }}
                         />
                         <DocumentUpload
@@ -354,7 +353,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                             onUpload={(file) => {
                                 const samples = documents.productSamples ? [...documents.productSamples] : [];
                                 samples[1] = { name: file.name, url: URL.createObjectURL(file) };
-                                updateDocument("productSamples", samples);
+                                updateDocuments({ productSamples: samples });
                             }}
                         />
                     </div>

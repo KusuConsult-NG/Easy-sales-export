@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Users, CheckCircle, XCircle, Loader2, Edit, Shield } from "lucide-react";
-import { toggleUserVerificationAction, updateUserRolesAction, getUsersAction } from "@/app/actions/admin";
+import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX } from "lucide-react";
+import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
 import AdminDataTable from "@/components/admin/AdminDataTable";
@@ -19,6 +19,13 @@ interface User {
     createdAt: Date;
     verifiedAt?: Date;
     bankDetails?: any;
+    bvn?: string;
+    bvnVerified?: boolean;
+    idType?: string;
+    taxId?: string;
+    tinVerified?: boolean;
+    cacNumber?: string;
+    cacVerified?: boolean;
 }
 
 const ROLES_LIST = [
@@ -33,6 +40,7 @@ export default function AdminUsersPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUpdatingRoles, setIsUpdatingRoles] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [kycProcessingId, setKycProcessingId] = useState<string | null>(null);
     const [bulkProcessing, setBulkProcessing] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -151,6 +159,26 @@ export default function AdminUsersPage() {
                 <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${getRoleBadge(user.role)}`}>
                     {user.role}
                 </span>
+            ),
+            hideOnMobile: true
+        },
+        {
+            header: "KYC",
+            accessor: (user: User) => (
+                <div className="flex gap-1.5 flex-wrap w-24">
+                    {user.bvn && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.bvnVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} title="BVN">BVN</span>
+                    )}
+                    {user.taxId && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.tinVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} title="TIN">TIN</span>
+                    )}
+                    {user.cacNumber && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.cacVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} title="CAC">CAC</span>
+                    )}
+                    {!user.bvn && !user.taxId && !user.cacNumber && (
+                        <span className="text-xs text-slate-400 italic">None</span>
+                    )}
+                </div>
             ),
             hideOnMobile: true
         },
@@ -284,6 +312,73 @@ export default function AdminUsersPage() {
                                 <p><span className="font-semibold text-slate-600">Name:</span> {selectedUserForModal.name}</p>
                                 <p><span className="font-semibold text-slate-600">Email:</span> {selectedUserForModal.email}</p>
                                 <p><span className="font-semibold text-slate-600">Phone:</span> {selectedUserForModal.phone || "N/A"}</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">KYC Details</h4>
+                            <div className="bg-slate-50 p-4 rounded-xl space-y-3 text-sm text-slate-800">
+                                {[
+                                    { key: "bvn", label: "BVN", value: selectedUserForModal.bvn, verified: selectedUserForModal.bvnVerified },
+                                    { key: "tin", label: "TIN", value: selectedUserForModal.taxId, verified: selectedUserForModal.tinVerified },
+                                    { key: "cac", label: "CAC", value: selectedUserForModal.cacNumber, verified: selectedUserForModal.cacVerified },
+                                ].map((item) => (
+                                    <div key={item.key} className="flex items-center justify-between border-b border-slate-200 pb-2 last:border-0 last:pb-0">
+                                        <div className="flex flex-col">
+                                            <span className="font-semibold text-slate-600">{item.label}:</span>
+                                            <span className={item.value ? "font-mono font-medium" : "text-slate-400 italic"}>
+                                                {item.value || "Not provided"}
+                                            </span>
+                                            {item.key === "bvn" && selectedUserForModal.idType && (
+                                                <span className="text-xs text-slate-500 uppercase">ID Type: {selectedUserForModal.idType}</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {item.value ? (
+                                                <>
+                                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${item.verified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {item.verified ? 'Verified' : 'Unverified'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            const pId = `${selectedUserForModal.id}_${item.key}`;
+                                                            setKycProcessingId(pId);
+                                                            const result = await toggleUserKycVerificationAction(
+                                                                selectedUserForModal.id,
+                                                                item.key as "bvn" | "tin" | "cac",
+                                                                !!item.verified
+                                                            );
+                                                            if (result.success) {
+                                                                const verifyField = item.key === 'bvn' ? 'bvnVerified' : item.key === 'tin' ? 'tinVerified' : 'cacVerified';
+                                                                const updatedUser = { ...selectedUserForModal, [verifyField]: !item.verified };
+                                                                setSelectedUserForModal(updatedUser as User);
+                                                                setData(prev => prev.map(u => u.id === selectedUserForModal.id ? updatedUser as User : u));
+                                                                showToast(result.message, "success");
+                                                            } else {
+                                                                showToast(result.error, "error");
+                                                            }
+                                                            setKycProcessingId(null);
+                                                        }}
+                                                        disabled={kycProcessingId === `${selectedUserForModal.id}_${item.key}`}
+                                                        className={`p-1.5 rounded-lg transition disabled:opacity-50 ${item.verified ? "text-red-600 hover:bg-red-50" : "text-emerald-600 hover:bg-emerald-50"}`}
+                                                        title={item.verified ? `Unverify ${item.label}` : `Verify ${item.label}`}
+                                                    >
+                                                        {kycProcessingId === `${selectedUserForModal.id}_${item.key}` ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                        ) : item.verified ? (
+                                                            <FileX className="w-4 h-4" />
+                                                        ) : (
+                                                            <FileCheck className="w-4 h-4" />
+                                                        )}
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <span className="text-xs text-slate-400">N/A</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 

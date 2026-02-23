@@ -168,6 +168,12 @@ export const UserVerificationToggleSchema = z.object({
     userId: z.string().min(1),
 });
 
+export const UserKycVerificationSchema = z.object({
+    userId: z.string().min(1),
+    field: z.enum(["bvn", "tin", "cac"]),
+    currentStatus: z.boolean(),
+});
+
 export const LandListingVerificationSchema = z.object({
     listingId: z.string().min(1),
     decision: z.enum(["approved", "rejected"]),

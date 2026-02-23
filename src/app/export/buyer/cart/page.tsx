@@ -25,7 +25,7 @@ export default function ExportCartPage() {
     const [step, setStep] = useState<"cart" | "details" | "payment" | "success">("cart");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [orderRef, setOrderRef] = useState("");
-    const [paymentMethod, setPaymentMethod] = useState<"paystack" | "bank_transfer">("paystack");
+    const [paymentMethod, setPaymentMethod] = useState<"paystack">("paystack");
     const [error, setError] = useState<string | null>(null);
 
     // Buyer details form state
@@ -121,41 +121,8 @@ export default function ExportCartPage() {
         }
     };
 
-    const handleBankTransfer = async () => {
-        if (!buyerDetails.email) {
-            setError("Please provide your email address");
-            return;
-        }
-        if (cart.length === 0) {
-            setError("Your cart is empty");
-            return;
-        }
-
-        setIsSubmitting(true);
-        setError(null);
-
-        try {
-            // Simulate creating order — in production this would be a server action
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Generate reference number
-            const ref = `EXP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-            setOrderRef(ref);
-            clearCart();
-            setStep("success");
-            setIsSubmitting(false);
-        } catch (err) {
-            setError("An error occurred while creating your order");
-            setIsSubmitting(false);
-        }
-    };
-
     const handlePayment = () => {
-        if (paymentMethod === "paystack") {
-            handlePaystackCheckout();
-        } else {
-            handleBankTransfer();
-        }
+        handlePaystackCheckout();
     };
 
     // ── Success Screen ────────────────────────────────────────────────────────
@@ -171,46 +138,13 @@ export default function ExportCartPage() {
                         Order Placed Successfully!
                     </h1>
                     <p className="text-slate-600 mb-6">
-                        {paymentMethod === "bank_transfer"
-                            ? "Please complete your bank transfer using the details below. Your order will be confirmed within 24 hours of payment verification."
-                            : "Your payment has been received. Our export team will begin processing your order immediately."
-                        }
+                        Your payment has been received. Our export team will begin processing your order immediately.
                     </p>
 
                     {orderRef && (
                         <div className="bg-blue-50 rounded-xl p-4 mb-6">
                             <p className="text-sm text-blue-600 mb-1">Order Reference</p>
                             <p className="text-2xl font-bold font-mono text-blue-900">{orderRef}</p>
-                        </div>
-                    )}
-
-                    {paymentMethod === "bank_transfer" && (
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 mb-6 text-left">
-                            <h3 className="font-semibold text-yellow-900 mb-4">Bank Transfer Details</h3>
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                                    <span className="text-slate-600">Bank Name:</span>
-                                    <span className="font-semibold text-slate-900">First Bank of Nigeria</span>
-                                </div>
-                                <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                                    <span className="text-slate-600">Account Number:</span>
-                                    <span className="font-semibold text-slate-900 font-mono">1234567890</span>
-                                </div>
-                                <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                                    <span className="text-slate-600">Account Name:</span>
-                                    <span className="font-semibold text-slate-900">Easy Sales Export Ltd</span>
-                                </div>
-                                <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                                    <span className="text-slate-600">Amount (NGN):</span>
-                                    <span className="font-bold text-green-600">₦{totalInNaira.toLocaleString()}</span>
-                                </div>
-                            </div>
-                            <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
-                                <p className="text-xs text-yellow-900">
-                                    ⚠️ <strong>Important:</strong> Use your order reference <strong>{orderRef}</strong> as the payment narration.
-                                    We&apos;ll confirm your payment within 24 hours.
-                                </p>
-                            </div>
                         </div>
                     )}
 
@@ -221,10 +155,7 @@ export default function ExportCartPage() {
                                 <span className="text-xs font-bold text-blue-600">1</span>
                             </div>
                             <p className="text-sm text-slate-600">
-                                {paymentMethod === "bank_transfer"
-                                    ? "Complete your bank transfer and we verify payment"
-                                    : "Payment confirmed automatically via Paystack"
-                                }
+                                Payment confirmed automatically via Paystack
                             </p>
                         </div>
                         <div className="flex items-start gap-3">
@@ -537,75 +468,14 @@ export default function ExportCartPage() {
                                         <CreditCard className="w-5 h-5 text-blue-600" />
                                         Payment Method
                                     </h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => setPaymentMethod("paystack")}
-                                            className={`p-5 border-2 rounded-xl transition-all text-left ${paymentMethod === "paystack"
-                                                ? "border-blue-600 bg-blue-50"
-                                                : "border-slate-200 hover:border-blue-300"
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <CreditCard className="w-6 h-6 text-blue-600" />
-                                                <div>
-                                                    <p className="font-bold text-slate-900">Card Payment</p>
-                                                    <p className="text-xs text-slate-600">Pay with debit/credit card via Paystack</p>
-                                                </div>
-                                            </div>
-                                            {paymentMethod === "paystack" && (
-                                                <CheckCircle className="w-5 h-5 text-blue-600 mt-3" />
-                                            )}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => setPaymentMethod("bank_transfer")}
-                                            className={`p-5 border-2 rounded-xl transition-all text-left ${paymentMethod === "bank_transfer"
-                                                ? "border-blue-600 bg-blue-50"
-                                                : "border-slate-200 hover:border-blue-300"
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <Store className="w-6 h-6 text-blue-600" />
-                                                <div>
-                                                    <p className="font-bold text-slate-900">Bank Transfer</p>
-                                                    <p className="text-xs text-slate-600">Transfer directly to our bank account</p>
-                                                </div>
-                                            </div>
-                                            {paymentMethod === "bank_transfer" && (
-                                                <CheckCircle className="w-5 h-5 text-blue-600 mt-3" />
-                                            )}
-                                        </button>
+                                    <div className="p-5 border-2 border-blue-600 bg-blue-50 rounded-xl flex items-center gap-3">
+                                        <CreditCard className="w-6 h-6 text-blue-600" />
+                                        <div>
+                                            <p className="font-bold text-slate-900">Card Payment (Paystack)</p>
+                                            <p className="text-xs text-slate-600">Pay securely with your debit or credit card</p>
+                                        </div>
                                     </div>
                                 </div>
-
-                                {/* Bank Transfer Details (shown when selected) */}
-                                {paymentMethod === "bank_transfer" && (
-                                    <div className="bg-white rounded-2xl p-6 shadow-sm">
-                                        <h3 className="font-bold text-slate-900 mb-4">Bank Transfer Details</h3>
-                                        <div className="space-y-3 text-sm">
-                                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
-                                                <span className="text-slate-600">Bank Name:</span>
-                                                <span className="font-semibold text-slate-900">First Bank of Nigeria</span>
-                                            </div>
-                                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
-                                                <span className="text-slate-600">Account Number:</span>
-                                                <span className="font-semibold text-slate-900 font-mono">1234567890</span>
-                                            </div>
-                                            <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
-                                                <span className="text-slate-600">Account Name:</span>
-                                                <span className="font-semibold text-slate-900">Easy Sales Export Ltd</span>
-                                            </div>
-                                        </div>
-                                        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                            <p className="text-xs text-yellow-800">
-                                                ⚠️ <strong>Important:</strong> After transfer, your order will be marked as &quot;pending payment verification&quot;.
-                                                We&apos;ll confirm your payment within 24 hours and begin processing your shipment.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
 
                                 {/* Order Review */}
                                 <div className="bg-white rounded-2xl p-6 shadow-sm">
@@ -702,7 +572,7 @@ export default function ExportCartPage() {
                                 </button>
                             ) : (
                                 <>
-                                    {process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || paymentMethod === "bank_transfer" ? (
+                                    {process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ? (
                                         <button
                                             onClick={handlePayment}
                                             disabled={isSubmitting}
@@ -713,15 +583,10 @@ export default function ExportCartPage() {
                                                     <Loader2 className="w-5 h-5 animate-spin" />
                                                     Processing...
                                                 </>
-                                            ) : paymentMethod === "paystack" ? (
+                                            ) : (
                                                 <>
                                                     <CreditCard className="w-5 h-5" />
                                                     Pay ₦{totalInNaira.toLocaleString()}
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Store className="w-5 h-5" />
-                                                    Confirm Order
                                                 </>
                                             )}
                                         </button>
@@ -731,14 +596,8 @@ export default function ExportCartPage() {
                                                 Card Payment Temporarily Unavailable
                                             </p>
                                             <p className="text-xs text-yellow-700 mb-3">
-                                                Please use bank transfer or contact support.
+                                                Please contact support to complete your order.
                                             </p>
-                                            <button
-                                                onClick={() => setPaymentMethod("bank_transfer")}
-                                                className="w-full px-4 py-2 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700 transition"
-                                            >
-                                                Switch to Bank Transfer
-                                            </button>
                                         </div>
                                     )}
                                 </>

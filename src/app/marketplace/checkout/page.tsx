@@ -24,7 +24,7 @@ export default function CheckoutPage() {
     const { showToast } = useToast();
     const [cart, setCart] = useState<LocalCartItem[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState<"paystack" | "bank_transfer">("paystack");
+    const [paymentMethod, setPaymentMethod] = useState<"paystack">("paystack");
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
     const [phoneError, setPhoneError] = useState<string>("");
@@ -115,75 +115,7 @@ export default function CheckoutPage() {
         }
     };
 
-    const handleBankTransfer = async () => {
-        if (!session) {
-            router.push("/auth/login?redirect=/marketplace/checkout");
-            return;
-        }
 
-        if (!email || !phone) {
-            setError("Please provide your email and phone number");
-            return;
-        }
-
-        // Validate phone number
-        if (!isValidNigerianPhone(phone)) {
-            setPhoneError("Please enter a valid Nigerian phone number");
-            return;
-        }
-
-        if (cart.length === 0) {
-            setError("Your cart is empty");
-            return;
-        }
-
-        setIsProcessing(true);
-        setError(null);
-        setPhoneError("");
-
-        try {
-            // Import the bank transfer action
-            const { createBankTransferOrderAction } = await import("@/app/actions/marketplace-payment");
-
-            // Prepare cart items
-            const cartItems = cart.map(item => ({
-                id: item.id,
-                title: item.title,
-                sellerId: item.sellerId,
-                price: item.pricingTiers[0]?.price || 0,
-                quantity: item.quantity,
-                unit: item.unit,
-            }));
-
-            // Create bank transfer order
-            const result = await createBankTransferOrderAction(
-                cartItems,
-                email,
-                phone,
-                deliveryFee
-            );
-
-            if (result.success && result.orderId) {
-                // Clear cart
-                localStorage.removeItem("marketplace_cart");
-
-                // Show success message
-                showToast(
-                    "Order Created! Please complete bank transfer to the account details shown.",
-                    "success"
-                );
-
-                // Redirect to success page with order details
-                router.push(`/marketplace/orders/${result.orderId}?payment=pending`);
-            } else {
-                setError(result.error || "Failed to create order");
-                setIsProcessing(false);
-            }
-        } catch (err) {
-            setError("An error occurred while creating your order");
-            setIsProcessing(false);
-        }
-    };
 
     if (!isClient || cart.length === 0) {
         return (
@@ -286,34 +218,7 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        {/* Payment Method */}
-                        <div className="bg-white rounded-2xl p-6">
-                            <h2 className="text-xl font-bold text-slate-900 mb-4">
-                                Payment Method
-                            </h2>
-                            <div className="space-y-3">
-                                <button
-                                    onClick={() => setPaymentMethod("paystack")}
-                                    className={`w-full p-4 border-2 rounded-xl flex items-center gap-3 transition ${paymentMethod === "paystack"
-                                        ? "border-primary bg-primary/5"
-                                        : "border-slate-200"
-                                        }`}
-                                >
-                                    <CreditCard className="w-6 h-6 text-primary" />
-                                    <div className="flex-1 text-left">
-                                        <p className="font-semibold text-slate-900">
-                                            Card Payment (Paystack)
-                                        </p>
-                                        <p className="text-sm text-slate-600">
-                                            Pay securely with your debit/credit card
-                                        </p>
-                                    </div>
-                                    {paymentMethod === "paystack" && (
-                                        <CheckCircle className="w-6 h-6 text-primary" />
-                                    )}
-                                </button>
-                            </div>
-                        </div>
+
                     </div>
 
                     {/* Order Total */}
@@ -338,74 +243,18 @@ export default function CheckoutPage() {
                             </div>
 
 
-                            {/* Payment Method Selection */}
                             <div className="mb-6">
                                 <label className="block text-sm font-semibold text-slate-900 mb-3">
-                                    Payment Method *
+                                    Payment Method
                                 </label>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setPaymentMethod("paystack")}
-                                        className={`p-4 border-2 rounded-xl transition-all text-left ${paymentMethod === "paystack"
-                                            ? "border-primary bg-primary/10"
-                                            : "border-slate-200 hover:border-primary/50"
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <CreditCard className="w-6 h-6 text-primary" />
-                                            <div>
-                                                <p className="font-semibold text-slate-900">Card Payment</p>
-                                                <p className="text-xs text-slate-600">Pay with debit/credit card</p>
-                                            </div>
-                                        </div>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setPaymentMethod("bank_transfer")}
-                                        className={`p-4 border-2 rounded-xl transition-all text-left ${paymentMethod === "bank_transfer"
-                                            ? "border-primary bg-primary/10"
-                                            : "border-slate-200 hover:border-primary/50"
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <Store className="w-6 h-6 text-primary" />
-                                            <div>
-                                                <p className="font-semibold text-slate-900">Bank Transfer</p>
-                                                <p className="text-xs text-slate-600">Transfer directly to our account</p>
-                                            </div>
-                                        </div>
-                                    </button>
+                                <div className="p-4 border-2 border-primary bg-primary/10 rounded-xl flex items-center gap-3">
+                                    <CreditCard className="w-6 h-6 text-primary" />
+                                    <div>
+                                        <p className="font-semibold text-slate-900">Card Payment (Paystack)</p>
+                                        <p className="text-xs text-slate-600">Pay securely with your debit or credit card</p>
+                                    </div>
                                 </div>
                             </div>
-
-                            {/* Bank Transfer Details */}
-                            {paymentMethod === "bank_transfer" && (
-                                <div className="mb-6 p-6 bg-blue-50 border border-blue-200 rounded-xl">
-                                    <h3 className="font-semibold text-blue-900 mb-4">Bank Transfer Details</h3>
-                                    <div className="space-y-3 text-sm">
-                                        <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                                            <span className="text-slate-600">Bank Name:</span>
-                                            <span className="font-semibold text-slate-900">First Bank of Nigeria</span>
-                                        </div>
-                                        <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                                            <span className="text-slate-600">Account Number:</span>
-                                            <span className="font-semibold text-slate-900 font-mono">1234567890</span>
-                                        </div>
-                                        <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                                            <span className="text-slate-600">Account Name:</span>
-                                            <span className="font-semibold text-slate-900">Easy Sales Export Ltd</span>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
-                                        <p className="text-xs text-yellow-900">
-                                            ⚠️ <strong>Important:</strong> After transfer, your order will be marked as "pending payment verification".
-                                            We'll confirm your payment within 24 hours and ship your order.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Error Display */}
                             {error && (
@@ -416,7 +265,7 @@ export default function CheckoutPage() {
 
                             {process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ? (
                                 <button
-                                    onClick={paymentMethod === "paystack" ? handlePaystackCheckout : handleBankTransfer}
+                                    onClick={handlePaystackCheckout}
                                     disabled={isProcessing || !email || !phone}
                                     className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
@@ -425,15 +274,10 @@ export default function CheckoutPage() {
                                             <Loader2 className="w-5 h-5 animate-spin" />
                                             Processing...
                                         </>
-                                    ) : paymentMethod === "paystack" ? (
+                                    ) : (
                                         <>
                                             <CreditCard className="w-5 h-5" />
                                             Complete Payment
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Store className="w-5 h-5" />
-                                            Confirm Order
                                         </>
                                     )}
                                 </button>
