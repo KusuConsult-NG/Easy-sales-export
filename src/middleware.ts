@@ -130,8 +130,8 @@ export default auth((req: any) => {
         return response;
     }
 
-    // START: Auth guards
-    // Admin routes: must be admin/super_admin
+    // Admin route permission guard (role check — distinct from auth check)
+    // Auth check is handled by authConfig.callbacks.authorized()
     if (pathname.startsWith("/admin") && req.auth?.user) {
         const roles = (req.auth.user as any)?.roles || [];
         const isAdmin = roles.includes("admin") || roles.includes("super_admin");
@@ -139,43 +139,6 @@ export default auth((req: any) => {
             return NextResponse.redirect(new URL("/dashboard", req.url));
         }
     }
-
-    // All protected module routes: must be signed in
-    const PROTECTED_PREFIXES = [
-        "/admin",
-        "/dashboard",
-        "/profile",
-        "/settings",
-        "/wave/application",
-        "/wave/dashboard",
-        "/wave/earnings",
-        "/wave/profile",
-        "/wave/resources",
-        "/wave/shipments",
-        "/wave/training",
-        "/wave/live-training",
-        "/wave/certificates",
-        "/cooperatives/onboarding",
-        "/cooperatives/payment",
-        "/cooperatives/dashboard",
-        "/export/onboarding",
-        "/export/dashboard",
-        "/export/invest",
-        "/marketplace/seller",
-        "/marketplace/sell",
-        "/marketplace/seller-verification",
-        "/academy/setup",
-        "/academy/learn",
-        "/farm-nation/onboarding",
-        "/messages",
-    ];
-    const isProtected = PROTECTED_PREFIXES.some(prefix => pathname.startsWith(prefix));
-    if (isProtected && !req.auth?.user) {
-        const loginUrl = new URL("/auth/login", req.url);
-        loginUrl.searchParams.set("callbackUrl", pathname);
-        return NextResponse.redirect(loginUrl);
-    }
-    // END: Auth guards
 
     return response;
 });
