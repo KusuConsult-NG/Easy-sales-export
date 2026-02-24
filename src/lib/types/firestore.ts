@@ -547,6 +547,16 @@ export interface ExportInvestment {
     updatedAt?: Date;
 }
 
+export interface PasswordResetToken {
+    id: string;
+    email: string;
+    token: string;
+    expiry: number; // Unix ms timestamp
+    used: boolean;
+    usedAt?: Date;
+    createdAt: Date;
+}
+
 export interface Announcement {
     id: string;
     title: string;
@@ -671,4 +681,7 @@ export const COLLECTIONS = {
 
     // WAVE / Field briefings (offline submissions)
     BRIEFINGS: "briefing_submissions",
+
+    // Auth
+    PASSWORD_RESETS: "password_resets",
 } as const;
