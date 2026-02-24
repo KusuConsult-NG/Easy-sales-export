@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 
@@ -186,12 +187,11 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
  * Submit multi-step WAVE application
  * Accepts object data from multi-step form (not FormData)
  */
-export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ success: boolean; error?: string; applicationId?: string }> {
+export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ success: boolean; code?: string; error?: string; applicationId?: string }> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "You must be logged in to apply" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         // Validate with Zod
         const validation = waveApplicationSchema.safeParse(applicationData);

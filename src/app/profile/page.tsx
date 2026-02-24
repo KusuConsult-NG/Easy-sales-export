@@ -11,10 +11,12 @@ import Image from "next/image";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getUserProfileAction, updateUserProfileAction, updateNotificationPreferencesAction } from "@/app/actions/profile";
 import { signOut } from "next-auth/react";
+import { useSessionExpiry } from "@/hooks/useSessionExpiry";
 
 export default function ProfilePage() {
     const { data: session } = useSession();
     const { theme, toggleTheme } = useTheme();
+    const { run: guardRun } = useSessionExpiry();
     const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences'>('general');
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
@@ -80,14 +82,14 @@ export default function ProfilePage() {
         if (activeTab === 'general') {
             const sessionEmail = session?.user?.email || "";
             const emailChanged = sessionEmail !== "" && userData.email !== "" && userData.email !== sessionEmail;
-            const result = await updateUserProfileAction({
+            const result = await guardRun(updateUserProfileAction({
                 firstName: userData.firstName,
                 lastName: userData.lastName,
                 email: userData.email,
                 phone: userData.phone,
                 location: userData.location,
                 bio: userData.bio,
-            });
+            }));
 
             if (result.success) {
                 if (emailChanged) {

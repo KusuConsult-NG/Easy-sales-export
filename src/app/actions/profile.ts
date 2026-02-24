@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db, adminAuth } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -31,11 +32,9 @@ const notificationPreferencesSchema = z.object({
  */
 export async function getUserProfileAction() {
     try {
-        const session = await auth();
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         const userId = session.user.id;
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
@@ -95,11 +94,9 @@ export async function updateUserProfileAction(data: {
     bio?: string;
 }) {
     try {
-        const session = await auth();
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         // Validate input
         const validated = profileUpdateSchema.parse(data);
@@ -154,11 +151,9 @@ export async function updateNotificationPreferencesAction(preferences: {
     sms: boolean;
 }) {
     try {
-        const session = await auth();
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         // Validate input
         const validated = notificationPreferencesSchema.parse(preferences);

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { submitMultiStepWaveApplicationAction } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
+import { useSessionExpiry } from "@/hooks/useSessionExpiry";
 
 // Step imports
 import PersonalDetailsStep from "./steps/PersonalDetailsStep";
@@ -179,6 +180,7 @@ export default function WaveApplicationPage() {
     const [restored, setRestored] = useState(false);
     const { showToast } = useToast();
     const { data: session, status } = useSession();
+    const { run: guardRun } = useSessionExpiry();
 
     // Restore saved progress from localStorage — scoped by user ID to prevent PII leaks across accounts
     useEffect(() => {
@@ -302,10 +304,9 @@ export default function WaveApplicationPage() {
     const handleSubmit = async () => {
         setSubmitting(true);
         try {
-            const result = await submitMultiStepWaveApplicationAction(formData);
-
+            const result = await guardRun(submitMultiStepWaveApplicationAction(formData));
+            // If session expired, guardRun will sign the user out — result below won't be reached
             if (result.success) {
-                // Clear saved draft on successful submit (user-scoped key)
                 const userId = session?.user?.id;
                 if (userId) {
                     try { localStorage.removeItem(`wave_app_draft_${userId}`); } catch { /* non-blocking */ }
