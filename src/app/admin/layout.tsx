@@ -3,11 +3,7 @@ import { auth } from "@/lib/auth";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-export default async function AdminLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const session = await auth();
 
     // Verify authentication and admin role
@@ -24,19 +20,25 @@ export default async function AdminLayout({
     }
 
     return (
-        <ErrorBoundary>
-            <div className="flex min-h-screen bg-slate-50">
-                {/* Admin Sidebar */}
-                <AdminSidebar />
+        <div className="flex min-h-screen bg-slate-50">
+            {/* Admin Sidebar */}
+            <AdminSidebar />
 
-                {/* Main Content Area */}
-                <main className="flex-1 lg:pl-64 min-h-screen transition-all">
-                    {/* Remove top padding if not needed, or add if using a topbar */}
-                    <div className="w-full">
-                        {children}
-                    </div>
-                </main>
-            </div>
+            {/* Main Content Area */}
+            <main className="flex-1 lg:pl-64 min-h-screen transition-all">
+                {/* Remove top padding if not needed, or add if using a topbar */}
+                <div className="w-full">
+                    {children}
+                </div>
+            </main>
+        </div>
+    );
+}
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <ErrorBoundary>
+            <AdminLayoutContent>{children}</AdminLayoutContent>
         </ErrorBoundary>
     );
 }

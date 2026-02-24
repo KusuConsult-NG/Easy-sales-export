@@ -23,7 +23,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
     // Generate unique lock key on mount or when modal opens
     useEffect(() => {
         if (isOpen) {
-            setIdempotencyKey(crypto.randomUUID());
+            setTimeout(() => setIdempotencyKey(crypto.randomUUID()), 0);
         }
     }, [isOpen]);
 
@@ -41,7 +41,7 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
         } else if (state.error && !state.success && state.error !== "Initializing...") {
             showToast(state.error, "error");
         }
-    }, [state.success, state.error, isPending, onClose, showToast]);
+    }, [state, isPending, onClose, showToast]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Create Export Window">

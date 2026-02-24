@@ -11,11 +11,7 @@ import { auth } from "@/lib/auth"; // Use NextAuth session
 import FarmNationSidebar from "./FarmNationSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-export default async function FarmNationMemberLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+async function FarmNationLayoutContent({ children }: { children: React.ReactNode }) {
     // Get NextAuth session
     const session = await auth();
 
@@ -38,17 +34,23 @@ export default async function FarmNationMemberLayout({
     }
 
     return (
-        <ErrorBoundary>
-            <div className="min-h-screen bg-slate-50">
-                <FarmNationSidebar />
+        <div className="min-h-screen bg-slate-50">
+            <FarmNationSidebar />
 
-                {/* Main Content - Offset for sidebar */}
-                <main className="lg:pl-64 min-h-screen transition-all">
-                    <div className="p-4 lg:p-8 mt-16 lg:mt-0">
-                        {children}
-                    </div>
-                </main>
-            </div>
+            {/* Main Content - Offset for sidebar */}
+            <main className="lg:pl-64 min-h-screen transition-all">
+                <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+                    {children}
+                </div>
+            </main>
+        </div>
+    );
+}
+
+export default function FarmNationMemberLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <ErrorBoundary>
+            <FarmNationLayoutContent>{children}</FarmNationLayoutContent>
         </ErrorBoundary>
     );
 }

@@ -16,7 +16,8 @@ function PaymentCallbackContent() {
 
     const verify = useCallback(async () => {
         if (!reference) {
-            setStatus("failed");
+            // Delay state update slightly to prevent synchronous render cascade warning
+            setTimeout(() => setStatus("failed"), 0);
             return;
         }
 

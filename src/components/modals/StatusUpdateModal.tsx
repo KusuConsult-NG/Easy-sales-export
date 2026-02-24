@@ -42,7 +42,7 @@ export default function StatusUpdateModal({
         } else if (state.error && !state.success && state.error !== "Initializing...") {
             showToast(state.error, "error");
         }
-    }, [state.success, state.error, isPending, onClose, showToast]);
+    }, [state, isPending, onClose, showToast]);
 
     const statusOptions: { value: ExportStatus; label: string; description: string }[] = [
         { value: "pending", label: "Pending", description: "Order is being prepared" },

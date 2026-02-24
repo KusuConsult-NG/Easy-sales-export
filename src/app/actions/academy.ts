@@ -692,7 +692,7 @@ export async function initiateAcademyPaymentAction(
         }
 
         let amount = ACADEMY_REGISTRATION_FEE; // Default to 5000 (Registration)
-        let purpose = "academy_registration";
+        const purpose = "academy_registration";
 
         if (plan && plan !== "registration") {
             if (plan === "foundation") amount = 25000;

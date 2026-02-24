@@ -66,14 +66,16 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
     // --- Persist state across Paystack redirect ---
     useEffect(() => {
-        const savedPersonalInfo = localStorage.getItem("coop_onboarding_personal");
-        if (savedPersonalInfo) setPersonalInfo(JSON.parse(savedPersonalInfo));
+        setTimeout(() => {
+            const savedPersonalInfo = localStorage.getItem("coop_onboarding_personal");
+            if (savedPersonalInfo) setPersonalInfo(JSON.parse(savedPersonalInfo));
 
-        const savedNextOfKin = localStorage.getItem("coop_onboarding_nok");
-        if (savedNextOfKin) setNextOfKin(JSON.parse(savedNextOfKin));
+            const savedNextOfKin = localStorage.getItem("coop_onboarding_nok");
+            if (savedNextOfKin) setNextOfKin(JSON.parse(savedNextOfKin));
 
-        const savedDocuments = localStorage.getItem("coop_onboarding_docs");
-        if (savedDocuments) setDocuments(JSON.parse(savedDocuments));
+            const savedDocuments = localStorage.getItem("coop_onboarding_docs");
+            if (savedDocuments) setDocuments(JSON.parse(savedDocuments));
+        }, 0);
     }, []);
 
     useEffect(() => {

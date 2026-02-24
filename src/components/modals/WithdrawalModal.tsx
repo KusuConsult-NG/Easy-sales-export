@@ -31,7 +31,7 @@ export default function WithdrawalModal({
     // Generate unique lock key on mount or when modal opens
     useEffect(() => {
         if (isOpen) {
-            setIdempotencyKey(crypto.randomUUID());
+            setTimeout(() => setIdempotencyKey(crypto.randomUUID()), 0);
         }
     }, [isOpen]);
 
@@ -45,7 +45,7 @@ export default function WithdrawalModal({
         } else if (state.error && !state.success && state.error !== "Initializing...") {
             showToast(state.error, "error");
         }
-    }, [state.success, state.error, isPending, onClose, showToast]);
+    }, [state, isPending, onClose, showToast]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Request Withdrawal">

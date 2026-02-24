@@ -51,13 +51,13 @@ export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions
         } finally {
             setLoading(false);
         }
-    }, [fetchAction, limit, search, filters, pageIndex]);
+    }, [fetchAction, limit, search, filters]);
 
     // Initial load and search/filter changes
     useEffect(() => {
         setPageIndex(0);
         fetchData(true);
-    }, [search, filters]);
+    }, [search, filters, fetchData]);
 
     const updateFilter = (key: string, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));

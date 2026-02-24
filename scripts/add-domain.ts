@@ -14,7 +14,7 @@ const NEW_DOMAINS = [
     "easysalescooperative.com",
     "easysalesexportacademy.com",
     "easysalesmarket.com",
-    "waveprogramme.gov.ng",
+    "waveprogramme.com",
     "farmnation.ng",
     "easysalesexportng.com"
 ];

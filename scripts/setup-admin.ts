@@ -176,7 +176,7 @@ async function main() {
 
         for (const doc of usersSnapshot.docs) {
             const data = doc.data();
-            let updates: any = {};
+            const updates: any = {};
             let needsUpdate = false;
 
             // 1. Fix Missing ID

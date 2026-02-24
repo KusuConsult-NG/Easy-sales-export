@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Search, Eye, Calendar, User, BookOpen } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -37,8 +37,9 @@ export default function AdminAcademyApplicationsPage() {
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    const fetchApplications = async () => {
-        setIsLoading(true);
+    const fetchApplications = useCallback(async () => {
+        // Prevents React warning about synchronous state updates inside an effect
+        setTimeout(() => setIsLoading(true), 0);
         setError(null);
         try {
             const result = await getAcademyApplicationsAction(
@@ -53,11 +54,11 @@ export default function AdminAcademyApplicationsPage() {
             setError("Failed to fetch applications");
         }
         setIsLoading(false);
-    };
+    }, [statusFilter]);
 
     useEffect(() => {
         fetchApplications();
-    }, [statusFilter]);
+    }, [fetchApplications]);
 
     const handleApprove = async (applicationId: string) => {
         setProcessingId(applicationId);

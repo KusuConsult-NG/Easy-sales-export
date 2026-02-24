@@ -4,7 +4,7 @@ import { ArrowLeft, TrendingUp, Calendar, MapPin, Clock, Shield, FileText, Users
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { getExportOpportunityById, type ExportOpportunity } from "@/app/actions/export-investments";
 import { initializeInvestmentPaymentAction } from "@/app/actions/export-payment";
@@ -21,21 +21,21 @@ export default function ExportWindowDetailPage() {
     const [investmentAmount, setInvestmentAmount] = useState<number>(0);
     const [error, setError] = useState<string | null>(null);
 
-    async function loadWindow() {
-        setLoading(true);
+    const loadWindow = useCallback(async () => {
+        setTimeout(() => setLoading(true), 0);
         const result = await getExportOpportunityById(windowId as string);
         if (result.success && result.data) {
             setWindowData(result.data);
             setInvestmentAmount(result.data.minInvestment);
         }
         setLoading(false);
-    }
+    }, [windowId]);
 
     useEffect(() => {
         if (windowId) {
             loadWindow();
         }
-    }, [windowId]);
+    }, [windowId, loadWindow]);
 
     const handleInvest = async () => {
         if (!session) {

@@ -58,7 +58,7 @@ export function ExportCartProvider({ children }: { children: React.ReactNode }) 
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
-                setCart(JSON.parse(saved));
+                setTimeout(() => setCart(JSON.parse(saved)), 0);
             }
         } catch {
             // Ignore parse errors

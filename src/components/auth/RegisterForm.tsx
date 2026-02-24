@@ -328,7 +328,7 @@ export default function RegisterForm() {
                 {/* Footer */}
                 <div className="mt-8 text-center relative z-10 space-y-4">
                     <p className="text-sm text-slate-500">
-                        © {new Date().getFullYear()} Easy Sales Export • v2.0.0
+                        © {new Date().getFullYear()} Easy Sales Export
                     </p>
                     <div className="flex items-center justify-center gap-6 text-sm text-slate-500">
                         <Link href="/privacy" className="hover:underline hover:text-primary transition-colors">

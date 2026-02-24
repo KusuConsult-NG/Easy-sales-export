@@ -116,7 +116,7 @@ export default function JoinCooperativeModal({
         } else if (state.error && !state.success && state.error !== "Initializing...") {
             showToast(state.error, "error");
         }
-    }, [state.success, state.error, isPending, onClose, showToast]);
+    }, [state, isPending, onClose, showToast]);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Join Cooperative">

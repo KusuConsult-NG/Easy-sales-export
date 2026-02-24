@@ -12,11 +12,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import AcademySidebar from "./AcademySidebar";
 
-export default async function AcademyLearnerLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+async function AcademyLayoutContent({ children }: { children: React.ReactNode }) {
     // Get NextAuth session
     const session = await auth();
 
@@ -39,17 +35,23 @@ export default async function AcademyLearnerLayout({
     }
 
     return (
-        <ErrorBoundary>
-            <div className="min-h-screen bg-slate-50">
-                <AcademySidebar />
+        <div className="min-h-screen bg-slate-50">
+            <AcademySidebar />
 
-                {/* Main Content - Offset for sidebar */}
-                <main className="lg:pl-64 min-h-screen transition-all">
-                    <div className="p-4 lg:p-8 mt-16 lg:mt-0">
-                        {children}
-                    </div>
-                </main>
-            </div>
+            {/* Main Content - Offset for sidebar */}
+            <main className="lg:pl-64 min-h-screen transition-all">
+                <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+                    {children}
+                </div>
+            </main>
+        </div>
+    );
+}
+
+export default function AcademyLearnerLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <ErrorBoundary>
+            <AcademyLayoutContent>{children}</AcademyLayoutContent>
         </ErrorBoundary>
     );
 }

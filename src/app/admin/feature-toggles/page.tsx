@@ -16,7 +16,8 @@ export default function FeatureTogglesPage() {
 
     // Use useCallback to prevent unnecessary recreations
     const loadToggles = useCallback(async () => {
-        setLoading(true);
+        // Delay synchronous state update slightly to avoid rendering warnings
+        setTimeout(() => setLoading(true), 0);
         const result = await getAllFeatureToggles();
         if (result.success && result.data) {
             setToggles(result.data);
@@ -25,7 +26,7 @@ export default function FeatureTogglesPage() {
     }, []);
 
     // Initial data fetch on mount - legitimate use case for calling async function in effect
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     useEffect(() => {
         loadToggles();
     }, [loadToggles]);

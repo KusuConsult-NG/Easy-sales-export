@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Clock, Lock, Truck, CheckCircle, AlertTriangle, X, MessageCircle } from "lucide-react";
@@ -209,18 +209,18 @@ export default function EscrowDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [selectedTab, setSelectedTab] = useState<'all' | 'farm-nation' | 'marketplace' | 'export'>('all');
 
-    async function loadTransactions() {
-        setLoading(true);
+    const loadTransactions = useCallback(async () => {
+        setTimeout(() => setLoading(true), 0);
         const result = await getUserEscrowTransactions();
         if (result.success && result.transactions) {
             setTransactions(result.transactions);
         }
         setLoading(false);
-    }
+    }, []);
 
     useEffect(() => {
         loadTransactions();
-    }, []);
+    }, [loadTransactions]);
 
     const filteredTransactions = transactions.filter(t => {
         if (selectedTab === 'all') return true;

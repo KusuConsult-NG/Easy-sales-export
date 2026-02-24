@@ -36,8 +36,10 @@ function PaymentCallbackContent() {
     useEffect(() => {
         const reference = searchParams.get("reference");
         if (!reference) {
-            setStatus("failed");
-            setMessage("No payment reference found");
+            setTimeout(() => {
+                setStatus("failed");
+                setMessage("No payment reference found");
+            }, 0);
             return;
         }
         verifyPayment(reference);

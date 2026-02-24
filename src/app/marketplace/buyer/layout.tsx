@@ -10,7 +10,7 @@ import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-async function BuyerLayoutContent({ children }: { children: React.ReactNode }) {
+function BuyerLayoutContent({ children }: { children: React.ReactNode }) {
     return (
         <ErrorBoundary>
             <div className="min-h-screen bg-slate-50">
@@ -35,16 +35,18 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
         const userId = session.user.id;
 
         // Check service access
+        // Check service access
         const hasAccess = hasAppAccess(session.user.roles || [], "marketplace");
 
         if (!hasAccess) {
             redirect("/marketplace/onboarding");
         }
 
-        // User has access, render the layout
-        return <BuyerLayoutContent>{children}</BuyerLayoutContent>;
     } catch (error) {
         logger.error("Buyer access check error:", error);
         redirect("/auth/login?module=marketplace");
     }
+
+    // User has access, render the layout outside try/catch to satisfy React error-boundaries
+    return <BuyerLayoutContent>{children}</BuyerLayoutContent>;
 }

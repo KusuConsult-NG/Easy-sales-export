@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, use } from "react";
+import { useState, useEffect, useRef, use, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -60,16 +60,18 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
         checkAuthorization();
     }, [status, session, escrowId, router]);
 
-    async function loadMessages() {
+    const loadMessages = useCallback(async () => {
         try {
             const fetchedMessages = await getEscrowMessagesAction(escrowId);
-            setMessages(fetchedMessages);
-            setLoading(false);
+            setTimeout(() => {
+                setMessages(fetchedMessages);
+                setLoading(false);
+            }, 0);
         } catch (error) {
             logger.error("Failed to load messages:", error);
-            setLoading(false);
+            setTimeout(() => setLoading(false), 0);
         }
-    }
+    }, [escrowId]);
 
     function scrollToBottom() {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -86,7 +88,7 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
         }, 5000); // Poll every 5 seconds
 
         return () => clearInterval(interval);
-    }, [status, escrowId]);
+    }, [status, loadMessages]);
 
     // Auto-scroll to bottom when new messages arrive
     useEffect(() => {

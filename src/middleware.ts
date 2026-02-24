@@ -27,7 +27,7 @@ const DOMAIN_MAP: Record<string, string> = {
     "easysalesexportacademy.com": "/academy",
     "easysalescooperative.com": "/cooperatives",
     "easysalesmarket.com": "/marketplace",
-    "waveprogramme.gov.ng": "/wave",
+    "waveprogramme.com": "/wave",
     "farmnation.ng": "/farm-nation",
     "easysalesexportng.com": "/export",
     "easysalesexport.com": "", // Hub represents the root

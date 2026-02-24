@@ -362,7 +362,7 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
             }
         }
 
-        let q = db.collection("wave_resources");
+        const q = db.collection("wave_resources");
         let queryRef;
 
         if (category) {

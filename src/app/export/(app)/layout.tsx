@@ -35,21 +35,22 @@ export default async function ExportAppLayout({
             redirect("/export/onboarding");
         }
 
-        // User has access, render the app
-        return (
-            <ErrorBoundary>
-                <div className="min-h-screen bg-slate-50">
-                    <ExportSidebar />
-                    <main className="lg:pl-64 min-h-screen transition-all">
-                        <div className="p-4 lg:p-8 mt-16 lg:mt-0">
-                            {children}
-                        </div>
-                    </main>
-                </div>
-            </ErrorBoundary>
-        );
     } catch (error) {
         logger.error("Export access check error:", error);
         redirect("/auth/login?module=export");
     }
+
+    // User has access, render the app outside try/catch to satisfy React error-boundaries
+    return (
+        <ErrorBoundary>
+            <div className="min-h-screen bg-slate-50">
+                <ExportSidebar />
+                <main className="lg:pl-64 min-h-screen transition-all">
+                    <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+                        {children}
+                    </div>
+                </main>
+            </div>
+        </ErrorBoundary>
+    );
 }

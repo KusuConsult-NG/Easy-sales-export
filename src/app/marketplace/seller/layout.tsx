@@ -11,7 +11,7 @@ import { auth } from "@/lib/auth"; // Use NextAuth session
 import MarketplaceSidebar from "./MarketplaceSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-async function SellerLayoutContent({ children }: { children: React.ReactNode }) {
+function SellerLayoutContent({ children }: { children: React.ReactNode }) {
     return (
         <ErrorBoundary>
             <div className="min-h-screen bg-slate-50">
@@ -102,10 +102,11 @@ export default async function SellerLayout({ children }: { children: React.React
             redirect('/marketplace/onboarding');
         }
 
-        // User has access, render the layout
-        return <SellerLayoutContent>{children}</SellerLayoutContent>;
     } catch (error) {
         logger.error("Seller access check error:", error);
         redirect("/marketplace/login");
     }
+
+    // User has access, render the layout outside of the try/catch to satisfy React error-boundary rules
+    return <SellerLayoutContent>{children}</SellerLayoutContent>;
 }

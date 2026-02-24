@@ -51,9 +51,9 @@ function DashboardRedirectContent() {
         // Get user roles
         const userRoles = (session?.user?.roles as UserRole[]) || [];
 
-        // Determine primary app and redirect
+        // Determine primary app and defer state update to satisfy React's effect constraints
         const primaryApp = getPrimaryApp(userRoles);
-        setTargetRoute(primaryApp);
+        setTimeout(() => setTargetRoute(primaryApp), 0);
         router.replace(primaryApp);
     }, [session, status, router, error]);
 

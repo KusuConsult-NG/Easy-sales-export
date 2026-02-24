@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Star, Check, User } from "lucide-react";
+import Image from "next/image";
 import { getProductReviewsAction } from "@/app/actions/reviews";
 import type { ProductReview } from "@/lib/types/marketplace";
 
@@ -42,11 +43,7 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
     const [loading, setLoading] = useState(true);
     const [filterRating, setFilterRating] = useState<number | null>(null);
 
-    useEffect(() => {
-        loadReviews();
-    }, [productId, filterRating]);
-
-    async function loadReviews() {
+    const loadReviews = useCallback(async () => {
         setLoading(true);
         try {
             const result = await getProductReviewsAction(
@@ -61,7 +58,11 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
         } finally {
             setLoading(false);
         }
-    }
+    }, [productId, filterRating]);
+
+    useEffect(() => {
+        loadReviews();
+    }, [loadReviews]);
 
     // Calculate rating summary
     const averageRating =
@@ -210,10 +211,12 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                                         key={idx}
                                         className="w-20 h-20 rounded-lg overflow-hidden border border-gray-200"
                                     >
-                                        <img
+                                        <Image
                                             src={url}
                                             alt={`Review image ${idx + 1}`}
-                                            className="w-full h-full object-cover"
+                                            fill
+                                            className="object-cover"
+                                            sizes="(max-width: 768px) 100vw, 80px"
                                         />
                                     </div>
                                 ))}

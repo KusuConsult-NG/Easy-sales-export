@@ -1,0 +1,1161 @@
+
+> easy-sales-export-nextjs@0.1.0 lint
+> eslint
+
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/scripts/setup-admin.ts
+  179:17  error  'updates' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/__tests__/integration/email.test.ts
+  73:13  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/(learner)/progress/page.tsx
+  154:21  error  Do not use an `<a>` element to navigate to `/academy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+  154:21  error  Do not use an `<a>` element to navigate to `/academy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+  154:21  error  Do not use an `<a>` element to navigate to `/academy/`. Use `<Link />` from `next/link` instead. See: https://nextjs.org/docs/messages/no-html-link-for-pages  @next/next/no-html-link-for-pages
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/[courseId]/quiz/[moduleId]/page.tsx
+  53:8  warning  React Hook useEffect has a missing dependency: 'loadQuiz'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  66:9  error    Do not assign to the variable `module`. See: https://nextjs.org/docs/messages/no-assign-module-variable      @next/next/no-assign-module-variable
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/application/page.tsx
+   93:45  error  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render   react-hooks/rules-of-hooks
+  104:39  error  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render   react-hooks/rules-of-hooks
+  111:39  error  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render   react-hooks/rules-of-hooks
+  126:5   error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  130:5   error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  134:5   error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  138:5   error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  142:5   error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  146:5   error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  150:5   error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  154:5   error  React Hook "useEffect" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/courses/[courseId]/quiz/page.tsx
+  57:8  warning  React Hook useEffect has a missing dependency: 'fetchQuiz'. Either include it or remove the dependency array         react-hooks/exhaustive-deps
+  73:8  warning  React Hook useEffect has a missing dependency: 'handleAutoSubmit'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/dashboard/page.tsx
+  43:8  warning  React Hook useEffect has a missing dependency: 'fetchDashboardData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/payment/callback/page.tsx
+  32:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/payment/callback/page.tsx:32:9
+  30 |
+  31 |     useEffect(() => {
+> 32 |         verify();
+     |         ^^^^^^ Avoid calling setState() directly within an effect
+  33 |     }, [verify]);
+  34 |
+  35 |     // Auto-redirect after success  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/academy/verify/[certificateId]/page.tsx
+  29:8  warning  React Hook useEffect has a missing dependency: 'verifyCertificate'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/actions/academy.ts
+  493:13  error  Do not assign to the variable `module`. See: https://nextjs.org/docs/messages/no-assign-module-variable  @next/next/no-assign-module-variable
+  695:13  error  'purpose' is never reassigned. Use 'const' instead                                                       prefer-const
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/actions/land-listings.ts
+  369:13  error  Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/actions/wave.ts
+  365:13  error  'q' is never reassigned. Use 'const' instead  prefer-const
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/academy/[courseId]/page.tsx
+   33:8   warning  React Hook useEffect has a missing dependency: 'loadCourse'. Either include it or remove the dependency array        react-hooks/exhaustive-deps
+  214:30  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/academy/applications/page.tsx
+  59:9  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/academy/applications/page.tsx:59:9
+  57 |
+  58 |     useEffect(() => {
+> 59 |         fetchApplications();
+     |         ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  60 |     }, [statusFilter]);
+  61 |
+  62 |     const handleApprove = async (applicationId: string) => {  react-hooks/set-state-in-effect
+  60:8  warning  React Hook useEffect has a missing dependency: 'fetchApplications'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/content-approval/page.tsx
+  30:9  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/cooperatives/loans/loans/page.tsx
+  67:8  warning  React Hook useEffect has a missing dependency: 'selectedLoan'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/cooperatives/members/page.tsx
+  89:8  warning  React Hook useCallback has a missing dependency: 'showToast'. Either include it or remove the dependency array        react-hooks/exhaustive-deps
+  96:8  warning  React Hook useEffect has a missing dependency: 'fetchApplications'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/export/edit/[id]/page.tsx
+  28:9  error    Error: Cannot access variable before it is declared
+
+`loadData` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/export/edit/[id]/page.tsx:28:9
+  26 |
+  27 |     useEffect(() => {
+> 28 |         loadData();
+     |         ^^^^^^^^ `loadData` accessed before it is declared
+  29 |     }, []);
+  30 |
+  31 |     async function loadData() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/export/edit/[id]/page.tsx:31:5
+  29 |     }, []);
+  30 |
+> 31 |     async function loadData() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 33 |         const result = await getExportRequestByIdAction(id);
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |     }
+     | ^^^^^^ `loadData` is declared here
+  47 |
+  48 |     async function handleSave() {
+  49 |         setSaving(true);  react-hooks/immutability
+  29:8  warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/farm-nation/listings/page.tsx
+  59:29  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/feature-toggles/page.tsx
+  28:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+  30:9  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/feature-toggles/page.tsx:30:9
+  28 |     // eslint-disable-next-line react-hooks/set-state-in-effect
+  29 |     useEffect(() => {
+> 30 |         loadToggles();
+     |         ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  31 |     }, [loadToggles]);
+  32 |
+  33 |     async function handleToggle(featureId: string, currentState: boolean) {  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/marketplace/disputes/[id]/page.tsx
+  54:8  warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/marketplace/disputes/page.tsx
+  42:8  warning  React Hook useEffect has a missing dependency: 'loadDisputes'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
+  46:8  warning  React Hook useEffect has a missing dependency: 'filterDisputes'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/marketplace/reviews/page.tsx
+  54:8  warning  React Hook useEffect has a missing dependency: 'loadReviews'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
+  58:8  warning  React Hook useEffect has a missing dependency: 'filterReviews'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/marketplace/sellers/page.tsx
+  54:8  warning  React Hook useEffect has a missing dependency: 'fetchVerifications'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+  58:8  warning  React Hook useEffect has a missing dependency: 'filterVerifications'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/wave/applications/page.tsx
+  84:8  warning  React Hook useEffect has a missing dependency: 'fetchApplications'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/wave/compliance/page.tsx
+  33:8  warning  React Hook useEffect has a missing dependency: 'fetchComplianceData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/admin/wave/training/page.tsx
+  62:8  warning  React Hook useEffect has a missing dependency: 'loadEvents'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/onboarding/OnboardingClient.tsx
+  70:32  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/onboarding/OnboardingClient.tsx:70:32
+  68 |     useEffect(() => {
+  69 |         const savedPersonalInfo = localStorage.getItem("coop_onboarding_personal");
+> 70 |         if (savedPersonalInfo) setPersonalInfo(JSON.parse(savedPersonalInfo));
+     |                                ^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  71 |
+  72 |         const savedNextOfKin = localStorage.getItem("coop_onboarding_nok");
+  73 |         if (savedNextOfKin) setNextOfKin(JSON.parse(savedNextOfKin));  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/onboarding/steps/DocumentUploadStep.tsx
+  446:33  warning  Image elements must have an alt prop, either with meaningful text, or an empty string for decorative images  jsx-a11y/alt-text
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/payment/callback/page.tsx
+  39:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/cooperatives/payment/callback/page.tsx:39:13
+  37 |         const reference = searchParams.get("reference");
+  38 |         if (!reference) {
+> 39 |             setStatus("failed");
+     |             ^^^^^^^^^ Avoid calling setState() directly within an effect
+  40 |             setMessage("No payment reference found");
+  41 |             return;
+  42 |         }  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/disputes/new/page.tsx
+  69:8  warning  React Hook useEffect has missing dependencies: 'loadOrder', 'router', and 'showToast'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/notifications/page.tsx
+  39:8  warning  React Hook useEffect has missing dependencies: 'loadNotifications' and 'router'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/orders/page.tsx
+  43:8  warning  React Hook useEffect has a missing dependency: 'loadOrders'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/page.tsx
+  56:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/page.tsx:56:9
+  54 |         // Determine primary app and redirect
+  55 |         const primaryApp = getPrimaryApp(userRoles);
+> 56 |         setTargetRoute(primaryApp);
+     |         ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  57 |         router.replace(primaryApp);
+  58 |     }, [session, status, router, error]);
+  59 |  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/reviews/new/page.tsx
+  40:8  warning  React Hook useEffect has missing dependencies: 'loadOrder', 'router', and 'showToast'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/dashboard/reviews/page.tsx
+  65:8  warning  React Hook useEffect has a missing dependency: 'loadReviews'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/[id]/chat/page.tsx
+  61:8  warning  React Hook useEffect has a missing dependency: 'showToast'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               react-hooks/exhaustive-deps
+  82:9  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/[id]/chat/page.tsx:82:9
+  80 |         if (status !== "authenticated") return;
+  81 |
+> 82 |         loadMessages();
+     |         ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  83 |
+  84 |         const interval = setInterval(() => {
+  85 |             loadMessages();  react-hooks/set-state-in-effect
+  89:8  warning  React Hook useEffect has a missing dependency: 'loadMessages'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/[id]/dispute/page.tsx
+  47:8  warning  React Hook useEffect has a missing dependency: 'showToast'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/page.tsx
+  222:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/escrow/page.tsx:222:9
+  220 |
+  221 |     useEffect(() => {
+> 222 |         loadTransactions();
+      |         ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  223 |     }, []);
+  224 |
+  225 |     const filteredTransactions = transactions.filter(t => {  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/layout.tsx
+  40:13  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/layout.tsx:40:13
+  38 |         // User has access, render the app
+  39 |         return (
+> 40 |             <ErrorBoundary>
+     |             ^^^^^^^^^^^^^^^
+> 41 |                 <div className="min-h-screen bg-slate-50">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 42 |                     <ExportSidebar />
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 43 |                     <main className="lg:pl-64 min-h-screen transition-all">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 44 |                         <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |                             {children}
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |                         </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |                     </main>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 48 |                 </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 49 |             </ErrorBoundary>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+  50 |         );
+  51 |     } catch (error) {
+  52 |         logger.error("Export access check error:", error);  react-hooks/error-boundaries
+  41:17  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/layout.tsx:41:17
+  39 |         return (
+  40 |             <ErrorBoundary>
+> 41 |                 <div className="min-h-screen bg-slate-50">
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 42 |                     <ExportSidebar />
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 43 |                     <main className="lg:pl-64 min-h-screen transition-all">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 44 |                         <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |                             {children}
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |                         </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |                     </main>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 48 |                 </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+  49 |             </ErrorBoundary>
+  50 |         );
+  51 |     } catch (error) {                                                                                                                                                                                                                                                                                                                                                               react-hooks/error-boundaries
+  42:21  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/layout.tsx:42:21
+  40 |             <ErrorBoundary>
+  41 |                 <div className="min-h-screen bg-slate-50">
+> 42 |                     <ExportSidebar />
+     |                     ^^^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+  43 |                     <main className="lg:pl-64 min-h-screen transition-all">
+  44 |                         <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+  45 |                             {children}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react-hooks/error-boundaries
+  43:21  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/layout.tsx:43:21
+  41 |                 <div className="min-h-screen bg-slate-50">
+  42 |                     <ExportSidebar />
+> 43 |                     <main className="lg:pl-64 min-h-screen transition-all">
+     |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 44 |                         <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |                             {children}
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |                         </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |                     </main>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+  48 |                 </div>
+  49 |             </ErrorBoundary>
+  50 |         );                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react-hooks/error-boundaries
+  44:25  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/(app)/layout.tsx:44:25
+  42 |                     <ExportSidebar />
+  43 |                     <main className="lg:pl-64 min-h-screen transition-all">
+> 44 |                         <div className="p-4 lg:p-8 mt-16 lg:mt-0">
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |                             {children}
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |                         </div>
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+  47 |                     </main>
+  48 |                 </div>
+  49 |             </ErrorBoundary>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/error-boundaries
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/windows/[id]/page.tsx
+  36:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/export/windows/[id]/page.tsx:36:13
+  34 |     useEffect(() => {
+  35 |         if (windowId) {
+> 36 |             loadWindow();
+     |             ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  37 |         }
+  38 |     }, [windowId]);
+  39 |  react-hooks/set-state-in-effect
+  38:8   warning  React Hook useEffect has a missing dependency: 'loadWindow'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/checkout/[propertyId]/page.tsx
+  62:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/checkout/[propertyId]/page.tsx:62:13
+  60 |             });
+  61 |
+> 62 |             setBuyerInfo(prev => ({
+     |             ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  63 |                 ...prev,
+  64 |                 name: session?.user?.name || "",
+  65 |                 email: session?.user?.email || "",  react-hooks/set-state-in-effect
+  70:8   warning  React Hook useEffect has missing dependencies: 'loadProperty' and 'router'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/list-land/page.tsx
+  503:57  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/map/page.tsx
+   81:8   warning  React Hook useEffect has a missing dependency: 'applyFilters'. Either include it or remove the dependency array                                                                                                                                                                          react-hooks/exhaustive-deps
+  302:41  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-properties/page.tsx
+  61:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-properties/page.tsx:61:13
+  59 |             router.push("/auth/login");
+  60 |         } else if (status === "authenticated") {
+> 61 |             loadProperties();
+     |             ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  62 |         }
+  63 |     }, [status, session]);
+  64 |  react-hooks/set-state-in-effect
+  63:8   warning  React Hook useEffect has missing dependencies: 'loadProperties' and 'router'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-purchases/page.tsx
+  115:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/my-purchases/page.tsx:115:13
+  113 |             router.push("/auth/login");
+  114 |         } else if (status === "authenticated") {
+> 115 |             loadPurchases();
+      |             ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  116 |         }
+  117 |     }, [status, session]);;
+  118 |  react-hooks/set-state-in-effect
+  117:8   warning  React Hook useEffect has missing dependencies: 'loadPurchases' and 'router'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/farm-nation/property/[id]/page.tsx
+  56:8  warning  React Hook useEffect has a missing dependency: 'loadProperty'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/land/verify/page.tsx
+  27:9  error  Error: Cannot access variable before it is declared
+
+`loadListings` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/land/verify/page.tsx:27:9
+  25 |
+  26 |     useEffect(() => {
+> 27 |         loadListings();
+     |         ^^^^^^^^^^^^ `loadListings` accessed before it is declared
+  28 |     }, []);
+  29 |
+  30 |     async function loadListings() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/land/verify/page.tsx:30:5
+  28 |     }, []);
+  29 |
+> 30 |     async function loadListings() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |         const result = await getLandListings({ status: 'pending_verification' });
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 33 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 34 |             setListings(result.listings);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 35 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 36 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 37 |     }
+     | ^^^^^^ `loadListings` is declared here
+  38 |
+  39 |     async function handleVerification(listingId: string, verified: boolean, rejectionReason?: string) {
+  40 |         setProcessing(true);  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/approve/page.tsx
+  25:9  error  Error: Cannot access variable before it is declared
+
+`loadLoans` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/approve/page.tsx:25:9
+  23 |
+  24 |     useEffect(() => {
+> 25 |         loadLoans();
+     |         ^^^^^^^^^ `loadLoans` accessed before it is declared
+  26 |     }, []);
+  27 |
+  28 |     async function loadLoans() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/approve/page.tsx:28:5
+  26 |     }, []);
+  27 |
+> 28 |     async function loadLoans() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 29 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |         const result = await getPendingLoanApplications();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |             setLoans(result.loans);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 33 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 34 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 35 |     }
+     | ^^^^^^ `loadLoans` is declared here
+  36 |
+  37 |     async function handleApproval(loanId: string, approved: boolean, notes?: string, rejectionReason?: string) {
+  38 |         setProcessing(true);  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/page.tsx
+  23:9  error  Error: Cannot access variable before it is declared
+
+`loadLoans` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/page.tsx:23:9
+  21 |
+  22 |     useEffect(() => {
+> 23 |         loadLoans();
+     |         ^^^^^^^^^ `loadLoans` accessed before it is declared
+  24 |     }, []);
+  25 |
+  26 |     async function loadLoans() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/loans/page.tsx:26:5
+  24 |     }, []);
+  25 |
+> 26 |     async function loadLoans() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 27 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |         const result = await getUserLoanApplications();
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 29 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |             setLoans(result.loans);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 32 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 33 |     }
+     | ^^^^^^ `loadLoans` is declared here
+  34 |
+  35 |     const getStatusColor = (status: LoanStatus) => {
+  36 |         const colors: Record<string, string> = {  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/buyer/layout.tsx
+  45:16  error  Error: Avoid constructing JSX within try/catch
+
+React does not immediately render components when JSX is rendered, so any errors from this component will not be caught by the try/catch. To catch errors in rendering a given component, wrap that component in an error boundary. (https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/buyer/layout.tsx:45:16
+  43 |
+  44 |         // User has access, render the layout
+> 45 |         return <BuyerLayoutContent>{children}</BuyerLayoutContent>;
+     |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid constructing JSX within try/catch
+  46 |     } catch (error) {
+  47 |         logger.error("Buyer access check error:", error);
+  48 |         redirect("/auth/login?module=marketplace");  react-hooks/error-boundaries
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/checkout/page.tsx
+  41:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/checkout/page.tsx:41:9
+  39 |
+  40 |     useEffect(() => {
+> 41 |         setIsClient(true);
+     |         ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  42 |         // Pre-fill email from session
+  43 |         if (session?.user?.email) {
+  44 |             setEmail(session.user.email);  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/onboarding/steps/BusinessVerificationStep.tsx
+  295:25  warning  Image elements must have an alt prop, either with meaningful text, or an empty string for decorative images  jsx-a11y/alt-text
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/orders/[id]/page.tsx
+  23:8  warning  React Hook useEffect has a missing dependency: 'loadOrder'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/product/[id]/page.tsx
+  42:8  warning  React Hook useEffect has a missing dependency: 'loadProduct'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/products/add/page.tsx
+  430:57  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/create/page.tsx
+  193:37  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/orders/page.tsx
+  49:8  warning  React Hook useEffect has a missing dependency: 'loadOrders'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/page.tsx
+   33:17  error    Error: Cannot access variable before it is declared
+
+`loadSellerData` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/page.tsx:33:17
+  31 |             if (result.success) {
+  32 |                 showToast(result.message || "Product deleted successfully", "success");
+> 33 |                 loadSellerData();
+     |                 ^^^^^^^^^^^^^^ `loadSellerData` accessed before it is declared
+  34 |             } else {
+  35 |                 showToast(result.error || "Failed to delete product", "error");
+  36 |             }
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/marketplace/sell/page.tsx:50:5
+  48 |     }, [status]);
+  49 |
+> 50 |     const loadSellerData = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 51 |         setLoading(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 52 |         const [productsRes, verificationRes] = await Promise.all([
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 65 |         setLoading(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^
+> 66 |     };
+     | ^^^^^^^ `loadSellerData` is declared here
+  67 |
+  68 |     const filteredProducts = products.filter(p => {
+  69 |         if (filterStatus === "all") return true;  react-hooks/immutability
+   48:8   warning  React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react-hooks/exhaustive-deps
+  245:41  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/messages/page.tsx
+  44:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/messages/page.tsx:44:13
+  42 |     useEffect(() => {
+  43 |         if (!selectedConv) {
+> 44 |             setMessages([]);
+     |             ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  45 |             return;
+  46 |         }
+  47 |  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/vendor/orders/page.tsx
+  21:8  warning  React Hook useEffect has a missing dependency: 'loadOrders'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/vendor/products/page.tsx
+  22:8  warning  React Hook useEffect has a missing dependency: 'loadProducts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/vendor/settings/page.tsx
+  58:9  error  Error: Cannot access variable before it is declared
+
+`loadSettings` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/vendor/settings/page.tsx:58:9
+  56 |
+  57 |     useEffect(() => {
+> 58 |         loadSettings();
+     |         ^^^^^^^^^^^^ `loadSettings` accessed before it is declared
+  59 |     }, []);
+  60 |
+  61 |     async function loadSettings() {
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/vendor/settings/page.tsx:61:5
+   59 |     }, []);
+   60 |
+>  61 |     async function loadSettings() {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  62 |         const result = await getVendorSettingsAction();
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  63 |         if (result.success && result.settings) {
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  99 |         setIsLoading(false);
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 100 |     }
+      | ^^^^^^ `loadSettings` is declared here
+  101 |
+  102 |     async function handleSaveProfile() {
+  103 |         setIsSaving(true);  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/dashboard/page.tsx
+  36:8  warning  React Hook useEffect has a missing dependency: 'loadDashboard'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/earnings/page.tsx
+  32:8  warning  React Hook useEffect has missing dependencies: 'loadEarnings' and 'router'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/profile/page.tsx
+  35:8  warning  React Hook useEffect has a missing dependency: 'loadProfile'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/resources/page.tsx
+  104:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/resources/page.tsx:104:9
+  102 |         }
+  103 |
+> 104 |         setFilteredResources(filtered);
+      |         ^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  105 |     }, [selectedCategory, searchQuery, resources]);
+  106 |     // ...
+  107 |     async function handleDownload(resource: WaveResource) {  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/shipments/page.tsx
+  30:8  warning  React Hook useEffect has missing dependencies: 'loadShipments' and 'router'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/(member)/training/page.tsx
+  33:8  warning  React Hook useEffect has a missing dependency: 'loadTrainingData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/application/page.tsx
+  189:8  warning  React Hook useEffect has a missing dependency: 'checkApplicationStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/application/review-pending/page.tsx
+  14:41  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/wave/application/review-pending/page.tsx:14:41
+  12 |     // Mock data - in production, fetch from database
+  13 |     const applicationDate = new Date();
+> 14 |     const expectedReviewDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
+     |                                         ^^^^^^^^^^ Cannot call impure function
+  15 |
+  16 |     return (
+  17 |         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 px-4 py-12">  react-hooks/purity
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/AnnouncementBanner.tsx
+  15:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/AnnouncementBanner.tsx:15:13
+  13 |         const stored = localStorage.getItem("dismissed_announcements");
+  14 |         if (stored) {
+> 15 |             setDismissed(new Set(JSON.parse(stored)));
+     |             ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  16 |         }
+  17 |
+  18 |         // Mock announcements - in real app, fetch from API  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/DigitalIDCard.tsx
+  161:25  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/OnboardingTour.tsx
+  45:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/OnboardingTour.tsx:45:13
+  43 |     useEffect(() => {
+  44 |         if (isOpen) {
+> 45 |             setIsVisible(true);
+     |             ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  46 |         }
+  47 |     }, [isOpen]);
+  48 |  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx
+  32:13  error    Error: Cannot access variable before it is declared
+
+`loadChatHistory` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:32:13
+  30 |     useEffect(() => {
+  31 |         if (isOpen) {
+> 32 |             loadChatHistory();
+     |             ^^^^^^^^^^^^^^^ `loadChatHistory` accessed before it is declared
+  33 |             loadSuggestions();
+  34 |         }
+  35 |     }, [isOpen, pathname]);
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:42:5
+  40 |     }, [messages]);
+  41 |
+> 42 |     async function loadChatHistory() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 43 |         const result = await getAIChatHistory(20);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 44 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 45 |             setMessages(result.messages);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 46 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 47 |     }
+     | ^^^^^^ `loadChatHistory` is declared here
+  48 |
+  49 |     async function loadSuggestions() {
+  50 |         const result = await getAISuggestions({                                                                                                                                                                                                                                                    react-hooks/immutability
+  33:13  error    Error: Cannot access variable before it is declared
+
+`loadSuggestions` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:33:13
+  31 |         if (isOpen) {
+  32 |             loadChatHistory();
+> 33 |             loadSuggestions();
+     |             ^^^^^^^^^^^^^^^ `loadSuggestions` accessed before it is declared
+  34 |         }
+  35 |     }, [isOpen, pathname]);
+  36 |
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:49:5
+  47 |     }
+  48 |
+> 49 |     async function loadSuggestions() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 50 |         const result = await getAISuggestions({
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 51 |             currentPage: pathname,
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 52 |             userRole,
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 53 |         });
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 54 |         if (result.success) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 55 |             setSuggestions(result.suggestions);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 56 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 57 |     }
+     | ^^^^^^ `loadSuggestions` is declared here
+  58 |
+  59 |     async function handleSendMessage(message?: string) {
+  60 |         const messageToSend = message || inputMessage.trim();  react-hooks/immutability
+  35:8   warning  React Hook useEffect has a missing dependency: 'loadSuggestions'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      react-hooks/exhaustive-deps
+  68:17  error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:68:17
+  66 |         // Add user message optimistically
+  67 |         const userMessage: AIChatMessage = {
+> 68 |             id: Date.now().toString(),
+     |                 ^^^^^^^^^^ Cannot call impure function
+  69 |             userId: 'current',
+  70 |             message: messageToSend,
+  71 |             response: '',                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react-hooks/purity
+  87:38  error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/ai/AISidebar.tsx:87:38
+  85 |             // Update with AI response
+  86 |             const aiMessage: AIChatMessage = {
+> 87 |                 id: result.chatId || Date.now().toString(),
+     |                                      ^^^^^^^^^^ Cannot call impure function
+  88 |                 userId: 'current',
+  89 |                 message: messageToSend,
+  90 |                 response: result.response,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/purity
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/LoginForm.tsx
+  114:17  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/LoginForm.tsx:114:17
+  112 |                 setTimeout(() => showToast(message, "error"), 500);
+  113 |             } else {
+> 114 |                 setError(message);
+      |                 ^^^^^^^^ Avoid calling setState() directly within an effect
+  115 |             }
+  116 |         }
+  117 |     }, [errorParam, showToast]);  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/SessionActivityTracker.tsx
+  26:62  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/SessionActivityTracker.tsx:26:62
+  24 |     const [showWarning, setShowWarning] = useState(false);
+  25 |     const [timeRemaining, setTimeRemaining] = useState(0);
+> 26 |     const [lastActivityTime, setLastActivityTime] = useState(Date.now());
+     |                                                              ^^^^^^^^^^ Cannot call impure function
+  27 |
+  28 |     // Update activity timestamp
+  29 |     const updateActivity = useCallback(() => {                                                                                                                                                                                                                                                                                                                                        react-hooks/purity
+  57:17  error  Error: Cannot access variable before it is declared
+
+`handleLogout` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/SessionActivityTracker.tsx:57:17
+  55 |             // Auto-logout if timeout exceeded
+  56 |             if (remaining <= 0) {
+> 57 |                 handleLogout();
+     |                 ^^^^^^^^^^^^ `handleLogout` accessed before it is declared
+  58 |             }
+  59 |         };
+  60 |
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/auth/SessionActivityTracker.tsx:100:5
+   98 |     }, []);
+   99 |
+> 100 |     const handleLogout = async () => {
+      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 101 |         localStorage.removeItem("lastActivity");
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 102 |         await signOut({ callbackUrl: "/auth/login" });
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 103 |     };
+      | ^^^^^^^ `handleLogout` is declared here
+  104 |
+  105 |     const handleExtendSession = () => {
+  106 |         updateActivity();  react-hooks/immutability
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/cooperative/CooperativePaymentOption.tsx
+  25:8  warning  React Hook useEffect has a missing dependency: 'checkEligibility'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/features/CommodityPieChart.tsx
+  68:40  error  Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/features/CommodityPieChart.tsx:68:40
+  66 |                         ))}
+  67 |                     </Pie>
+> 68 |                     <Tooltip content={<CustomTooltip />} />
+     |                                        ^^^^^^^^^^^^^ This component is created during render
+  69 |                 </PieChart>
+  70 |             </ResponsiveContainer>
+  71 |             <div className="mt-4 space-y-2">
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/features/CommodityPieChart.tsx:23:27
+  21 |     const total = data.reduce((sum, item) => sum + item.value, 0);
+  22 |
+> 23 |     const CustomTooltip = ({ active, payload }: any) => {
+     |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |         if (active && payload && payload.length) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 25 |             const data = payload[0].payload;
+     …
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 39 |         return null;
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 40 |     };
+     | ^^^^^^ The component is created during render here
+  41 |
+  42 |     const renderCustomLabel = (entry: any) => {
+  43 |         const percentage = ((entry.value / total) * 100).toFixed(0);  react-hooks/static-components
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/hub/PlatformStats.tsx
+  53:8  warning  React Hook useEffect has a missing dependency: 'stats'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/land/LandMap.tsx
+  103:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/land/LandMap.tsx:103:9
+  101 |     // Only render map on client-side
+  102 |     useEffect(() => {
+> 103 |         setMounted(true);
+      |         ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  104 |     }, []);
+  105 |
+  106 |     if (!mounted) {  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/layout/NotificationCenter.tsx
+  36:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/layout/NotificationCenter.tsx:36:13
+  34 |     useEffect(() => {
+  35 |         if (!session?.user?.id) {
+> 36 |             setLoading(false);
+     |             ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  37 |             return;
+  38 |         }
+  39 |  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/lms/CourseProgressCard.tsx
+  27:21  error    Error: Cannot access variable before it is declared
+
+`handleGenerateCertificate` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/lms/CourseProgressCard.tsx:27:21
+  25 |                 // Auto-generate certificate if completed and not already generated
+  26 |                 if (result.progress.completed && result.progress.progressPercent >= 100) {
+> 27 |                     handleGenerateCertificate();
+     |                     ^^^^^^^^^^^^^^^^^^^^^^^^^ `handleGenerateCertificate` accessed before it is declared
+  28 |                 }
+  29 |             }
+  30 |             setLoading(false);
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/lms/CourseProgressCard.tsx:36:5
+  34 |     }, [courseId]);
+  35 |
+> 36 |     const handleGenerateCertificate = async () => {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 37 |         setGeneratingCert(true);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 38 |         await generateCourseCertificate(courseId, courseTitle);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 39 |         setGeneratingCert(false);
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 40 |     };
+     | ^^^^^^^ `handleGenerateCertificate` is declared here
+  41 |
+  42 |     if (loading) {
+  43 |         return (  react-hooks/immutability
+  34:8   warning  React Hook useEffect has a missing dependency: 'handleGenerateCertificate'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/marketplace/ProductReviewsSection.tsx
+   47:8   warning  React Hook useEffect has a missing dependency: 'loadReviews'. Either include it or remove the dependency array                                                                                                                                                                           react-hooks/exhaustive-deps
+  213:41  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/ExportWindowModal.tsx
+  26:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/ExportWindowModal.tsx:26:13
+  24 |     useEffect(() => {
+  25 |         if (isOpen) {
+> 26 |             setIdempotencyKey(crypto.randomUUID());
+     |             ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  27 |         }
+  28 |     }, [isOpen]);
+  29 |  react-hooks/set-state-in-effect
+  44:8   warning  React Hook useEffect has a missing dependency: 'state'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/JoinCooperativeModal.tsx
+  119:8  warning  React Hook useEffect has a missing dependency: 'state.message'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/StatusUpdateModal.tsx
+  45:8  warning  React Hook useEffect has a missing dependency: 'state.message'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/WithdrawalModal.tsx
+  34:13  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/components/modals/WithdrawalModal.tsx:34:13
+  32 |     useEffect(() => {
+  33 |         if (isOpen) {
+> 34 |             setIdempotencyKey(crypto.randomUUID());
+     |             ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  35 |         }
+  36 |     }, [isOpen]);
+  37 |  react-hooks/set-state-in-effect
+  48:8   warning  React Hook useEffect has a missing dependency: 'state.message'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        react-hooks/exhaustive-deps
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/contexts/ExportCartContext.tsx
+  61:17  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/contexts/ExportCartContext.tsx:61:17
+  59 |             const saved = localStorage.getItem(STORAGE_KEY);
+  60 |             if (saved) {
+> 61 |                 setCart(JSON.parse(saved));
+     |                 ^^^^^^^ Avoid calling setState() directly within an effect
+  62 |             }
+  63 |         } catch {
+  64 |             // Ignore parse errors  react-hooks/set-state-in-effect
+
+/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/hooks/useAdminData.ts
+  54:8  warning  React Hook useCallback has an unnecessary dependency: 'pageIndex'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+  60:8  warning  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array         react-hooks/exhaustive-deps
+
+✖ 136 problems (66 errors, 70 warnings)
+  3 errors and 2 warnings potentially fixable with the `--fix` option.
+

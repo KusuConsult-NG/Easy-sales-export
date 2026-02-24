@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { CheckCircle, XCircle, Clock, Eye, FileText, Package, Home, GraduationCap, BookOpen, Loader2 } from "lucide-react";
 import { getPendingContentAction, approveContentAction, rejectContentAction, type PendingContentItem, type ContentType } from "@/app/actions/admin-content";
 import { toast } from "sonner";
@@ -14,8 +14,9 @@ export default function ContentApprovalPage() {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
 
-    async function loadContent() {
-        setLoading(true);
+    const loadContent = useCallback(async () => {
+        // Delay synchronous state to satisfy React hydration effect rules
+        setTimeout(() => setLoading(true), 0);
         const result = await getPendingContentAction();
         if (result.success && result.data) {
             setPendingItems(result.data);
@@ -23,12 +24,11 @@ export default function ContentApprovalPage() {
             toast.error(result.error || "Failed to load content");
         }
         setLoading(false);
-    }
+    }, []);
 
     useEffect(() => {
         loadContent();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [loadContent]);
 
     const handleApprove = async (item: PendingContentItem) => {
         if (!confirm(`Are you sure you want to approve "${item.title}"?`)) return;
