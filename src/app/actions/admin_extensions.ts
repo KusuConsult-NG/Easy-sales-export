@@ -44,7 +44,7 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
         // PII Scrubbing
         const timestamp = Date.now();
         const scrubbedEmail = `deleted_${timestamp}_${targetUserId}@deleted.com`;
-        const scrubbedPhone = `0000000000`; // Placeholder
+        const scrubbedPhone = `DELETED-${timestamp.toString(36).toUpperCase()}`;
         const scrubbedName = "Deleted User";
 
         // 1. Update Firestore Doc (Soft Delete)

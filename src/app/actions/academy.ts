@@ -1042,3 +1042,95 @@ export async function getEnrolledCoursesWithDetailsAction(): Promise<{
     }
 }
 
+
+// ============================================================================
+// QUIZ MANAGEMENT (Admin)
+// ============================================================================
+
+export interface QuizEditorQuestion {
+    id: string;
+    text: string;
+    options: {
+        id: string;
+        text: string;
+        isCorrect: boolean;
+    }[];
+}
+
+/**
+ * Save (upsert) a quiz's questions and title to Firestore.
+ * Used by the admin quiz editor page.
+ */
+export async function saveQuizAction(
+    courseId: string,
+    quizId: string,
+    title: string,
+    questions: QuizEditorQuestion[]
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+            return { success: false, error: "Unauthorized: Admin access required" };
+        }
+
+        if (!courseId || !quizId) {
+            return { success: false, error: "Course ID and Quiz ID are required" };
+        }
+
+        if (questions.length === 0) {
+            return { success: false, error: "Quiz must have at least one question" };
+        }
+
+        // Validate each question has exactly one correct answer
+        for (const q of questions) {
+            const correctCount = q.options.filter(o => o.isCorrect).length;
+            if (correctCount !== 1) {
+                return { success: false, error: `Question "${q.text.slice(0, 40)}…" must have exactly one correct answer` };
+            }
+        }
+
+        await db.collection(COLLECTIONS.ACADEMY_QUIZZES).doc(quizId).set({
+            courseId,
+            title,
+            questions,
+            updatedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("saveQuizAction error:", error);
+        return { success: false, error: "Failed to save quiz" };
+    }
+}
+
+/**
+ * Load a quiz's questions from Firestore.
+ */
+export async function getQuizAction(
+    quizId: string
+): Promise<{ success: boolean; title?: string; questions?: QuizQuestion[]; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return { success: false, error: "Authentication required" };
+        }
+
+        const doc = await db.collection(COLLECTIONS.ACADEMY_QUIZZES).doc(quizId).get();
+
+        if (!doc.exists) {
+            return { success: true, title: "New Quiz", questions: [] };
+        }
+
+        const data = doc.data()!;
+        return {
+            success: true,
+            title: data.title || "Module Quiz",
+            questions: data.questions || [],
+        };
+    } catch (error: any) {
+        logger.error("getQuizAction error:", error);
+        return { success: false, error: "Failed to load quiz" };
+    }
+}

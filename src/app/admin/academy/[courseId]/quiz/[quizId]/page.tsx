@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Save, Trash2, GripVertical, CheckCircle2, Circle } from "lucide-react";
+import { ArrowLeft, Plus, Save, Trash2, CheckCircle2, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { saveQuizAction, getQuizAction } from "@/app/actions/academy";
 
 type Question = {
     id: string;
@@ -23,18 +24,24 @@ export default function QuizEditorPage() {
     const quizId = params.quizId as string;
 
     const [isLoading, setIsLoading] = useState(false);
+    const [isFetching, setIsFetching] = useState(true);
     const [quizTitle, setQuizTitle] = useState("Module Quiz");
-    const [questions, setQuestions] = useState<Question[]>([
-        {
-            id: "q1",
-            text: "What is the primary export document?",
-            options: [
-                { id: "o1", text: "NXP Form", isCorrect: true },
-                { id: "o2", text: "Driver's License", isCorrect: false },
-                { id: "o3", text: "Receipt", isCorrect: false },
-            ]
+    const [questions, setQuestions] = useState<Question[]>([]);
+
+    // Load from Firestore on mount
+    useEffect(() => {
+        async function load() {
+            const result = await getQuizAction(quizId);
+            if (result.success) {
+                setQuizTitle(result.title || "Module Quiz");
+                setQuestions((result.questions || []) as any);
+            } else {
+                toast.error(result.error || "Failed to load quiz");
+            }
+            setIsFetching(false);
         }
-    ]);
+        load();
+    }, [quizId]);
 
     const handleAddQuestion = () => {
         const newQuestion: Question = {
@@ -103,11 +110,22 @@ export default function QuizEditorPage() {
 
     const handleSave = async () => {
         setIsLoading(true);
-        // Simulate save
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        toast.success("Quiz saved successfully");
+        const result = await saveQuizAction(courseId, quizId, quizTitle, questions as any);
         setIsLoading(false);
+        if (result.success) {
+            toast.success("Quiz saved successfully");
+        } else {
+            toast.error(result.error || "Failed to save quiz");
+        }
     };
+
+    if (isFetching) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 py-8 px-4">
@@ -173,8 +191,8 @@ export default function QuizEditorPage() {
                                         <button
                                             onClick={() => handleSetCorrectOption(q.id, opt.id)}
                                             className={`flex-none w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${opt.isCorrect
-                                                    ? "border-green-500 bg-green-500 text-white"
-                                                    : "border-slate-300 text-transparent hover:border-slate-400"
+                                                ? "border-green-500 bg-green-500 text-white"
+                                                : "border-slate-300 text-transparent hover:border-slate-400"
                                                 }`}
                                         >
                                             <CheckCircle2 className="w-3 h-3" />

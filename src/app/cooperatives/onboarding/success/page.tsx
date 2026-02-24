@@ -6,14 +6,15 @@
 
 "use client";
 
-import { useState } from "react";
-import { CheckCircle, ArrowRight, Home, Wallet, TrendingUp, Users } from "lucide-react";
+import { Suspense } from "react";
+import { CheckCircle, ArrowRight, Home, Wallet, TrendingUp, Users, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
-export default function CooperativeSuccessPage() {
-    // In production, get membership details from URL params or Firestore
-    const [membershipId] = useState(() => "COOP-2026-" + Math.random().toString(36).substr(2, 6).toUpperCase());
-    const tier = "Premium"; // Would come from onboarding data
+function CooperativeSuccessContent() {
+    const searchParams = useSearchParams();
+    const membershipId = searchParams.get("ref") || "COOP-2026-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+    const tier = searchParams.get("tier") || "Standard";
 
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -127,5 +128,17 @@ export default function CooperativeSuccessPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function CooperativeSuccessPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+            </div>
+        }>
+            <CooperativeSuccessContent />
+        </Suspense>
     );
 }

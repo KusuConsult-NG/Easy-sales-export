@@ -16,9 +16,9 @@ import { AlertTriangle, X } from "lucide-react";
  * - Event listeners for: mousemove, keydown, click, scroll, touchstart
  */
 
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
-const WARNING_THRESHOLD_MS = 2 * 60 * 1000; // Show warning 2 minutes before timeout
-const ACTIVITY_DEBOUNCE_MS = 30 * 1000; // Update activity timestamp max once per 30 seconds
+const SESSION_TIMEOUT_MS = 10 * 60 * 1000;  // 10 minutes
+const WARNING_THRESHOLD_MS = 60 * 1000;       // Show warning 60 seconds before timeout
+const ACTIVITY_DEBOUNCE_MS = 30 * 1000;       // Update activity timestamp max once per 30 seconds
 
 export default function SessionActivityTracker() {
     const [showWarning, setShowWarning] = useState(false);
