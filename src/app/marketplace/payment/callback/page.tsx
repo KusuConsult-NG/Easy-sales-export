@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { verifyOrderPaymentAction } from "@/app/actions/marketplace-payment";
 import { CheckCircle, XCircle, Loader2, Home, ShoppingBag } from "lucide-react";
 import Link from "next/link";
@@ -9,6 +10,7 @@ import Link from "next/link";
 function PaymentCallbackContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const { data: session } = useSession();
     const [status, setStatus] = useState<"verifying" | "success" | "error">("verifying");
     const [message, setMessage] = useState("");
     const [orderId, setOrderId] = useState<string | null>(null);
@@ -31,9 +33,11 @@ function PaymentCallbackContent() {
                     setMessage(result.message || "Order payment successful!");
                     setOrderId(result.orderId || null);
 
-                    // Clear cart from localStorage
+                    // Clear both user-scoped and legacy cart keys
                     if (typeof window !== "undefined") {
-                        localStorage.removeItem("marketplace_cart");
+                        const userId = session?.user?.id;
+                        if (userId) localStorage.removeItem(`marketplace_cart_${userId}`);
+                        localStorage.removeItem("marketplace_cart"); // legacy fallback
                     }
                 } else {
                     setStatus("error");

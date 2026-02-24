@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
     ArrowLeft, ArrowRight, ShoppingCart, Minus, Plus, X,
@@ -20,6 +21,7 @@ const SHIPPING_TERMS: { id: ShippingTerm; label: string; description: string }[]
 
 export default function ExportCartPage() {
     const router = useRouter();
+    const { data: session } = useSession();
     const { cart, removeFromCart, updateQuantity, cartTotal, clearCart, cartCount } = useExportCart();
 
     const [step, setStep] = useState<"cart" | "details" | "payment" | "success">("cart");
@@ -27,6 +29,18 @@ export default function ExportCartPage() {
     const [orderRef, setOrderRef] = useState("");
     const [paymentMethod, setPaymentMethod] = useState<"paystack">("paystack");
     const [error, setError] = useState<string | null>(null);
+
+    // Warn before leaving mid-checkout
+    useEffect(() => {
+        if (step === "details" || step === "payment") {
+            const handler = (e: BeforeUnloadEvent) => {
+                e.preventDefault();
+                e.returnValue = "";
+            };
+            window.addEventListener("beforeunload", handler);
+            return () => window.removeEventListener("beforeunload", handler);
+        }
+    }, [step]);
 
     // Buyer details form state
     const [buyerDetails, setBuyerDetails] = useState({
@@ -91,8 +105,10 @@ export default function ExportCartPage() {
             );
 
             if (result.success && result.data) {
-                // Store buyer details in localStorage for post-payment processing
-                localStorage.setItem("export_buyer_details", JSON.stringify({
+                // Store buyer details in user-scoped localStorage for post-payment processing
+                const userId = session?.user?.id;
+                const detailsKey = userId ? `export_buyer_details_${userId}` : "export_buyer_details";
+                localStorage.setItem(detailsKey, JSON.stringify({
                     ...buyerDetails,
                     cartSnapshot: cart.map(item => ({
                         product: item.product.name,

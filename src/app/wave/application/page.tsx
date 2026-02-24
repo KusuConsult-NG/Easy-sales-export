@@ -200,10 +200,31 @@ export default function WaveApplicationPage() {
         setRestored(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, session?.user?.id]);
+
+    // Warn before tab close / navigation away mid-form
+    useEffect(() => {
+        if (currentStep === 0 || submitting) return; // no warning on first step or after submit
+        const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+        window.addEventListener("beforeunload", handler);
+        return () => window.removeEventListener("beforeunload", handler);
+    }, [currentStep, submitting]);
+
+    // Mobile back button: intercept popstate and go to the previous step
+    useEffect(() => {
+        const handlePopState = (e: PopStateEvent) => {
+            if (currentStep > 0) {
+                e.preventDefault?.();
+                setCurrentStep(prev => Math.max(0, prev - 1));
+                // Re-push a state so the next back press also gets caught
+                window.history.pushState({ waveStep: currentStep - 1 }, "");
+            }
+        };
+        window.addEventListener("popstate", handlePopState);
+        return () => window.removeEventListener("popstate", handlePopState);
+    }, [currentStep]);
+
     useEffect(() => {
         // Auth is now enforced server-side in middleware.
-        // By the time this component renders, the user is guaranteed to be authenticated.
-        // We only need to check if they already have a pending/approved application.
         if (session?.user?.id) {
             checkApplicationStatus();
         }
@@ -258,7 +279,12 @@ export default function WaveApplicationPage() {
                 localStorage.setItem(`wave_app_draft_${userId}`, JSON.stringify({ step, data: formData }));
             } catch { /* non-blocking */ }
         }
+        // Push a history entry so the mobile back button goes to previous step, not previous page
+        if (typeof window !== "undefined") {
+            window.history.pushState({ waveStep: step }, "");
+        }
         window.scrollTo({ top: 0, behavior: "smooth" });
+
     };
 
     const nextStep = () => {

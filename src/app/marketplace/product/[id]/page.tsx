@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
 import {
     ArrowLeft,
     ShoppingCart,
@@ -29,6 +30,7 @@ export default function ProductDetailPage() {
     const params = useParams();
     const router = useRouter();
     const { showToast } = useToast();
+    const { data: session } = useSession();
     const productId = params.id as string;
 
     const [product, setProduct] = useState<Product | null>(null);
@@ -59,11 +61,10 @@ export default function ProductDetailPage() {
 
     const addToCart = () => {
         if (!product) return;
+        const userId = session?.user?.id;
+        const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
 
-        // Get current cart from localStorage
-        const cart = JSON.parse(localStorage.getItem("marketplace_cart") || "[]");
-
-        // Check if product already in cart
+        const cart = JSON.parse(localStorage.getItem(cartKey) || "[]");
         const existingIndex = cart.findIndex((item: any) => item.id === product.id);
 
         if (existingIndex >= 0) {
@@ -72,7 +73,7 @@ export default function ProductDetailPage() {
             cart.push({ ...product, quantity });
         }
 
-        localStorage.setItem("marketplace_cart", JSON.stringify(cart));
+        localStorage.setItem(cartKey, JSON.stringify(cart));
         showToast(`Added ${quantity} ${product.unit} to cart`, "success");
         router.push("/marketplace");
     };
@@ -369,8 +370,8 @@ export default function ProductDetailPage() {
                     </div>
                 </div>
 
-                    {/* Reviews Section */}
-                    <ProductReviewsSection productId={productId} />
+                {/* Reviews Section */}
+                <ProductReviewsSection productId={productId} />
 
             </div>
         </div>

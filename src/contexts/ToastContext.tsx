@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useCallback } from "react";
+import { createContext, useContext, useCallback, useRef } from "react";
 import { toast } from "sonner";
 
 type ToastType = "success" | "error" | "info" | "warning" | "loading";
@@ -21,10 +21,24 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | undefined>(undefined);
 
+// Deduplication window: ignore a repeat of the exact same message+type within 2 seconds
+const DEDUP_WINDOW_MS = 2000;
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+    // Map of "type:message" -> timestamp of last show
+    const recentToastsRef = useRef<Map<string, number>>(new Map());
 
     const showToast = useCallback((message: string, type: ToastType, duration = 5000) => {
-        // Map to sonner methods
+        const key = `${type}:${message}`;
+        const now = Date.now();
+        const last = recentToastsRef.current.get(key) ?? 0;
+
+        // Deduplicate: if same message+type shown within DEDUP_WINDOW_MS, do nothing
+        if (now - last < DEDUP_WINDOW_MS) {
+            return 0; // return a stable no-op id
+        }
+        recentToastsRef.current.set(key, now);
+
         switch (type) {
             case "success":
                 return toast.success(message, { duration });
@@ -42,11 +56,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const updateToast = useCallback((id: string | number, message: string, type: ToastType) => {
-        // Sonner doesn't strictly separate "update" from "dismiss + new" for simple toasts,
-        // but it does support updating if we have the ID.
-        // For 'loading' to 'success'/'error', usually we use toast.promise or manual dismiss + show.
-        // However, toast.success(message, { id }) can update an existing toast if the ID matches.
-
         const options = { id };
         switch (type) {
             case "success":
@@ -82,12 +91,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 error: string | ((error: any) => string);
             }
         ): Promise<T> => {
-            const result = toast.promise(promiseToResolve, {
+            toast.promise(promiseToResolve, {
                 loading: messages.loading,
                 success: messages.success,
                 error: messages.error,
             });
-            // Await the promise to get the actual T value
             return promiseToResolve;
         },
         []
@@ -107,4 +115,3 @@ export function useToast() {
     }
     return context;
 }
-

@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { registerCooperativeMemberAction, initiateCooperativePaymentAction } from "@/app/actions/cooperative";
 import { CooperativeErrorBoundary } from "@/components/errors/CooperativeErrorBoundary";
 import { useToast } from "@/contexts/ToastContext";
+import { useSession } from "next-auth/react";
 
 // Steps
 import PersonalInfoStep from "./steps/PersonalInfoStep";
@@ -28,6 +29,7 @@ interface OnboardingContentProps {
 function CooperativeOnboardingContent({ initialTier, paymentStatus }: OnboardingContentProps) {
     const router = useRouter();
     const { showToast } = useToast();
+    const { data: session, status } = useSession();
 
     // If payment is already done, start at step 4 (review & submit)
     const [currentStep, setCurrentStep] = useState(paymentStatus === "completed" ? 4 : 1);
@@ -64,32 +66,42 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         bvn: ""
     });
 
+    // ── User-scoped localStorage keys ────────────────────────────────────────
+    // Keys are namespaced by userId so two users on the same device never share
+    // sensitive personal / next-of-kin / document data.
+    const userId = session?.user?.id;
+    const keyOf = (suffix: string) => userId ? `coop_onboarding_${userId}_${suffix}` : null;
+
     // --- Persist state across Paystack redirect ---
     useEffect(() => {
+        if (status === "loading" || !userId) return;
         setTimeout(() => {
-            const savedPersonalInfo = localStorage.getItem("coop_onboarding_personal");
+            const savedPersonalInfo = localStorage.getItem(keyOf('personal') as string);
             if (savedPersonalInfo) setPersonalInfo(JSON.parse(savedPersonalInfo));
 
-            const savedNextOfKin = localStorage.getItem("coop_onboarding_nok");
+            const savedNextOfKin = localStorage.getItem(keyOf('nok') as string);
             if (savedNextOfKin) setNextOfKin(JSON.parse(savedNextOfKin));
 
-            const savedDocuments = localStorage.getItem("coop_onboarding_docs");
+            const savedDocuments = localStorage.getItem(keyOf('docs') as string);
             if (savedDocuments) setDocuments(JSON.parse(savedDocuments));
         }, 0);
-    }, []);
+    }, [userId, status]);
 
     useEffect(() => {
-        localStorage.setItem("coop_onboarding_personal", JSON.stringify(personalInfo));
-    }, [personalInfo]);
+        const k = keyOf('personal');
+        if (k) localStorage.setItem(k, JSON.stringify(personalInfo));
+    }, [personalInfo, userId]);
 
     useEffect(() => {
-        localStorage.setItem("coop_onboarding_nok", JSON.stringify(nextOfKin));
-    }, [nextOfKin]);
+        const k = keyOf('nok');
+        if (k) localStorage.setItem(k, JSON.stringify(nextOfKin));
+    }, [nextOfKin, userId]);
 
     useEffect(() => {
-        localStorage.setItem("coop_onboarding_docs", JSON.stringify(documents));
-    }, [documents]);
-    // ----------------------------------------------
+        const k = keyOf('docs');
+        if (k) localStorage.setItem(k, JSON.stringify(documents));
+    }, [documents, userId]);
+    // ─────────────────────────────────────────────────────────────────────────
 
     const isPaid = paymentStatus === "completed";
     const totalSteps = 4;
@@ -161,10 +173,12 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             const result = await registerCooperativeMemberAction(formData);
 
             if (result.success) {
-                // Clear local storage upon successful submission
-                localStorage.removeItem("coop_onboarding_personal");
-                localStorage.removeItem("coop_onboarding_nok");
-                localStorage.removeItem("coop_onboarding_docs");
+                // Clear user-scoped local storage upon successful submission
+                if (userId) {
+                    ['personal', 'nok', 'docs'].forEach(s => {
+                        try { localStorage.removeItem(`coop_onboarding_${userId}_${s}`); } catch { /* non-blocking */ }
+                    });
+                }
 
                 showToast("Application submitted successfully!", "success");
                 router.push("/cooperatives/onboarding/pending");

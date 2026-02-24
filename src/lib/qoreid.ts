@@ -2,24 +2,39 @@ import { logger } from './logger';
 
 const QOREID_API_URL = process.env.NODE_ENV === 'production'
     ? 'https://api.qoreid.com'
-    : 'https://api.sandbox.qoreid.com'; // Using sandbox for dev/test
+    : 'https://api.sandbox.qoreid.com';
 
 interface QoreIdAuthResponse {
     accessToken: string;
     expiresIn: number;
 }
 
+// ─── Response normalisation ──────────────────────────────────────────────────
+// QoreID returns state values in UPPERCASE in production ("COMPLETE", "EXACT_MATCH")
+// and lowercase in sandbox ("complete", "exact_match"). We normalise to lowercase.
+function normState(state?: string): string {
+    return (state || '').toLowerCase();
+}
+
+// A lookup is considered a successful identity match when:
+//  - state is "complete" or "exact_match"
+//  - AND (where available) summary.exactMatch is not explicitly false
+function resolveMatch(data: any): boolean {
+    const state = normState(data?.status?.state);
+    const stateOk = state === 'complete' || state === 'exact_match';
+    // summary.exactMatch may be undefined (entity found but name not compared) — treat as true
+    const nameMatch = data?.summary?.exactMatch !== false;
+    return stateOk && nameMatch;
+}
+
+// ─── QoreID Service ──────────────────────────────────────────────────────────
 class QoreIdService {
     private accessToken: string | null = null;
     private tokenExpiry: number | null = null;
 
-    /**
-     * Get an access token using Client ID and Secret Key
-     */
     private async getAuthToken(): Promise<string> {
-        // Return cached token if valid
         if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
-            return this.accessToken as string;
+            return this.accessToken;
         }
 
         const clientId = process.env.QOREID_CLIENT_ID;
@@ -29,327 +44,165 @@ class QoreIdService {
             throw new Error('QOREID_CLIENT_ID or QOREID_SECRET_KEY is missing');
         }
 
-        try {
-            const response = await fetch(`${QOREID_API_URL}/token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    clientId,
-                    secret: secretKey,
-                }),
-            });
+        const response = await fetch(`${QOREID_API_URL}/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId, secret: secretKey }),
+        });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                logger.error('Failed to authenticate with QoreID', { status: response.status, error: errorData });
-                throw new Error(`QoreID Authentication failed: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            // Accommodate structure differences based on QoreID API version
-            const token = data.accessToken || data.data?.accessToken;
-            const expiresIn = data.expiresIn || data.data?.expiresIn || 3600; // Default 1 hour
-
-            if (!token) {
-                throw new Error('Received empty access token from QoreID');
-            }
-
-            this.accessToken = String(token);
-            // Subtract 5 minutes from expiry for safety margin
-            this.tokenExpiry = Date.now() + (expiresIn * 1000) - 300000;
-
-            return this.accessToken;
-        } catch (error) {
-            logger.error('Error fetching QoreID token', error);
-            throw error;
+        if (response.status === 429) {
+            throw new Error('RATE_LIMIT: QoreID authentication rate-limited. Please retry later.');
         }
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            logger.error('QoreID auth failed', { status: response.status, err });
+            throw new Error(`QoreID Authentication failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const token = data.accessToken || data.data?.accessToken;
+        const expiresIn = data.expiresIn || data.data?.expiresIn || 3600;
+
+        if (!token) throw new Error('Received empty access token from QoreID');
+
+        this.accessToken = String(token);
+        this.tokenExpiry = Date.now() + (expiresIn * 1000) - 300_000; // 5-min safety margin
+        return this.accessToken;
     }
 
-    /**
-     * Verify a BVN
-     */
+    // ── Common fetch helper ─────────────────────────────────────────────────
+    private async qoreIdFetch(path: string, body: Record<string, string>) {
+        const token = await this.getAuthToken();
+        const response = await fetch(`${QOREID_API_URL}${path}`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (response.status === 429) {
+            return { success: false as const, error: 'RATE_LIMIT: Verification service is temporarily rate-limited. Please wait a moment and try again.' };
+        }
+        if (response.status === 401 || response.status === 403) {
+            // Token may have been revoked; clear cache so next call re-authenticates
+            this.accessToken = null;
+            this.tokenExpiry = null;
+            return { success: false as const, error: 'Verification service authentication failed. Please try again.' };
+        }
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const errMsg = data?.message || data?.error || 'Verification failed or service unavailable';
+            return { success: false as const, error: errMsg };
+        }
+
+        return { success: true as const, data };
+    }
+
+    // ── BVN ─────────────────────────────────────────────────────────────────
     async verifyBVN(bvn: string, firstName: string, lastName: string) {
         try {
-            const token = await this.getAuthToken();
-
-            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/bvn-basic`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    idNumber: bvn,
-                    firstName: firstName,
-                    lastName: lastName
-                }),
+            const result = await this.qoreIdFetch('/v1/ng/identities/bvn-basic', {
+                idNumber: bvn, firstName, lastName,
             });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                logger.error('QoreID BVN Verification Failed', { status: response.status, error: errorData });
-                return { success: false, error: 'Verification failed or service unavailable' };
-            }
-
-            const data = await response.json();
-
-            // Analyze the response to determine mathematical match
-            // Typically QoreID returns status and matching fields
-            // Assuming QoreID structure: data.summary.exactMatch or data.status.state === "complete"
-            const isMatch = data.status?.state === "complete" || data.summary?.exactMatch;
-
-            return {
-                success: true,
-                isMatch: isMatch,
-                details: data
-            };
-
+            if (!result.success) return result;
+            return { success: true as const, isMatch: resolveMatch(result.data), details: result.data };
         } catch (error) {
-            logger.error('Exception during QoreID BVN verification', error);
-            return { success: false, error: 'An unexpected error occurred during verification' };
+            logger.error('QoreID BVN verification exception', error);
+            return { success: false as const, error: 'An unexpected error occurred during BVN verification' };
         }
     }
 
-    /**
-     * Verify a NIN
-     */
+    // ── NIN ─────────────────────────────────────────────────────────────────
     async verifyNIN(nin: string, firstName: string, lastName: string) {
         try {
-            const token = await this.getAuthToken();
-
-            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/nin`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    idNumber: nin,
-                    firstName: firstName,
-                    lastName: lastName
-                }),
+            const result = await this.qoreIdFetch('/v1/ng/identities/nin', {
+                idNumber: nin, firstName, lastName,
             });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                logger.error('QoreID NIN Verification Failed', { status: response.status, error: errorData });
-                return { success: false, error: 'Verification failed or service unavailable' };
-            }
-
-            const data = await response.json();
-
-            // Check status for completed match
-            const isMatch = data.status?.state === "complete" || data.summary?.exactMatch;
-
-            return {
-                success: true,
-                isMatch: isMatch,
-                details: data
-            };
-
+            if (!result.success) return result;
+            return { success: true as const, isMatch: resolveMatch(result.data), details: result.data };
         } catch (error) {
-            logger.error('Exception during QoreID NIN verification', error);
-            return { success: false, error: 'An unexpected error occurred during verification' };
+            logger.error('QoreID NIN verification exception', error);
+            return { success: false as const, error: 'An unexpected error occurred during NIN verification' };
         }
     }
 
-    /**
-     * Verifies a Driver's License
-     */
+    // ── Driver's Licence ────────────────────────────────────────────────────
     async verifyDrivingLicense(licenseNumber: string, firstName: string, lastName: string) {
         try {
-            const token = await this.getAuthToken();
-
-            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/drivers-license`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    idNumber: licenseNumber,
-                    firstName: firstName,
-                    lastName: lastName
-                }),
+            const result = await this.qoreIdFetch('/v1/ng/identities/drivers-license', {
+                idNumber: licenseNumber, firstName, lastName,
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                logger.error('QoreID Driver License Verification Error', data);
-                return { success: false, error: data.message || 'Failed to verify Driver License' };
-            }
-
-            // A successful response where identity matches
-            const isMatch = data.status?.state === 'exact_match' || data.summary?.nid_match;
-
-            return {
-                success: true,
-                isMatch: isMatch,
-                details: data
-            };
+            if (!result.success) return result;
+            return { success: true as const, isMatch: resolveMatch(result.data), details: result.data };
         } catch (error) {
-            logger.error('Exception during QoreID Driver License verification', error);
-            return { success: false, error: 'An unexpected error occurred during verification' };
+            logger.error('QoreID Driver Licence verification exception', error);
+            return { success: false as const, error: 'An unexpected error occurred during Driver Licence verification' };
         }
     }
 
-    /**
-     * Verifies a Voter's Card (PVC)
-     */
+    // ── Voter's Card (PVC) ───────────────────────────────────────────────────
     async verifyVotersCard(votersNumber: string, firstName: string, lastName: string) {
         try {
-            const token = await this.getAuthToken();
-
-            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/voters-card`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    idNumber: votersNumber,
-                    firstName: firstName,
-                    lastName: lastName
-                }),
+            const result = await this.qoreIdFetch('/v1/ng/identities/voters-card', {
+                idNumber: votersNumber, firstName, lastName,
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                logger.error('QoreID Voters Card Verification Error', data);
-                return { success: false, error: data.message || 'Failed to verify Voters Card' };
-            }
-
-            const isMatch = data.status?.state === 'exact_match' || data.summary?.nid_match;
-
-            return {
-                success: true,
-                isMatch: isMatch,
-                details: data
-            };
+            if (!result.success) return result;
+            return { success: true as const, isMatch: resolveMatch(result.data), details: result.data };
         } catch (error) {
-            logger.error('Exception during QoreID Voters Card verification', error);
-            return { success: false, error: 'An unexpected error occurred during verification' };
+            logger.error('QoreID Voter Card verification exception', error);
+            return { success: false as const, error: 'An unexpected error occurred during Voter Card verification' };
         }
     }
 
-    /**
-     * Verifies an International Passport
-     */
+    // ── Passport ────────────────────────────────────────────────────────────
     async verifyPassport(passportNumber: string, firstName: string, lastName: string) {
         try {
-            const token = await this.getAuthToken();
-
-            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/passport`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    idNumber: passportNumber,
-                    firstName: firstName,
-                    lastName: lastName
-                }),
+            const result = await this.qoreIdFetch('/v1/ng/identities/passport', {
+                idNumber: passportNumber, firstName, lastName,
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                logger.error('QoreID Passport Verification Error', data);
-                return { success: false, error: data.message || 'Failed to verify Passport' };
-            }
-
-            const isMatch = data.status?.state === 'exact_match' || data.summary?.nid_match;
-
-            return {
-                success: true,
-                isMatch: isMatch,
-                details: data
-            };
+            if (!result.success) return result;
+            return { success: true as const, isMatch: resolveMatch(result.data), details: result.data };
         } catch (error) {
-            logger.error('Exception during QoreID Passport verification', error);
-            return { success: false, error: 'An unexpected error occurred during verification' };
+            logger.error('QoreID Passport verification exception', error);
+            return { success: false as const, error: 'An unexpected error occurred during Passport verification' };
         }
     }
 
-    /**
-     * Verifies a Corporate Affairs Commission (CAC) Business Registration
-     */
+    // ── CAC (Business Registration) ─────────────────────────────────────────
     async verifyCAC(rcNumber: string, companyName: string) {
         try {
-            const token = await this.getAuthToken();
-
-            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/cac-basic`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    idNumber: rcNumber,
-                    companyName: companyName
-                }),
+            const result = await this.qoreIdFetch('/v1/ng/identities/cac-basic', {
+                idNumber: rcNumber, companyName,
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                logger.error('QoreID CAC Verification Error', data);
-                return { success: false, error: data.message || 'Failed to verify CAC Registration' };
-            }
-
-            // A successful response where identity matches
-            const isMatch = data.status?.state === 'exact_match' || data.summary?.nid_match;
-
-            return {
-                success: true,
-                isMatch: isMatch,
-                details: data
-            };
+            if (!result.success) return result;
+            return { success: true as const, isMatch: resolveMatch(result.data), details: result.data };
         } catch (error) {
-            logger.error('Exception during QoreID CAC verification', error);
-            return { success: false, error: 'An unexpected error occurred during verification' };
+            logger.error('QoreID CAC verification exception', error);
+            return { success: false as const, error: 'An unexpected error occurred during CAC verification' };
         }
     }
 
-    /**
-     * Verifies a Tax Identification Number (TIN)
-     */
+    // ── TIN ─────────────────────────────────────────────────────────────────
+    // Previously hardcoded isMatch: true regardless of the API response.
+    // Now properly checks whether the TIN resolves a real registered entity.
+    // TIN responses don't include a name comparison (no firstName/lastName submitted),
+    // so isMatch = true iff the API found a record (state === complete/found).
     async verifyTIN(tin: string) {
         try {
-            const token = await this.getAuthToken();
-
-            const response = await fetch(`${QOREID_API_URL}/v1/ng/identities/tin`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    idNumber: tin
-                }),
+            const result = await this.qoreIdFetch('/v1/ng/identities/tin', {
+                idNumber: tin,
             });
+            if (!result.success) return result;
 
-            const data = await response.json();
+            // TIN is "matched" when the API successfully resolved the TIN to a known entity
+            const state = normState(result.data?.status?.state);
+            const isMatch = state === 'complete' || state === 'found' || state === 'exact_match';
 
-            if (!response.ok) {
-                logger.error('QoreID TIN Verification Error', data);
-                return { success: false, error: data.message || 'Failed to verify TIN' };
-            }
-
-            return {
-                success: true,
-                isMatch: true, // If it resolves the organization successfully
-                details: data
-            };
+            return { success: true as const, isMatch, details: result.data };
         } catch (error) {
-            logger.error('Exception during QoreID TIN verification', error);
-            return { success: false, error: 'An unexpected error occurred during verification' };
+            logger.error('QoreID TIN verification exception', error);
+            return { success: false as const, error: 'An unexpected error occurred during TIN verification' };
         }
     }
 }

@@ -39,17 +39,15 @@ export default function CheckoutPage() {
 
     useEffect(() => {
         setIsClient(true);
-        // Pre-fill email from session
-        if (session?.user?.email) {
-            setEmail(session.user.email);
-        }
+        if (session?.user?.email) setEmail(session.user.email);
 
-        // Retrieve cart from localStorage
-        const savedCart = localStorage.getItem("marketplace_cart");
+        // Use user-scoped cart key to match what product page sets
+        const userId = session?.user?.id;
+        const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
+        const savedCart = localStorage.getItem(cartKey);
         if (savedCart) {
             setCart(JSON.parse(savedCart));
         } else {
-            // No cart items, redirect back to marketplace
             router.push("/marketplace");
         }
     }, [router, session]);
