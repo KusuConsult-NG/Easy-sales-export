@@ -83,33 +83,31 @@ export default auth((req: any) => {
     // -----------------------------------------------------------------------
     // DEDICATED DOMAIN REWRITE
     // When a non-hub dedicated domain is detected (rewritePrefix is a non-empty
-    // string), we handle two distinct cases so the FULL application is accessible
-    // through both the dedicated domain and the hub:
+    // string), we handle distinct cases so the FULL application is accessible:
     //
-    //  Case 1 — Root path "/" → rewrite to module landing page (e.g. /academy).
+    //  Case 1 — Path already includes the module prefix (e.g. /academy/courses)
+    //            → pass-through with security headers.
     //
-    //  Case 2 — Path already includes the module prefix (e.g. /academy/courses
-    //            on easysalesexportacademy.com) → pass-through with security
-    //            headers. Internal links inside the app always use full absolute
-    //            paths (e.g. href="/academy/courses"), so this is the normal
-    //            in-app navigation path.
+    //  Case 2 — Path is a global "shared" route (e.g. /auth, /dashboard)
+    //            → pass-through untouched so it works on the dedicated domain.
     //
-    //  All other paths (shared routes like /auth/*, /dashboard, /about, etc.)
-    //  are left untouched and served as-is — they work the same on both the
-    //  hub and the dedicated domain. DO NOT prepend the module prefix to them,
-    //  as that creates double routes that don't exist (e.g. /academy/auth/login).
+    //  Case 3 — All other paths (including root "/") are assumed to belong to 
+    //            the module associated with this domain. We prepend the prefix.
+    //            (e.g., /courses → rewrite to /academy/courses).
     // -----------------------------------------------------------------------
     if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
-        // --- Case 1: root path → rewrite to module landing page ---
-        if (pathname === "/") {
-            const url = req.nextUrl.clone();
-            url.pathname = rewritePrefix;
-            const rewriteRes = NextResponse.rewrite(url);
-            response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
-            return rewriteRes;
-        }
+        const SHARED_ROOT_PATHS = [
+            "/auth", "/dashboard", "/admin", "/profile", "/settings",
+            "/messages", "/escrow", "/verify-id", "/verify-status",
+            "/loans", "/favicon.ico", "/images", "/about", "/contact",
+            "/privacy", "/terms", "/refund-policy", "/get-started", "/api"
+        ];
 
-        // --- Case 2: path already carries the module prefix → no rewrite needed ---
+        const isSharedRoute = SHARED_ROOT_PATHS.some(
+            (p) => pathname === p || pathname.startsWith(p + "/")
+        );
+
+        // --- Case 1: path already carries the module prefix → no rewrite needed ---
         if (pathname.startsWith(rewritePrefix)) {
             // Apply admin role guard on the already-prefixed path
             if (pathname.startsWith("/admin") && req.auth?.user) {
@@ -119,10 +117,18 @@ export default auth((req: any) => {
                     return NextResponse.redirect(new URL("/dashboard", req.url));
                 }
             }
-            // Fall through to the standard auth/response logic below
+        }
+        // --- Case 3: path is NOT a shared route and NOT already prefixed ---
+        else if (!isSharedRoute) {
+            const url = req.nextUrl.clone();
+            // Prepend the module prefix. Special case: if pathname is just "/", resulting path is rewritePrefix
+            url.pathname = pathname === "/" ? rewritePrefix : `${rewritePrefix}${pathname}`;
+            const rewriteRes = NextResponse.rewrite(url);
+            response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
+            return rewriteRes;
         }
 
-        // All other paths (shared routes) — fall through untouched.
+        // --- Case 2: shared routes fall through untouched.
     }
 
     // Root/landing page is public (only reaches here for the hub domain)
