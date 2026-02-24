@@ -144,8 +144,16 @@ export default auth((req: any) => {
         // Only gate non-auth / non-API paths
         const UNGATED_PREFIXES = ["/auth", "/api", "/about", "/contact", "/help", "/privacy", "/terms", "/refund-policy", "/_next", "/favicon.ico"];
         const isUngated = UNGATED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
-        // Also allow the pure marketing pages to remain public
-        const PUBLIC_MODULE_PAGES = ["/wave/landing", "/wave/access-denied", "/cooperatives/landing", "/export/windows", "/windows"];
+        // Also allow the pure marketing/landing pages to remain public
+        const PUBLIC_MODULE_PAGES = [
+            "/wave/landing", "/wave/access-denied", "/wave",          // WAVE marketing
+            "/cooperatives/landing", "/cooperatives",                  // Cooperatives marketing
+            "/marketplace", "/marketplace/products",                   // Marketplace catalog
+            "/academy",                                                // Academy info
+            "/farm-nation",                                            // Farm Nation landing
+            "/export",                                                 // Export landing
+            "/export/windows", "/windows",                             // Export catalog
+        ];
         const isPublicModulePage = PUBLIC_MODULE_PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
         if (!isUngated && !isPublicModulePage) {

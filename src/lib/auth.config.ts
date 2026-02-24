@@ -30,11 +30,18 @@ export const authConfig = {
                 "/refund-policy",
                 "/get-started",
                 "/land",
-                // Module MARKETING pages only (read-only, no forms)
+                // Module MARKETING / LANDING pages (read-only, no gated forms)
                 "/wave/landing",
                 "/wave/access-denied",
+                "/wave",              // root → redirects to /wave/landing
                 "/cooperatives/landing",
-                // Export windows — public investment catalog (no auth needed to browse)
+                "/cooperatives",      // root → redirects to /cooperatives/landing
+                "/marketplace",       // public catalog landing
+                "/marketplace/products", // public product browsing
+                "/academy",           // public academy info page
+                "/farm-nation",       // public farm-nation landing
+                "/export",            // public export windows landing
+                // Export windows — public investment catalog
                 "/export/windows",
                 "/windows",
             ];
@@ -53,13 +60,12 @@ export const authConfig = {
             // easysalesexportacademy.com becomes /setup before rewrite).
             const protectedPaths = [
                 "/dashboard",
-                // Wave — all entry + app forms require auth
+                // Wave — application forms require auth
                 "/wave/briefing",
                 "/wave/application",
                 "/briefing",
                 "/application",
-                // Marketplace — entire module requires auth
-                "/marketplace",
+                // Marketplace — seller/buyer/checkout flows require auth
                 "/marketplace/buyer",
                 "/marketplace/checkout",
                 "/marketplace/success",
@@ -67,7 +73,7 @@ export const authConfig = {
                 "/marketplace/onboarding",
                 "/marketplace/sell",
                 "/marketplace/seller",
-                "/onboarding",
+                "/marketplace/seller-verification",
                 "/sell",
                 "/seller",
                 // Cooperatives — all forms require auth
@@ -76,15 +82,19 @@ export const authConfig = {
                 "/cooperatives/verify-payment",
                 "/payment",
                 "/verify-payment",
-                // Academy — entire module requires auth
-                "/academy",
+                // Academy — setup/enrollment flow requires auth
                 "/academy/setup",
+                "/academy/(member)",
                 "/setup",
-                // Farm Nation — entire module requires auth
-                "/farm-nation",
-                // Export — onboarding & buyer flows require auth (/windows is public catalog)
+                // Farm Nation — onboarding/checkout flows require auth
+                "/farm-nation/onboarding",
+                "/farm-nation/checkout",
+                "/farm-nation/(member)",
+                "/farm-nation/list-land",
+                // Export — onboarding & buyer flows require auth
                 "/export/onboarding",
                 "/export/buyer",
+                "/export/(app)",
                 "/onboarding",
                 // Shared protected areas
                 "/escrow",
