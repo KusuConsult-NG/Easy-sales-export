@@ -970,3 +970,75 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
         return { success: false, error: error.message };
     }
 }
+
+/**
+ * Get all courses a user is enrolled in, joined with course metadata.
+ * Used by the My Courses page.
+ */
+export interface EnrolledCourseWithDetails {
+    courseId: string;
+    title: string;
+    instructor: string;
+    thumbnail?: string;
+    totalLessons: number;
+    completedLessons: number;
+    progress: number;
+    status: "in-progress" | "completed";
+    startedAt: string;
+}
+
+export async function getEnrolledCoursesWithDetailsAction(): Promise<{
+    success: boolean;
+    courses: EnrolledCourseWithDetails[];
+    error?: string;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, courses: [], error: "Authentication required" };
+
+        const userId = session.user.id;
+
+        // 1. Fetch all progress records for this user
+        const progressSnap = await db.collection(`user_progress/${userId}/courses`).get();
+        if (progressSnap.empty) return { success: true, courses: [] };
+
+        // 2. Batch-fetch course metadata for each enrolled course
+        const courseIds = progressSnap.docs.map((d) => d.id);
+        const courseDocs = await Promise.all(
+            courseIds.map((id) => db.collection("academy_courses").doc(id).get())
+        );
+
+        const courses: EnrolledCourseWithDetails[] = [];
+
+        progressSnap.docs.forEach((progressDoc, idx) => {
+            const progress = progressDoc.data() as UserProgress;
+            const courseDoc = courseDocs[idx];
+            if (!courseDoc.exists) return;
+
+            const course = courseDoc.data() as Course;
+            const totalLessons = course.modules?.reduce((sum, m) => sum + m.lessons.length, 0) ?? 0;
+            const completedCount = progress.completedLessons?.length ?? 0;
+            const progressPct = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
+
+            courses.push({
+                courseId: progressDoc.id,
+                title: course.title,
+                instructor: course.instructor,
+                thumbnail: course.thumbnail,
+                totalLessons,
+                completedLessons: completedCount,
+                progress: progressPct,
+                status: progress.completedAt ? "completed" : "in-progress",
+                startedAt: progress.startedAt
+                    ? new Date((progress.startedAt as Timestamp).toDate()).toLocaleDateString()
+                    : "",
+            });
+        });
+
+        return { success: true, courses };
+    } catch (error: any) {
+        logger.error("getEnrolledCoursesWithDetailsAction error:", error);
+        return { success: false, courses: [], error: "Failed to load enrolled courses" };
+    }
+}
+

@@ -1,59 +1,41 @@
-import { BookOpen, Clock, CheckCircle, Play, Award } from "lucide-react";
+"use client";
+
+import { useState, useEffect } from "react";
+import { BookOpen, Clock, CheckCircle, Play, Award, Loader2 } from "lucide-react";
 import Link from "next/link";
 import BackButton from "@/components/ui/BackButton";
-
-// This will be replaced with real data from Firestore
-const ENROLLED_COURSES = [
-    {
-        id: "1",
-        title: "Modern Farming Techniques",
-        instructor: "Dr. Ademola Ogunlesi",
-        progress: 65,
-        thumbnail: "/images/courses/farming.jpg",
-        totalLessons: 24,
-        completedLessons: 16,
-        estimatedTime: "2 weeks left",
-        status: "in-progress"
-    },
-    {
-        id: "2",
-        title: "Export Documentation Mastery",
-        instructor: "Mrs. Patience Nwafor",
-        progress: 30,
-        thumbnail: "/images/courses/export.jpg",
-        totalLessons: 18,
-        completedLessons: 5,
-        estimatedTime: "4 weeks left",
-        status: "in-progress"
-    },
-    {
-        id: "3",
-        title: "Agribusiness Fundamentals",
-        instructor: "Prof. Ibrahim Yusuf",
-        progress: 100,
-        thumbnail: "/images/courses/business.jpg",
-        totalLessons: 20,
-        completedLessons: 20,
-        estimatedTime: "Completed",
-        status: "completed"
-    }
-];
+import { getEnrolledCoursesWithDetailsAction, type EnrolledCourseWithDetails } from "@/app/actions/academy";
 
 export default function MyCoursesPage() {
-    const inProgressCourses = ENROLLED_COURSES.filter((c) => c.status === "in-progress");
-    const completedCourses = ENROLLED_COURSES.filter((c) => c.status === "completed");
+    const [courses, setCourses] = useState<EnrolledCourseWithDetails[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        getEnrolledCoursesWithDetailsAction()
+            .then((result) => {
+                if (result.success) setCourses(result.courses);
+            })
+            .finally(() => setLoading(false));
+    }, []);
+
+    const inProgressCourses = courses.filter((c) => c.status === "in-progress");
+    const completedCourses = courses.filter((c) => c.status === "completed");
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
             {/* Header */}
             <div>
                 <BackButton fallbackPath="/academy/dashboard" />
-                <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                    My Courses
-                </h1>
-                <p className="text-slate-600">
-                    Continue learning and track your progress
-                </p>
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">My Courses</h1>
+                <p className="text-slate-600">Continue learning and track your progress</p>
             </div>
 
             {/* Stats Cards */}
@@ -65,9 +47,7 @@ export default function MyCoursesPage() {
                         </div>
                         <div>
                             <p className="text-sm text-slate-600">Enrolled Courses</p>
-                            <p className="text-2xl font-bold text-slate-900">
-                                {ENROLLED_COURSES.length}
-                            </p>
+                            <p className="text-2xl font-bold text-slate-900">{courses.length}</p>
                         </div>
                     </div>
                 </div>
@@ -79,9 +59,7 @@ export default function MyCoursesPage() {
                         </div>
                         <div>
                             <p className="text-sm text-slate-600">Completed</p>
-                            <p className="text-2xl font-bold text-slate-900">
-                                {completedCourses.length}
-                            </p>
+                            <p className="text-2xl font-bold text-slate-900">{completedCourses.length}</p>
                         </div>
                     </div>
                 </div>
@@ -93,9 +71,7 @@ export default function MyCoursesPage() {
                         </div>
                         <div>
                             <p className="text-sm text-slate-600">In Progress</p>
-                            <p className="text-2xl font-bold text-slate-900">
-                                {inProgressCourses.length}
-                            </p>
+                            <p className="text-2xl font-bold text-slate-900">{inProgressCourses.length}</p>
                         </div>
                     </div>
                 </div>
@@ -104,30 +80,22 @@ export default function MyCoursesPage() {
             {/* In Progress Courses */}
             {inProgressCourses.length > 0 && (
                 <div>
-                    <h2 className="text-xl font-bold text-slate-900 mb-4">
-                        Continue Learning
-                    </h2>
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">Continue Learning</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {inProgressCourses.map((course) => (
                             <div
-                                key={course.id}
+                                key={course.courseId}
                                 className="bg-white rounded-xl overflow-hidden border border-slate-200 hover:shadow-lg transition-shadow"
                             >
                                 {/* Thumbnail */}
-                                <div className="h-40 bg-linear-to-br from-primary/20 to-transparent relative">
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <BookOpen className="w-16 h-16 text-white/30" />
-                                    </div>
+                                <div className="h-40 bg-linear-to-br from-blue-500/20 to-indigo-500/20 relative flex items-center justify-center">
+                                    <BookOpen className="w-16 h-16 text-blue-300" />
                                 </div>
 
                                 {/* Content */}
                                 <div className="p-6">
-                                    <h3 className="text-lg font-bold text-slate-900 mb-1">
-                                        {course.title}
-                                    </h3>
-                                    <p className="text-sm text-slate-600 mb-4">
-                                        {course.instructor}
-                                    </p>
+                                    <h3 className="text-lg font-bold text-slate-900 mb-1">{course.title}</h3>
+                                    <p className="text-sm text-slate-600 mb-4">{course.instructor}</p>
 
                                     {/* Progress Bar */}
                                     <div className="mb-4">
@@ -150,10 +118,10 @@ export default function MyCoursesPage() {
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-sm text-slate-600">
                                             <Clock className="w-4 h-4" />
-                                            <span>{course.estimatedTime}</span>
+                                            <span>Started {course.startedAt}</span>
                                         </div>
                                         <Link
-                                            href={`/academy/courses/${course.id}`}
+                                            href={`/academy/courses/${course.courseId}`}
                                             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
                                         >
                                             <Play className="w-4 h-4" />
@@ -177,7 +145,7 @@ export default function MyCoursesPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {completedCourses.map((course) => (
                             <div
-                                key={course.id}
+                                key={course.courseId}
                                 className="bg-white rounded-xl overflow-hidden border border-green-200 relative"
                             >
                                 {/* Completed Badge */}
@@ -189,27 +157,21 @@ export default function MyCoursesPage() {
                                 </div>
 
                                 {/* Thumbnail */}
-                                <div className="h-32 bg-linear-to-br from-green-500 to-emerald-600 relative">
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <Award className="w-12 h-12 text-white/30" />
-                                    </div>
+                                <div className="h-32 bg-linear-to-br from-green-500 to-emerald-600 relative flex items-center justify-center">
+                                    <Award className="w-12 h-12 text-white/30" />
                                 </div>
 
                                 {/* Content */}
                                 <div className="p-6">
-                                    <h3 className="text-lg font-bold text-slate-900 mb-1">
-                                        {course.title}
-                                    </h3>
-                                    <p className="text-sm text-slate-600 mb-4">
-                                        {course.instructor}
-                                    </p>
+                                    <h3 className="text-lg font-bold text-slate-900 mb-1">{course.title}</h3>
+                                    <p className="text-sm text-slate-600 mb-4">{course.instructor}</p>
 
                                     <div className="flex items-center justify-between">
                                         <div className="text-sm text-green-600 font-semibold">
                                             Certificate earned!
                                         </div>
                                         <Link
-                                            href={`/academy/(learner)/certificates`}
+                                            href="/academy/certificate"
                                             className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
                                         >
                                             <Award className="w-4 h-4" />
@@ -224,12 +186,10 @@ export default function MyCoursesPage() {
             )}
 
             {/* Empty State */}
-            {ENROLLED_COURSES.length === 0 && (
+            {courses.length === 0 && (
                 <div className="bg-white rounded-xl p-12 text-center border border-slate-200">
                     <BookOpen className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">
-                        No Courses Enrolled Yet
-                    </h3>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">No Courses Enrolled Yet</h3>
                     <p className="text-slate-600 mb-6">
                         Start your learning journey by browsing our course catalog
                     </p>

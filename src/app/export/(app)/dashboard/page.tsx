@@ -270,11 +270,13 @@ export default function ExportDashboardPage() {
                         </div>
 
                         {/* Info Banner */}
-                        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 p-8">
-                            <h3 className="font-bold mb-2">New Opportunities Available</h3>
-                            <p className="text-sm text-orange-50 mb-4">
-                                3 new export windows are now open for investment. Explore premium
-                                opportunities with up to 22% ROI.
+                        <div className="bg-linear-to-br from-orange-500 to-amber-600 rounded-xl p-6 text-white">
+                            <div className="flex items-center gap-2 mb-3">
+                                <AlertCircle className="w-5 h-5 text-orange-100" />
+                                <h3 className="font-bold text-white">New Opportunities</h3>
+                            </div>
+                            <p className="text-sm text-orange-100 mb-4">
+                                New export windows are now open for investment with up to 22% ROI.
                             </p>
                             <Link
                                 href="/export/opportunities"

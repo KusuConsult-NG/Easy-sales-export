@@ -206,7 +206,7 @@ export default function OrderConfirmationPage() {
                         Continue Shopping
                     </button>
                     <button
-                        onClick={() => router.push("/dashboard/orders")}
+                        onClick={() => router.push("/marketplace/seller")}
                         className="flex-1 px-6 py-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition flex items-center justify-center gap-2"
                     >
                         <Package className="w-5 h-5" />
