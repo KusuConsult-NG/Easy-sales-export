@@ -547,6 +547,50 @@ export interface ExportInvestment {
     updatedAt?: Date;
 }
 
+export interface ExportSlot {
+    id: string;
+    userId: string;
+    exportId: string; // Reference to export_windows document
+    windowTitle?: string; // Denormalized for display — e.g. "Q1 Yam Export"
+    commodity?: string;
+    amount: number; // Amount invested by the user
+    expectedReturn: number; // Projected profit at window end
+    roi?: string; // e.g. "15%"
+    status: "pending" | "active" | "completed" | "cancelled";
+    paymentReference: string; // Paystack reference
+    purchaseDate?: Date;
+    startDate?: Date;
+    endDate?: Date;
+    daysRemaining?: number;
+    createdAt: Date;
+    updatedAt?: Date;
+}
+
+export interface WaveWithdrawal {
+    id: string;
+    withdrawalId: string; // Canonical ID, e.g. WD-1234-ABC
+    userId: string;
+    userEmail?: string;
+    amount: number; // Amount requested in ₦, minimum 5,000
+    status: "pending" | "approved" | "rejected" | "completed";
+    requestedAt: Date;
+    processedAt?: Date;
+    processedBy?: string; // Admin userId who approved/rejected
+    adminNotes?: string;
+    createdAt: Date;
+    updatedAt?: Date;
+}
+
+export interface PlatformSettings {
+    platformName: string;
+    supportEmail: string;
+    contactPhone: string;
+    defaultCurrency: "NGN" | "USD" | "GBP";
+    maintenanceMode: boolean;
+    updatedBy?: string; // Admin userId who last saved
+    updatedAt?: Date;
+}
+
 export interface PasswordResetToken {
     id: string;
     email: string;
@@ -684,4 +728,13 @@ export const COLLECTIONS = {
 
     // Auth
     PASSWORD_RESETS: "password_resets",
+
+    // WAVE Earnings Withdrawals
+    WAVE_WITHDRAWALS: "wave_withdrawals",
+
+    // Platform / Admin Configuration
+    PLATFORM_SETTINGS: "platform_settings",
+
+    // Export Slots (individual investment slots per user per export window)
+    // Note: EXPORT_SLOTS is already defined above — this alias is preferred in new code
 } as const;
