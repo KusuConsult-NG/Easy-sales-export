@@ -6,7 +6,7 @@
 
 import { auth } from "@/lib/auth";
 import { logger } from '@/lib/logger';
-import { db } from "@/lib/firebase-admin";
+import { db, adminAuth } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 
@@ -14,6 +14,7 @@ import { z } from "zod";
 const profileUpdateSchema = z.object({
     firstName: z.string().max(50).optional(),
     lastName: z.string().max(50).optional(),
+    email: z.string().email("Please enter a valid email address").optional(),
     phone: z.string().optional(),
     location: z.string().optional(),
     bio: z.string().max(500).optional(),
@@ -45,11 +46,21 @@ export async function getUserProfileAction() {
 
         const userData = userDoc.data()!;
 
+        const splitName = (fullName: string) => {
+            const parts = fullName.trim().split(/\s+/).filter(Boolean);
+            return {
+                first: parts[0] || "",
+                last: parts.length > 1 ? parts.slice(1).join(" ") : "",
+            };
+        };
+
+        const nameSplit = splitName(userData.fullName || "");
+
         return {
             success: true,
             profile: {
-                firstName: userData.firstName || userData.fullName?.split(' ')[0] || "",
-                lastName: userData.lastName || userData.fullName?.split(' ').slice(1).join(' ') || "",
+                firstName: userData.firstName || nameSplit.first,
+                lastName: userData.lastName || nameSplit.last,
                 email: userData.email || "",
                 phone: userData.phone || "",
                 location: userData.location || "",
@@ -78,6 +89,7 @@ export async function getUserProfileAction() {
 export async function updateUserProfileAction(data: {
     firstName?: string;
     lastName?: string;
+    email?: string;
     phone?: string;
     location?: string;
     bio?: string;
@@ -94,6 +106,19 @@ export async function updateUserProfileAction(data: {
 
         const userId = session.user.id;
 
+        // If email is changing, update Firebase Auth as well (not just Firestore)
+        if (validated.email && validated.email !== session.user.email) {
+            try {
+                await adminAuth.updateUser(userId, { email: validated.email });
+            } catch (authErr: any) {
+                logger.error("Firebase Auth email update failed:", authErr);
+                if (authErr.code === 'auth/email-already-exists') {
+                    return { success: false, error: "That email address is already in use by another account." };
+                }
+                return { success: false, error: "Failed to update email. Please try again." };
+            }
+        }
+
         // Update Firestore — also compute fullName from parts
         const updatePayload: Record<string, any> = {
             ...validated,
@@ -102,8 +127,8 @@ export async function updateUserProfileAction(data: {
         if (validated.firstName || validated.lastName) {
             const existingDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const existing = existingDoc.data() || {};
-            const first = validated.firstName ?? existing.firstName ?? "";
-            const last = validated.lastName ?? existing.lastName ?? "";
+            const first = validated.firstName ?? existing.firstName ?? existing.fullName?.split(' ')[0] ?? "";
+            const last = validated.lastName ?? existing.lastName ?? existing.fullName?.split(' ').slice(1).join(' ') ?? "";
             updatePayload.fullName = `${first} ${last}`.trim();
         }
         await db.collection(COLLECTIONS.USERS).doc(userId).update(updatePayload);

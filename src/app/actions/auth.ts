@@ -131,7 +131,8 @@ export async function getPostLoginRedirect(email: string) {
                     'export': '/export/onboarding/pending',
                     'marketplace': '/marketplace/onboarding/pending',
                     'cooperatives': '/cooperatives/onboarding/pending',
-                    'farm_nation': '/farm-nation/onboarding/pending',
+                    'farmNation': '/farm-nation/onboarding/pending',  // camelCase — matches Firestore writes
+                    'farm_nation': '/farm-nation/onboarding/pending', // snake_case alias for safety
                     'academy': '/academy/application/pending',
                 };
 

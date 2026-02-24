@@ -176,9 +176,26 @@ export default function WaveApplicationPage() {
     const [currentStep, setCurrentStep] = useState(0);
     const [formData, setFormData] = useState<WaveApplicationData>(INITIAL_DATA);
     const [submitting, setSubmitting] = useState(false);
+    const [restored, setRestored] = useState(false);
     const { showToast } = useToast();
     const { data: session, status } = useSession();
 
+    // Restore saved progress from localStorage on first mount
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem("wave_app_draft");
+            if (saved) {
+                const { step, data } = JSON.parse(saved);
+                if (data) setFormData({ ...INITIAL_DATA, ...data });
+                if (typeof step === "number") setCurrentStep(step);
+                showToast("Your previous progress has been restored.", "success");
+            }
+        } catch {
+            // Ignore parse errors — start fresh
+        }
+        setRestored(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     useEffect(() => {
         // Auth is now enforced server-side in middleware.
         // By the time this component renders, the user is guaranteed to be authenticated.
@@ -207,7 +224,7 @@ export default function WaveApplicationPage() {
         }
     };
 
-    if (status === "loading") {
+    if (status === "loading" || !restored) {
         return (
             <div className="min-h-screen bg-stone-900 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -216,30 +233,44 @@ export default function WaveApplicationPage() {
     }
 
     const updateFormData = (data: Partial<WaveApplicationData>) => {
-        setFormData((prev) => ({ ...prev, ...data }));
+        setFormData((prev) => {
+            const next = { ...prev, ...data };
+            // Persist draft after every field update
+            try {
+                localStorage.setItem("wave_app_draft", JSON.stringify({ step: currentStep, data: next }));
+            } catch { /* quota exceeded, non-blocking */ }
+            return next;
+        });
+    };
+
+    const goToStep = (step: number) => {
+        setCurrentStep(step);
+        try {
+            localStorage.setItem("wave_app_draft", JSON.stringify({ step, data: formData }));
+        } catch { /* non-blocking */ }
+        window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
     const nextStep = () => {
         if (currentStep < STEPS.length - 1) {
-            setCurrentStep((prev) => prev + 1);
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            goToStep(currentStep + 1);
         }
     };
 
     const prevStep = () => {
         if (currentStep > 0) {
-            setCurrentStep((prev) => prev - 1);
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            goToStep(currentStep - 1);
         }
     };
 
     const handleSubmit = async () => {
         setSubmitting(true);
         try {
-            // Submit WAVE application with full multi-step data
             const result = await submitMultiStepWaveApplicationAction(formData);
 
             if (result.success) {
+                // Clear saved draft on successful submit
+                try { localStorage.removeItem("wave_app_draft"); } catch { /* non-blocking */ }
                 router.push("/wave/application/success");
             } else {
                 showToast(result.error || "Failed to submit application. Please try again.", "error");
@@ -361,7 +392,7 @@ export default function WaveApplicationPage() {
                             onBack={prevStep}
                             onSubmit={handleSubmit}
                             submitting={submitting}
-                            onEdit={(step) => setCurrentStep(step)}
+                            onEdit={(step) => goToStep(step)}
                         />
                     )}
                 </div>

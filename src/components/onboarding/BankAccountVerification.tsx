@@ -328,23 +328,25 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                                 Account Verified
                             </p>
                             <p className="text-sm text-green-700">
-                                Your bank account has been successfully verified
+                                {bvnVerified
+                                    ? "Bank account & BVN both verified ✓"
+                                    : "Your bank account has been successfully verified"}
                             </p>
                         </div>
                     </div>
                     <button
                         onClick={() => {
+                            // Only reset bank fields — preserve BVN verification
                             setVerified(false);
-                            setBvnVerified(false);
                             setAccountName("");
-                            setBvn("");
                             setError("");
-                            setBvnError("");
+                            // Note: bvnVerified is intentionally NOT reset here.
+                            // The user only needs to re-verify the bank, not BVN.
                         }}
                         className="text-xs text-slate-500 underline hover:text-slate-700 hover:no-underline shrink-0"
-                        title="Change bank details"
+                        title="Change bank details only"
                     >
-                        ✎ Edit Details
+                        ✎ Edit Account
                     </button>
                 </div>
             )}
