@@ -6,15 +6,19 @@
 
 "use client";
 
-import { useState } from "react";
-import { Clock, Building2, Upload, CheckCircle, ArrowLeft } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { Clock, Building2, Upload, CheckCircle, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
-export default function PendingPaymentPage() {
-    // In production, get from URL params or Firestore
-    const [paymentReference] = useState(() => "COOP-PAY-" + Math.random().toString(36).substr(2, 9).toUpperCase());
-    const amount = 15000;
-    const tier = "Premium";
+function PendingPaymentContent() {
+    const searchParams = useSearchParams();
+    const [paymentReference] = useState(() => {
+        // Use ref from URL params if available (set during checkout)
+        return searchParams.get("ref") || "COOP-PAY-" + Math.random().toString(36).substr(2, 9).toUpperCase();
+    });
+    const amount = parseInt(searchParams.get("amount") || "15000", 10);
+    const tier = searchParams.get("tier") || "Standard";
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4">
@@ -174,5 +178,17 @@ export default function PendingPaymentPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function PendingPaymentPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+            </div>
+        }>
+            <PendingPaymentContent />
+        </Suspense>
     );
 }

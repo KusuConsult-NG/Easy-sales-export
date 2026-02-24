@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Settings, Save, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { savePlatformSettingsAction, getPlatformSettingsAction } from "@/app/actions/admin";
+import { toast } from "sonner";
 
 export default function GeneralSettingsPage() {
     const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState({
         platformName: "Easy Sales Export",
         supportEmail: "support@easysalesexport.com",
@@ -14,11 +17,22 @@ export default function GeneralSettingsPage() {
         maintenanceMode: false,
     });
 
+    useEffect(() => {
+        getPlatformSettingsAction().then((data) => {
+            setSettings(data);
+            setLoading(false);
+        });
+    }, []);
+
     const handleSave = async () => {
         setSaving(true);
-        // TODO: Save to Firestore via server action
-        await new Promise(r => setTimeout(r, 1000));
+        const result = await savePlatformSettingsAction(settings);
         setSaving(false);
+        if (result.success) {
+            toast.success("Settings saved successfully");
+        } else {
+            toast.error(result.error || "Failed to save settings");
+        }
     };
 
     return (

@@ -1815,3 +1815,71 @@ export async function rejectAcademyApplicationAction(
         return { error: "Failed to reject application", success: false };
     }
 }
+
+// ============================================
+// Platform Settings (Admin)
+// ============================================
+
+export async function savePlatformSettingsAction(
+    settings: {
+        platformName: string;
+        supportEmail: string;
+        contactPhone: string;
+        defaultCurrency: string;
+        maintenanceMode: boolean;
+    }
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasAdminPermission(session.user.roles, "config:update")) {
+            return { error: "Unauthorized: Admin access required", success: false };
+        }
+
+        await db.collection("platform_settings").doc("general").set({
+            ...settings,
+            updatedBy: session!.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        await logAuditAction("export_create", "general", "export", {
+            adminId: session!.user.id,
+            changes: settings,
+        });
+
+        return { error: null, success: true, message: "Platform settings saved successfully" };
+    } catch (error: any) {
+        logger.error("Save platform settings error:", error);
+        return { error: "Failed to save settings", success: false };
+    }
+}
+
+export async function getPlatformSettingsAction(): Promise<{
+    platformName: string;
+    supportEmail: string;
+    contactPhone: string;
+    defaultCurrency: string;
+    maintenanceMode: boolean;
+}> {
+    try {
+        const doc = await db.collection("platform_settings").doc("general").get();
+        if (!doc.exists) {
+            return {
+                platformName: "Easy Sales Export",
+                supportEmail: "support@easysalesexport.com",
+                contactPhone: "+234 000 000 0000",
+                defaultCurrency: "NGN",
+                maintenanceMode: false,
+            };
+        }
+        return doc.data() as any;
+    } catch (error: any) {
+        logger.error("Get platform settings error:", error);
+        return {
+            platformName: "Easy Sales Export",
+            supportEmail: "support@easysalesexport.com",
+            contactPhone: "+234 000 000 0000",
+            defaultCurrency: "NGN",
+            maintenanceMode: false,
+        };
+    }
+}
