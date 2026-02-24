@@ -21,6 +21,9 @@ export default function ProfilePage() {
 
     // Real user data from Firestore
     const [userData, setUserData] = useState({
+        firstName: "",
+        lastName: "",
+        email: "",
         phone: "",
         location: "",
         bio: "",
@@ -38,7 +41,24 @@ export default function ProfilePage() {
             const result = await getUserProfileAction();
 
             if (result.success && result.profile) {
-                setUserData(result.profile);
+                const p = result.profile;
+                setUserData({
+                    firstName: p.firstName || (session?.user?.name?.split(" ")[0] ?? ""),
+                    lastName: p.lastName || (session?.user?.name?.split(" ").slice(1).join(" ") ?? ""),
+                    email: p.email || session?.user?.email || "",
+                    phone: p.phone || "",
+                    location: p.location || "",
+                    bio: p.bio || "",
+                    notifications: p.notifications || { email: true, push: false, sms: true },
+                });
+            } else if (session?.user) {
+                const nameParts = (session.user.name || "").split(" ");
+                setUserData(prev => ({
+                    ...prev,
+                    firstName: nameParts[0] || "",
+                    lastName: nameParts.slice(1).join(" ") || "",
+                    email: session?.user?.email || "",
+                }));
             }
             setIsFetching(false);
         }
@@ -55,6 +75,8 @@ export default function ProfilePage() {
         // Determine what to save based on active tab
         if (activeTab === 'general') {
             const result = await updateUserProfileAction({
+                firstName: userData.firstName,
+                lastName: userData.lastName,
                 phone: userData.phone,
                 location: userData.location,
                 bio: userData.bio,
@@ -229,22 +251,35 @@ export default function ProfilePage() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-sm font-medium text-slate-900">Full Name</label>
+                                            <label className="text-sm font-medium text-slate-900">First Name</label>
                                             <input
                                                 type="text"
-                                                defaultValue={user.name || ''}
-                                                disabled
-                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed"
+                                                value={userData.firstName}
+                                                onChange={(e) => setUserData({ ...userData, firstName: e.target.value })}
+                                                placeholder="First name"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-900">Last Name</label>
+                                            <input
+                                                type="text"
+                                                value={userData.lastName}
+                                                onChange={(e) => setUserData({ ...userData, lastName: e.target.value })}
+                                                placeholder="Last name"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                             />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900">Email Address</label>
                                             <input
                                                 type="email"
-                                                defaultValue={user.email || ''}
-                                                disabled
-                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed"
+                                                value={userData.email}
+                                                onChange={(e) => setUserData({ ...userData, email: e.target.value })}
+                                                placeholder="your@email.com"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                             />
+                                            <p className="text-xs text-slate-400">Email changes will require verification before taking effect.</p>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900">Phone Number</label>

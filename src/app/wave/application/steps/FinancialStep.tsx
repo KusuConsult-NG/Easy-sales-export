@@ -226,10 +226,23 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                 </p>
                             )}
                             {bvnVerified && (
-                                <p className="mt-2 text-sm text-emerald-600 flex items-center gap-1 font-medium">
-                                    <CheckCircle className="w-4 h-4" />
-                                    BVN matches profile records
-                                </p>
+                                <div className="mt-2 flex items-center justify-between">
+                                    <p className="text-sm text-emerald-600 flex items-center gap-1 font-medium">
+                                        <CheckCircle className="w-4 h-4" />
+                                        BVN matches profile records
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setBvnVerified(false);
+                                            setBvnError("");
+                                            updateData({ bvn: "" });
+                                        }}
+                                        className="text-xs text-slate-500 underline hover:text-slate-700 ml-2"
+                                    >
+                                        Wrong BVN? Edit
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>

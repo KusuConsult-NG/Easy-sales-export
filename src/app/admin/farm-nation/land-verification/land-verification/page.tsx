@@ -178,13 +178,13 @@ export default function LandVerificationPage() {
                                     <div>
                                         <p className="text-xs text-slate-500">Size</p>
                                         <p className="text-sm font-medium text-slate-900">
-                                            {(listing.sizeInAcres || (listing.size * 2.47)).toFixed(2)} acres
+                                            {(listing.sizeInAcres || (parseFloat(String(listing.size || 0)) * 2.47)).toFixed(2)} acres
                                         </p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500">Price</p>
                                         <p className="text-sm font-medium text-slate-900">
-                                            ₦{(listing.pricePerAcre || (listing.price / (listing.size * 2.47))).toLocaleString(undefined, { maximumFractionDigits: 0 })}/acre
+                                            ₦{(listing.pricePerAcre || (listing.price / (parseFloat(String(listing.size || 1)) * 2.47))).toLocaleString(undefined, { maximumFractionDigits: 0 })}/acre
                                         </p>
                                     </div>
                                     <div>

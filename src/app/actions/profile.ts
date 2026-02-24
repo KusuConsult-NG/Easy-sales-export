@@ -12,6 +12,8 @@ import { z } from "zod";
 
 // Validation schemas
 const profileUpdateSchema = z.object({
+    firstName: z.string().max(50).optional(),
+    lastName: z.string().max(50).optional(),
     phone: z.string().optional(),
     location: z.string().optional(),
     bio: z.string().max(500).optional(),
@@ -46,6 +48,9 @@ export async function getUserProfileAction() {
         return {
             success: true,
             profile: {
+                firstName: userData.firstName || userData.fullName?.split(' ')[0] || "",
+                lastName: userData.lastName || userData.fullName?.split(' ').slice(1).join(' ') || "",
+                email: userData.email || "",
                 phone: userData.phone || "",
                 location: userData.location || "",
                 bio: userData.bio || "",
@@ -71,6 +76,8 @@ export async function getUserProfileAction() {
  * via a specific admin request to prevent "Identity Hopping" in programs like WAVE.
  */
 export async function updateUserProfileAction(data: {
+    firstName?: string;
+    lastName?: string;
     phone?: string;
     location?: string;
     bio?: string;
@@ -87,11 +94,19 @@ export async function updateUserProfileAction(data: {
 
         const userId = session.user.id;
 
-        // Update Firestore
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        // Update Firestore — also compute fullName from parts
+        const updatePayload: Record<string, any> = {
             ...validated,
             updatedAt: new Date(),
-        });
+        };
+        if (validated.firstName || validated.lastName) {
+            const existingDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            const existing = existingDoc.data() || {};
+            const first = validated.firstName ?? existing.firstName ?? "";
+            const last = validated.lastName ?? existing.lastName ?? "";
+            updatePayload.fullName = `${first} ${last}`.trim();
+        }
+        await db.collection(COLLECTIONS.USERS).doc(userId).update(updatePayload);
 
         return { success: true };
     } catch (error: any) {

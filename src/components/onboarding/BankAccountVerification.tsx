@@ -320,16 +320,32 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
 
             {/* Success Message */}
             {verified && (
-                <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                    <div>
-                        <p className="font-medium text-green-900">
-                            Account Verified
-                        </p>
-                        <p className="text-sm text-green-700">
-                            Your bank account has been successfully verified
-                        </p>
+                <div className="flex items-center justify-between gap-2 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                        <div>
+                            <p className="font-medium text-green-900">
+                                Account Verified
+                            </p>
+                            <p className="text-sm text-green-700">
+                                Your bank account has been successfully verified
+                            </p>
+                        </div>
                     </div>
+                    <button
+                        onClick={() => {
+                            setVerified(false);
+                            setBvnVerified(false);
+                            setAccountName("");
+                            setBvn("");
+                            setError("");
+                            setBvnError("");
+                        }}
+                        className="text-xs text-slate-500 underline hover:text-slate-700 hover:no-underline shrink-0"
+                        title="Change bank details"
+                    >
+                        ✎ Edit Details
+                    </button>
                 </div>
             )}
             {/* BVN Verification (Only shown after successful bank verification) */}
@@ -374,9 +390,17 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                         </div>
                     )}
                     {bvnVerified && (
-                        <div className="flex items-center gap-2 mt-2 text-green-600">
-                            <CheckCircle className="w-4 h-4 shrink-0" />
-                            <span className="text-sm font-medium">BVN Verified against account name successfully</span>
+                        <div className="flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-2 text-green-600">
+                                <CheckCircle className="w-4 h-4 shrink-0" />
+                                <span className="text-sm font-medium">BVN Verified against account name successfully</span>
+                            </div>
+                            <button
+                                onClick={() => { setBvnVerified(false); setBvn(""); setBvnError(""); }}
+                                className="text-xs text-slate-500 underline hover:text-slate-700 ml-2"
+                            >
+                                Edit BVN
+                            </button>
                         </div>
                     )}
                 </div>

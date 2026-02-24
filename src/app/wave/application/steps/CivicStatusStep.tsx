@@ -176,10 +176,23 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         </p>
                     )}
                     {ninVerified && (
-                        <p className="mt-2 text-sm text-emerald-600 flex items-center gap-1 font-medium">
-                            <CheckCircle className="w-4 h-4" />
-                            NIN matches profile records
-                        </p>
+                        <div className="mt-2 flex items-center justify-between">
+                            <p className="text-sm text-emerald-600 flex items-center gap-1 font-medium">
+                                <CheckCircle className="w-4 h-4" />
+                                NIN matches profile records
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setNinVerified(false);
+                                    setNinError("");
+                                    updateData({ nin: "" });
+                                }}
+                                className="text-xs text-slate-500 underline hover:text-slate-700 ml-2"
+                            >
+                                Wrong NIN? Edit
+                            </button>
+                        </div>
                     )}
                 </div>
 

@@ -140,7 +140,9 @@ export interface ExportOnboardingApplication {
 export interface Notification {
     id: string;
     userId: string;
-    type: "escrow" | "order" | "academy";
+    type: "escrow" | "order" | "academy" | "wave" | "cooperative" | "export"
+    | "payment" | "loan" | "system" | "event" | "payout"
+    | "info" | "warning" | "success" | "farm_nation" | "marketplace" | "general";
     title: string;
     message: string;
     link?: string;
@@ -259,9 +261,90 @@ export type { EscrowTransaction, Dispute };
 export interface WaveApplication {
     id: string;
     userId: string;
-    gender: "female";
-    status: "pending" | "approved" | "rejected";
+    fullName?: string;
+    phone?: string;
+    gender?: "female" | "male";
+    businessName?: string;
+    businessType?: string;
+    farmingExperience?: string;
+    landSize?: string;
+    commodityInterest?: string[];
+    businessPlan?: string;
+    yearsInOperation?: number;
+    annualRevenue?: number;
+    fundingNeeded?: number;
+    purpose?: string;
+    status: "draft" | "pending" | "submitted" | "under_review" | "approved" | "rejected";
+    submittedAt?: Date;
+    reviewedAt?: Date;
+    reviewNotes?: string;
     createdAt: Date;
+    updatedAt?: Date;
+}
+
+export interface WaveResource {
+    id: string;
+    title: string;
+    description?: string;
+    category: string;
+    fileUrl: string;
+    fileType?: string;
+    fileSize?: number;
+    isActive: boolean;
+    uploadedBy?: string;
+    uploadedAt?: Date;
+    downloadCount?: number;
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
+export interface VendorSettings {
+    id?: string;
+    userId: string;
+    storeInfo?: {
+        name?: string;
+        description?: string;
+        category?: string;
+        contactEmail?: string;
+        phone?: string;
+    };
+    paymentConfig?: {
+        bankName?: string;
+        accountNumber?: string;
+        accountName?: string;
+        bankCode?: string;
+        paymentSchedule?: "weekly" | "monthly";
+        minPayoutThreshold?: number;
+        taxId?: string;
+    };
+    notifications?: {
+        newOrders?: boolean;
+        lowStock?: boolean;
+        payments?: boolean;
+        reviews?: boolean;
+        marketing?: boolean;
+    };
+    shipping?: {
+        processingDays?: number;
+        returnPolicy?: string;
+        locations?: string[];
+    };
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
+export interface ExportInvestment {
+    id: string;
+    userId: string;
+    windowId: string;
+    amount: number;
+    status: "pending" | "active" | "completed" | "cancelled";
+    roi?: string;
+    roiAmount?: number;
+    investedAt?: Date;
+    completedAt?: Date;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 export interface Announcement {
@@ -362,4 +445,10 @@ export const COLLECTIONS = {
 
     // System
     SYSTEM_SETTINGS: "system_settings",
+
+    // Vendor
+    VENDOR_SETTINGS: "vendor_settings",
+
+    // Export Investments
+    EXPORT_INVESTMENTS: "export_investments",
 } as const;

@@ -1,48 +1,123 @@
+/**
+ * Easy Sales Export Platform — Canonical Type Definitions
+ *
+ * This is the single source of truth for all application types.
+ * Aligned with Firestore schema in src/lib/types/firestore.ts
+ * Last updated: 2026-02-24
+ */
+
+// Re-export canonical Firestore types for backward compatibility
+export type { UserRole, LegacyRole } from "@/lib/types/roles";
+export { ROLE_LABELS, LEGACY_ROLE_MAP } from "@/lib/types/roles";
+export { COLLECTIONS } from "@/lib/types/firestore";
+
 // ===========================
 // User & Authentication Types
 // ===========================
 
 export interface User {
-    id: string;
+    // Core identity
+    id?: string;        // Auth UID (client-side)
+    uid?: string;       // Firestore UID (server-side)
     email: string;
     originalEmail?: string;
-    firstName: string;
-    lastName: string;
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
     displayName?: string;
     phoneNumber?: string;
     phone?: string;
-    role: "member" | "admin" | "super_admin" | string;
-    roles?: string[];
-    membershipTier?: "Basic" | "Premium" | "Gold";
-    memberSince?: Date | any;
+    gender?: "male" | "female";
     profileImage?: string;
+
+    // Roles (multi-role array — platform standard)
+    roles: string[];
+    /** @deprecated Use `roles` array instead */
+    role?: string;
+
+    // Membership
+    membershipTier?: "Basic" | "Premium" | "Gold";
+    cooperativeTier?: "tier1" | "tier2";
+    memberSince?: Date | any;
+    isActive?: boolean;
     isVerified?: boolean;
+    verified?: boolean;
     verifiedBy?: string;
     verifiedAt?: Date | any;
+    onboardingCompleted?: boolean;
 
-    // Identity Verification (KYC)
+    // Cooperative
+    cooperativeId?: string;
+    cooperativeMembershipId?: string;
+    cooperativeRegistrationFee?: number;
+
+    // Seller
+    sellerVerificationStatus?: "pending" | "approved" | "rejected" | "suspended";
+    sellerVerificationId?: string;
+    sellerPhoneVerified?: boolean;
+
+    // KYC / Identity Verification
     bvn?: string;
     bvnVerified?: boolean;
-    idType?: string; // e.g. "nin"
+    idType?: string;
     idNumber?: string;
     idVerified?: boolean;
 
-    // Business Verification (KYB)
-    taxId?: string; // TIN
+    // KYB / Business Verification
+    taxId?: string;
     tinVerified?: boolean;
-    cacNumber?: string; // RC Number
+    cacNumber?: string;
     companyName?: string;
     cacVerified?: boolean;
 
-    sellerVerificationStatus?: string;
-    sellerVerificationId?: string;
+    // Bank Details
+    bankDetails?: {
+        accountNumber: string;
+        bankName: string;
+        accountName: string;
+        bankCode: string;
+    };
+
+    // Address
+    address?: {
+        street?: string;
+        city?: string;
+        state?: string;
+        lga?: string;
+        country?: string;
+    };
+
+    // Location (flattened form)
+    location?: string;
+    bio?: string;
+
+    // MFA
+    mfaEnabled?: boolean;
+    totpSecret?: string;
+    mfaRecoveryCodes?: string[];
+
+    // NDPR / GDPR
+    consentVersion?: string;
+    consentDate?: Date | any;
+    marketingOptIn?: boolean;
+
+    // Notification preferences
+    notifications?: {
+        email?: boolean;
+        push?: boolean;
+        sms?: boolean;
+    };
+
+    // Service registrations
     serviceRegistrations?: Record<string, any>;
+
+    // Soft-delete / NDPR
     deleted?: boolean;
     deletedAt?: Date | any;
     deletedBy?: string;
     deletionReason?: string;
     suspended?: boolean;
-    isActive?: boolean;
+
     createdAt?: Date | any;
     updatedAt?: Date | any;
 }
@@ -57,23 +132,58 @@ export interface AuthSession {
 // Export Window Types
 // ===========================
 
-export type CommodityType = "Yam Tubers" | "Sesame Seeds" | "Dried Hibiscus";
+export type CommodityType = "Yam Tubers" | "Sesame Seeds" | "Dried Hibiscus" | "yam" | "sesame" | "hibiscus" | "other";
 
 export interface ExportWindow {
     id: string;
+    title?: string;
     commodity: CommodityType;
-    phase: string;
-    roi: string;
-    fundingProgress: number; // 0-100
-    daysRemaining: number;
-    minInvestment: number;
+    phase?: string;
+    description?: string;
+    destination?: string;
+
+    // Funding
+    roi?: string;
+    roiPercent?: number;
+    investmentCap?: number;  // Maximum total investment allowed
+    totalInvested?: number;  // Total currently invested
+    fundingProgress?: number; // 0-100 percentage
+    minInvestment?: number;
     maxInvestment?: number;
-    targetAmount: number;
-    currentAmount: number;
-    status: "open" | "funded" | "in_progress" | "completed" | "closed";
-    startDate: Date;
-    endDate: Date;
+    targetAmount?: number;
+    currentAmount?: number;
+    fundedAmount?: number;
+
+    // Capacity
+    totalSpots?: number;
+    spotsFilled?: number;
+    daysRemaining?: number;
+
+    // Dates
+    startDate?: Date | any;
+    endDate?: Date | any;
+    deadline?: Date | any;
+    deliveryDate?: Date | any;
+
+    // Status
+    status: "pending" | "open" | "active" | "funded" | "in_progress" | "in_transit" | "delivered" | "completed" | "closed";
+    isActive?: boolean;
+
+    // Rich data
+    specifications?: string[];
+    benefits?: string[];
+    documents?: { name: string; url?: string; required: boolean }[];
+    timeline?: { phase: string; date: string; description: string; status: "pending" | "active" | "completed" }[];
+
+    // Media
     imageUrl?: string;
+    image?: string;
+    quantity?: string;
+    amount?: number;
+    duration?: string;
+    orderId?: string;
+
+    userId?: string;
     createdAt?: Date | any;
     updatedAt?: Date | any;
 }
@@ -83,10 +193,24 @@ export interface UserExportParticipation {
     exportWindowId: string;
     userId: string;
     amountInvested: number;
-    participationDate: Date;
+    participationDate: Date | any;
     status: "pending" | "active" | "completed" | "disputed";
     expectedReturn: number;
     actualReturn?: number;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
+}
+
+export interface ExportInvestment {
+    id: string;
+    userId: string;
+    windowId: string;
+    amount: number;
+    status: "pending" | "active" | "completed" | "cancelled";
+    roi?: string;
+    roiAmount?: number;
+    investedAt?: Date | any;
+    completedAt?: Date | any;
     createdAt?: Date | any;
     updatedAt?: Date | any;
 }
@@ -99,15 +223,30 @@ export interface Product {
     id: string;
     name: string;
     description: string;
-    commodity: CommodityType;
+    commodity?: CommodityType;
+    category?: string;
     price: number;
-    unit: "kg" | "ton" | "bag";
-    minOrder: number;
+    unit?: "kg" | "ton" | "bag" | "per ton" | string;
+    minOrder?: number;
     maxOrder?: number;
-    imageUrl: string;
-    inStock: boolean;
-    sellerId: string;
-    quality: "Standard" | "Premium" | "Organic";
+    quantity?: number;
+    imageUrl?: string;
+    images?: string[];
+    inStock?: boolean;
+    status?: "available" | "out_of_stock" | "draft" | "pending" | "rejected";
+    isActive?: boolean;
+    isVerified?: boolean;
+
+    // Seller info
+    sellerId?: string;
+    farmerId?: string;
+    farmerName?: string;
+    sellerName?: string;
+
+    // Location
+    location?: { state: string; lga?: string; address?: string };
+
+    quality?: "Standard" | "Premium" | "Organic";
     createdAt?: Date | any;
     updatedAt?: Date | any;
 }
@@ -115,14 +254,65 @@ export interface Product {
 export interface Order {
     id: string;
     userId: string;
+    buyerId?: string;
+    buyerName?: string;
     productId: string;
+    sellerId?: string;
     quantity: number;
     totalAmount: number;
-    status: "pending" | "escrow" | "shipped" | "delivered" | "completed" | "disputed";
-    createdAt: Date;
-    updatedAt: Date;
-    escrowReleaseDate?: Date;
+    status: "pending" | "escrow" | "shipped" | "delivered" | "completed" | "disputed" | "cancelled";
+    reason?: string;   // Dispute reason
+    amount?: number;   // Escrow amount
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
+    escrowReleaseDate?: Date | any;
     trackingNumber?: string;
+}
+
+// ===========================
+// Dispute Types
+// ===========================
+
+export interface Dispute {
+    id: string;
+    orderId?: string;
+    exportWindowId?: string;
+
+    // Parties
+    complainantId?: string;
+    respondentId?: string;
+    buyerId?: string;
+    buyerName?: string;
+    buyerEmail?: string;
+    sellerId?: string;
+    sellerName?: string;
+    sellerEmail?: string;
+
+    type?: "order" | "export" | "payment" | "other";
+    reason?: string;
+    subject?: string;
+    description?: string;
+    adminNotes?: string;
+
+    // Financials
+    amount?: number;
+
+    status: "open" | "awaiting_evidence" | "under_review" | "investigating" | "resolved" | "closed";
+    priority?: "low" | "medium" | "high" | "urgent";
+
+    // Timeline events
+    timeline?: {
+        event: string;
+        timestamp: Date | any;
+        description?: string;
+    }[];
+
+    resolution?: string;
+    resolvedAt?: Date | any;
+    assignedTo?: string;
+
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 // ===========================
@@ -132,13 +322,17 @@ export interface Order {
 export interface CooperativeMember {
     id: string;
     userId: string;
-    membershipNumber: string;
-    joinDate: Date;
-    tier: "Basic" | "Premium" | "Gold";
-    totalSavings: number;
-    totalExports: number;
-    totalRevenue: number;
-    status: "active" | "inactive" | "suspended";
+    cooperativeId?: string;
+    membershipNumber?: string;
+    joinDate?: Date | any;
+    joinedAt?: Date | any;
+    tier?: "Basic" | "Premium" | "Gold" | "tier1" | "tier2";
+    totalSavings?: number;
+    savingsBalance?: number;
+    totalExports?: number;
+    totalRevenue?: number;
+    loanBalance?: number;
+    status?: "active" | "inactive" | "suspended";
     createdAt?: Date | any;
     updatedAt?: Date | any;
 }
@@ -146,11 +340,11 @@ export interface CooperativeMember {
 export interface Transaction {
     id: string;
     userId: string;
-    type: "deposit" | "withdrawal" | "export_profit" | "fee";
+    type: "deposit" | "withdrawal" | "export_profit" | "fee" | "loan_repayment" | "savings";
     amount: number;
-    description: string;
+    description?: string;
     status: "pending" | "completed" | "failed";
-    date: Date;
+    date?: Date | any;
     reference?: string;
     createdAt?: Date | any;
     updatedAt?: Date | any;
@@ -163,16 +357,39 @@ export interface Transaction {
 export interface WAVEApplication {
     id: string;
     userId: string;
-    businessName: string;
-    businessType: string;
-    yearsInOperation: number;
+    fullName?: string;
+    phone?: string;
+    gender?: "female" | "male";
+    businessName?: string;
+    businessType?: string;
+    farmingExperience?: string;
+    landSize?: string;
+    commodityInterest?: string[];
+    businessPlan?: string;
+    yearsInOperation?: number;
     annualRevenue?: number;
-    fundingNeeded: number;
-    purpose: string;
-    status: "draft" | "submitted" | "under_review" | "approved" | "rejected";
-    submittedAt?: Date;
-    reviewedAt?: Date;
+    fundingNeeded?: number;
+    purpose?: string;
+    status: "draft" | "pending" | "submitted" | "under_review" | "approved" | "rejected";
+    submittedAt?: Date | any;
+    reviewedAt?: Date | any;
     reviewNotes?: string;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
+}
+
+export interface WaveResource {
+    id: string;
+    title: string;
+    description?: string;
+    category: string;
+    fileUrl: string;
+    fileType?: string;
+    fileSize?: number;
+    isActive: boolean;
+    uploadedBy?: string;
+    uploadedAt?: Date | any;
+    downloadCount?: number;
     createdAt?: Date | any;
     updatedAt?: Date | any;
 }
@@ -184,38 +401,44 @@ export interface WAVEApplication {
 export interface LandListing {
     id: string;
     title: string;
-    description: string;
+    description?: string;
     location: {
         state: string;
-        lga: string;
-        address: string;
+        lga?: string;
+        address?: string;
     };
-    size: number; // in hectares
+    size?: number | string;
     sizeInAcres?: number;
+    price: number;
     pricePerHectare?: number;
     pricePerAcre?: number;
     totalPrice?: number;
-    price: number; // Generic price field
     category?: string;
     soilType?: string;
     soilQuality?: string;
     waterSource?: string;
     waterAccess?: boolean;
+    electricity?: boolean;
+    roadAccess?: boolean;
     accessibility?: string;
-    images: string[];
-    documents?: any; // Can be string[] or object depending on context
+    images?: string[];
+    documents?: any;
     ownerId: string;
+    ownerName?: string;
+    ownerEmail?: string;
     status: "available" | "reserved" | "sold" | "draft" | "pending_verification" | "verified" | "rejected" | "deleted";
-    listedDate?: Date;
-    createdAt?: Date;
-    updatedAt?: Date;
+    verificationStatus?: string;
+    verified?: boolean;
+    listedDate?: Date | any;
     verifiedAt?: Date | null;
     verifiedBy?: string | null;
     rejectionReason?: string | null;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 // ===========================
-// Academy Types
+// Academy / Courses
 // ===========================
 
 export interface Course {
@@ -223,16 +446,18 @@ export interface Course {
     title: string;
     description: string;
     instructor: string;
-    duration: string; // e.g., "4 weeks"
-    modules: number;
+    duration: string;
+    modules?: number;
     price: number;
-    currency: "NGN" | "USD";
-    imageUrl: string;
-    category: "export" | "farming" | "business" | "compliance";
+    currency?: "NGN" | "USD";
+    imageUrl?: string;
+    thumbnail?: string;
+    category?: "export" | "farming" | "business" | "compliance" | string;
     level: "beginner" | "intermediate" | "advanced";
-    enrollmentCount: number;
-    rating: number; // 0-5
-    status: "upcoming" | "open" | "in_progress" | "completed";
+    enrollmentCount?: number;
+    enrolledCount?: number;
+    rating?: number;
+    status?: "upcoming" | "open" | "in_progress" | "completed";
     createdAt?: Date | any;
     updatedAt?: Date | any;
 }
@@ -241,45 +466,146 @@ export interface Enrollment {
     id: string;
     userId: string;
     courseId: string;
-    enrollmentDate: Date;
-    progress: number; // 0-100
-    completedModules: number;
-    totalModules: number;
-    status: "active" | "completed" | "dropped";
+    enrollmentDate?: Date | any;
+    enrolledAt?: Date | any;
+    progress: number;
+    completedModules?: number;
+    totalModules?: number;
+    completed?: boolean;
+    status?: "active" | "completed" | "dropped";
     certificateUrl?: string;
+    completedAt?: Date | any;
+    paymentStatus?: "pending" | "paid" | "free";
+    paymentReference?: string;
+    amount?: number;
     createdAt?: Date | any;
     updatedAt?: Date | any;
 }
 
 // ===========================
-// Admin & Dispute Types
+// Vendor Types
 // ===========================
 
-export interface Dispute {
-    id: string;
-    orderId?: string;
-    exportWindowId?: string;
-    complainantId: string;
-    respondentId?: string;
-    type: "order" | "export" | "payment" | "other";
-    subject: string;
-    description: string;
-    status: "open" | "investigating" | "resolved" | "closed";
-    priority: "low" | "medium" | "high" | "urgent";
-    createdAt: Date;
-    updatedAt: Date;
-    resolvedAt?: Date;
-    resolution?: string;
-    assignedTo?: string;
+export interface VendorSettings {
+    id?: string;
+    userId: string;
+    storeInfo?: {
+        name?: string;
+        description?: string;
+        category?: string;
+        contactEmail?: string;
+        phone?: string;
+    };
+    paymentConfig?: {
+        bankName?: string;
+        accountNumber?: string;
+        accountName?: string;
+        bankCode?: string;
+        paymentSchedule?: "weekly" | "monthly";
+        minPayoutThreshold?: number;
+        taxId?: string;
+    };
+    notifications?: {
+        newOrders?: boolean;
+        lowStock?: boolean;
+        payments?: boolean;
+        reviews?: boolean;
+        marketing?: boolean;
+    };
+    shipping?: {
+        processingDays?: number;
+        returnPolicy?: string;
+        locations?: string[];
+    };
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
-export interface DisputeMessage {
+// ===========================
+// Loan Types
+// ===========================
+
+export interface LoanApplication {
     id: string;
-    disputeId: string;
-    senderId: string;
+    userId: string;
+    amount: number;
+    purpose: string;
+    status: "pending" | "approved" | "rejected" | "disbursed" | "repaid" | "completed";
+    interestRate?: number;
+    durationMonths?: number;
+    monthlyPayment?: number;
+    totalRepayment?: number;
+    contributionAmount?: number;
+    tier?: string;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
+    approvedAt?: Date | any;
+    disbursedAt?: Date | any;
+    repaidAt?: Date | any;
+}
+
+// ===========================
+// Notifications
+// ===========================
+
+export type NotificationType =
+    | "escrow" | "order" | "academy"
+    | "wave" | "cooperative" | "export" | "payment"
+    | "loan" | "system" | "event" | "payout"
+    | "info" | "warning" | "success"
+    | "farm_nation" | "marketplace" | "general";
+
+export interface Notification {
+    id: string;
+    userId: string;
+    type: NotificationType;
+    title: string;
     message: string;
-    attachments?: string[];
-    timestamp: Date;
+    link?: string;
+    read: boolean;
+    createdAt?: Date | any;
+}
+
+// ===========================
+// Announcements
+// ===========================
+
+export interface Announcement {
+    id: string;
+    title: string;
+    message: string;
+    type: "info" | "warning" | "success";
+    targetRoles?: string[];
+    createdAt?: Date | any;
+}
+
+// ===========================
+// Audit & Admin
+// ===========================
+
+export interface AuditLog {
+    id: string;
+    userId: string;
+    action: string;
+    details?: string;
+    metadata?: Record<string, any>;
+    timestamp?: Date | any;
+    createdAt?: Date | any;
+}
+
+export interface Payment {
+    id: string;
+    userId: string;
+    amount: number;
+    type: string;
+    status: "pending" | "completed" | "failed";
+    reference: string;
+    paystackRef?: string;
+    channel?: string;
+    currency?: string;
+    metadata?: Record<string, any>;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
 }
 
 // ===========================
@@ -293,4 +619,17 @@ export interface DashboardStats {
     pendingOrders: number;
     savings: number;
     roi: string;
+}
+
+// ===========================
+// Escrow / Messages
+// ===========================
+
+export interface DisputeMessage {
+    id: string;
+    disputeId: string;
+    senderId: string;
+    message: string;
+    attachments?: string[];
+    timestamp?: Date | any;
 }
