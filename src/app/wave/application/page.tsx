@@ -180,10 +180,14 @@ export default function WaveApplicationPage() {
     const { showToast } = useToast();
     const { data: session, status } = useSession();
 
-    // Restore saved progress from localStorage on first mount
+    // Restore saved progress from localStorage — scoped by user ID to prevent PII leaks across accounts
     useEffect(() => {
+        if (status === "loading") return; // wait for session
+        const userId = session?.user?.id;
+        const draftKey = userId ? `wave_app_draft_${userId}` : null;
+        if (!draftKey) { setRestored(true); return; }
         try {
-            const saved = localStorage.getItem("wave_app_draft");
+            const saved = localStorage.getItem(draftKey);
             if (saved) {
                 const { step, data } = JSON.parse(saved);
                 if (data) setFormData({ ...INITIAL_DATA, ...data });
@@ -195,7 +199,7 @@ export default function WaveApplicationPage() {
         }
         setRestored(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [status, session?.user?.id]);
     useEffect(() => {
         // Auth is now enforced server-side in middleware.
         // By the time this component renders, the user is guaranteed to be authenticated.
@@ -235,19 +239,25 @@ export default function WaveApplicationPage() {
     const updateFormData = (data: Partial<WaveApplicationData>) => {
         setFormData((prev) => {
             const next = { ...prev, ...data };
-            // Persist draft after every field update
-            try {
-                localStorage.setItem("wave_app_draft", JSON.stringify({ step: currentStep, data: next }));
-            } catch { /* quota exceeded, non-blocking */ }
+            // Persist draft after every field update (user-scoped key)
+            const userId = session?.user?.id;
+            if (userId) {
+                try {
+                    localStorage.setItem(`wave_app_draft_${userId}`, JSON.stringify({ step: currentStep, data: next }));
+                } catch { /* quota exceeded, non-blocking */ }
+            }
             return next;
         });
     };
 
     const goToStep = (step: number) => {
         setCurrentStep(step);
-        try {
-            localStorage.setItem("wave_app_draft", JSON.stringify({ step, data: formData }));
-        } catch { /* non-blocking */ }
+        const userId = session?.user?.id;
+        if (userId) {
+            try {
+                localStorage.setItem(`wave_app_draft_${userId}`, JSON.stringify({ step, data: formData }));
+            } catch { /* non-blocking */ }
+        }
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
@@ -269,8 +279,11 @@ export default function WaveApplicationPage() {
             const result = await submitMultiStepWaveApplicationAction(formData);
 
             if (result.success) {
-                // Clear saved draft on successful submit
-                try { localStorage.removeItem("wave_app_draft"); } catch { /* non-blocking */ }
+                // Clear saved draft on successful submit (user-scoped key)
+                const userId = session?.user?.id;
+                if (userId) {
+                    try { localStorage.removeItem(`wave_app_draft_${userId}`); } catch { /* non-blocking */ }
+                }
                 router.push("/wave/application/success");
             } else {
                 showToast(result.error || "Failed to submit application. Please try again.", "error");

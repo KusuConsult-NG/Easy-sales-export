@@ -106,16 +106,28 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             }
 
             // Success - account verified
-            setAccountName(result.accountName);
+            const newAccountName = result.accountName;
+            const prevAccountName = accountName; // capture before state update
+
+            setAccountName(newAccountName);
             setVerified(true);
             setError("");
+
+            // If bank changed and new account name differs from the one BVN was verified
+            // against, the BVN match is now stale — reset it and warn the user.
+            const nameNormalised = (s: string) => s.trim().toUpperCase();
+            if (bvnVerified && prevAccountName && nameNormalised(newAccountName) !== nameNormalised(prevAccountName)) {
+                setBvnVerified(false);
+                setBvn("");
+                setBvnError("Your BVN was verified against a different account name. Please re-verify your BVN.");
+            }
 
             onVerified({
                 bvn: bvnVerified ? bvn : undefined,
                 bvnVerified: bvnVerified,
                 bankName,
                 accountNumber,
-                accountName: result.accountName,
+                accountName: newAccountName,
                 verified: true,
             });
         } catch (err) {

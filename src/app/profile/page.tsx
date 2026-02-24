@@ -10,6 +10,7 @@ import {
 import Image from "next/image";
 import { useTheme } from "@/contexts/ThemeContext";
 import { getUserProfileAction, updateUserProfileAction, updateNotificationPreferencesAction } from "@/app/actions/profile";
+import { signOut } from "next-auth/react";
 
 export default function ProfilePage() {
     const { data: session } = useSession();
@@ -42,9 +43,11 @@ export default function ProfilePage() {
 
             if (result.success && result.profile) {
                 const p = result.profile;
+                const splitName = (n: string) => { const parts = (n || "").trim().split(/\s+/).filter(Boolean); return { first: parts[0] || "", last: parts.slice(1).join(" ") }; };
+                const nameFallback = splitName(session?.user?.name || "");
                 setUserData({
-                    firstName: p.firstName || (session?.user?.name?.split(" ")[0] ?? ""),
-                    lastName: p.lastName || (session?.user?.name?.split(" ").slice(1).join(" ") ?? ""),
+                    firstName: p.firstName || nameFallback.first,
+                    lastName: p.lastName || nameFallback.last,
                     email: p.email || session?.user?.email || "",
                     phone: p.phone || "",
                     location: p.location || "",
@@ -52,11 +55,12 @@ export default function ProfilePage() {
                     notifications: p.notifications || { email: true, push: false, sms: true },
                 });
             } else if (session?.user) {
-                const nameParts = (session.user.name || "").split(" ");
+                const splitName = (n: string) => { const parts = (n || "").trim().split(/\s+/).filter(Boolean); return { first: parts[0] || "", last: parts.slice(1).join(" ") }; };
+                const { first, last } = splitName(session.user.name || "");
                 setUserData(prev => ({
                     ...prev,
-                    firstName: nameParts[0] || "",
-                    lastName: nameParts.slice(1).join(" ") || "",
+                    firstName: first,
+                    lastName: last,
                     email: session?.user?.email || "",
                 }));
             }
@@ -74,16 +78,24 @@ export default function ProfilePage() {
 
         // Determine what to save based on active tab
         if (activeTab === 'general') {
+            const emailChanged = userData.email && userData.email !== (session?.user?.email || "");
             const result = await updateUserProfileAction({
                 firstName: userData.firstName,
                 lastName: userData.lastName,
+                email: userData.email,
                 phone: userData.phone,
                 location: userData.location,
                 bio: userData.bio,
             });
 
             if (result.success) {
-                setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
+                if (emailChanged) {
+                    // Session JWT is now stale — user must re-login with the new email
+                    setSaveMessage({ type: 'success', text: 'Email updated! You will be signed out to apply the change.' });
+                    setTimeout(() => signOut({ callbackUrl: "/auth/login" }), 2500);
+                } else {
+                    setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
+                }
             } else {
                 setSaveMessage({ type: 'error', text: result.error || 'Failed to update profile' });
             }
