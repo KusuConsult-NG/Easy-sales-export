@@ -41,11 +41,12 @@ export async function uploadResourceAction(formData: FormData): Promise<{
             return { success: false, error: "Authentication required" };
         }
 
-        // Check if user is admin
+        // Check if user is admin (multi-role array aware)
         const userRef = db.collection("users").doc(session.user.id);
         const userDoc = await userRef.get();
         const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
+        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) {
             return { success: false, error: "Admin access required" };
         }
 
@@ -222,11 +223,12 @@ export async function deleteResourceAction(resourceId: string): Promise<{
             return { success: false, error: "Authentication required" };
         }
 
-        // Check if user is admin
+        // Check if user is admin (multi-role array aware)
         const userRef = db.collection("users").doc(session.user.id);
         const userDoc = await userRef.get();
         const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
+        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) {
             return { success: false, error: "Admin access required" };
         }
 
@@ -273,11 +275,12 @@ export async function updateResourceAction(
             return { success: false, error: "Authentication required" };
         }
 
-        // Check if user is admin
+        // Check if user is admin (multi-role array aware)
         const userRef = db.collection("users").doc(session.user.id);
         const userDoc = await userRef.get();
         const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
+        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) {
             return { success: false, error: "Admin access required" };
         }
 
