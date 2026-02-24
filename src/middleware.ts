@@ -136,30 +136,45 @@ export default auth((req: any) => {
 
     // -----------------------------------------------------------------------
     // DEDICATED DOMAIN REGISTRATION GATE
-    // New / unauthenticated users on any dedicated domain are redirected to
-    // /auth/register (not /auth/login) so the primary CTA is "create an
-    // account". A callbackUrl is appended so they land back on the page they
-    // originally requested after sign-up or login.
-    // Shared routes (/auth/*, /api/*, /about, etc.) are excluded so the auth
-    // pages themselves remain reachable.
+    // Only redirects unauthenticated users to /auth/register for specific
+    // "action" paths (forms, onboarding, checkout, etc.) that genuinely
+    // require a registered account.
+    //
+    // Uses a BLOCKLIST (only gate what needs gating), NOT an allowlist.
+    // This means new catalog/info pages are never accidentally blocked.
+    // auth.config.authorized() handles all other session enforcement.
     // -----------------------------------------------------------------------
     if (rewritePrefix && !req.auth?.user) {
-        // Only gate non-auth / non-API paths
-        const UNGATED_PREFIXES = ["/auth", "/api", "/about", "/contact", "/help", "/privacy", "/terms", "/refund-policy", "/_next", "/favicon.ico"];
-        const isUngated = UNGATED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
-        // Also allow the pure marketing/landing pages to remain public
-        const PUBLIC_MODULE_PAGES = [
-            "/wave/landing", "/wave/access-denied", "/wave",          // WAVE marketing
-            "/cooperatives/landing", "/cooperatives",                  // Cooperatives marketing
-            "/marketplace", "/marketplace/products",                   // Marketplace catalog
-            "/academy",                                                // Academy info
-            "/farm-nation",                                            // Farm Nation landing
-            "/export",                                                 // Export landing
-            "/export/windows", "/windows",                             // Export catalog
+        // Short-form path segments that require registration on any dedicated domain.
+        const GATED_PATH_SEGMENTS = [
+            "/onboarding",
+            "/checkout",
+            "/payment",
+            "/verify-payment",
+            "/briefing",
+            "/application",
+            "/setup",
+            "/buyer",
+            "/seller",
+            "/sell",
+            "/list-land",
+            "/dashboard",
+            "/profile",
+            "/settings",
+            "/messages",
+            "/escrow",
+            "/loans",
+            "/admin",
+            "/verify-id",
+            "/verify-status",
+            "/vendor",
         ];
-        const isPublicModulePage = PUBLIC_MODULE_PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
-        if (!isUngated && !isPublicModulePage) {
+        const isGated = GATED_PATH_SEGMENTS.some(
+            (seg) => pathname === seg || pathname.startsWith(seg + "/")
+        );
+
+        if (isGated) {
             const registerUrl = new URL("/auth/register", req.url);
             registerUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
             return NextResponse.redirect(registerUrl);
