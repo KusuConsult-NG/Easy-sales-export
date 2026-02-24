@@ -83,23 +83,33 @@ export default auth((req: any) => {
     // -----------------------------------------------------------------------
     // DEDICATED DOMAIN REWRITE
     // When a non-hub dedicated domain is detected (rewritePrefix is a non-empty
-    // string), we handle three distinct cases so the FULL application is
-    // accessible through both the dedicated domain and the hub:
+    // string), we handle two distinct cases so the FULL application is accessible
+    // through both the dedicated domain and the hub:
     //
-    //  Case 1 — Path already includes the module prefix (e.g. /academy/courses
-    //            when on easysalesexportacademy.com). The rewrite already
-    //            happened on a previous navigation cycle or the link was
-    //            absolute. Pass-through, only applying security headers.
+    //  Case 1 — Root path "/" → rewrite to module landing page (e.g. /academy).
     //
-    //  Case 2 — Root path "/" → rewrite to the module landing page.
+    //  Case 2 — Path already includes the module prefix (e.g. /academy/courses
+    //            on easysalesexportacademy.com) → pass-through with security
+    //            headers. Internal links inside the app always use full absolute
+    //            paths (e.g. href="/academy/courses"), so this is the normal
+    //            in-app navigation path.
     //
-    //  Case 3 — Any other path (e.g. /dashboard, /courses, /setup) → prepend
-    //            the module prefix so /courses becomes /academy/courses, etc.
-    //            This allows internal page-to-page navigation within the
-    //            dedicated domain to work without double-rewrites.
+    //  All other paths (shared routes like /auth/*, /dashboard, /about, etc.)
+    //  are left untouched and served as-is — they work the same on both the
+    //  hub and the dedicated domain. DO NOT prepend the module prefix to them,
+    //  as that creates double routes that don't exist (e.g. /academy/auth/login).
     // -----------------------------------------------------------------------
     if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
-        // --- Case 1: path already carries the module prefix → no rewrite needed ---
+        // --- Case 1: root path → rewrite to module landing page ---
+        if (pathname === "/") {
+            const url = req.nextUrl.clone();
+            url.pathname = rewritePrefix;
+            const rewriteRes = NextResponse.rewrite(url);
+            response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
+            return rewriteRes;
+        }
+
+        // --- Case 2: path already carries the module prefix → no rewrite needed ---
         if (pathname.startsWith(rewritePrefix)) {
             // Apply admin role guard on the already-prefixed path
             if (pathname.startsWith("/admin") && req.auth?.user) {
@@ -110,33 +120,9 @@ export default auth((req: any) => {
                 }
             }
             // Fall through to the standard auth/response logic below
-        } else {
-            const url = req.nextUrl.clone();
-
-            // --- Case 2: root path → rewrite to module landing page ---
-            if (pathname === "/") {
-                url.pathname = rewritePrefix;
-                const rewriteRes = NextResponse.rewrite(url);
-                response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
-                return rewriteRes;
-            }
-
-            // --- Case 3: all other paths → prepend module prefix ---
-            url.pathname = `${rewritePrefix}${pathname}`;
-
-            // Apply admin role guard on the rewritten path
-            if (url.pathname.startsWith("/admin") && req.auth?.user) {
-                const roles = (req.auth.user as any)?.roles || [];
-                const isAdmin = roles.includes("admin") || roles.includes("super_admin");
-                if (!isAdmin) {
-                    return NextResponse.redirect(new URL("/dashboard", req.url));
-                }
-            }
-
-            const rewriteRes = NextResponse.rewrite(url);
-            response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
-            return rewriteRes;
         }
+
+        // All other paths (shared routes) — fall through untouched.
     }
 
     // Root/landing page is public (only reaches here for the hub domain)
