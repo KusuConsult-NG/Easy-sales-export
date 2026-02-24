@@ -954,3 +954,40 @@ export async function withdrawEarningsAction(
         return { success: false, error: "Failed to submit withdrawal request" };
     }
 }
+
+/**
+ * Get the current user's WAVE application (primarily for the review-pending page to show real submission date)
+ */
+export async function getWaveApplicationStatusAction(userId?: string): Promise<{
+    status: string | null;
+    submittedAt?: Date | any;
+} | null> {
+    try {
+        const session = await auth();
+        if (!session?.user) return null;
+        const targetId = userId || session.user.id;
+
+        // Look in wave_applications collection
+        const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+            .where("userId", "==", targetId)
+            .orderBy("createdAt", "desc")
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) {
+            // Fallback: check serviceRegistrations on user doc
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(targetId).get();
+            const reg = userDoc.data()?.serviceRegistrations?.wave;
+            return { status: reg?.status || null };
+        }
+
+        const data = snapshot.docs[0].data();
+        return {
+            status: data.status || null,
+            submittedAt: data.createdAt || data.submittedAt || null,
+        };
+    } catch (error) {
+        logger.error("getWaveApplicationStatusAction error:", error);
+        return null;
+    }
+}

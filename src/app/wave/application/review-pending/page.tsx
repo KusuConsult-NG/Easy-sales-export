@@ -1,17 +1,55 @@
 /**
  * WAVE Application Review Pending Page
- * Shows current status while application is under review
+ * Reads the actual submission date from Firestore for this user's application.
  */
 
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Clock, Mail, Phone, ArrowLeft, FileText, CheckCircle } from "lucide-react";
+import { Clock, Mail, Phone, ArrowLeft, FileText, CheckCircle, Loader2 } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 export default function ReviewPendingPage() {
-    // Mock data - in production, fetch from database
-    const applicationDate = new Date();
-    const expectedReviewDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
+    const { data: session } = useSession();
+    const [applicationDate, setApplicationDate] = useState<Date | null>(null);
+    const [expectedReviewDate, setExpectedReviewDate] = useState<Date | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        const fetchApplicationDate = async () => {
+            try {
+                const { getWaveApplicationStatusAction } = await import("@/app/actions/wave");
+                const result = await getWaveApplicationStatusAction(session.user.id);
+                if (result?.submittedAt) {
+                    const submitted = result.submittedAt instanceof Date
+                        ? result.submittedAt
+                        : new Date(result.submittedAt.seconds ? result.submittedAt.seconds * 1000 : result.submittedAt);
+                    setApplicationDate(submitted);
+                    // Expected review = submitted + 5 business days
+                    const expected = new Date(submitted);
+                    expected.setDate(expected.getDate() + 7);
+                    setExpectedReviewDate(expected);
+                } else {
+                    // Fallback: use today + 5 days if no data found
+                    setApplicationDate(new Date());
+                    setExpectedReviewDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000));
+                }
+            } catch {
+                setApplicationDate(new Date());
+                setExpectedReviewDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000));
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchApplicationDate();
+    }, [session?.user?.id]);
+
+    const fmt = (d: Date | null) =>
+        d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "…";
 
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 px-4 py-12">
@@ -56,13 +94,11 @@ export default function ReviewPendingPage() {
                             <p className="text-sm text-slate-600 mb-1">
                                 Submitted
                             </p>
-                            <p className="font-semibold text-slate-900">
-                                {applicationDate.toLocaleDateString("en-US", {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                })}
-                            </p>
+                            {isLoading ? (
+                                <Loader2 className="w-5 h-5 animate-spin text-slate-400 ml-auto" />
+                            ) : (
+                                <p className="font-semibold text-slate-900">{fmt(applicationDate)}</p>
+                            )}
                         </div>
                     </div>
 
@@ -75,7 +111,7 @@ export default function ReviewPendingPage() {
                                     Application Received
                                 </h3>
                                 <p className="text-sm text-slate-600">
-                                    Submitted on {applicationDate.toLocaleDateString()}
+                                    Submitted on {isLoading ? "…" : fmt(applicationDate)}
                                 </p>
                             </div>
                         </div>
@@ -99,7 +135,7 @@ export default function ReviewPendingPage() {
                                     Decision Pending
                                 </h3>
                                 <p className="text-sm text-slate-600">
-                                    Expected by {expectedReviewDate.toLocaleDateString()}
+                                    Expected by {isLoading ? "…" : fmt(expectedReviewDate)}
                                 </p>
                             </div>
                         </div>
@@ -108,7 +144,7 @@ export default function ReviewPendingPage() {
                     {/* Timeline Note */}
                     <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4">
                         <p className="text-sm text-emerald-700">
-                            <strong>Estimated Review Time:</strong> 3-5 business days. We'll notify you via email once a decision has been made.
+                            <strong>Estimated Review Time:</strong> 3-5 business days. We&apos;ll notify you via email once a decision has been made.
                         </p>
                     </div>
                 </div>
@@ -126,7 +162,7 @@ export default function ReviewPendingPage() {
                                     Document Verification
                                 </h3>
                                 <p className="text-sm text-slate-600">
-                                    We're verifying all submitted documents and information
+                                    We&apos;re verifying all submitted documents and information
                                 </p>
                             </div>
                         </div>
@@ -148,7 +184,7 @@ export default function ReviewPendingPage() {
                                     Email Notification
                                 </h3>
                                 <p className="text-sm text-slate-600">
-                                    You'll receive an email with our decision and next steps
+                                    You&apos;ll receive an email with our decision and next steps
                                 </p>
                             </div>
                         </div>

@@ -40,6 +40,9 @@ export default function AcademyOnboardingPage() {
     const [skillLevel, setSkillLevel] = useState<SkillLevel | "">("");
     const [learningPreference, setLearningPreference] = useState<LearningPreference | "">("");
     const [interests, setInterests] = useState<InterestArea[]>([]);
+    const [educationLevel, setEducationLevel] = useState("");
+    const [fieldOfStudy, setFieldOfStudy] = useState("");
+    const [currentRole, setCurrentRole] = useState("");
 
     useEffect(() => {
         if (sessionStatus === "loading") return;
@@ -104,13 +107,6 @@ export default function AcademyOnboardingPage() {
         setIsSubmitting(true);
 
         try {
-            // Construct application data
-            // Note: In a real app we'd collect more details. Here we infer/mock some for the MVP flow
-            // or we could expand the form steps to collect them proper.
-            // For now, we'll use placeholder values for the required fields in AcademyApplicationData
-            // that aren't collected in this wizard, to satisfy the schema/action.
-            // Ideally, the wizard should collect these. Assuming this is a profile setup.
-
             const applicationData: AcademyApplicationData = {
                 personalInfo: {
                     fullName: session.user.name || "",
@@ -123,15 +119,15 @@ export default function AcademyOnboardingPage() {
                     occupation: occupation,
                 },
                 education: {
-                    educationLevel: "",
-                    fieldOfStudy: "",
+                    educationLevel: educationLevel,
+                    fieldOfStudy: fieldOfStudy,
                     yearsExperience: skillLevel === "beginner" ? 0 : skillLevel === "intermediate" ? 2 : 5,
-                    currentRole: ""
+                    currentRole: currentRole || occupation,
                 },
                 interests: {
                     learningPaths: interests,
                     topics: learningPreference,
-                    goals: "To learn and grow in agricultural export"
+                    goals: `Improve skills in: ${interests.join(", ")}`,
                 }
             };
 
@@ -154,7 +150,7 @@ export default function AcademyOnboardingPage() {
     const isStepValid = () => {
         switch (step) {
             case 1: return phone !== "" && dateOfBirth !== "" && gender !== "" && state !== "" && lga !== "" && occupation !== "";
-            case 2: return skillLevel !== "";
+            case 2: return educationLevel !== "" && skillLevel !== "";
             case 3: return learningPreference !== "";
             case 4: return interests.length > 0;
             default: return false;
@@ -403,7 +399,7 @@ export default function AcademyOnboardingPage() {
                         </div>
                         <div className="flex justify-between text-xs text-slate-600">
                             <span>Profile</span>
-                            <span>Skill Level</span>
+                            <span>Education</span>
                             <span>Preferences</span>
                             <span>Interests</span>
                         </div>
@@ -490,40 +486,78 @@ export default function AcademyOnboardingPage() {
                             </div>
                         )}
 
-                        {/* Step 2: Skill Level */}
+                        {/* Step 2: Education + Skill Level */}
                         {step === 2 && (
                             <div className="space-y-6">
                                 <div>
                                     <h2 className="text-2xl font-bold text-slate-900 mb-2">
-                                        What's your skill level?
+                                        Education &amp; Experience
                                     </h2>
                                     <p className="text-slate-600">
-                                        This helps us recommend the right courses for you
+                                        Help us tailor your learning path
                                     </p>
                                 </div>
 
-                                <div className="space-y-3">
-                                    {[
-                                        { value: "beginner" as SkillLevel, label: "Beginner", desc: "New to agricultural export and business" },
-                                        { value: "intermediate" as SkillLevel, label: "Intermediate", desc: "Some experience in farming or business" },
-                                        { value: "advanced" as SkillLevel, label: "Advanced", desc: "Experienced in agricultural export" }
-                                    ].map(level => (
-                                        <button
-                                            key={level.value}
-                                            onClick={() => setSkillLevel(level.value)}
-                                            className={`w-full p-4 border-2 rounded-lg text-left transition-all ${skillLevel === level.value
-                                                ? "border-blue-600 bg-blue-50"
-                                                : "border-slate-200 hover:border-blue-400"
-                                                }`}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-semibold text-slate-900">Education Level</label>
+                                        <select
+                                            value={educationLevel}
+                                            onChange={(e) => setEducationLevel(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                         >
-                                            <div className="font-semibold text-slate-900">
-                                                {level.label}
-                                            </div>
-                                            <div className="text-sm text-slate-600">
-                                                {level.desc}
-                                            </div>
-                                        </button>
-                                    ))}
+                                            <option value="">Select level...</option>
+                                            <option value="primary">Primary School</option>
+                                            <option value="secondary">Secondary School</option>
+                                            <option value="vocational">Vocational / OND</option>
+                                            <option value="bachelor">Bachelor&apos;s Degree</option>
+                                            <option value="postgraduate">Postgraduate</option>
+                                            <option value="none">No Formal Education</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="block text-sm font-semibold text-slate-900">Field of Study <span className="text-slate-400 font-normal">(optional)</span></label>
+                                        <input
+                                            type="text"
+                                            value={fieldOfStudy}
+                                            onChange={(e) => setFieldOfStudy(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                            placeholder="e.g. Agriculture, Business"
+                                        />
+                                    </div>
+                                    <div className="space-y-2 md:col-span-2">
+                                        <label className="block text-sm font-semibold text-slate-900">Current Role <span className="text-slate-400 font-normal">(optional)</span></label>
+                                        <input
+                                            type="text"
+                                            value={currentRole}
+                                            onChange={(e) => setCurrentRole(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                                            placeholder="e.g. Farm Manager, Entrepreneur"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-900 mb-3">Skill Level</p>
+                                    <div className="space-y-3">
+                                        {[
+                                            { value: "beginner" as SkillLevel, label: "Beginner", desc: "New to agricultural export and business" },
+                                            { value: "intermediate" as SkillLevel, label: "Intermediate", desc: "Some experience in farming or business" },
+                                            { value: "advanced" as SkillLevel, label: "Advanced", desc: "Experienced in agricultural export" }
+                                        ].map(level => (
+                                            <button
+                                                key={level.value}
+                                                onClick={() => setSkillLevel(level.value)}
+                                                className={`w-full p-4 border-2 rounded-lg text-left transition-all ${skillLevel === level.value
+                                                    ? "border-blue-600 bg-blue-50"
+                                                    : "border-slate-200 hover:border-blue-400"
+                                                    }`}
+                                            >
+                                                <div className="font-semibold text-slate-900">{level.label}</div>
+                                                <div className="text-sm text-slate-600">{level.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         )}

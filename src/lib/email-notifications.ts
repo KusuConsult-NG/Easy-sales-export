@@ -366,3 +366,66 @@ export async function sendBriefing24HourReminderEmail(
         metadata: { type: 'briefing_24hr_reminder' },
     });
 }
+
+/**
+ * Send Export Window Completion Email
+ * Sent to each investor when an export window is marked "completed".
+ * Includes their invested amount, expected return, and ROI.
+ */
+export async function sendExportWindowCompleteEmail(
+    userEmail: string,
+    userName: string,
+    windowTitle: string,
+    amountInvested: number,
+    returnAmount: number,
+    roi: string
+) {
+    const profit = returnAmount - amountInvested;
+    return sendEmailNotification({
+        to: userEmail,
+        subject: `🎉 Your Export Returns Are Ready — ${windowTitle}`,
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <h2 style="color: #16a34a;">Your Export Returns Are Ready!</h2>
+                <p>Hello ${userName},</p>
+                <p>Your investment in <strong>${windowTitle}</strong> has been completed successfully.</p>
+
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                    <table style="width:100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 6px 0; color: #166534; font-weight: bold;">Amount Invested</td>
+                            <td style="padding: 6px 0; color: #166534; text-align: right;">₦${amountInvested.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px 0; color: #166534; font-weight: bold;">Profit Earned</td>
+                            <td style="padding: 6px 0; color: #16a34a; text-align: right; font-size: 18px; font-weight: bold;">+₦${profit.toLocaleString()}</td>
+                        </tr>
+                        <tr style="border-top: 1px solid #bbf7d0;">
+                            <td style="padding: 10px 0; color: #14532d; font-weight: bold; font-size: 16px;">Total Return</td>
+                            <td style="padding: 10px 0; color: #14532d; text-align: right; font-size: 20px; font-weight: bold;">₦${returnAmount.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px 0; color: #166534;">ROI</td>
+                            <td style="padding: 6px 0; color: #16a34a; text-align: right; font-weight: bold;">${roi}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <p>Your funds are ready for withdrawal. Log in to your dashboard to request a withdrawal.</p>
+
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/export/(app)/transactions"
+                       style="background: #16a34a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                        View My Returns
+                    </a>
+                </div>
+
+                <p style="color: #6b7280; font-size: 13px;">
+                    Thank you for investing with Easy Sales Export. We look forward to your continued participation.
+                </p>
+            </div>
+        `,
+        metadata: { type: 'export_window_complete', windowTitle, amountInvested, returnAmount },
+    });
+}
+

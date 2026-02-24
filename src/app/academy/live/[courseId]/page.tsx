@@ -1,62 +1,59 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { logger } from '@/lib/logger';
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import VideoClassroom from "@/components/VideoClassroom";
 import { Video, BookOpen, ArrowLeft, Users } from "lucide-react";
+import { getCourseByIdAction } from "@/app/actions/academy";
 
-export default function AcademyLiveClassPage() {
+interface AcademyLiveClassPageProps {
+    params: Promise<{ courseId: string }>;
+}
+
+export default function AcademyLiveClassPage(props: AcademyLiveClassPageProps) {
+    const params = use(props.params);
     const router = useRouter();
-    const params = useParams();
-    const [user, setUser] = useState<any>(null);
+    const { data: session, status } = useSession();
     const [course, setCourse] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    const courseId = params?.courseId as string || "general";
+    const courseId = params.courseId;
 
     useEffect(() => {
-        const fetchData = async () => {
+        if (status === "loading") return;
+
+        if (status === "unauthenticated") {
+            router.push("/auth/login?callbackUrl=/academy");
+            return;
+        }
+
+        async function loadCourse() {
             try {
-                // Get user session
-                const sessionResponse = await fetch("/api/auth/session");
-                const sessionData = await sessionResponse.json();
-
-                // Assuming 'status' would be available from a global auth context like useSession()
-                // For this specific change, we're replacing the existing session check.
-                // If 'status' is not defined, this will cause a runtime error.
-                // A full implementation would involve importing and using 'useSession' from 'next-auth/react'.
-                if (status === "unauthenticated") {
-                    router.push("/auth/login?callbackUrl=/academy");
-                    return;
+                const courseData = await getCourseByIdAction(courseId);
+                if (courseData) {
+                    setCourse(courseData);
+                } else {
+                    // Fallback with courseId as title
+                    setCourse({ id: courseId, title: courseId.replace(/-/g, " "), instructor: "Easy Sales Academy" });
                 }
-
-                setUser(sessionData.user);
-
-                // Get course details (optional - you can enhance this)
-                // For now, we'll use a placeholder
-                setCourse({
-                    id: courseId,
-                    title: "Export Fundamentals",
-                    instructor: "Easy Sales Academy"
-                });
-
             } catch (error) {
-                logger.error("Failed to fetch data:", error);
-                router.push("/academy/login");
+                logger.error("Failed to load course:", error);
+                setCourse({ id: courseId, title: "Live Class", instructor: "Easy Sales Academy" });
             } finally {
                 setIsLoading(false);
             }
-        };
+        }
 
-        fetchData();
-    }, [courseId, router]);
+        loadCourse();
+    }, [status, courseId, router]);
 
     const handleMeetingEnd = () => {
-        router.push("/academy/courses");
+        router.push("/academy/dashboard");
     };
 
-    if (isLoading) {
+    if (status === "loading" || isLoading) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
@@ -67,10 +64,9 @@ export default function AcademyLiveClassPage() {
         );
     }
 
-    if (!user) {
-        return null;
-    }
+    if (!session?.user) return null;
 
+    const user = session.user as any;
     const isInstructor = user.roles?.includes("instructor") || user.roles?.includes("admin");
 
     return (
@@ -79,11 +75,11 @@ export default function AcademyLiveClassPage() {
                 {/* Header */}
                 <div className="mb-6">
                     <button
-                        onClick={() => router.push("/academy/courses")}
-                        className="flex items-center gap-2 text-slate-600 hover:text-primary mb-4"
+                        onClick={() => router.push("/academy/dashboard")}
+                        className="flex items-center gap-2 text-slate-600 hover:text-primary mb-4 transition-colors"
                     >
                         <ArrowLeft className="w-4 h-4" />
-                        Back to Courses
+                        Back to Academy
                     </button>
 
                     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -115,14 +111,12 @@ export default function AcademyLiveClassPage() {
                             <div className="flex items-center gap-2">
                                 <Users className="w-4 h-4 text-slate-400" />
                                 <span className="text-slate-600">
-                                    {course?.instructor}
+                                    {course?.instructor || "Easy Sales Academy"}
                                 </span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Video className="w-4 h-4 text-slate-400" />
-                                <span className="text-slate-600">
-                                    Live Session
-                                </span>
+                                <span className="text-slate-600">Live Session</span>
                             </div>
                         </div>
                     </div>
@@ -132,7 +126,7 @@ export default function AcademyLiveClassPage() {
                 <div className="h-[calc(100vh-300px)] min-h-[500px]">
                     <VideoClassroom
                         roomName={`academy-${courseId}`}
-                        userName={user.name || user.email}
+                        userName={user.name || user.email || "Student"}
                         userEmail={user.email}
                         isModerator={isInstructor}
                         subject={`Academy: ${course?.title || courseId}`}
@@ -140,14 +134,12 @@ export default function AcademyLiveClassPage() {
                     />
                 </div>
 
-                {/* Instructions */}
+                {/* Guidelines */}
                 <div className="mt-6 bg-purple-50 rounded-xl p-6">
-                    <h3 className="font-bold text-purple-900 mb-3">
-                        Live Class Guidelines:
-                    </h3>
+                    <h3 className="font-bold text-purple-900 mb-3">Live Class Guidelines:</h3>
                     <ul className="space-y-2 text-sm text-purple-800">
                         <li>• Please mute your microphone when the instructor is speaking</li>
-                        <li>• Use the "Raise Hand" feature to ask questions</li>
+                        <li>• Use the &quot;Raise Hand&quot; feature to ask questions</li>
                         <li>• Chat is open for questions and discussions</li>
                         <li>• Screen sharing is available for presentations</li>
                         {isInstructor && (

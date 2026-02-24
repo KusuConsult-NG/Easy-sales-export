@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
     ArrowRight, Search, Filter, ShoppingCart, MapPin, CheckCircle,
-    Plus, Minus, X, ChevronRight
+    Plus, Minus, X, ChevronRight, Loader2
 } from "lucide-react";
 import BackToHub from "@/components/common/BackToHub";
 import { useExportCart, type ExportProduct } from "@/contexts/ExportCartContext";
@@ -383,8 +383,23 @@ export default function ExportBuyerPage() {
     const { cartCount, setIsCartOpen } = useExportCart();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("all");
+    // Live catalog from Firestore (falls back to hardcoded PRODUCTS if API unavailable)
+    const [liveProducts, setLiveProducts] = useState<ExportProduct[]>(PRODUCTS);
+    const [catalogLoading, setCatalogLoading] = useState(true);
 
-    const filteredProducts = PRODUCTS.filter((product) => {
+    useEffect(() => {
+        fetch("/api/export/catalog")
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.products?.length) {
+                    setLiveProducts(data.products as ExportProduct[]);
+                }
+            })
+            .catch(() => { /* keep PRODUCTS fallback */ })
+            .finally(() => setCatalogLoading(false));
+    }, []);
+
+    const filteredProducts = liveProducts.filter((product) => {
         const matchesSearch =
             product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             product.origin.toLowerCase().includes(searchQuery.toLowerCase());
@@ -392,6 +407,13 @@ export default function ExportBuyerPage() {
         return matchesSearch && matchesCategory;
     });
 
+    if (catalogLoading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+            </div>
+        );
+    }
     return (
         <div className="min-h-screen bg-slate-50">
             <CartSidebar />

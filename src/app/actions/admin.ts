@@ -289,13 +289,61 @@ export async function processWithdrawalAction(
 
         const withdrawalData = withdrawalDoc.data()!;
 
-        await withdrawalRef.update({
-            status: action === "approve" ? "completed" : "rejected",
-            processedBy: session.user.id,
-            processedAt: FieldValue.serverTimestamp(),
-            adminNotes: reasoning || "",
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        if (action === "approve") {
+            // ══════════════════════════════════════════════
+            // PAYOUT — Trigger Paystack Transfer immediately
+            // ══════════════════════════════════════════════
+            let payoutSuccess = false;
+            let payoutError: string | undefined;
+            let transferCode: string | undefined;
+
+            try {
+                const { paystackPayout } = await import("@/lib/paystack-transfer");
+
+                // Get user bank details
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId).get();
+                const userData = userDoc.data();
+
+                if (userData?.bankAccountNumber && userData?.bankCode) {
+                    const payoutResult = await paystackPayout(
+                        {
+                            accountNumber: userData.bankAccountNumber,
+                            bankCode: userData.bankCode,
+                            accountName: userData.bankAccountName || userData.name,
+                        },
+                        withdrawalData.amount,
+                        `Withdrawal payout - ${withdrawalId}`
+                    );
+                    payoutSuccess = payoutResult.success;
+                    payoutError = payoutResult.error;
+                    transferCode = payoutResult.transferCode;
+                } else {
+                    payoutError = "User bank details not configured";
+                }
+            } catch (payoutErr: any) {
+                payoutError = payoutErr.message;
+                logger.error(`Payout error for withdrawal ${withdrawalId}:`, payoutErr);
+            }
+
+            await withdrawalRef.update({
+                status: payoutSuccess ? "completed" : "approved_pending_payout",
+                processedBy: session.user.id,
+                processedAt: FieldValue.serverTimestamp(),
+                adminNotes: reasoning || "",
+                updatedAt: FieldValue.serverTimestamp(),
+                ...(transferCode ? { paystackTransferCode: transferCode } : {}),
+                ...(payoutError && !payoutSuccess ? { payoutError, pendingManualPayout: true } : {}),
+            });
+        } else {
+            // Rejection — just update status
+            await withdrawalRef.update({
+                status: "rejected",
+                processedBy: session.user.id,
+                processedAt: FieldValue.serverTimestamp(),
+                adminNotes: reasoning || "",
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
 
         // Create notification for user
         await createNotificationAction({
@@ -303,7 +351,7 @@ export async function processWithdrawalAction(
             type: action === "approve" ? "success" : "warning",
             title: action === "approve" ? "Withdrawal Approved" : "Withdrawal Rejected",
             message: action === "approve"
-                ? `Your withdrawal request of ₦${withdrawalData.amount.toLocaleString()} has been approved.`
+                ? `Your withdrawal request of ₦${withdrawalData.amount.toLocaleString()} has been approved and is being processed.`
                 : `Your withdrawal request of ₦${withdrawalData.amount.toLocaleString()} was rejected. ${reasoning || ''}`,
             link: "/cooperatives",
             linkText: "View Dashboard",
@@ -320,7 +368,7 @@ export async function processWithdrawalAction(
         return {
             error: null,
             success: true,
-            message: `Withdrawal ${action === "approve" ? "approved" : "rejected"} successfully`,
+            message: `Withdrawal ${action === "approve" ? "approved and payout initiated" : "rejected"} successfully`,
         };
     } catch (error: any) {
         logger.error("Process withdrawal error:", error);
@@ -905,6 +953,60 @@ export async function approveLoanApplication(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // ══════════════════════════════════════════════════
+        // LOAN DISBURSEMENT — Trigger Paystack Transfer now
+        // ══════════════════════════════════════════════════
+        let disbursementTransferCode: string | undefined;
+        let disbursementError: string | undefined;
+        try {
+            const { paystackPayout } = await import("@/lib/paystack-transfer");
+
+            // Get borrower's bank details
+            const borrowerDoc = await db.collection(COLLECTIONS.USERS).doc(loanData.userId).get();
+            const borrowerData = borrowerDoc.data();
+
+            if (borrowerData?.bankAccountNumber && borrowerData?.bankCode) {
+                const disbResult = await paystackPayout(
+                    {
+                        accountNumber: borrowerData.bankAccountNumber,
+                        bankCode: borrowerData.bankCode,
+                        accountName: borrowerData.bankAccountName || borrowerData.name,
+                    },
+                    loanData.amount,
+                    `Cooperative loan disbursement - ${applicationId}`
+                );
+
+                if (disbResult.success) {
+                    disbursementTransferCode = disbResult.transferCode;
+                    await loanRef.update({
+                        disbursed: true,
+                        disbursedAt: FieldValue.serverTimestamp(),
+                        disbursementTransferCode: disbResult.transferCode,
+                        status: "disbursed",
+                    });
+                    logger.info(`Loan ${applicationId} disbursed: ₦${loanData.amount} to ${loanData.userId}`);
+                } else {
+                    disbursementError = disbResult.error;
+                    await loanRef.update({
+                        disbursed: false,
+                        disbursementError: disbResult.error,
+                        pendingManualDisbursement: true,
+                    });
+                    logger.error(`Loan disbursement FAILED for ${applicationId}: ${disbResult.error}`);
+                }
+            } else {
+                disbursementError = "Borrower bank details not configured";
+                await loanRef.update({
+                    pendingManualDisbursement: true,
+                    disbursementNote: disbursementError,
+                });
+            }
+        } catch (disbErr: any) {
+            disbursementError = disbErr.message;
+            logger.error(`Loan disbursement error for ${applicationId}:`, disbErr);
+            await loanRef.update({ pendingManualDisbursement: true });
+        }
+
         // CLEAR CACHE - User's cooperative status changed
         try {
             const { invalidateCooperativeCache } = await import('@/lib/cache-invalidation');
@@ -943,7 +1045,7 @@ export async function approveLoanApplication(
 
                         <p><strong>Next Steps:</strong></p>
                         <ul>
-                            <li>Funds will be disbursed to your account within 2-3 business days</li>
+                            <li>${disbursementTransferCode ? 'Your funds have been transferred to your bank account.' : 'Funds will be disbursed to your account shortly.'}</li>
                             <li>Your first repayment is due 30 days from disbursement</li>
                             <li>You can track your repayment schedule in your dashboard</li>
                         </ul>
@@ -960,7 +1062,9 @@ export async function approveLoanApplication(
             userId: loanData.userId,
             type: "success",
             title: "Loan Approved!",
-            message: `Your loan application for ₦${loanData.amount.toLocaleString()} has been approved. Disbursement within 2-3 days.`,
+            message: disbursementTransferCode
+                ? `Your loan of ₦${loanData.amount.toLocaleString()} has been approved and disbursed to your bank account!`
+                : `Your loan application for ₦${loanData.amount.toLocaleString()} has been approved. Disbursement will follow shortly.`,
             link: "/loans",
             linkText: "View Loans",
         });
@@ -970,13 +1074,15 @@ export async function approveLoanApplication(
             "loan_approved",
             applicationId,
             "application",
-            { adminId: session.user.id, amount: loanData.amount, role: "Checker/Final" }
+            { adminId: session.user.id, amount: loanData.amount, role: "Checker/Final", disbursed: !!disbursementTransferCode }
         );
 
         return {
             error: null,
             success: true,
-            message: "Loan application approved successfully",
+            message: disbursementTransferCode
+                ? "Loan approved and disbursed successfully"
+                : `Loan approved. ${disbursementError ? `Disbursement pending: ${disbursementError}` : "Disbursement pending."}`,
         };
     } catch (error: any) {
         logger.error("Approve loan application error:", error);

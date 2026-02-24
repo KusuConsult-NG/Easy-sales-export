@@ -1,51 +1,63 @@
 "use client";
 
-import { ArrowRight, MapPin, TrendingUp, Home, CheckCircle, Search, Award } from "lucide-react";
+import { ArrowRight, MapPin, Home, CheckCircle, Search, Award, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import BackToHub from "@/components/common/BackToHub";
+import { useState, useEffect } from "react";
+import { getPropertiesAction } from "@/app/actions/farm-nation";
+
+const categories = [
+    { name: "Arable Land", icon: "🌾" },
+    { name: "Leasing Options", icon: "📋" },
+    { name: "Poultry Farms", icon: "🐔" },
+    { name: "Fish Farms", icon: "🐟" },
+    { name: "Greenhouses", icon: "🏡" },
+    { name: "Mixed-Use", icon: "🌻" },
+];
 
 export default function FarmNationLandingPage() {
-    const featuredProperties = [
-        {
-            title: "Prime Irrigated Farmland",
-            location: "Kaduna State",
-            size: "50 hectares",
-            price: "₦45,000,000",
-            type: "Arable Land",
-            image: "/images/logo.jpg"
-        },
-        {
-            title: "Commercial Poultry Farm",
-            location: "Ogun State",
-            size: "5 hectares",
-            price: "₦22,000,000",
-            type: "Poultry",
-            image: "/images/logo.jpg"
-        },
-        {
-            title: "Fish Farm with Ponds",
-            location: "Delta State",
-            size: "3 hectares",
-            price: "₦18,500,000",
-            type: "Fishery",
-            image: "/images/logo.jpg"
-        }
-    ];
+    const [featuredProperties, setFeaturedProperties] = useState<any[]>([]);
+    const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+    const [totalCount, setTotalCount] = useState<number | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    const categories = [
-        { name: "Arable Land", icon: "🌾", count: "450+" },
-        { name: "Leasing Options", icon: "📋", count: "280+" },
-        { name: "Poultry Farms", icon: "🐔", count: "120+" },
-        { name: "Fish Farms", icon: "🐟", count: "95+" },
-        { name: "Greenhouses", icon: "🏡", count: "65+" },
-        { name: "Mixed-Use", icon: "🌻", count: "180+" }
-    ];
+    useEffect(() => {
+        async function loadData() {
+            try {
+                // Load featured (verified) properties — filter in-memory after load
+                const result = await getPropertiesAction({ limit: 50 });
+                if (result.success && result.properties) {
+                    // Only show verified properties on landing page
+                    const verified = result.properties.filter((p: any) => p.verified === true);
+                    setFeaturedProperties(verified.slice(0, 3));
+                    setTotalCount(result.properties.length);
+
+                    // Count properties by type/category
+                    const counts: Record<string, number> = {};
+                    result.properties.forEach((p: any) => {
+                        const type = p.propertyType || p.type || "other";
+                        counts[type] = (counts[type] || 0) + 1;
+                    });
+                    setCategoryCounts(counts);
+                }
+            } catch (e) {
+                // Graceful fallback — don't break the landing page
+            } finally {
+                setLoading(false);
+            }
+        }
+        loadData();
+    }, []);
+
+    const formatCount = (count: number | null) => {
+        if (count === null) return "...";
+        if (count === 0) return "0";
+        return count >= 100 ? `${Math.floor(count / 10) * 10}+` : `${count}`;
+    };
 
     return (
         <div className="min-h-screen bg-slate-50">
-
-
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-teal-600 via-cyan-600 to-blue-600 text-white">
                 <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
@@ -67,11 +79,17 @@ export default function FarmNationLandingPage() {
                         </p>
                         <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4">
                             <Link
-                                href="/farm-nation/onboarding"
+                                href="/farm-nation/properties"
                                 className="group inline-flex items-center justify-center gap-2 md:gap-3 bg-white text-teal-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-teal-500/50 transition-all hover:scale-105"
                             >
-                                Register Your Farm Here
+                                Browse Properties
                                 <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                            <Link
+                                href="/farm-nation/onboarding"
+                                className="inline-flex items-center justify-center gap-2 md:gap-3 bg-white/10 border border-white/30 text-white px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg hover:bg-white/20 transition-all"
+                            >
+                                List Your Property
                             </Link>
                         </div>
                     </div>
@@ -79,7 +97,7 @@ export default function FarmNationLandingPage() {
                 {/* Wave SVG */}
                 <div className="absolute bottom-0 left-0 right-0">
                     <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
-                        <path d="M0 0L60 10C120 20 240 40 360 46.7C480 53 600 47 720 43.3C840 40 960 40 1080 46.7C1200 53 1320 67 1380 73.3L1440 80V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0V0Z" fill="rgb(248 250 252)" className="dark:fill-slate-950" />
+                        <path d="M0 0L60 10C120 20 240 40 360 46.7C480 53 600 47 720 43.3C840 40 960 40 1080 46.7C1200 53 1320 67 1380 73.3L1440 80V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0V0Z" fill="rgb(248 250 252)" />
                     </svg>
                 </div>
             </div>
@@ -88,7 +106,9 @@ export default function FarmNationLandingPage() {
             <div className="max-w-7xl mx-auto px-8 -mt-16 relative z-10">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
                     <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-teal-600 mb-2">1,200+</div>
+                        <div className="text-4xl font-bold text-teal-600 mb-2">
+                            {totalCount !== null ? `${totalCount}+` : <Loader2 className="w-8 h-8 animate-spin text-teal-400 mx-auto" />}
+                        </div>
                         <div className="text-slate-600 font-medium">Properties Listed</div>
                     </div>
                     <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
@@ -111,15 +131,24 @@ export default function FarmNationLandingPage() {
                 <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-12">
                     Farm Categories
                 </h2>
-
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-12">
-                    {categories.map((category, index) => (
-                        <div key={index} className="bg-white rounded-xl p-6 elevation-2 hover-lift text-center">
-                            <div className="text-4xl mb-3">{category.icon}</div>
-                            <h4 className="font-bold text-slate-900 text-sm mb-1">{category.name}</h4>
-                            <p className="text-xs text-teal-600 font-semibold">{category.count}</p>
-                        </div>
-                    ))}
+                    {categories.map((category) => {
+                        const key = category.name.toLowerCase().replace(/\s+/g, "_");
+                        const count = categoryCounts[key] ?? categoryCounts[category.name] ?? null;
+                        return (
+                            <Link
+                                key={category.name}
+                                href={`/farm-nation/properties?category=${encodeURIComponent(category.name)}`}
+                                className="bg-white rounded-xl p-6 elevation-2 hover-lift text-center cursor-pointer block"
+                            >
+                                <div className="text-4xl mb-3">{category.icon}</div>
+                                <h4 className="font-bold text-slate-900 text-sm mb-1">{category.name}</h4>
+                                <p className="text-xs text-teal-600 font-semibold">
+                                    {loading ? "..." : count !== null ? `${count}+` : "Browse"}
+                                </p>
+                            </Link>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -132,52 +161,71 @@ export default function FarmNationLandingPage() {
                     Premium agricultural properties verified and ready for investment
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-                    {featuredProperties.map((property, index) => (
-                        <div key={index} className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift">
-                            <div className="relative h-56 bg-slate-200">
-                                <Image
-                                    src={property.image}
-                                    alt={property.title}
-                                    fill
-                                    className="object-cover"
-                                />
-                                <div className="absolute top-4 right-4">
-                                    <span className="px-3 py-1 bg-teal-600 text-white text-xs font-bold rounded-full">
-                                        {property.type}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="p-6">
-                                <h3 className="text-xl font-bold text-slate-900 mb-2">
-                                    {property.title}
-                                </h3>
-                                <div className="flex items-center gap-2 text-slate-600 mb-4">
-                                    <MapPin className="w-4 h-4" />
-                                    <span className="text-sm">{property.location}</span>
-                                </div>
-                                <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-                                    <div>
-                                        <p className="text-xs text-slate-500 mb-1">Size</p>
-                                        <p className="font-semibold text-slate-900">{property.size}</p>
+                {loading ? (
+                    <div className="flex items-center justify-center py-16">
+                        <Loader2 className="w-10 h-10 animate-spin text-teal-500" />
+                    </div>
+                ) : featuredProperties.length === 0 ? (
+                    <div className="text-center py-12 bg-white rounded-2xl shadow-sm">
+                        <p className="text-slate-500 text-lg mb-2">No verified properties yet</p>
+                        <p className="text-slate-400 text-sm">Be the first to list your farm!</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                        {featuredProperties.map((property) => (
+                            <Link
+                                key={property.id}
+                                href={`/farm-nation/property/${property.id}`}
+                                className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift block"
+                            >
+                                <div className="relative h-56 bg-slate-200">
+                                    {property.images?.[0] ? (
+                                        <Image
+                                            src={property.images[0]}
+                                            alt={property.title}
+                                            fill
+                                            className="object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-6xl">🌾</div>
+                                    )}
+                                    <div className="absolute top-4 right-4">
+                                        <span className="px-3 py-1 bg-teal-600 text-white text-xs font-bold rounded-full">
+                                            {property.propertyType || property.type || "Land"}
+                                        </span>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-slate-500 mb-1">Price</p>
-                                        <p className="text-xl font-bold text-teal-600">{property.price}</p>
+                                </div>
+                                <div className="p-6">
+                                    <h3 className="text-xl font-bold text-slate-900 mb-2">{property.title}</h3>
+                                    <div className="flex items-center gap-2 text-slate-600 mb-4">
+                                        <MapPin className="w-4 h-4" />
+                                        <span className="text-sm">{property.location || property.state}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between pt-4 border-t border-slate-200">
+                                        <div>
+                                            <p className="text-xs text-slate-500 mb-1">Size</p>
+                                            <p className="font-semibold text-slate-900">{property.size || "N/A"}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-slate-500 mb-1">Price</p>
+                                            <p className="text-xl font-bold text-teal-600">
+                                                ₦{Number(property.price || 0).toLocaleString()}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                            </Link>
+                        ))}
+                    </div>
+                )}
 
                 <div className="text-center">
                     <Link
-                        href="/farm-nation/onboarding"
-                        className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition shadow-lg shadow-emerald-200 group"
+                        href="/farm-nation/properties"
+                        className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition shadow-lg shadow-teal-200 group"
                     >
-                        Register Your Farm Here
-                        <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                        View All Properties
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </Link>
                 </div>
             </div>
@@ -187,42 +235,27 @@ export default function FarmNationLandingPage() {
                 <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-12">
                     Why Choose Farm Nation?
                 </h2>
-
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <div className="bg-white rounded-2xl p-8 elevation-2">
                         <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center mb-6">
                             <CheckCircle className="w-7 h-7 text-teal-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-3">
-                            Verified Properties
-                        </h3>
-                        <p className="text-slate-600">
-                            Every property is inspected and verified with clear documentation and legal compliance.
-                        </p>
+                        <h3 className="text-xl font-bold text-slate-900 mb-3">Verified Properties</h3>
+                        <p className="text-slate-600">Every property is inspected and verified with clear documentation and legal compliance.</p>
                     </div>
-
                     <div className="bg-white rounded-2xl p-8 elevation-2">
                         <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center mb-6">
                             <Search className="w-7 h-7 text-teal-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-3">
-                            Smart Search
-                        </h3>
-                        <p className="text-slate-600">
-                            Filter by location, size, price, and property type to find your ideal agricultural land.
-                        </p>
+                        <h3 className="text-xl font-bold text-slate-900 mb-3">Smart Search</h3>
+                        <p className="text-slate-600">Filter by location, size, price, and property type to find your ideal agricultural land.</p>
                     </div>
-
                     <div className="bg-white rounded-2xl p-8 elevation-2">
                         <div className="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center mb-6">
                             <Award className="w-7 h-7 text-teal-600" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-3">
-                            Expert Support
-                        </h3>
-                        <p className="text-slate-600">
-                            Get professional guidance on property selection, legal processes, and investment strategy.
-                        </p>
+                        <h3 className="text-xl font-bold text-slate-900 mb-3">Expert Support</h3>
+                        <p className="text-slate-600">Get professional guidance on property selection, legal processes, and investment strategy.</p>
                     </div>
                 </div>
             </div>
@@ -236,7 +269,7 @@ export default function FarmNationLandingPage() {
                             Find Your Perfect Agricultural Property
                         </h2>
                         <p className="text-xl mb-8 text-teal-100 max-w-2xl mx-auto">
-                            Browse over 1,200 verified agricultural properties across Nigeria. Start building your agribusiness empire today.
+                            Browse verified agricultural properties across Nigeria. Start building your agribusiness empire today.
                         </p>
                         <Link
                             href="/farm-nation/onboarding"

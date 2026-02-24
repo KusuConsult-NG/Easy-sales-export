@@ -3,7 +3,9 @@ import { logger } from '@/lib/logger';
 import { Resend } from "resend";
 import { COMPANY_INFO } from "@/lib/constants";
 
-const resend = new Resend(process.env.RESEND_API_KEY || "re_mock_key_for_build");
+// If RESEND_API_KEY is missing, every send will fail silently — surface it as a clear config error
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 export async function POST(request: NextRequest) {
     try {
@@ -24,6 +26,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { success: false, error: "Invalid email address" },
                 { status: 400 }
+            );
+        }
+
+        // Guard: email service not configured
+        if (!resend) {
+            logger.error("RESEND_API_KEY is not set — contact form emails will not be delivered.");
+            return NextResponse.json(
+                { success: false, error: "Email service is currently unavailable. Please contact us directly at support@easysalesexport.com." },
+                { status: 503 }
             );
         }
 

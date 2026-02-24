@@ -60,6 +60,11 @@ export interface User {
         bankCode: string;
     };
 
+    // Top-level bank fields — written directly by payout actions (paystackPayout reads these)
+    bankAccountNumber?: string;
+    bankAccountName?: string;
+    bankCode?: string;
+
     // Address
     address?: {
         street: string;
@@ -185,6 +190,7 @@ export interface Notification {
     title: string;
     message: string;
     link?: string;
+    linkText?: string; // CTA button label e.g. "View Loans"
     read: boolean;
     createdAt: Date;
 }
@@ -233,19 +239,27 @@ export interface CooperativeMember {
     savingsBalance: number;
     loanBalance: number;
     joinedAt: Date;
+    contributionAmount?: number;  // Total lifetime contributions (used for loan eligibility)
+    totalContributions?: number;  // Alias used in some dashboard actions
+    tier?: "tier1" | "tier2";
+    status?: "active" | "inactive" | "suspended";
 }
 
 export interface LoanApplication {
     id: string;
     userId: string;
+    userEmail?: string; // Used by approval email
+    fullName?: string;  // Written by loans.ts submitLoanApplicationAction
     amount: number;
     purpose: string;
-    status: "pending" | "approved" | "rejected" | "disbursed" | "repaid" | "completed";
+    status: "pending" | "partially_approved" | "approved" | "rejected" | "disbursed" | "repaid" | "completed";
     createdAt: Date;
     updatedAt?: Date;
     approvedAt?: Date;
     disbursedAt?: Date;
     repaidAt?: Date;
+    appliedAt?: Date;   // Alias for createdAt used in loans.ts
+    documents?: string[]; // Supporting document URLs
 
     // Financials
     interestRate?: number;
@@ -254,6 +268,28 @@ export interface LoanApplication {
     totalRepayment?: number;
     contributionAmount?: number;
     tier?: string;
+
+    // Maker-Checker approval chain (loans ≥ ₦1M require two admins)
+    approvalChain?: {
+        firstApprover?: string;
+        firstApprovalAt?: Date;
+        firstApproverName?: string;
+        secondApprover?: string;
+        secondApprovalAt?: Date;
+        secondApproverName?: string;
+    };
+
+    // Disbursement tracking
+    disbursed?: boolean;
+    disbursementTransferCode?: string; // Paystack transfer code
+    pendingManualDisbursement?: boolean; // Set if Paystack payout failed
+    disbursementError?: string;
+    disbursementNote?: string;
+
+    // Review
+    reviewedBy?: string;
+    reviewedAt?: Date;
+    rejectionReason?: string;
 }
 
 export interface Payment {
@@ -557,7 +593,7 @@ export interface ExportSlot {
     expectedReturn: number; // Projected profit at window end
     roi?: string; // e.g. "15%"
     status: "pending" | "active" | "completed" | "cancelled";
-    paymentReference: string; // Paystack reference
+    paymentReference?: string; // Paystack reference (optional until payment confirmed)
     purchaseDate?: Date;
     startDate?: Date;
     endDate?: Date;
@@ -572,11 +608,15 @@ export interface WaveWithdrawal {
     userId: string;
     userEmail?: string;
     amount: number; // Amount requested in ₦, minimum 5,000
-    status: "pending" | "approved" | "rejected" | "completed";
+    status: "pending" | "approved" | "approved_pending_payout" | "rejected" | "completed";
     requestedAt: Date;
     processedAt?: Date;
     processedBy?: string; // Admin userId who approved/rejected
     adminNotes?: string;
+    // Payout tracking (set when Paystack transfer is attempted)
+    paystackTransferCode?: string;
+    pendingManualPayout?: boolean;
+    payoutError?: string;
     createdAt: Date;
     updatedAt?: Date;
 }
@@ -613,8 +653,78 @@ export interface AuditLog {
     id: string;
     userId: string;
     action: string;
-    details: string;
+    entityId?: string;    // ID of the entity being acted on
+    entityType?: string;  // e.g. "application", "user", "withdrawal"
+    // Aliases used by createAdminAuditLog (audit-log-admin.ts)
+    targetId?: string;
+    targetType?: string;
+    details?: string;
+    metadata?: Record<string, any>;
+    adminId?: string;
+    // Extra fields written by admin audit logger
+    severity?: "info" | "warning" | "critical";
+    userEmail?: string;
+    userRole?: string;
+    ipAddress?: string;
+    userAgent?: string;
     timestamp: Date;
+    createdAt?: Date;
+}
+
+// ============================================
+// Wave Earnings
+// ============================================
+
+export interface WaveEarning {
+    id: string;
+    userId: string;
+    memberId?: string;  // WAVE member ID
+    amount: number;
+    type: "training_bonus" | "referral" | "sales_commission" | "other";
+    description?: string;
+    status: "pending" | "approved" | "paid" | "rejected";
+    approvedBy?: string;
+    approvedAt?: Date;
+    paidAt?: Date;
+    paystackTransferCode?: string;
+    createdAt: Date;
+    updatedAt?: Date;
+}
+
+// ============================================
+// Loan Payments (individual repayment records per installment)
+// ============================================
+
+export interface LoanPayment {
+    id: string;
+    loanId: string;
+    installmentId: string; // Reference to loan_repayments document
+    userId: string;
+    amount: number;
+    paymentReference: string; // Paystack reference
+    penaltyPaid?: number;
+    paidAt: Date;
+    createdAt?: Date;
+}
+
+// ============================================
+// Loan Repayment Installments
+// ============================================
+
+export interface RepaymentInstallment {
+    id?: string;
+    loanId: string;
+    userId: string;
+    installmentNumber: number;
+    dueDate: Date;
+    principalAmount: number;
+    interestAmount: number;
+    totalAmount: number;
+    paidAmount: number;
+    status: "pending" | "paid" | "overdue" | "partial";
+    paidAt?: Date;
+    penaltyAmount?: number;
+    daysOverdue?: number;
 }
 
 /**

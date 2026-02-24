@@ -220,6 +220,15 @@ export interface Order {
     buyerConfirmed: boolean;
     buyerConfirmedAt?: Date;
 
+    // Escrow Release Tracking (set by confirmDeliveryAction)
+    escrowReleased?: boolean;
+    escrowReleasedAt?: Date;
+    paystackTransferCode?: string;   // Paystack transfer code after release
+    sellerAmountPaid?: number;       // Actual amount sent to seller (after commission)
+    escrowPendingManualRelease?: boolean; // Set if Paystack payout failed
+    escrowReleaseError?: string;
+    escrowReleaseNote?: string;
+
     createdAt: Date;
     updatedAt: Date;
 }

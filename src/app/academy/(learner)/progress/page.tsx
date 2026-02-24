@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { TrendingUp, Award, Clock, Target, CheckCircle, BookOpen, Trophy, Loader2 } from "lucide-react";
-import { getUserAggregateProgressAction } from "@/app/actions/academy";
+import { getUserAggregateProgressAction, calculateStreakAction } from "@/app/actions/academy";
 import BackButton from "@/components/ui/BackButton";
 
 export default function ProgressPage() {
@@ -35,10 +35,13 @@ export default function ProgressPage() {
 
             setLoading(true);
             try {
-                const data = await getUserAggregateProgressAction(userId);
+                const [data, { streak }] = await Promise.all([
+                    getUserAggregateProgressAction(userId),
+                    calculateStreakAction(userId),
+                ]);
                 setProgressData({
                     ...data,
-                    currentStreak: 0, // Placeholder for streak implementation
+                    currentStreak: streak,
                 });
             } catch (error) {
                 logger.error("Failed to load progress:", error);

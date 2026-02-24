@@ -27,6 +27,26 @@ export default function AdminFinancePage() {
         setLoading(false);
     }
 
+    function exportCsv() {
+        if (!financial?.recentTransactions?.length) return;
+        const headers = ["ID", "Type", "Amount (NGN)", "Date", "Status"];
+        const rows = financial.recentTransactions.map((tx: any) => [
+            tx.id || "",
+            tx.type?.replace(/_/g, " ") || "",
+            (tx.amount || 0).toString(),
+            tx.date ? new Date(tx.date).toLocaleDateString("en-NG") : "N/A",
+            "Completed",
+        ]);
+        const csvContent = [headers, ...rows].map(r => r.map((c: string) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `finance-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
     useEffect(() => {
         let mounted = true;
         async function fetchFinancial() {
@@ -171,8 +191,8 @@ export default function AdminFinancePage() {
                         <p className="text-2xl font-bold text-slate-900">
                             {financial.recentTransactions.length}
                         </p>
-                        <p className="text-xs text-green-600 mt-1">
-                            +12% this month
+                        <p className="text-xs text-slate-500 mt-1">
+                            From Firestore
                         </p>
                     </div>
 
@@ -204,7 +224,10 @@ export default function AdminFinancePage() {
                                 Latest {financial.recentTransactions.length} transactions
                             </p>
                         </div>
-                        <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition">
+                        <button
+                            onClick={exportCsv}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition"
+                        >
                             <Download className="w-4 h-4" />
                             Export CSV
                         </button>

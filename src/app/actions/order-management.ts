@@ -7,6 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { paystackPayout } from "@/lib/paystack-transfer";
 
 /**
  * Get all orders for a seller
@@ -215,7 +216,59 @@ export async function confirmDeliveryAction(orderId: string) {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // In production, trigger escrow release here
+        // ══════════════════════════════════════════
+        // ESCROW RELEASE — Trigger Paystack Transfer
+        // ══════════════════════════════════════════
+        try {
+            // Get seller's bank details from Firestore
+            const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(order.sellerId).get();
+            const sellerData = sellerDoc.data();
+
+            if (sellerData?.bankAccountNumber && sellerData?.bankCode) {
+                // Platform takes 2.5% commission; seller receives 97.5%
+                const platformCommissionRate = 0.025;
+                const sellerAmount = Math.floor(order.totalAmount * (1 - platformCommissionRate));
+
+                const payoutResult = await paystackPayout(
+                    {
+                        accountNumber: sellerData.bankAccountNumber,
+                        bankCode: sellerData.bankCode,
+                        accountName: sellerData.bankAccountName || sellerData.name,
+                    },
+                    sellerAmount, // in Naira (paystackPayout converts to kobo internally)
+                    `Escrow release for order ${orderId}`
+                );
+
+                if (payoutResult.success) {
+                    await orderRef.update({
+                        escrowReleased: true,
+                        escrowReleasedAt: FieldValue.serverTimestamp(),
+                        paystackTransferCode: payoutResult.transferCode,
+                        sellerAmountPaid: sellerAmount,
+                    });
+                    logger.info(`Escrow released for order ${orderId}: ₦${sellerAmount} to ${order.sellerId}`);
+                } else {
+                    // Log failure and flag for manual processing
+                    await orderRef.update({
+                        escrowReleased: false,
+                        escrowReleaseError: payoutResult.error,
+                        escrowPendingManualRelease: true,
+                    });
+                    logger.error(`Escrow release FAILED for order ${orderId}: ${payoutResult.error}`);
+                }
+            } else {
+                // Seller hasn't set up bank details — flag for manual release
+                await orderRef.update({
+                    escrowPendingManualRelease: true,
+                    escrowReleaseNote: "Seller bank details not configured",
+                });
+                logger.warn(`Escrow release PENDING for order ${orderId}: seller ${order.sellerId} has no bank details`);
+            }
+        } catch (payoutError: any) {
+            // Never block the order completion due to payout failure
+            logger.error(`Escrow payout error for order ${orderId}:`, payoutError);
+            await orderRef.update({ escrowPendingManualRelease: true });
+        }
 
         return { success: true };
     } catch (error: any) {
@@ -223,3 +276,4 @@ export async function confirmDeliveryAction(orderId: string) {
         return { success: false, error: error.message };
     }
 }
+

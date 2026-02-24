@@ -78,6 +78,11 @@ export interface User {
         bankCode: string;
     };
 
+    // Top-level bank fields — written directly by payout actions (paystackPayout reads these)
+    bankAccountNumber?: string;
+    bankAccountName?: string;
+    bankCode?: string;
+
     // Address
     address?: {
         street?: string;
@@ -361,6 +366,8 @@ export interface CooperativeMember {
     totalExports?: number;
     totalRevenue?: number;
     loanBalance?: number;
+    contributionAmount?: number;  // Total lifetime contributions (for loan eligibility)
+    totalContributions?: number;  // Alias used in some dashboard actions
     status?: "active" | "inactive" | "suspended";
     createdAt?: Date | any;
     updatedAt?: Date | any;
@@ -557,9 +564,11 @@ export interface VendorSettings {
 export interface LoanApplication {
     id: string;
     userId: string;
+    userEmail?: string; // Used by approval email
+    fullName?: string;  // Written by submitLoanApplicationAction
     amount: number;
     purpose: string;
-    status: "pending" | "approved" | "rejected" | "disbursed" | "repaid" | "completed";
+    status: "pending" | "partially_approved" | "approved" | "rejected" | "disbursed" | "repaid" | "completed";
     interestRate?: number;
     durationMonths?: number;
     monthlyPayment?: number;
@@ -571,6 +580,30 @@ export interface LoanApplication {
     approvedAt?: Date | any;
     disbursedAt?: Date | any;
     repaidAt?: Date | any;
+    appliedAt?: Date | any;  // Alias for createdAt used in loans.ts
+    documents?: string[];    // Supporting document URLs
+
+    // Maker-Checker approval chain (loans ≥ ₦1M require two admins)
+    approvalChain?: {
+        firstApprover?: string;
+        firstApprovalAt?: Date | any;
+        firstApproverName?: string;
+        secondApprover?: string;
+        secondApprovalAt?: Date | any;
+        secondApproverName?: string;
+    };
+
+    // Disbursement tracking
+    disbursed?: boolean;
+    disbursementTransferCode?: string;
+    pendingManualDisbursement?: boolean;
+    disbursementError?: string;
+    disbursementNote?: string;
+
+    // Review
+    reviewedBy?: string;
+    reviewedAt?: Date | any;
+    rejectionReason?: string;
 }
 
 // ===========================
@@ -591,6 +624,7 @@ export interface Notification {
     title: string;
     message: string;
     link?: string;
+    linkText?: string; // CTA button label e.g. "View Dashboard"
     read: boolean;
     createdAt?: Date | any;
 }
@@ -618,8 +652,72 @@ export interface AuditLog {
     action: string;
     details?: string;
     metadata?: Record<string, any>;
+    // Field names used by logAuditAction
+    entityId?: string;
+    entityType?: string;
+    adminId?: string;
+    // Field names used by createAdminAuditLog (audit-log-admin.ts)
+    targetId?: string;
+    targetType?: string;
+    severity?: "info" | "warning" | "critical";
+    userEmail?: string;
+    userRole?: string;
+    ipAddress?: string;
+    userAgent?: string;
     timestamp?: Date | any;
     createdAt?: Date | any;
+}
+
+// ===========================
+// Wave Earnings
+// ===========================
+
+export interface WaveEarning {
+    id: string;
+    userId: string;
+    memberId?: string;
+    amount: number;
+    type: "training_bonus" | "referral" | "sales_commission" | "other";
+    description?: string;
+    status: "pending" | "approved" | "paid" | "rejected";
+    approvedBy?: string;
+    approvedAt?: Date | any;
+    paidAt?: Date | any;
+    paystackTransferCode?: string;
+    createdAt?: Date | any;
+    updatedAt?: Date | any;
+}
+
+// ===========================
+// Loan Payments & Repayments
+// ===========================
+
+export interface LoanPayment {
+    id: string;
+    loanId: string;
+    installmentId: string;
+    userId: string;
+    amount: number;
+    paymentReference: string;
+    penaltyPaid?: number;
+    paidAt?: Date | any;
+    createdAt?: Date | any;
+}
+
+export interface RepaymentInstallment {
+    id?: string;
+    loanId: string;
+    userId: string;
+    installmentNumber: number;
+    dueDate: Date | any;
+    principalAmount: number;
+    interestAmount: number;
+    totalAmount: number;
+    paidAmount: number;
+    status: "pending" | "paid" | "overdue" | "partial";
+    paidAt?: Date | any;
+    penaltyAmount?: number;
+    daysOverdue?: number;
 }
 
 export interface Payment {

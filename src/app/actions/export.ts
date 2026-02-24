@@ -219,6 +219,49 @@ export async function updateExportStatusAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // When a window completes, email all investors with their returns
+        if (newStatus === "completed") {
+            try {
+                const { sendExportWindowCompleteEmail } = await import("@/lib/email-notifications");
+                const slotsSnap = await db.collection("export_slots")
+                    .where("exportId", "==", exportId)
+                    .where("status", "==", "active")
+                    .get();
+
+                const windowTitle = data?.title || "Export Window";
+                const roi = data?.roi || data?.returnRate || "N/A";
+
+                await Promise.all(slotsSnap.docs.map(async (slotDoc) => {
+                    const slot = slotDoc.data();
+                    if (!slot.userId) return;
+
+                    // Fetch user email
+                    const userDoc = await db.collection(COLLECTIONS.USERS).doc(slot.userId).get();
+                    const userEmail = userDoc.data()?.email;
+                    const userName = userDoc.data()?.name || userDoc.data()?.displayName || "Investor";
+
+                    if (!userEmail) return;
+
+                    await sendExportWindowCompleteEmail(
+                        userEmail,
+                        userName,
+                        windowTitle,
+                        slot.amount || 0,
+                        slot.expectedReturn || 0,
+                        String(roi)
+                    );
+
+                    // Mark slot as completed
+                    await slotDoc.ref.update({ status: "completed", completedAt: FieldValue.serverTimestamp() });
+                }));
+
+                logger.info(`[Export Complete] Notified investors for window: ${exportId}`);
+            } catch (emailErr) {
+                logger.error("[Export Complete] Failed to notify investors:", emailErr);
+                // Don't block the status update on email failure
+            }
+        }
+
         return {
             error: null,
             success: true,
@@ -229,6 +272,7 @@ export async function updateExportStatusAction(
         return { error: "Failed to update status", success: false };
     }
 }
+
 
 // ============================================
 // Update Export Window Details Action

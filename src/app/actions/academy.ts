@@ -1134,3 +1134,89 @@ export async function getQuizAction(
         return { success: false, error: "Failed to load quiz" };
     }
 }
+
+// ============================================================================
+// LEARNING STREAK TRACKING
+// ============================================================================
+
+/**
+ * Record that the current user completed at least one lesson today.
+ * Call this whenever a lesson is marked complete.
+ * Collection: user_activity_logs/{userId}/days/{YYYY-MM-DD}
+ */
+export async function logLessonActivityAction(): Promise<{ success: boolean }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false };
+
+        const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+        await db
+            .collection("user_activity_logs")
+            .doc(session.user.id)
+            .collection("days")
+            .doc(today)
+            .set({
+                date: today,
+                lessonsCompletedCount: FieldValue.increment(1),
+                lastUpdated: FieldValue.serverTimestamp(),
+            }, { merge: true });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("logLessonActivityAction error:", error);
+        return { success: false };
+    }
+}
+
+/**
+ * Calculate the current consecutive-day learning streak for a given user.
+ * A streak day = any day with at least one lesson logged.
+ * Returns { streak } — count of consecutive days ending today (or yesterday if today not yet active).
+ */
+export async function calculateStreakAction(userId: string): Promise<{ streak: number }> {
+    try {
+        // Fetch the last 90 days of activity (enough for any realistic streak)
+        const snap = await db
+            .collection("user_activity_logs")
+            .doc(userId)
+            .collection("days")
+            .orderBy("date", "desc")
+            .limit(90)
+            .get();
+
+        if (snap.empty) return { streak: 0 };
+
+        const activeDays = new Set(snap.docs.map(d => d.id)); // Set of "YYYY-MM-DD" strings
+
+        let streak = 0;
+        // Start from today and walk back
+        const cursor = new Date();
+        cursor.setHours(0, 0, 0, 0);
+
+        while (true) {
+            const dateStr = cursor.toISOString().split("T")[0];
+            if (activeDays.has(dateStr)) {
+                streak++;
+                cursor.setDate(cursor.getDate() - 1);
+            } else if (streak === 0) {
+                // Allow one day gap at the start (e.g. user completed lessons yesterday but not today yet)
+                cursor.setDate(cursor.getDate() - 1);
+                const yesterdayStr = cursor.toISOString().split("T")[0];
+                if (activeDays.has(yesterdayStr)) {
+                    streak++;
+                    cursor.setDate(cursor.getDate() - 1);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        return { streak };
+    } catch (error: any) {
+        logger.error("calculateStreakAction error:", error);
+        return { streak: 0 };
+    }
+}
+
