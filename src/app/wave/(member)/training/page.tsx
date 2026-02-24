@@ -2,17 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
     Calendar,
     Users,
     Clock,
-    MapPin,
     Loader2,
     CheckCircle,
     XCircle,
     Video,
     User,
-    AlertCircle,
 } from "lucide-react";
 import { checkWaveMembershipAction, getUserTrainingRegistrationsAction } from "@/app/actions/wave-member";
 import { getWaveTrainingEventsAction, registerForTrainingAction, type WaveTrainingEvent } from "@/app/actions/wave";
@@ -22,6 +21,7 @@ import BackButton from "@/components/ui/BackButton";
 export default function WaveTrainingPage() {
     const router = useRouter();
     const { showToast } = useToast();
+    const { data: session } = useSession();
 
     const [loading, setLoading] = useState(true);
     const [events, setEvents] = useState<WaveTrainingEvent[]>([]);
@@ -64,13 +64,18 @@ export default function WaveTrainingPage() {
     async function handleRegister(eventId: string) {
         if (!eventId) return;
 
+        const userId = session?.user?.id;
+        if (!userId) {
+            showToast("You must be logged in to register", "error");
+            return;
+        }
+
         setRegisteringId(eventId);
         try {
-            const result = await registerForTrainingAction(await getUserId(), eventId);
+            const result = await registerForTrainingAction(userId, eventId);
 
             if (result.success) {
                 showToast("Successfully registered for training!", "success");
-                // Refresh data
                 loadTrainingData();
             } else {
                 showToast(result.error || "Failed to register", "error");
@@ -80,11 +85,6 @@ export default function WaveTrainingPage() {
         } finally {
             setRegisteringId(null);
         }
-    }
-
-    async function getUserId(): Promise<string> {
-        // This would come from session in real implementation
-        return "current-user-id";
     }
 
     function getEventStatusColor(status: string) {

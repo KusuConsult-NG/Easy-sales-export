@@ -8,7 +8,7 @@ import {
     DollarSign, TrendingUp, Clock, Download, Calendar,
     Eye, Loader2, ArrowDownCircle, CheckCircle
 } from "lucide-react";
-import { calculateEarningsAction } from "@/app/actions/wave";
+import { calculateEarningsAction, withdrawEarningsAction } from "@/app/actions/wave";
 import type { MemberEarnings } from "@/app/actions/wave";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
@@ -47,10 +47,25 @@ export default function WaveEarningsPage() {
     };
 
     const handleWithdraw = async () => {
-        // In production, call withdrawEarningsAction
-        showToast(`Withdrawal request for ₦${parseFloat(withdrawalAmount).toLocaleString()} submitted!`, "success");
-        setShowWithdrawalModal(false);
-        setWithdrawalAmount("");
+        const amount = parseFloat(withdrawalAmount);
+        if (isNaN(amount) || amount < 5000) {
+            showToast("Minimum withdrawal is ₦5,000", "error");
+            return;
+        }
+
+        try {
+            const result = await withdrawEarningsAction(amount);
+            if (result.success) {
+                showToast(`Withdrawal request of ₦${amount.toLocaleString()} submitted! Our team will process it shortly.`, "success");
+                setShowWithdrawalModal(false);
+                setWithdrawalAmount("");
+                loadEarnings(); // Refresh data
+            } else {
+                showToast(result.error || "Withdrawal failed", "error");
+            }
+        } catch {
+            showToast("Failed to submit withdrawal request", "error");
+        }
     };
 
     if (loading || status === "loading") {

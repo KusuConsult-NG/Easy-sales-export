@@ -886,3 +886,71 @@ export async function registerForTrainingAction(
         return { success: false, error: error.message || "Failed to register for training" };
     }
 }
+
+// ============================================================================
+// EARNINGS WITHDRAWAL
+// ============================================================================
+
+/**
+ * Request an earnings withdrawal.
+ * Creates a pending withdrawal record in Firestore for admin processing.
+ */
+export async function withdrawEarningsAction(
+    amount: number
+): Promise<{ success: boolean; error?: string; withdrawalId?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) {
+            return { success: false, error: "Authentication required" };
+        }
+
+        if (amount < 5000) {
+            return { success: false, error: "Minimum withdrawal amount is ₦5,000" };
+        }
+
+        const userId = session.user.id;
+
+        // Check available balance
+        const earnings = await calculateEarningsAction(userId);
+        if (earnings.paidAmount < amount) {
+            return { success: false, error: "Insufficient available balance" };
+        }
+
+        // Block if there's already a pending withdrawal
+        const existingSnap = await db.collection("wave_withdrawals")
+            .where("userId", "==", userId)
+            .where("status", "==", "pending")
+            .limit(1)
+            .get();
+
+        if (!existingSnap.empty) {
+            return { success: false, error: "You have a pending withdrawal request. Please wait for it to be processed." };
+        }
+
+        const withdrawalId = `WD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+        await db.collection("wave_withdrawals").doc(withdrawalId).set({
+            withdrawalId,
+            userId,
+            userEmail: session.user.email,
+            amount,
+            status: "pending",
+            requestedAt: FieldValue.serverTimestamp(),
+            processedAt: null,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+
+        await createAdminAuditLog({
+            action: "user_update",
+            userId,
+            targetId: withdrawalId,
+            targetType: "wave_withdrawal",
+            metadata: { amount },
+        });
+
+        return { success: true, withdrawalId };
+    } catch (error: any) {
+        logger.error("Withdraw earnings error:", error);
+        return { success: false, error: "Failed to submit withdrawal request" };
+    }
+}
