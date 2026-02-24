@@ -100,7 +100,10 @@ export default auth((req: any) => {
             "/auth", "/dashboard", "/admin", "/profile", "/settings",
             "/messages", "/escrow", "/verify-id", "/verify-status",
             "/loans", "/favicon.ico", "/images", "/about", "/contact",
-            "/privacy", "/terms", "/refund-policy", "/get-started", "/api"
+            "/privacy", "/terms", "/refund-policy", "/get-started", "/api",
+            // Cross-module paths: must pass-through untouched regardless of which dedicated domain the user is on.
+            // e.g. WAVE success page links to /cooperatives/onboarding — must not be rewritten to /wave/cooperatives/onboarding
+            "/cooperatives", "/marketplace", "/academy", "/farm-nation", "/export", "/wave",
         ];
 
         const isSharedRoute = SHARED_ROOT_PATHS.some(
