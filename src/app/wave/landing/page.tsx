@@ -187,6 +187,9 @@ export default function WaveLandingPage() {
                             title="RH-WAVE 774 Program - Women Agro-Value Expansion"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
+                            tabIndex={-1}
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            loading="lazy"
                         />
                     </div>
 
