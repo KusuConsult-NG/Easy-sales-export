@@ -80,36 +80,50 @@ export default auth((req: any) => {
         }
     }
 
-    // If it's a dedicated domain, we rewrite the URL transparently
-    if (rewritePrefix && !pathname.startsWith(rewritePrefix) && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
-        // Example: farmnation.ng/about -> /farm-nation/about
-        const url = req.nextUrl.clone();
-        url.pathname = `${rewritePrefix}${pathname === "/" ? "" : pathname}`;
-        pathname = url.pathname; // Update local reference for subsequent auth checks
+    // -----------------------------------------------------------------------
+    // DEDICATED DOMAIN REWRITE — must happen BEFORE the public-path early-return.
+    // When rewritePrefix is a non-empty string (a dedicated module domain),
+    // rewrite immediately. The hub domain has rewritePrefix="" (falsy) and skips.
+    // Fix: previously the pathname==="/" check on line 98 fired first, causing
+    // dedicated domains to serve the hub's root page instead of their own.
+    // -----------------------------------------------------------------------
+    if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
+        const targetPath = pathname === "/" ? rewritePrefix : `${rewritePrefix}${pathname}`;
 
-        // We do not return immediately because we still want to apply auth logic.
-        // We will return a rewrite explicitly at the end of the middleware.
-        // For now, we update the req object internally if possible, but NextAuth 
-        // in middleware is tricky with rewrites. 
-        // Next.js middleware best practice: return NextResponse.rewrite(url)
+        if (!req.nextUrl.pathname.startsWith(rewritePrefix)) {
+            const url = req.nextUrl.clone();
+            url.pathname = targetPath;
+
+            // Module root landing pages are always public — return rewrite immediately
+            if (pathname === "/") {
+                const rewriteRes = NextResponse.rewrite(url);
+                response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
+                return rewriteRes;
+            }
+
+            // For deeper paths, apply auth/role checks using the rewritten pathname
+            const rewrittenPath = url.pathname;
+
+            if (rewrittenPath.startsWith("/admin") && req.auth?.user) {
+                const roles = (req.auth.user as any)?.roles || [];
+                const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+                if (!isAdmin) {
+                    return NextResponse.redirect(new URL("/dashboard", req.url));
+                }
+            }
+
+            const rewriteRes = NextResponse.rewrite(url);
+            response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
+            return rewriteRes;
+        }
     }
 
-    // Root/landing page is public
+    // Root/landing page is public (only reaches here for the hub domain)
     if (pathname === "/" || Object.values(DOMAIN_MAP).includes(pathname)) {
         return response;
     }
 
-    // Protected Routes Logic is now handled by authConfig.callbacks.authorized
-    // But we can add extra custom logic here if needed, or rely on the authorized callback.
-    // The previous implementation had manual redirect logic.
-    // Let's migrate that logic to the authorized callback effectively, 
-    // OR keep it here if we want explicit control.
-
-    // WAVE route protection is handled by the `authorized` callback in auth.config.ts
-    // which returns false for unauthenticated users on /wave/* (except public paths).
-
-    // START: Manual Role Check (since authorized callback is boolean-only)
-    // Admin routes require admin/super_admin role
+    // START: Manual Role Check for hub domain admin routes
     if (pathname.startsWith("/admin") && req.auth?.user) {
         const roles = (req.auth.user as any)?.roles || [];
         const isAdmin = roles.includes("admin") || roles.includes("super_admin");
@@ -118,16 +132,6 @@ export default auth((req: any) => {
         }
     }
     // END: Manual Role Check
-
-    // Finally apply the rewrite if the domain was mapped, otherwise return the standard response string chain
-    if (rewritePrefix && !req.nextUrl.pathname.startsWith(rewritePrefix) && !req.nextUrl.pathname.startsWith("/api") && !req.nextUrl.pathname.startsWith("/_next")) {
-        const url = req.nextUrl.clone();
-        url.pathname = `${rewritePrefix}${req.nextUrl.pathname === "/" ? "" : req.nextUrl.pathname}`;
-        const finalResponse = NextResponse.rewrite(url);
-        // Ensure headers merge
-        response.headers.forEach((val, key) => finalResponse.headers.set(key, val));
-        return finalResponse;
-    }
 
     return response;
 });
