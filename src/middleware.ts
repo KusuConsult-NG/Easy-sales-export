@@ -81,30 +81,51 @@ export default auth((req: any) => {
     }
 
     // -----------------------------------------------------------------------
-    // DEDICATED DOMAIN REWRITE — must happen BEFORE the public-path early-return.
-    // When rewritePrefix is a non-empty string (a dedicated module domain),
-    // rewrite immediately. The hub domain has rewritePrefix="" (falsy) and skips.
-    // Fix: previously the pathname==="/" check on line 98 fired first, causing
-    // dedicated domains to serve the hub's root page instead of their own.
+    // DEDICATED DOMAIN REWRITE
+    // When a non-hub dedicated domain is detected (rewritePrefix is a non-empty
+    // string), we handle three distinct cases so the FULL application is
+    // accessible through both the dedicated domain and the hub:
+    //
+    //  Case 1 — Path already includes the module prefix (e.g. /academy/courses
+    //            when on easysalesexportacademy.com). The rewrite already
+    //            happened on a previous navigation cycle or the link was
+    //            absolute. Pass-through, only applying security headers.
+    //
+    //  Case 2 — Root path "/" → rewrite to the module landing page.
+    //
+    //  Case 3 — Any other path (e.g. /dashboard, /courses, /setup) → prepend
+    //            the module prefix so /courses becomes /academy/courses, etc.
+    //            This allows internal page-to-page navigation within the
+    //            dedicated domain to work without double-rewrites.
     // -----------------------------------------------------------------------
     if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
-        const targetPath = pathname === "/" ? rewritePrefix : `${rewritePrefix}${pathname}`;
-
-        if (!req.nextUrl.pathname.startsWith(rewritePrefix)) {
+        // --- Case 1: path already carries the module prefix → no rewrite needed ---
+        if (pathname.startsWith(rewritePrefix)) {
+            // Apply admin role guard on the already-prefixed path
+            if (pathname.startsWith("/admin") && req.auth?.user) {
+                const roles = (req.auth.user as any)?.roles || [];
+                const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+                if (!isAdmin) {
+                    return NextResponse.redirect(new URL("/dashboard", req.url));
+                }
+            }
+            // Fall through to the standard auth/response logic below
+        } else {
             const url = req.nextUrl.clone();
-            url.pathname = targetPath;
 
-            // Module root landing pages are always public — return rewrite immediately
+            // --- Case 2: root path → rewrite to module landing page ---
             if (pathname === "/") {
+                url.pathname = rewritePrefix;
                 const rewriteRes = NextResponse.rewrite(url);
                 response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
                 return rewriteRes;
             }
 
-            // For deeper paths, apply auth/role checks using the rewritten pathname
-            const rewrittenPath = url.pathname;
+            // --- Case 3: all other paths → prepend module prefix ---
+            url.pathname = `${rewritePrefix}${pathname}`;
 
-            if (rewrittenPath.startsWith("/admin") && req.auth?.user) {
+            // Apply admin role guard on the rewritten path
+            if (url.pathname.startsWith("/admin") && req.auth?.user) {
                 const roles = (req.auth.user as any)?.roles || [];
                 const isAdmin = roles.includes("admin") || roles.includes("super_admin");
                 if (!isAdmin) {

@@ -53,19 +53,33 @@ export const authConfig = {
             if (pathname === "/wave" || pathname === "/cooperatives") return true;
             if (isPublic) return true;
 
-            // Protected routes — require auth
-            // These routes are entry points where users click from the homepage
-            // after global auth and get the race condition redirect bug
+            // Protected routes — require auth.
+            // Includes BOTH fully-qualified paths (for hub domain access, e.g.
+            // /academy/setup) AND short-form paths (for dedicated domain access
+            // where the module prefix is stripped, e.g. /setup on
+            // easysalesexportacademy.com becomes /setup before rewrite).
             const protectedPaths = [
                 "/dashboard",
+                // Wave
                 "/wave/application",
+                "/application",
+                // Marketplace
                 "/marketplace/onboarding",
                 "/marketplace/sell",
                 "/marketplace/seller",
+                "/onboarding",
+                "/sell",
+                "/seller",
+                // Cooperatives
                 "/cooperatives/onboarding",
                 "/cooperatives/payment",
                 "/cooperatives/verify-payment",
+                "/payment",
+                "/verify-payment",
+                // Academy
                 "/academy/setup",
+                "/setup",
+                // Shared protected areas
                 "/escrow",
                 "/profile",
                 "/settings",
@@ -74,6 +88,7 @@ export const authConfig = {
                 "/messages",
                 "/vendor",
                 "/loans",
+                "/admin",
             ];
 
             const isProtected = protectedPaths.some(
