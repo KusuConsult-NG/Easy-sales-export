@@ -47,7 +47,28 @@ export async function POST(req: Request) {
         const result = await qoreIdService.verifyNIN(cleanNin, firstName, lastName);
 
         if (!result.success) {
-            return NextResponse.json({ error: result.error || 'Verification failed' }, { status: 400 });
+            // Sanitise internal error details — never expose API keys or config info to the client
+            const rawError = result.error || '';
+            let friendlyError: string;
+
+            if (rawError.includes('RATE_LIMIT')) {
+                friendlyError = 'Verification service is temporarily busy. Please wait a moment and try again.';
+            } else if (
+                rawError.includes('404') ||
+                rawError.includes('Application Not Found') ||
+                rawError.includes('QOREID_CLIENT_ID') ||
+                rawError.includes('QOREID_SECRET_KEY')
+            ) {
+                friendlyError = 'NIN verification is temporarily unavailable. You may continue and verify later.';
+            } else if (rawError.includes('401') || rawError.includes('403') || rawError.includes('authentication')) {
+                friendlyError = 'Verification service authentication failed. Please try again later.';
+            } else if (rawError.includes('Network') || rawError.includes('fetch')) {
+                friendlyError = 'Could not reach the verification service. Check your connection and try again.';
+            } else {
+                friendlyError = 'Identity verification failed. Please check your NIN and try again.';
+            }
+
+            return NextResponse.json({ error: friendlyError }, { status: 400 });
         }
 
         return NextResponse.json({

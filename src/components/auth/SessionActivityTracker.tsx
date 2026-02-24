@@ -58,10 +58,11 @@ export default function SessionActivityTracker() {
             }
         };
 
-        // Initialize localStorage
-        if (!localStorage.getItem("lastActivity")) {
-            localStorage.setItem("lastActivity", Date.now().toString());
-        }
+        // Always reset lastActivity on mount — prevents stale timestamps from
+        // a previous session triggering an immediate warning for a new login.
+        const freshTimestamp = Date.now().toString();
+        localStorage.setItem("lastActivity", freshTimestamp);
+        setLastActivityTime(Date.now());
 
         // Check every second
         const interval = setInterval(checkTimeout, 1000);

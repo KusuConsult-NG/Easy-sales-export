@@ -71,22 +71,10 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (!data.nin.trim() || data.nin.length !== 11) {
-            newErrors.nin = "Valid 11-digit NIN is required";
-        } else if (!ninVerified) {
-            newErrors.nin = "Please verify your NIN to proceed";
-        }
-        if (!data.votersCardNumber.trim()) {
-            newErrors.votersCardNumber = "Voter's card number is required";
-        }
-        if (!data.pollingUnit.trim()) {
-            newErrors.pollingUnit = "Polling unit is required";
-        }
-        if (!data.ward.trim()) {
-            newErrors.ward = "Ward is required";
-        }
-        if (!data.yearOfVoterRegistration.trim()) {
-            newErrors.yearOfVoterRegistration = "Year of voter registration is required";
+        // All civic fields are OPTIONAL — NIN verification failure does not block the form
+        // Validate format only if the user has entered something
+        if (data.nin && data.nin.trim() && data.nin.length !== 11) {
+            newErrors.nin = "NIN must be exactly 11 digits";
         }
 
         setErrors(newErrors);
@@ -121,7 +109,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 <div className="flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
                     <p className="text-sm text-emerald-700">
-                        Your NIN and PVC details are securely encrypted and used only for program verification and accountability purposes.
+                        All fields in this section are <strong>optional</strong>. Providing your NIN and PVC details helps with program verification and eligibility, and is securely encrypted.
                     </p>
                 </div>
             </div>
@@ -130,7 +118,8 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 {/* National Identification Number (NIN) */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        National Identification Number (NIN) 🔒 *
+                        National Identification Number (NIN) 🔒{" "}
+                        <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                     </label>
                     <div className="flex gap-2">
                         <div className="relative flex-1">
@@ -196,10 +185,11 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                     )}
                 </div>
 
-                {/* Voter's Card Number (PVC) */}
+                {/* Voter's Card Number (PVC) — Optional */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Voter's Card Number (PVC) *
+                        Voter's Card Number (PVC){" "}
+                        <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                     </label>
                     <input
                         type="text"
@@ -208,19 +198,14 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="e.g., 90F5B123456789012345"
                     />
-                    {errors.votersCardNumber && (
-                        <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                            <AlertCircle className="w-4 h-4" />
-                            {errors.votersCardNumber}
-                        </p>
-                    )}
                 </div>
 
-                {/* Ward & Polling Unit */}
+                {/* Ward & Polling Unit — Optional */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
-                            Ward (based on Residence) *
+                            Ward (based on Residence){" "}
+                            <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
                         <select
                             value={data.ward}
@@ -233,17 +218,12 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                                 <option key={ward} value={ward}>{ward}</option>
                             )) || []}
                         </select>
-                        {errors.ward && (
-                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                                <AlertCircle className="w-4 h-4" />
-                                {errors.ward}
-                            </p>
-                        )}
                     </div>
 
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
-                            Polling Unit *
+                            Polling Unit{" "}
+                            <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
                         <select
                             value={data.pollingUnit}
@@ -256,19 +236,14 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                                 <option key={pu} value={pu}>{pu}</option>
                             )) || []}
                         </select>
-                        {errors.pollingUnit && (
-                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                                <AlertCircle className="w-4 h-4" />
-                                {errors.pollingUnit}
-                            </p>
-                        )}
                     </div>
                 </div>
 
-                {/* Year of Voter Registration */}
+                {/* Year of Voter Registration — Optional */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Year of Voter Registration *
+                        Year of Voter Registration{" "}
+                        <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                     </label>
                     <input
                         type="text"
@@ -278,18 +253,13 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="e.g., 2023"
                     />
-                    {errors.yearOfVoterRegistration && (
-                        <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                            <AlertCircle className="w-4 h-4" />
-                            {errors.yearOfVoterRegistration}
-                        </p>
-                    )}
                 </div>
 
                 {/* Voted in Last Election */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Did you vote in the last general election? *
+                        Did you vote in the last general election?{" "}
+                        <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                     </label>
                     <div className="flex gap-4">
                         {[

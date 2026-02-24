@@ -91,7 +91,8 @@ function LayoutContent({ children }: ClientLayoutProps) {
 
     return (
         <ToastProvider>
-            <SessionActivityTracker />
+            {/* Only show session tracker for authenticated users — never on public pages */}
+            {status === "authenticated" && <SessionActivityTracker />}
             <ThemeProvider>
                 {shouldShowSidebar ? (
                     <div className="flex h-screen overflow-hidden">
