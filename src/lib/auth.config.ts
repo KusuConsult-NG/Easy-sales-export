@@ -34,6 +34,9 @@ export const authConfig = {
                 "/wave/landing",
                 "/wave/access-denied",
                 "/cooperatives/landing",
+                // Export windows — public investment catalog (no auth needed to browse)
+                "/export/windows",
+                "/windows",
             ];
             const isPublic = publicPaths.some(
                 (p) => pathname === p || pathname.startsWith(p + "/")
@@ -79,9 +82,10 @@ export const authConfig = {
                 "/setup",
                 // Farm Nation — entire module requires auth
                 "/farm-nation",
-                // Export — entire module requires auth
-                "/export",
+                // Export — onboarding & buyer flows require auth (/windows is public catalog)
+                "/export/onboarding",
                 "/export/buyer",
+                "/onboarding",
                 // Shared protected areas
                 "/escrow",
                 "/profile",
