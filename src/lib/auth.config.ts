@@ -29,21 +29,11 @@ export const authConfig = {
                 "/terms",
                 "/refund-policy",
                 "/get-started",
-                // Module landing pages (public marketing pages)
+                "/land",
+                // Module MARKETING pages only (read-only, no forms)
                 "/wave/landing",
-                "/wave/briefing",
                 "/wave/access-denied",
                 "/cooperatives/landing",
-                "/farm-nation",       // farm-nation root is a public landing
-                "/marketplace",       // marketplace root is a public catalog
-                "/marketplace/products",
-                "/marketplace/buyer",
-                "/marketplace/checkout",
-                "/marketplace/success",
-                "/marketplace/verify",
-                "/export/buyer",
-                "/academy",           // academy root is public info
-                "/land",
             ];
             const isPublic = publicPaths.some(
                 (p) => pathname === p || pathname.startsWith(p + "/")
@@ -60,25 +50,38 @@ export const authConfig = {
             // easysalesexportacademy.com becomes /setup before rewrite).
             const protectedPaths = [
                 "/dashboard",
-                // Wave
+                // Wave — all entry + app forms require auth
+                "/wave/briefing",
                 "/wave/application",
+                "/briefing",
                 "/application",
-                // Marketplace
+                // Marketplace — entire module requires auth
+                "/marketplace",
+                "/marketplace/buyer",
+                "/marketplace/checkout",
+                "/marketplace/success",
+                "/marketplace/verify",
                 "/marketplace/onboarding",
                 "/marketplace/sell",
                 "/marketplace/seller",
                 "/onboarding",
                 "/sell",
                 "/seller",
-                // Cooperatives
+                // Cooperatives — all forms require auth
                 "/cooperatives/onboarding",
                 "/cooperatives/payment",
                 "/cooperatives/verify-payment",
                 "/payment",
                 "/verify-payment",
-                // Academy
+                // Academy — entire module requires auth
+                "/academy",
                 "/academy/setup",
                 "/setup",
+                // Farm Nation — entire module requires auth
+                "/farm-nation",
+                // Export — entire module requires auth
+                "/export",
+                "/export/buyer",
                 // Shared protected areas
                 "/escrow",
                 "/profile",

@@ -131,6 +131,30 @@ export default auth((req: any) => {
         // --- Case 2: shared routes fall through untouched.
     }
 
+    // -----------------------------------------------------------------------
+    // DEDICATED DOMAIN REGISTRATION GATE
+    // New / unauthenticated users on any dedicated domain are redirected to
+    // /auth/register (not /auth/login) so the primary CTA is "create an
+    // account". A callbackUrl is appended so they land back on the page they
+    // originally requested after sign-up or login.
+    // Shared routes (/auth/*, /api/*, /about, etc.) are excluded so the auth
+    // pages themselves remain reachable.
+    // -----------------------------------------------------------------------
+    if (rewritePrefix && !req.auth?.user) {
+        // Only gate non-auth / non-API paths
+        const UNGATED_PREFIXES = ["/auth", "/api", "/about", "/contact", "/help", "/privacy", "/terms", "/refund-policy", "/_next", "/favicon.ico"];
+        const isUngated = UNGATED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+        // Also allow the pure marketing pages to remain public
+        const PUBLIC_MODULE_PAGES = ["/wave/landing", "/wave/access-denied", "/cooperatives/landing"];
+        const isPublicModulePage = PUBLIC_MODULE_PAGES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+
+        if (!isUngated && !isPublicModulePage) {
+            const registerUrl = new URL("/auth/register", req.url);
+            registerUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
+            return NextResponse.redirect(registerUrl);
+        }
+    }
+
     // Root/landing page is public (only reaches here for the hub domain)
     if (pathname === "/" || Object.values(DOMAIN_MAP).includes(pathname)) {
         return response;

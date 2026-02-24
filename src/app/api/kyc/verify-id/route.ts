@@ -18,9 +18,16 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'ID Type and ID Number are required' }, { status: 400 });
         }
 
-        const validIdTypes = ['nin', 'drivers_license', 'international_passport', 'voters_card'];
+        const validIdTypes = ['bvn', 'nin', 'drivers_license', 'international_passport', 'voters_card'];
         if (!validIdTypes.includes(idType)) {
             return NextResponse.json({ error: 'Invalid ID type provided' }, { status: 400 });
+        }
+
+        // QoreID requires a 16-digit Virtual NIN (vNIN) — standard 11-digit NINs will be rejected by the API.
+        if (idType === 'nin' && idNumber.replace(/\D/g, '').length !== 16) {
+            return NextResponse.json({
+                error: 'Please enter your 16-digit Virtual NIN (vNIN), not the standard 11-digit NIN. Generate your vNIN via the NIMC Mobile App or by dialling *346# from your registered phone number.'
+            }, { status: 400 });
         }
 
         // --- MOCK RESPONSE FOR LOCAL DEVELOPMENT IF NO API KEYS ---
@@ -47,6 +54,9 @@ export async function POST(req: Request) {
         let result;
 
         switch (idType) {
+            case 'bvn':
+                result = await qoreIdService.verifyBVN(idNumber, firstName, lastName);
+                break;
             case 'nin':
                 result = await qoreIdService.verifyNIN(idNumber, firstName, lastName);
                 break;
