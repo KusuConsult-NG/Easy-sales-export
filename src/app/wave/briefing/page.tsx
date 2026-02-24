@@ -627,7 +627,7 @@ export default function WaveBriefingPage() {
                                                     : "border-slate-200"
                                                     }`}
                                             >
-                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${formData.role === role.value ? "border-green-900" : "border-slate-300"
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${formData.role === role.value ? "border-green-900" : "border-slate-300"
                                                     }`}>
                                                     {formData.role === role.value && (
                                                         <div className="w-2.5 h-2.5 rounded-full bg-green-900" />

@@ -8,9 +8,42 @@
  *   npx ts-node -e "require('./scripts/seed-database').seedAll()"
  */
 
-import { db } from "@/lib/firebase";
-import { collection, addDoc, setDoc, doc } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import * as dotenv from "dotenv";
+
+// Load environment variables
+dotenv.config({ path: ".env.local" });
+
+// Initialize Firebase Admin (matches pattern used in all other scripts)
+if (!getApps().length) {
+    initializeApp({
+        credential: cert({
+            projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+        }),
+    });
+}
+
+const db = getFirestore();
+
+// Inline COLLECTIONS to avoid Next.js @/ path alias
+const COLLECTIONS = {
+    USERS: "users",
+    PRODUCTS: "products",
+    ORDERS: "orders",
+    EXPORT_WINDOWS: "export_windows",
+    EXPORT_INVESTMENTS: "export_investments",
+    COOPERATIVES: "cooperatives",
+    WAVE_APPLICATIONS: "wave_applications",
+    DISPUTES: "disputes",
+    ANNOUNCEMENTS: "announcements",
+    NOTIFICATIONS: "notifications",
+    ACADEMY_COURSES: "academy_courses",
+    COURSES: "courses",
+    LAND_LISTINGS: "land_listings",
+} as const;
 
 // ========================
 // PRODUCTS
@@ -411,7 +444,7 @@ const sampleNotifications = [
 export async function seedProducts() {
     console.log("🌱 Seeding marketplace products...");
     for (const product of sampleProducts) {
-        await addDoc(collection(db, COLLECTIONS.PRODUCTS), product);
+        await db.collection(COLLECTIONS.PRODUCTS).add(product);
     }
     console.log(`✅ Seeded ${sampleProducts.length} products`);
 }
@@ -419,7 +452,7 @@ export async function seedProducts() {
 export async function seedLandListings() {
     console.log("🌱 Seeding land listings...");
     for (const property of sampleProperties) {
-        await addDoc(collection(db, "land_listings"), property);
+        await db.collection("land_listings").add(property);
     }
     console.log(`✅ Seeded ${sampleProperties.length} land listings`);
 }
@@ -427,7 +460,7 @@ export async function seedLandListings() {
 export async function seedWaveApplications() {
     console.log("🌱 Seeding WAVE applications...");
     for (const application of sampleWaveApplications) {
-        await addDoc(collection(db, COLLECTIONS.WAVE_APPLICATIONS), application);
+        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).add(application);
     }
     console.log(`✅ Seeded ${sampleWaveApplications.length} WAVE applications`);
 }
@@ -435,7 +468,7 @@ export async function seedWaveApplications() {
 export async function seedCooperatives() {
     console.log("🌱 Seeding cooperatives...");
     for (const coop of sampleCooperatives) {
-        await addDoc(collection(db, COLLECTIONS.COOPERATIVES), coop);
+        await db.collection(COLLECTIONS.COOPERATIVES).add(coop);
     }
     console.log(`✅ Seeded ${sampleCooperatives.length} cooperatives`);
 }
@@ -443,7 +476,7 @@ export async function seedCooperatives() {
 export async function seedExportWindows() {
     console.log("🌱 Seeding export windows...");
     for (const win of sampleExportWindows) {
-        await addDoc(collection(db, COLLECTIONS.EXPORT_WINDOWS), win);
+        await db.collection(COLLECTIONS.EXPORT_WINDOWS).add(win);
     }
     console.log(`✅ Seeded ${sampleExportWindows.length} export windows`);
 }
@@ -451,7 +484,7 @@ export async function seedExportWindows() {
 export async function seedDisputes() {
     console.log("🌱 Seeding disputes...");
     for (const dispute of sampleDisputes) {
-        await addDoc(collection(db, COLLECTIONS.DISPUTES), dispute);
+        await db.collection(COLLECTIONS.DISPUTES).add(dispute);
     }
     console.log(`✅ Seeded ${sampleDisputes.length} disputes`);
 }
@@ -459,7 +492,7 @@ export async function seedDisputes() {
 export async function seedAnnouncements() {
     console.log("🌱 Seeding announcements...");
     for (const announcement of sampleAnnouncements) {
-        await addDoc(collection(db, COLLECTIONS.ANNOUNCEMENTS), announcement);
+        await db.collection(COLLECTIONS.ANNOUNCEMENTS).add(announcement);
     }
     console.log(`✅ Seeded ${sampleAnnouncements.length} announcements`);
 }
@@ -467,11 +500,11 @@ export async function seedAnnouncements() {
 export async function seedCourses() {
     console.log("🌱 Seeding academy courses...");
     for (const course of sampleCourses) {
-        await addDoc(collection(db, COLLECTIONS.ACADEMY_COURSES), course);
+        await db.collection(COLLECTIONS.ACADEMY_COURSES).add(course);
     }
     // Also seed to COURSES collection for cross-compatibility
     for (const course of sampleCourses) {
-        await addDoc(collection(db, COLLECTIONS.COURSES), course);
+        await db.collection(COLLECTIONS.COURSES).add(course);
     }
     console.log(`✅ Seeded ${sampleCourses.length} courses`);
 }
@@ -479,7 +512,7 @@ export async function seedCourses() {
 export async function seedNotifications() {
     console.log("🌱 Seeding sample notifications...");
     for (const notif of sampleNotifications) {
-        await addDoc(collection(db, COLLECTIONS.NOTIFICATIONS), notif);
+        await db.collection(COLLECTIONS.NOTIFICATIONS).add(notif);
     }
     console.log(`✅ Seeded ${sampleNotifications.length} notifications`);
 }
@@ -519,11 +552,14 @@ export async function seedAll() {
 }
 
 // Run if executed directly
+// @ts-ignore — Node globals available at runtime via ts-node
 if (require.main === module) {
     seedAll()
+        // @ts-ignore
         .then(() => process.exit(0))
-        .catch((error) => {
+        .catch((error: unknown) => {
             console.error(error);
+            // @ts-ignore
             process.exit(1);
         });
 }
