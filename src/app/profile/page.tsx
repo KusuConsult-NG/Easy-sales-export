@@ -78,7 +78,8 @@ export default function ProfilePage() {
 
         // Determine what to save based on active tab
         if (activeTab === 'general') {
-            const emailChanged = userData.email && userData.email !== (session?.user?.email || "");
+            const sessionEmail = session?.user?.email || "";
+            const emailChanged = sessionEmail !== "" && userData.email !== "" && userData.email !== sessionEmail;
             const result = await updateUserProfileAction({
                 firstName: userData.firstName,
                 lastName: userData.lastName,
