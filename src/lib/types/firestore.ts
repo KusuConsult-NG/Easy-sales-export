@@ -80,6 +80,45 @@ export interface User {
     consentDate?: Date;
     marketingOptIn?: boolean;
 
+    // Notification preferences
+    notifications?: {
+        email?: boolean;
+        push?: boolean;
+        sms?: boolean;
+    };
+
+    // Service Registrations — tracks status of each sub-platform enrollment
+    serviceRegistrations?: {
+        wave?: {
+            status: "pending" | "under_review" | "approved" | "rejected";
+            applicationId?: string;
+            submittedAt?: Date;
+            approvedAt?: Date;
+            rejectionReason?: string;
+        };
+        cooperative?: {
+            status: "pending" | "paid" | "approved" | "rejected";
+            tier?: "tier1" | "tier2";
+            applicationId?: string;
+            paymentReference?: string;
+            submittedAt?: Date;
+        };
+        farmNation?: {
+            status: "pending" | "approved" | "rejected";
+            applicationId?: string;
+            submittedAt?: Date;
+        };
+        export?: {
+            status: "pending" | "approved" | "rejected";
+            applicationId?: string;
+            submittedAt?: Date;
+        };
+        academy?: {
+            status: "active" | "suspended";
+            enrolledAt?: Date;
+        };
+    };
+
     createdAt: Date;
     updatedAt: Date;
 }
@@ -261,26 +300,187 @@ export type { EscrowTransaction, Dispute };
 export interface WaveApplication {
     id: string;
     userId: string;
-    fullName?: string;
-    phone?: string;
-    gender?: "female" | "male";
-    businessName?: string;
-    businessType?: string;
-    farmingExperience?: string;
-    landSize?: string;
-    commodityInterest?: string[];
-    businessPlan?: string;
-    yearsInOperation?: number;
-    annualRevenue?: number;
-    fundingNeeded?: number;
-    purpose?: string;
+    userEmail?: string;
+    // Section A: Personal Identification
+    surname: string;
+    firstName: string;
+    otherNames?: string;
+    dateOfBirth: string;
+    age: number;
+    phone: string;
+    alternativePhone?: string;
+    email?: string;
+    residentialAddress: string;
+    stateOfOrigin: string;
+    lgaOfOrigin: string;
+    stateOfResidence: string;
+    lgaOfResidence: string;
+    maritalStatus: "single" | "married" | "widowed" | "divorced" | "";
+    nextOfKinName: string;
+    nextOfKinPhone: string;
+    nextOfKinRelationship: string;
+    // Section B: Civic Status
+    nin: string;
+    votersCardNumber: string;
+    pollingUnit: string;
+    ward: string;
+    yearOfVoterRegistration: string;
+    votedInLastElection: boolean;
+    // Section C: Socio-Economic
+    highestEducation: string;
+    currentOccupation: string;
+    averageMonthlyIncome: string;
+    involvedInAgriculture: boolean;
+    agricultureTypes?: string[];
+    // Section D: Agricultural Interest
+    valueChainAreas: string[];
+    preferredCommodities: string[];
+    preferredCommodityOther?: string;
+    hasAccessToFarmland: boolean;
+    farmlandHectares?: number;
+    needsFarmlandAccess?: boolean;
+    // Section E: Financial
+    hasBankAccount: boolean;
+    bankName?: string;
+    accountNumber?: string;
+    bvn?: string;
+    isMemberOfCooperative: boolean;
+    cooperativeName?: string;
+    willingToJoinCooperative: boolean;
+    // Section F: Training
+    supportNeeded: string[];
+    willingToUndergoTraining: boolean;
+    willingToComplyWithStandards: boolean;
+    willingToParticipateInME: boolean;
+    // Section G: Declaration
+    declarationAccepted: boolean;
+    consentGiven: boolean;
+    // Admin fields
     status: "draft" | "pending" | "submitted" | "under_review" | "approved" | "rejected";
+    applicationDate?: Date;
     submittedAt?: Date;
     reviewedAt?: Date;
+    reviewedBy?: string;
+    rejectionReason?: string;
     reviewNotes?: string;
     createdAt: Date;
     updatedAt?: Date;
 }
+
+export interface WaveCertificate {
+    id: string;
+    memberId: string;
+    memberName: string;
+    certificateType: "training" | "achievement" | "completion";
+    programName: string;
+    issuedDate: Date;
+    certificateNumber: string;
+    verificationUrl: string;
+    createdAt?: Date;
+}
+
+export interface WaveShipment {
+    id: string;
+    memberId: string;
+    orderId: string;
+    productName: string;
+    destination: string;
+    carrier: string;
+    trackingNumber: string;
+    status: "pending" | "in_transit" | "delivered" | "cancelled";
+    estimatedDelivery: Date;
+    actualDelivery?: Date;
+    updates: {
+        timestamp: Date;
+        location: string;
+        status: string;
+        note?: string;
+    }[];
+    createdAt: Date;
+}
+
+export interface CooperativeOnboardingApplication {
+    id: string;
+    userId: string;
+    userEmail?: string;
+    tier: "tier1" | "tier2";
+    personalInfo: {
+        firstName: string;
+        lastName: string;
+        dateOfBirth: string;
+        gender: string;
+        occupation: string;
+        address: string;
+        state: string;
+        lga: string;
+    };
+    nextOfKin: {
+        name: string;
+        relationship: string;
+        phone: string;
+    };
+    documents: {
+        validId?: { name: string; url: string };
+        idType?: string;
+        idNumber?: string;
+        idVerified?: boolean;
+        passportPhoto?: { name: string; url: string };
+        proofOfAddress?: { name: string; url: string };
+        bvn: string;
+        bvnVerified?: boolean;
+    };
+    paymentReference?: string;
+    paymentStatus?: "pending" | "completed" | "failed";
+    status: "pending" | "approved" | "rejected";
+    submittedAt?: Date;
+    reviewedAt?: Date;
+    reviewedBy?: string;
+    rejectionReason?: string;
+    createdAt: Date;
+    updatedAt?: Date;
+}
+
+export interface MarketplaceOrder {
+    id: string;
+    buyerId: string;
+    sellerId?: string;
+    items: {
+        productId: string;
+        productName: string;
+        quantity: number;
+        unitPrice: number;
+        totalPrice: number;
+    }[];
+    buyerDetails: {
+        companyName: string;
+        email: string;
+        phone: string;
+        address: string;
+    };
+    totalAmount: number;
+    paymentReference?: string;
+    paymentStatus: "pending" | "paid" | "failed" | "refunded";
+    orderStatus: "pending" | "confirmed" | "processing" | "shipped" | "delivered" | "cancelled";
+    escrowEnabled?: boolean;
+    escrowTransactionId?: string;
+    createdAt: Date;
+    updatedAt?: Date;
+}
+
+export interface BriefingSubmission {
+    id: string;
+    fullName: string;
+    phone: string;
+    email?: string;
+    state: string;
+    role: string;
+    programType: string;
+    status: "pending_sync" | "synced" | "rejected";
+    syncedAt?: Date;
+    submittedAt: Date;
+    source: "online" | "offline";
+}
+
 
 export interface WaveResource {
     id: string;
@@ -448,7 +648,27 @@ export const COLLECTIONS = {
 
     // Vendor
     VENDOR_SETTINGS: "vendor_settings",
+    VENDOR_REVIEWS: "vendor_reviews",
 
     // Export Investments
     EXPORT_INVESTMENTS: "export_investments",
+    EXPORT_APPLICATIONS: "export_onboarding_applications",
+
+    // WAVE — full suite
+    WAVE_CERTIFICATES: "wave_certificates",
+    WAVE_SHIPMENTS: "wave_shipments",
+    WAVE_MEMBERS: "wave_members",
+    WAVE_EARNINGS: "wave_earnings",
+
+    // Cooperative onboarding applications
+    COOPERATIVE_ONBOARDING: "cooperative_onboarding_applications",
+
+    // KYC / Identity verification records
+    KYC_VERIFICATIONS: "kyc_verifications",
+
+    // Farm Nation
+    FARM_NATION_INQUIRIES: "farm_nation_inquiries",
+
+    // WAVE / Field briefings (offline submissions)
+    BRIEFINGS: "briefing_submissions",
 } as const;

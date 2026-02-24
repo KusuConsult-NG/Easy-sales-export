@@ -9,19 +9,34 @@ import {
     rejectWaveApplicationAction
 } from "@/app/actions/admin";
 
-type ApplicationStatus = "pending" | "approved" | "rejected";
+type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
 interface WaveApplication {
     id: string;
-    fullName: string;
-    email: string;
-    phone: string;
-    farmSize: string;
+    // New schema fields (7-section form)
+    surname?: string;
+    firstName?: string;
+    otherNames?: string;
+    phone?: string;
+    email?: string;
+    userEmail?: string;
+    stateOfResidence?: string;
+    // Legacy fallback
+    fullName?: string;
+    farmSize?: string;
     status: ApplicationStatus;
     createdAt: Date;
     reviewedAt?: Date;
     reviewedBy?: string;
     rejectionReason?: string;
+}
+
+/** Derives display name from new or legacy schema */
+function getDisplayName(app: WaveApplication): string {
+    if (app.surname || app.firstName) {
+        return `${app.surname || ''} ${app.firstName || ''}`.trim();
+    }
+    return app.fullName || 'Unknown Applicant';
 }
 
 export default function AdminWaveApplicationsPage() {
@@ -47,7 +62,7 @@ export default function AdminWaveApplicationsPage() {
 
         try {
             const result = await getWaveApplicationsAction(
-                statusFilter !== "all" ? statusFilter : undefined,
+                statusFilter !== "all" ? statusFilter as "pending" | "approved" | "rejected" : undefined,
                 20,
                 loadMore ? lastCreatedAt : undefined
             );
@@ -136,7 +151,10 @@ export default function AdminWaveApplicationsPage() {
                 return "bg-green-100 text-green-700";
             case "rejected":
                 return "bg-red-100 text-red-700";
+            case "under_review":
+                return "bg-blue-100 text-blue-700";
             case "pending":
+            default:
                 return "bg-yellow-100 text-yellow-700";
         }
     };
@@ -163,6 +181,7 @@ export default function AdminWaveApplicationsPage() {
                 >
                     <option value="all">All Applications</option>
                     <option value="pending">Pending</option>
+                    <option value="under_review">Under Review</option>
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                 </select>
@@ -198,14 +217,16 @@ export default function AdminWaveApplicationsPage() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-bold text-slate-900">
-                                            {app.fullName}
+                                            {getDisplayName(app)}
                                         </h3>
                                         <p className="text-sm text-slate-500">
-                                            {app.email} • {app.phone}
+                                            {app.email || app.userEmail || '—'} • {app.phone || '—'}
                                         </p>
-                                        <p className="text-sm text-slate-600 mt-1">
-                                            Farm Size: <span className="font-semibold">{app.farmSize}</span>
-                                        </p>
+                                        {app.stateOfResidence && (
+                                            <p className="text-sm text-slate-600 mt-1">
+                                                State: <span className="font-semibold">{app.stateOfResidence}</span>
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                                 <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(app.status)}`}>

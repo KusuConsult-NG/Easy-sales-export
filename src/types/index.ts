@@ -108,8 +108,37 @@ export interface User {
         sms?: boolean;
     };
 
-    // Service registrations
-    serviceRegistrations?: Record<string, any>;
+    // Service registrations — tracks enrollment status per sub-platform
+    serviceRegistrations?: {
+        wave?: {
+            status: "pending" | "under_review" | "approved" | "rejected";
+            applicationId?: string;
+            submittedAt?: Date | any;
+            approvedAt?: Date | any;
+            rejectionReason?: string;
+        };
+        cooperative?: {
+            status: "pending" | "paid" | "approved" | "rejected";
+            tier?: "tier1" | "tier2";
+            applicationId?: string;
+            paymentReference?: string;
+            submittedAt?: Date | any;
+        };
+        farmNation?: {
+            status: "pending" | "approved" | "rejected";
+            applicationId?: string;
+            submittedAt?: Date | any;
+        };
+        export?: {
+            status: "pending" | "approved" | "rejected";
+            applicationId?: string;
+            submittedAt?: Date | any;
+        };
+        academy?: {
+            status: "active" | "suspended";
+            enrolledAt?: Date | any;
+        };
+    };
 
     // Soft-delete / NDPR
     deleted?: boolean;
