@@ -77,11 +77,9 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             newErrors.accountNumber = "Valid 10-digit account number required";
         }
 
-        // BVN is required and must be verified
-        if (!data.bvn || data.bvn.length !== 11) {
-            newErrors.bvn = "BVN is required — enter your 11-digit Bank Verification Number";
-        } else if (!bvnVerified) {
-            newErrors.bvn = "Please verify your BVN before continuing";
+        // BVN is collected but verification is optional (service not yet active)
+        if (data.bvn && data.bvn.length > 0 && data.bvn.length !== 11) {
+            newErrors.bvn = "BVN must be exactly 11 digits";
         }
 
         if (data.isMemberOfCooperative && !data.cooperativeName?.trim()) {
@@ -120,7 +118,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                 <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
-                        <strong>Bank account and BVN are required</strong> for identity and financial verification. Your data is securely encrypted.
+                        <strong>Bank account details are required.</strong> Providing your BVN is optional but recommended for faster processing. Your data is securely encrypted.
                     </p>
                 </div>
             </div>
@@ -169,10 +167,11 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         )}
                     </div>
 
-                    {/* BVN — REQUIRED */}
+                    {/* BVN — Optional (verification service not yet active) */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
-                            Bank Verification Number (BVN) <span className="text-red-500">*</span>
+                            Bank Verification Number (BVN){" "}
+                            <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
                         <div className="flex gap-2">
                             <div className="relative flex-1">
@@ -186,24 +185,10 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                     }}
                                     disabled={bvnVerified}
                                     maxLength={11}
-                                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 disabled:bg-slate-100 disabled:text-slate-500 ${bvnVerified ? "border-emerald-500 bg-emerald-50" : errors.bvn ? "border-red-400" : "border-slate-300"}`}
-                                    placeholder="11-digit BVN"
+                                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 ${errors.bvn ? "border-red-400" : "border-slate-300"}`}
+                                    placeholder="11-digit BVN (optional)"
                                 />
                             </div>
-                            <button
-                                type="button"
-                                onClick={handleVerifyBvn}
-                                disabled={!data.bvn || data.bvn.length !== 11 || verifyingBvn || bvnVerified}
-                                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white border-0 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap font-medium flex items-center gap-2 justify-center min-w-[120px]"
-                            >
-                                {verifyingBvn ? (
-                                    <><Loader2 className="w-4 h-4 animate-spin" /> Verifying</>
-                                ) : bvnVerified ? (
-                                    <><CheckCircle className="w-4 h-4" /> Verified</>
-                                ) : (
-                                    "Verify BVN"
-                                )}
-                            </button>
                         </div>
                         {errors.bvn && !bvnError && (
                             <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
