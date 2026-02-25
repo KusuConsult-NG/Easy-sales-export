@@ -10,16 +10,17 @@ import { getAdminDb } from "@/lib/firebase-admin";
  */
 export async function GET(
     _req: Request,
-    { params }: { params: { docId: string } }
+    { params }: { params: Promise<{ docId: string }> }
 ) {
     try {
+        const { docId } = await params;
         const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const db = getAdminDb();
-        const docSnap = await db.collection("_document_uploads").doc(params.docId).get();
+        const docSnap = await db.collection("_document_uploads").doc(docId).get();
 
         if (!docSnap.exists) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
