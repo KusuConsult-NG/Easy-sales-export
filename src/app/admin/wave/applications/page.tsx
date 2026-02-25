@@ -13,7 +13,7 @@ type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
 interface WaveApplication {
     id: string;
-    // New schema fields (7-section form)
+    // Section A: Personal
     surname?: string;
     firstName?: string;
     otherNames?: string;
@@ -21,6 +21,14 @@ interface WaveApplication {
     email?: string;
     userEmail?: string;
     stateOfResidence?: string;
+    lgaOfResidence?: string;
+    // Section B: Identity (new mandatory fields)
+    nin?: string;
+    votersCardNumber?: string;
+    // Section E: Financial (new mandatory fields)
+    bvn?: string;
+    bankName?: string;
+    accountNumber?: string;
     // Legacy fallback
     fullName?: string;
     farmSize?: string;
@@ -225,6 +233,35 @@ export default function AdminWaveApplicationsPage() {
                                         {app.stateOfResidence && (
                                             <p className="text-sm text-slate-600 mt-1">
                                                 State: <span className="font-semibold">{app.stateOfResidence}</span>
+                                                {app.lgaOfResidence && ` • LGA: `}
+                                                {app.lgaOfResidence && <span className="font-semibold">{app.lgaOfResidence}</span>}
+                                            </p>
+                                        )}
+
+                                        {/* Identity & KYC Fields — key for admin review */}
+                                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            <div className="bg-slate-50 rounded-lg px-3 py-2">
+                                                <p className="text-xs text-slate-500 mb-0.5">NIN</p>
+                                                <p className="text-sm font-mono font-semibold text-slate-800">
+                                                    {app.nin ? `${app.nin.slice(0, 3)}****${app.nin.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                </p>
+                                            </div>
+                                            <div className="bg-slate-50 rounded-lg px-3 py-2">
+                                                <p className="text-xs text-slate-500 mb-0.5">Voter's Card (PVC)</p>
+                                                <p className="text-sm font-mono font-semibold text-slate-800">
+                                                    {app.votersCardNumber || <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                </p>
+                                            </div>
+                                            <div className="bg-slate-50 rounded-lg px-3 py-2">
+                                                <p className="text-xs text-slate-500 mb-0.5">BVN</p>
+                                                <p className="text-sm font-mono font-semibold text-slate-800">
+                                                    {app.bvn ? `${app.bvn.slice(0, 3)}****${app.bvn.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {app.bankName && (
+                                            <p className="text-xs text-slate-500 mt-2">
+                                                🏦 {app.bankName} {app.accountNumber ? `• ****${app.accountNumber.slice(-4)}` : ''}
                                             </p>
                                         )}
                                     </div>

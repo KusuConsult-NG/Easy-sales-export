@@ -7,25 +7,20 @@ service cloud.firestore {
     // HELPER FUNCTIONS
     // ============================================
     
-    // Check if user is authenticated
     function isSignedIn() {
       return request.auth != null;
     }
     
-    // Check if user is admin
-    // Updated to match server-side RBAC which uses roles array
     function isAdmin() {
       return isSignedIn() && 
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              'admin' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles;
     }
     
-    // Check if user owns the resource
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
     
-    // Check if user is verified
     function isVerified() {
       return isSignedIn() &&
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -36,21 +31,28 @@ service cloud.firestore {
     // USERS COLLECTION
     // ============================================
     match /users/{userId} {
-      // Read: Own profile or admin
       allow read: if isOwner(userId) || isAdmin();
       
-      // Create: Own profile only (during registration)
       allow create: if isOwner(userId) &&
                        request.resource.data.keys().hasAll(['email', 'fullName', 'roles']) &&
-                       request.resource.data.roles.hasOnly(['user']); // Prevent self-promotion to admin
+                       request.resource.data.roles.hasOnly(['user']);
       
-      // Update: Own profile (limited fields) or admin (all fields)
+      // EXPANDED: users can update their own profile including KYC identity fields
       allow update: if isOwner(userId) &&
-                       // Users can only update these fields (roles excluded to prevent privilege escalation)
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName', 'phone', 'address', 'businessType', 'updatedAt'])
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'fullName', 'phone', 'address', 'businessType', 'updatedAt',
+                         // KYC / Identity fields (collected, not verified client-side)
+                         'nin', 'ninVerified', 'votersCardNumber',
+                         'bvn', 'bvnVerified', 'idType', 'idNumber', 'idVerified',
+                         // Bank details
+                         'bankDetails', 'bankAccountNumber', 'bankAccountName', 'bankCode',
+                         // Notification preferences
+                         'notifications', 'marketingOptIn',
+                         // Onboarding
+                         'onboardingCompleted'
+                       ])
                     || isAdmin();
       
-      // Delete: Admin only
       allow delete: if isAdmin();
     }
     
@@ -58,22 +60,32 @@ service cloud.firestore {
     // WAVE APPLICATIONS
     // ============================================
     match /wave_applications/{applicationId} {
-      // Read: Own application or admin
       allow read: if isOwner(resource.data.userId) || isAdmin();
       
-      // Create: Authenticated users only, female-only enforcement
+      // UPDATED: create rule now matches the real 7-section multi-step form schema
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.gender == 'female' && // WAVE is female-only
+                       request.resource.data.gender == 'female' &&
                        request.resource.data.status == 'pending' &&
-                       request.resource.data.keys().hasAll(['fullName', 'email', 'phone', 'gender', 'businessName', 'businessType', 'yearsInBusiness', 'reasonForApplying']);
+                       // Section A: Personal (required core fields)
+                       request.resource.data.keys().hasAll([
+                         'surname', 'firstName', 'dateOfBirth', 'phone',
+                         'stateOfResidence', 'lgaOfResidence',
+                         // Section B: Identity (required)
+                         'nin', 'votersCardNumber',
+                         // Section E: Financial (required)
+                         'bankName', 'accountNumber', 'bvn',
+                         // Declaration
+                         'declarationAccepted', 'consentGiven'
+                       ]);
       
-      // Update: Admin only (approval/rejection)
+      // Update: Admin only (approval/rejection/review)
       allow update: if isAdmin() &&
-                       // Only allow status, reviewedBy, reviewedAt, rejectionReason updates
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt', 'rejectionReason', 'updatedAt']);
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'status', 'reviewedBy', 'reviewedAt', 'rejectionReason',
+                         'reviewNotes', 'updatedAt'
+                       ]);
       
-      // Delete: Admin only
       allow delete: if isAdmin();
     }
     
@@ -81,20 +93,54 @@ service cloud.firestore {
     // COOPERATIVE MEMBERSHIPS
     // ============================================
     match /cooperative_memberships/{membershipId} {
-      // Read: Own membership or admin
       allow read: if isOwner(resource.data.userId) || isAdmin();
       
-      // Create: Authenticated users only
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.totalContributions >= 0;
       
-      // Update: System updates for contributions (via server actions)
       allow update: if isAdmin() || 
                        (isOwner(resource.data.userId) && 
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalContributions', 'tier', 'updatedAt']));
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'totalContributions', 'tier', 'updatedAt'
+                        ]));
       
-      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // COOPERATIVE MEMBERS (main collection used by app)
+    // ============================================
+    match /cooperative_members/{memberId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      
+      allow update: if isAdmin() ||
+                       (isOwner(resource.data.userId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'totalContributions', 'contributionAmount', 'savingsBalance',
+                          'tier', 'status', 'updatedAt'
+                        ]));
+      
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // COOPERATIVE ONBOARDING APPLICATIONS
+    // ============================================
+    match /cooperative_onboarding_applications/{applicationId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      
+      allow update: if isAdmin() ||
+                       // Allow owner to update while status is 'draft' only
+                       (isOwner(resource.data.userId) &&
+                        resource.data.status == 'draft');
+      
       allow delete: if isAdmin();
     }
     
@@ -102,19 +148,43 @@ service cloud.firestore {
     // COOPERATIVE CONTRIBUTIONS
     // ============================================
     match /cooperative_contributions/{contributionId} {
-      // Read: Own contributions or admin
       allow read: if isOwner(resource.data.userId) || isAdmin();
       
-      // Create: Authenticated users only
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.amount > 0 &&
                        request.resource.data.status == 'pending';
       
-      // Update: Admin only (approval/rejection)
       allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // COOPERATIVE TRANSACTIONS
+    // ============================================
+    match /cooperative_transactions/{transactionId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // FIXED SAVINGS PLANS
+    // ============================================
+    match /fixed_savings_plans/{planId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
       
-      // Delete: Admin only
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.amount > 0;
+      
+      allow update: if isAdmin() ||
+                       (isOwner(resource.data.userId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'status', 'updatedAt'
+                        ]));
+      
       allow delete: if isAdmin();
     }
     
@@ -122,42 +192,117 @@ service cloud.firestore {
     // LOAN APPLICATIONS
     // ============================================
     match /loan_applications/{loanId} {
-      // Read: Own loan or admin
       allow read: if isOwner(resource.data.userId) || isAdmin();
       
-      // Create: Authenticated users only, tier validation
-      allow create: if isSignedIn() &&
-                       request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.amount > 0 &&
-                       request.resource.data.status == 'pending' &&
-                       request.resource.data.tier in ['Basic', 'Premium'];
-      
-      // Update: Admin only (approval/rejection/disbursement)
-      allow update: if isAdmin() &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt', 'rejectionReason', 'disbursedAt', 'updatedAt']);
-      
-      // Delete: Admin only
-      allow delete: if isAdmin();
-    }
-    
-    // ============================================
-    // WITHDRAWALS
-    // ============================================
-    match /withdrawals/{withdrawalId} {
-      // Read: Own withdrawal or admin
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Create: Authenticated users only
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.amount > 0 &&
                        request.resource.data.status == 'pending';
       
-      // Update: Admin only (approval/rejection)
       allow update: if isAdmin() &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'processedBy', 'processedAt', 'adminNotes', 'updatedAt']);
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'status', 'reviewedBy', 'reviewedAt', 'rejectionReason',
+                         'disbursedAt', 'disbursed', 'disbursementNote',
+                         'disbursementTransferCode', 'pendingManualDisbursement',
+                         'approvalChain', 'updatedAt'
+                       ]);
       
-      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // WITHDRAWALS (Cooperative)
+    // ============================================
+    match /withdrawals/{withdrawalId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.amount > 0 &&
+                       request.resource.data.status == 'pending';
+      
+      allow update: if isAdmin() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'status', 'processedBy', 'processedAt', 'adminNotes', 'updatedAt'
+                       ]);
+      
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // WAVE EARNINGS WITHDRAWALS (new collection)
+    // ============================================
+    match /wave_withdrawals/{withdrawalId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.amount >= 5000 &&
+                       request.resource.data.status == 'pending';
+      
+      allow update: if isAdmin() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'status', 'processedBy', 'processedAt', 'adminNotes',
+                         'transactionReference', 'updatedAt'
+                       ]);
+      
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // WAVE TRAINING REGISTRATIONS
+    // ============================================
+    match /wave_training_registrations/{registrationId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      
+      // Admin can mark attendance
+      allow update: if isAdmin() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         'attended', 'attendedAt', 'updatedAt'
+                       ]);
+      
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // KYC VERIFICATIONS
+    // ============================================
+    match /kyc_verifications/{verificationId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      // Only server-side (Admin SDK) should create these
+      // Client-side creation blocked for security
+      allow create: if false;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // BRIEFING SUBMISSIONS (offline WAVE field submissions)
+    // ============================================
+    match /briefing_submissions/{submissionId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      
+      allow create: if isSignedIn() &&
+                       request.resource.data.userId == request.auth.uid;
+      
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // PLATFORM SETTINGS (admin-managed global config)
+    // ============================================
+    match /platform_settings/{settingId} {
+      // All authenticated users can READ platform settings (feature flags, etc.)
+      allow read: if isSignedIn();
+      
+      // Only admin can write
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
@@ -165,174 +310,163 @@ service cloud.firestore {
     // LAND LISTINGS
     // ============================================
     match /land_listings/{listingId} {
-      // Read: All authenticated users
       allow read: if isSignedIn();
       
-      // Create: Authenticated users only
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'pending' &&
                        request.resource.data.price > 0;
       
-      // Update: Own listing (limited fields) or admin (verification)
       allow update: if (isOwner(resource.data.userId) &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'price', 'updatedAt']))
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'title', 'description', 'price', 'updatedAt'
+                        ]))
                     || isAdmin();
       
-      // Delete: Own listing or admin
       allow delete: if isOwner(resource.data.userId) || isAdmin();
     }
     
     // ============================================
-    // AUDIT LOGS (Admin Read-Only, System Write)
+    // AUDIT LOGS (immutable)
     // ============================================
     match /audit_logs/{logId} {
-      // Read: Admin only
       allow read: if isAdmin();
-      
-      // Create: System only (server-side authenticated writes)
-      allow create: if request.auth != null; // All authenticated requests can write logs
-      
-      // Update/Delete: NEVER (immutable audit trail)
+      allow create: if request.auth != null;
       allow update: if false;
       allow delete: if false;
     }
     
     match /admin_audit_logs/{logId} {
-      // Read: Admin only
       allow read: if isAdmin();
-      
-      // Create: System only
       allow create: if request.auth != null;
-      
-      // Update/Delete: NEVER (immutable audit trail)
       allow update: if false;
       allow delete: if false;
     }
     
     // ============================================
-    // ANNOUNCEMENTS
+    // ANNOUNCEMENTS & BANNERS
     // ============================================
     match /announcements/{announcementId} {
-      // Read: All authenticated users
       allow read: if isSignedIn();
-      
-      // Create/Update/Delete: Admin only
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
-    // ============================================
-    // BANNERS
-    // ============================================
     match /banners/{bannerId} {
-      // Read: All authenticated users
       allow read: if isSignedIn();
-      
-      // Create/Update/Delete: Admin only
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
     // ============================================
-    // EXPORT AGGREGATION ORDERS
+    // EXPORT MODULE
     // ============================================
     match /export_orders/{orderId} {
-      // Read: Own order or admin
       allow read: if isOwner(resource.data.userId) || isAdmin();
       
-      // Create: Verified users only
       allow create: if isVerified() &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'pending';
       
-      // Update: Admin only (status changes)
       allow update: if isAdmin();
-      
-      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    match /export_participants/{participantId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    match /export_windows/{windowId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Export Catalog (products shown to buyers)
+    match /export_catalog/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Export Investments (user slots)
+    match /export_investments/{investmentId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Export Onboarding Applications
+    match /export_onboarding_applications/{applicationId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
     // ============================================
-    // ACADEMY COURSES
+    // ACADEMY MODULE
     // ============================================
     match /academy_courses/{courseId} {
-      // Read: All authenticated users
       allow read: if isSignedIn();
-      
-      // Create/Update/Delete: Admin only
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
     match /course_enrollments/{enrollmentId} {
-      // Read: Own enrollment or admin
       allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Create: Authenticated users only
-      allow create: if isSignedIn() &&
-                       request.resource.data.userId == request.auth.uid;
-      
-      // Update: Own enrollment (progress) or admin
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Delete: Admin only
       allow delete: if isAdmin();
     }
     
-    // ============================================
-    // CERTIFICATES
-    // ============================================
     match /certificates/{certificateId} {
-      // Read: Own certificate or admin
       allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Create: System/Admin only
       allow create: if isAdmin();
-      
-      // Update: Admin only
       allow update: if isAdmin();
-      
-      // Delete: Admin only
       allow delete: if isAdmin();
     }
     
+    match /wave_certificates/{certId} {
+      allow read: if isOwner(resource.data.memberId) || isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
     
     // ============================================
-    // CONVERSATIONS & MESSAGES (Messaging System)
+    // CONVERSATIONS & MESSAGES
     // ============================================
     match /conversations/{conversationId} {
-      // Read: Users who are participants in the conversation
       allow read: if isSignedIn() && 
         request.auth.uid in resource.data.participants;
       
-      // Create: Users can create conversations with themselves as participant
       allow create: if isSignedIn() &&
         request.auth.uid in request.resource.data.participants &&
         request.resource.data.participants.size() == 2;
       
-      // Update: Participants can update (for lastMessage, updatedAt)
       allow update: if isSignedIn() &&
         request.auth.uid in resource.data.participants;
       
-      // Delete: No deletion of conversations (archiving should be flag-based)
       allow delete: if false;
       
-      // Messages subcollection
       match /messages/{messageId} {
-        // Read: Users who are participants in the parent conversation
         allow read: if isSignedIn() &&
           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
         
-        // Create: Participants can send messages
         allow create: if isSignedIn() &&
           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants &&
           request.resource.data.senderId == request.auth.uid;
         
-        // Update/Delete: Messages are immutable
         allow update: if false;
         allow delete: if false;
       }
@@ -341,99 +475,59 @@ service cloud.firestore {
     // ============================================
     // MARKETPLACE MODULE
     // ============================================
-    
-    // Marketplace Sellers (vendor profiles)
     match /marketplace_sellers/{sellerId} {
-      // Read: All authenticated users can view sellers
       allow read: if isSignedIn();
       
-      // Create: Own profile only
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'pending';
       
-      // Update: Own profile (limited) or admin (all fields)
       allow update: if (isOwner(resource.data.userId) &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['businessName', 'description', 'phone', 'address', 'updatedAt']))
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'businessName', 'description', 'phone', 'address', 'updatedAt'
+                        ]))
                     || isAdmin();
       
-      // Delete: Admin only
       allow delete: if isAdmin();
     }
     
-    // Marketplace Products
     match /marketplace_products/{productId} {
-      // Read: All authenticated users
       allow read: if isSignedIn();
       
-      // Create: Authenticated AND APPROVED sellers only
       allow create: if isSignedIn() &&
                        request.resource.data.sellerId == request.auth.uid &&
                        request.resource.data.price > 0 &&
                        request.resource.data.stock >= 0 &&
-                       // CRITICAL: Check seller is approved
                        exists(/databases/$(database)/documents/marketplace_sellers/$(request.auth.uid)) &&
                        get(/databases/$(database)/documents/marketplace_sellers/$(request.auth.uid)).data.status == 'approved';
       
-      // Update: Own products or admin
       allow update: if isOwner(resource.data.sellerId) || isAdmin();
-      
-      // Delete: Own products or admin
       allow delete: if isOwner(resource.data.sellerId) || isAdmin();
     }
     
-    // Marketplace Orders
     match /marketplace_orders/{orderId} {
-      // Read: Buyer, seller, or admin
       allow read: if isSignedIn() &&
                      (resource.data.buyerId == request.auth.uid ||
                       resource.data.sellerId == request.auth.uid ||
                       isAdmin());
       
-      // Create: Authenticated buyers only
       allow create: if isSignedIn() &&
                        request.resource.data.buyerId == request.auth.uid &&
                        request.resource.data.status == 'pending';
       
-      // Update: Seller (status), buyer (limited), or admin
       allow update: if isAdmin() ||
                        (isOwner(resource.data.sellerId) &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
                        (isOwner(resource.data.buyerId) &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryAddress', 'updatedAt']));
       
-      // Delete: Admin only
       allow delete: if isAdmin();
     }
     
-    // ============================================
-    // EXPORT MODULE
-    // ============================================
-    
-    // Export Participants
-    match /export_participants/{participantId} {
-      // Read: Own profile or admin
+    // Seller Verifications
+    match /seller_verifications/{verificationId} {
       allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Create: Authenticated users only
-      allow create: if isSignedIn() &&
-                       request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.status == 'pending';
-      
-      // Update: Admin only (approval/rejection)
-      allow update: if isAdmin();
-      
-      // Delete: Admin only
-      allow delete: if isAdmin();
-    }
-    
-    // Export Windows (active export periods)
-    match /export_windows/{windowId} {
-      // Read: All authenticated users
-      allow read: if isSignedIn();
-      
-      // Create/Update/Delete: Admin only
-      allow create: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -441,89 +535,99 @@ service cloud.firestore {
     // ============================================
     // WAVE MODULE
     // ============================================
-    
-    // WAVE Members (approved participants)
     match /wave_members/{memberId} {
-      // Read: Own profile or admin
       allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // Create: Admin only (after application approval)
       allow create: if isAdmin();
-      
-      // Update: Admin or own profile (limited fields)
       allow update: if isAdmin() ||
                        (isOwner(resource.data.userId) &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['progressTracking', 'updatedAt']));
-      
-      // Delete: Admin only
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'progressTracking', 'updatedAt'
+                        ]));
+      allow delete: if isAdmin();
+    }
+    
+    match /wave_resources/{resourceId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin() ||
+                       // Allow incrementing downloads
+                       (isSignedIn() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloads']));
+      allow delete: if isAdmin();
+    }
+    
+    match /wave_training_events/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin() ||
+                       // Allow incrementing participant count during registration
+                       (isSignedIn() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentParticipants']));
+      allow delete: if isAdmin();
+    }
+    
+    match /wave_shipments/{shipmentId} {
+      allow read: if isOwner(resource.data.memberId) || isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    match /wave_earnings/{earningId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
     // ============================================
     // FARM NATION MODULE
     // ============================================
+    match /farm_nation_properties/{propertyId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isOwner(resource.data.userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
     
-    // Property Inquiries
-    match /property_inquiries/{inquiryId} {
-      // Read: Inquiry sender, property owner, or admin
+    match /farm_nation_inquiries/{inquiryId} {
       allow read: if isSignedIn() &&
                      (resource.data.userId == request.auth.uid ||
                       resource.data.propertyOwnerId == request.auth.uid ||
                       isAdmin());
       
-      // Create: Authenticated users only
-      allow create: if isSignedIn() &&
-                       request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.status == 'pending';
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
-      // Update: Property owner (response) or admin
       allow update: if isAdmin() ||
                        (isOwner(resource.data.propertyOwnerId) &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'response', 'updatedAt']));
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                          'status', 'response', 'updatedAt'
+                        ]));
       
-      // Delete: Admin only
       allow delete: if isAdmin();
     }
     
     // ============================================
     // NOTIFICATIONS
     // ============================================
-    
-    // User Notifications
     match /notifications/{notificationId} {
-      // Read: Own notifications only
       allow read: if isOwner(resource.data.userId);
-      
-      // Create: System/Admin only
       allow create: if isAdmin();
-      
-      // Update: Own notifications (mark as read) or admin
       allow update: if (isOwner(resource.data.userId) &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'updatedAt']))
                     || isAdmin();
-      
-      // Delete: Own notifications or admin
       allow delete: if isOwner(resource.data.userId) || isAdmin();
     }
     
     // ============================================
     // TESTIMONIALS
     // ============================================
-    
-    // Platform Testimonials
     match /testimonials/{testimonialId} {
-      // Read: All authenticated users (public)
       allow read: if isSignedIn();
-      
-      // Create: Authenticated users only
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'pending';
-      
-      // Update: Admin only (approval/moderation)
       allow update: if isAdmin();
-      
-      // Delete: Own testimonial or admin
       allow delete: if isOwner(resource.data.userId) || isAdmin();
     }
     
@@ -531,33 +635,45 @@ service cloud.firestore {
     // ESCROW TRANSACTIONS
     // ============================================
     match /escrow_transactions/{transactionId} {
-      // Read: Party to transaction or admin
       allow read: if isSignedIn() && 
                      (resource.data.buyerId == request.auth.uid ||
                       resource.data.sellerId == request.auth.uid ||
                       isAdmin());
       
-      // Create: Authenticated users only
       allow create: if isSignedIn() &&
                        (request.resource.data.buyerId == request.auth.uid ||
                         request.resource.data.sellerId == request.auth.uid) &&
                        request.resource.data.status == 'pending';
       
-      // Update: Admin only or involved parties (limited status updates)
       allow update: if isAdmin() || 
                        (isSignedIn() &&
                         (resource.data.buyerId == request.auth.uid ||
                          resource.data.sellerId == request.auth.uid) &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
       
-      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // CMS — Feature Toggles, System Settings
+    // ============================================
+    match /feature_toggles/{toggleId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    match /system_settings/{settingId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
     // ============================================
     // DEFAULT DENY
     // ============================================
-    // All other collections are denied by default
     match /{document=**} {
       allow read, write: if false;
     }

@@ -39,10 +39,13 @@ export interface User {
     sellerPhoneVerified?: boolean;
 
     // KYC / Identity Verification
+    nin?: string;            // National Identification Number
+    ninVerified?: boolean;
+    votersCardNumber?: string; // Permanent Voter's Card
     bvn?: string;
     bvnVerified?: boolean;
     idType?: string; // e.g. "nin"
-    idNumber?: string;
+    idNumber?: string;       // Generic ID number (legacy — prefer nin)
     idVerified?: boolean;
 
     // KYB / Business Verification
@@ -234,15 +237,26 @@ export interface Cooperative {
 
 export interface CooperativeMember {
     id: string;
-    cooperativeId: string;
+    cooperativeId?: string;
     userId: string;
     savingsBalance: number;
     loanBalance: number;
-    joinedAt: Date;
+    joinedAt?: Date;
     contributionAmount?: number;  // Total lifetime contributions (used for loan eligibility)
     totalContributions?: number;  // Alias used in some dashboard actions
-    tier?: "tier1" | "tier2";
-    status?: "active" | "inactive" | "suspended";
+    tier?: "basic" | "premium" | "tier1" | "tier2";
+    status?: "active" | "inactive" | "suspended" | "pending" | "under_review" | "approved" | "rejected";
+    membershipStatus?: "pending" | "approved" | "active" | "rejected" | "under_review";
+    paymentStatus?: "pending" | "completed" | "failed";
+    onboardingCompleted?: boolean;
+    // Personal info written by registerCooperativeMemberAction
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    membershipTier?: "basic" | "premium";
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 export interface LoanApplication {
@@ -355,13 +369,13 @@ export interface WaveApplication {
     nextOfKinName: string;
     nextOfKinPhone: string;
     nextOfKinRelationship: string;
-    // Section B: Civic Status
+    // Section B: Civic Status (nin + votersCardNumber mandatory)
     nin: string;
-    votersCardNumber: string;
-    pollingUnit: string;
-    ward: string;
-    yearOfVoterRegistration: string;
-    votedInLastElection: boolean;
+    votersCardNumber: string;  // Mandatory — Permanent Voter's Card Number
+    pollingUnit?: string;
+    ward?: string;
+    yearOfVoterRegistration?: string;
+    votedInLastElection?: boolean;
     // Section C: Socio-Economic
     highestEducation: string;
     currentOccupation: string;
@@ -375,11 +389,11 @@ export interface WaveApplication {
     hasAccessToFarmland: boolean;
     farmlandHectares?: number;
     needsFarmlandAccess?: boolean;
-    // Section E: Financial
-    hasBankAccount: boolean;
-    bankName?: string;
-    accountNumber?: string;
-    bvn?: string;
+    // Section E: Financial (bankName + accountNumber + bvn mandatory)
+    hasBankAccount?: boolean;
+    bankName: string;       // Mandatory
+    accountNumber: string;  // Mandatory
+    bvn: string;            // Mandatory — Bank Verification Number
     isMemberOfCooperative: boolean;
     cooperativeName?: string;
     willingToJoinCooperative: boolean;
