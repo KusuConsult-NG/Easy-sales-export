@@ -78,6 +78,11 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             newErrors.nin = "Please verify your NIN before continuing";
         }
 
+        // Voter's Card Number is REQUIRED on WAVE (collected, not API-verified)
+        if (!data.votersCardNumber || data.votersCardNumber.trim().length < 5) {
+            newErrors.votersCardNumber = "Voter's Card Number (PVC) is required";
+        }
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -110,7 +115,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 <div className="flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
-                        <strong>Your NIN is required</strong> for identity verification. Voter's Card details are optional but help with programme eligibility. All data is securely encrypted.
+                        <strong>NIN and Voter&apos;s Card details are required</strong> for identity and eligibility verification. NIN will be verified electronically. All data is securely encrypted.
                     </p>
                 </div>
             </div>
@@ -186,19 +191,25 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                     )}
                 </div>
 
-                {/* Voter's Card Number (PVC) — Optional */}
+                {/* Voter's Card Number (PVC) — REQUIRED on WAVE */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Voter's Card Number (PVC){" "}
-                        <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                        Voter&apos;s Card Number (PVC) <span className="text-red-500">*</span>
                     </label>
                     <input
                         type="text"
                         value={data.votersCardNumber}
                         onChange={(e) => updateData({ votersCardNumber: e.target.value.toUpperCase() })}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 ${errors.votersCardNumber ? 'border-red-400' : 'border-slate-300'}`}
                         placeholder="e.g., 90F5B123456789012345"
                     />
+                    {errors.votersCardNumber && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                            <AlertCircle className="w-4 h-4" />
+                            {errors.votersCardNumber}
+                        </p>
+                    )}
+                    <p className="mt-1 text-xs text-slate-500">Enter the Voter Identification Number (VIN) as printed on your Permanent Voter Card.</p>
                 </div>
 
                 {/* Ward & Polling Unit — Optional */}

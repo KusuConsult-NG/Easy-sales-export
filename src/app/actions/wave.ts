@@ -69,7 +69,7 @@ const waveApplicationSchema = z.object({
 
     // SECTION B: National Identity & Civic Status
     nin: z.string().min(11, "Valid NIN is required"),
-    votersCardNumber: z.string().optional(),
+    votersCardNumber: z.string().min(5, "Voter's Card Number is required"),
     pollingUnit: z.string().optional(),
     ward: z.string().optional(),
     yearOfVoterRegistration: z.string().optional(),
@@ -91,10 +91,10 @@ const waveApplicationSchema = z.object({
     needsFarmlandAccess: z.boolean().optional(),
 
     // SECTION E: Financial & Cooperative Details
-    hasBankAccount: z.boolean(),
-    bankName: z.string().optional(),
-    accountNumber: z.string().optional(),
-    bvn: z.string().optional(),
+    hasBankAccount: z.boolean().optional(),
+    bankName: z.string().min(2, "Bank name is required"),
+    accountNumber: z.string().min(10, "Valid 10-digit account number required"),
+    bvn: z.string().min(11, "BVN is required (11 digits)"),
     isMemberOfCooperative: z.boolean(),
     cooperativeName: z.string().optional(),
     willingToJoinCooperative: z.boolean(),
