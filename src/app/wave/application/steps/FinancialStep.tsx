@@ -69,13 +69,19 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (data.hasBankAccount) {
-            if (!data.bankName?.trim()) {
-                newErrors.bankName = "Bank name is required";
-            }
-            if (!data.accountNumber?.trim() || data.accountNumber.length !== 10) {
-                newErrors.accountNumber = "Valid 10-digit account number required";
-            }
+        // Bank account is always required
+        if (!data.bankName?.trim()) {
+            newErrors.bankName = "Bank name is required";
+        }
+        if (!data.accountNumber?.trim() || data.accountNumber.length !== 10) {
+            newErrors.accountNumber = "Valid 10-digit account number required";
+        }
+
+        // BVN is required and must be verified
+        if (!data.bvn || data.bvn.length !== 11) {
+            newErrors.bvn = "BVN is required — enter your 11-digit Bank Verification Number";
+        } else if (!bvnVerified) {
+            newErrors.bvn = "Please verify your BVN before continuing";
         }
 
         if (data.isMemberOfCooperative && !data.cooperativeName?.trim()) {
@@ -107,146 +113,128 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             <h2 className="text-2xl font-bold text-slate-900 mb-2">
                 Section E: Financial & Cooperative Details
             </h2>
-            <p className="text-slate-600 mb-8">
+            <p className="text-slate-600 mb-4">
                 Provide your banking and cooperative membership information
             </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
+                <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-700">
+                        <strong>Bank account and BVN are required</strong> for identity and financial verification. Your data is securely encrypted.
+                    </p>
+                </div>
+            </div>
 
             <div className="space-y-6">
-                {/* Do you have a bank account? */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Do you have a bank account? *
-                    </label>
-                    <div className="flex gap-4">
-                        {[
-                            { value: true, label: "Yes" },
-                            { value: false, label: "No" },
-                        ].map((option) => (
-                            <label
-                                key={option.label}
-                                className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.hasBankAccount === option.value
-                                    ? "border-emerald-600 bg-emerald-50 text-emerald-700"
-                                    : "border-slate-300 hover:bg-slate-50"
-                                    }`}
-                            >
-                                <input
-                                    type="radio"
-                                    name="hasBankAccount"
-                                    checked={data.hasBankAccount === option.value}
-                                    onChange={() => updateData({ hasBankAccount: option.value })}
-                                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
-                                />
-                                <span className="font-medium">{option.label}</span>
-                            </label>
-                        ))}
+                {/* Bank Details — Always Required */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 space-y-6">
+                    <h3 className="text-base font-bold text-slate-900">Bank Account Details <span className="text-red-500">*</span></h3>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                            Bank Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={data.bankName}
+                            onChange={(e) => updateData({ bankName: e.target.value })}
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            placeholder="e.g., First Bank, GT Bank, Access Bank"
+                        />
+                        {errors.bankName && (
+                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                {errors.bankName}
+                            </p>
+                        )}
                     </div>
-                </div>
 
-                {/* If YES, Bank Details */}
-                {data.hasBankAccount && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 space-y-6">
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                Bank Name *
-                            </label>
-                            <input
-                                type="text"
-                                value={data.bankName}
-                                onChange={(e) => updateData({ bankName: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                                placeholder="e.g., First Bank, GT Bank"
-                            />
-                            {errors.bankName && (
-                                <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                                    <AlertCircle className="w-4 h-4" />
-                                    {errors.bankName}
-                                </p>
-                            )}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                            Account Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={data.accountNumber}
+                            onChange={(e) => updateData({ accountNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                            maxLength={10}
+                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            placeholder="10-digit account number"
+                        />
+                        {errors.accountNumber && (
+                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                {errors.accountNumber}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* BVN — REQUIRED */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                            Bank Verification Number (BVN) <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <input
+                                    type="text"
+                                    value={data.bvn}
+                                    onChange={(e) => {
+                                        updateData({ bvn: e.target.value.replace(/\D/g, "").slice(0, 11) });
+                                        setBvnVerified(false);
+                                        setBvnError("");
+                                    }}
+                                    disabled={bvnVerified}
+                                    maxLength={11}
+                                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 disabled:bg-slate-100 disabled:text-slate-500 ${bvnVerified ? "border-emerald-500 bg-emerald-50" : errors.bvn ? "border-red-400" : "border-slate-300"}`}
+                                    placeholder="11-digit BVN"
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleVerifyBvn}
+                                disabled={!data.bvn || data.bvn.length !== 11 || verifyingBvn || bvnVerified}
+                                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white border-0 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap font-medium flex items-center gap-2 justify-center min-w-[120px]"
+                            >
+                                {verifyingBvn ? (
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> Verifying</>
+                                ) : bvnVerified ? (
+                                    <><CheckCircle className="w-4 h-4" /> Verified</>
+                                ) : (
+                                    "Verify BVN"
+                                )}
+                            </button>
                         </div>
-
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                Account Number *
-                            </label>
-                            <input
-                                type="text"
-                                value={data.accountNumber}
-                                onChange={(e) => updateData({ accountNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-                                maxLength={10}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                                placeholder="10-digit account number"
-                            />
-                            {errors.accountNumber && (
-                                <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                                    <AlertCircle className="w-4 h-4" />
-                                    {errors.accountNumber}
+                        {errors.bvn && !bvnError && (
+                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                {errors.bvn}
+                            </p>
+                        )}
+                        {bvnError && (
+                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                {bvnError}
+                            </p>
+                        )}
+                        {bvnVerified && (
+                            <div className="mt-2 flex items-center justify-between">
+                                <p className="text-sm text-emerald-600 flex items-center gap-1 font-medium">
+                                    <CheckCircle className="w-4 h-4" />
+                                    BVN verified successfully
                                 </p>
-                            )}
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                BVN (Optional but recommended)
-                            </label>
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <input
-                                        type="text"
-                                        value={data.bvn}
-                                        onChange={(e) => {
-                                            updateData({ bvn: e.target.value.replace(/\D/g, "").slice(0, 11) });
-                                            setBvnVerified(false);
-                                            setBvnError("");
-                                        }}
-                                        disabled={bvnVerified}
-                                        maxLength={11}
-                                        className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 disabled:bg-slate-100 disabled:text-slate-500 ${bvnVerified ? "border-emerald-500 bg-emerald-50" : "border-slate-300"}`}
-                                        placeholder="11-digit BVN (optional)"
-                                    />
-                                </div>
                                 <button
                                     type="button"
-                                    onClick={handleVerifyBvn}
-                                    disabled={!data.bvn || data.bvn.length !== 11 || verifyingBvn || bvnVerified}
-                                    className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap font-medium flex items-center gap-2 justify-center min-w-[120px]"
+                                    onClick={() => { setBvnVerified(false); setBvnError(""); updateData({ bvn: "" }); }}
+                                    className="text-xs text-slate-500 underline hover:text-slate-700 ml-2"
                                 >
-                                    {verifyingBvn ? (
-                                        <><Loader2 className="w-4 h-4 animate-spin" /> Verifying</>
-                                    ) : bvnVerified ? (
-                                        <><CheckCircle className="w-4 h-4 text-emerald-600" /> Verified</>
-                                    ) : (
-                                        "Verify"
-                                    )}
+                                    Wrong BVN? Edit
                                 </button>
                             </div>
-                            {bvnError && (
-                                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                                    <AlertCircle className="w-4 h-4" />
-                                    {bvnError}
-                                </p>
-                            )}
-                            {bvnVerified && (
-                                <div className="mt-2 flex items-center justify-between">
-                                    <p className="text-sm text-emerald-600 flex items-center gap-1 font-medium">
-                                        <CheckCircle className="w-4 h-4" />
-                                        BVN matches profile records
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setBvnVerified(false);
-                                            setBvnError("");
-                                            updateData({ bvn: "" });
-                                        }}
-                                        className="text-xs text-slate-500 underline hover:text-slate-700 ml-2"
-                                    >
-                                        Wrong BVN? Edit
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        )}
+                        <p className="mt-1 text-xs text-slate-500">Dial *565*0# on your registered phone to retrieve your BVN.</p>
                     </div>
-                )}
+                </div>
 
                 {/* Cooperative Membership */}
                 <div>

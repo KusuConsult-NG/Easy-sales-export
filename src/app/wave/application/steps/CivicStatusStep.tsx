@@ -71,10 +71,11 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        // All civic fields are OPTIONAL — NIN verification failure does not block the form
-        // Validate format only if the user has entered something
-        if (data.nin && data.nin.trim() && data.nin.length !== 11) {
-            newErrors.nin = "NIN must be exactly 11 digits";
+        // NIN is REQUIRED and must be verified
+        if (!data.nin || data.nin.trim().length !== 11) {
+            newErrors.nin = "NIN is required — enter your 11-digit National Identification Number";
+        } else if (!ninVerified) {
+            newErrors.nin = "Please verify your NIN before continuing";
         }
 
         setErrors(newErrors);
@@ -105,21 +106,21 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             <p className="text-slate-600 mb-2">
                 This section is compulsory for transparency, accountability, and eligibility validation.
             </p>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-8">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
                 <div className="flex items-start gap-3">
-                    <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
-                    <p className="text-sm text-emerald-700">
-                        All fields in this section are <strong>optional</strong>. Providing your NIN and PVC details helps with program verification and eligibility, and is securely encrypted.
+                    <ShieldCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-700">
+                        <strong>Your NIN is required</strong> for identity verification. Voter's Card details are optional but help with programme eligibility. All data is securely encrypted.
                     </p>
                 </div>
             </div>
 
             <div className="space-y-6">
-                {/* National Identification Number (NIN) */}
+                {/* National Identification Number (NIN) — REQUIRED */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         National Identification Number (NIN) 🔒{" "}
-                        <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                        <span className="text-red-500">*</span>
                     </label>
                     <div className="flex gap-2">
                         <div className="relative flex-1">
