@@ -246,15 +246,41 @@ export interface CooperativeMember {
     totalContributions?: number;  // Alias used in some dashboard actions
     tier?: "basic" | "premium" | "tier1" | "tier2";
     status?: "active" | "inactive" | "suspended" | "pending" | "under_review" | "approved" | "rejected";
-    membershipStatus?: "pending" | "approved" | "active" | "rejected" | "under_review";
+    membershipStatus?: "pending" | "approved" | "active" | "rejected" | "under_review" | "suspended";
     paymentStatus?: "pending" | "completed" | "failed";
     onboardingCompleted?: boolean;
     // Personal info written by registerCooperativeMemberAction
     firstName?: string;
     lastName?: string;
+    middleName?: string;         // Added: admin members modal shows this
     email?: string;
     phone?: string;
+    dateOfBirth?: string;        // Added: admin members modal shows this
+    gender?: "male" | "female" | "";  // Added: admin members modal shows this
+    stateOfOrigin?: string;      // Added: admin members modal shows this
+    lga?: string;                // Added: admin members modal shows this
+    residentialAddress?: string; // Added: admin members modal shows this
+    occupation?: string;         // Added: admin members modal shows this
+    registrationFee?: number;    // Added: admin table shows this
     membershipTier?: "basic" | "premium";
+    // Next of kin written during onboarding
+    nextOfKin?: {
+        name: string;
+        phone: string;
+        address: string;
+    };
+    // Legacy flat next-of-kin fields (backward compatible)
+    nextOfKinName?: string;
+    nextOfKinPhone?: string;
+    nextOfKinAddress?: string;
+    // Uploaded KYC document references (Firestore fallback refs or Storage URLs)
+    documents?: {
+        validId?: { name: string; url: string };
+        idType?: string;
+        passportPhoto?: { name: string; url: string };
+        proofOfAddress?: { name: string; url: string };
+        bvn?: string;            // Optional — collected, not live-verified
+    };
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -473,11 +499,11 @@ export interface CooperativeOnboardingApplication {
         validId?: { name: string; url: string };
         idType?: string;
         idNumber?: string;
-        idVerified?: boolean;
+        // idVerified removed — was set by QoreID (now removed). Admin reviews manually.
         passportPhoto?: { name: string; url: string };
         proofOfAddress?: { name: string; url: string };
-        bvn: string;
-        bvnVerified?: boolean;
+        bvn?: string;            // Optional — no longer required; admin reviews manually
+        // bvnVerified removed — was set by QoreID (now removed). Admin reviews manually.
     };
     paymentReference?: string;
     paymentStatus?: "pending" | "completed" | "failed";
@@ -858,6 +884,9 @@ export const COLLECTIONS = {
 
     // Platform / Admin Configuration
     PLATFORM_SETTINGS: "platform_settings",
+
+    // Firestore-backed document uploads (fallback when Storage unavailable)
+    DOCUMENT_UPLOADS: "_document_uploads",
 
     // Export Slots (individual investment slots per user per export window)
     // Note: EXPORT_SLOTS is already defined above — this alias is preferred in new code

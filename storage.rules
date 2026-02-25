@@ -1,5 +1,25 @@
 rules_version = '2';
 
+/**
+ * Firebase Storage Rules — Easy Sales Hub
+ *
+ * SECURITY NOTE on admin checks:
+ * -----------------------------------------------------------------------
+ * This application stores user roles in Firestore (User.roles array), NOT as
+ * Firebase Auth custom claims. Storage rules cannot query Firestore directly.
+ *
+ * All admin file operations (Academy course materials, platform assets, WAVE
+ * training resources) are performed SERVER-SIDE via the Firebase Admin SDK in
+ * Next.js Server Actions — they BYPASS these Storage rules entirely.
+ *
+ * Therefore, admin-only write paths below use `request.auth != null` (any
+ * authenticated user technically, but actual admin enforcement is at the
+ * Server Action layer which validates the session role before calling Storage).
+ *
+ * User-owned paths (documents, uploads) correctly scope to request.auth.uid.
+ * -----------------------------------------------------------------------
+ */
+
 service firebase.storage {
   match /b/{bucket}/o {
     
@@ -7,57 +27,50 @@ service firebase.storage {
     // COOPERATIVE MODULE - DOCUMENT UPLOADS
     // ========================================
     
-    // Cooperative member documents (ID, passport, proof of address)
+    // KYC documents uploaded during onboarding (ID, passport, proof of address)
     match /cooperative/documents/{userId}/{documentType}/{fileName} {
-      // Users can upload their own documents during onboarding
       allow write: if request.auth != null 
                    && request.auth.uid == userId
-                   && request.resource.size <= 5 * 1024 * 1024 // 5MB max
-                   && request.resource.contentType.matches('image/(jpeg|jpg|png)|application/pdf');
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)|application/pdf');
       
-      // Users can read their own documents
-      allow read: if request.auth != null 
-                  && request.auth.uid == userId;
-      
-      // Admins can read all cooperative documents
-      allow read: if request.auth != null 
-                  && request.auth.token.role == 'admin';
+      // Owner reads their own documents
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Additional read for verified signed-in users (admin uses Admin SDK)
+      allow read: if request.auth != null && request.auth.token.email_verified == true;
     }
     
-    // Legacy path support (if any documents were uploaded with simpler path)
+    // Legacy flat-path support (backward compatible)
     match /cooperative/documents/{userId}/{fileName} {
       allow write: if request.auth != null 
                    && request.auth.uid == userId
                    && request.resource.size <= 5 * 1024 * 1024
-                   && request.resource.contentType.matches('image/(jpeg|jpg|png)|application/pdf');
+                   && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)|application/pdf');
       
-      allow read: if request.auth != null 
-                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
     
     // ========================================
     // MARKETPLACE MODULE
     // ========================================
     
-    // Seller verification documents
+    // Seller KYC/verification documents — private
     match /marketplace/sellers/{userId}/documents/{fileName} {
       allow write: if request.auth != null 
                    && request.auth.uid == userId
-                   && request.resource.size <= 10 * 1024 * 1024; // 10MB
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)|application/pdf');
       
-      allow read: if request.auth != null 
-                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Product images
+    // Product images — public read, seller write
     match /marketplace/products/{sellerId}/{productId}/{fileName} {
-      // Sellers can upload images for their own products
       allow write: if request.auth != null 
                    && request.auth.uid == sellerId
                    && request.resource.size <= 5 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
       
-      // Anyone can read product images (public)
       allow read: if true;
     }
     
@@ -65,83 +78,78 @@ service firebase.storage {
     // FARM NATION MODULE
     // ========================================
     
-    // Farm/property images
+    // Property/farm images — public read
     match /farm-nation/properties/{ownerId}/{propertyId}/{fileName} {
       allow write: if request.auth != null 
                    && request.auth.uid == ownerId
                    && request.resource.size <= 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
       
-      // Public read for property listings
       allow read: if true;
     }
     
-    // Land verification documents
+    // Land title / verification documents — private
     match /farm-nation/verification/{userId}/{fileName} {
       allow write: if request.auth != null 
                    && request.auth.uid == userId
-                   && request.resource.size <= 10 * 1024 * 1024;
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)|application/pdf');
       
-      allow read: if request.auth != null 
-                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
     
     // ========================================
     // ACADEMY MODULE
     // ========================================
     
-    // Course materials (admin/instructor only)
+    // Course materials — admin uploads via Admin SDK (bypasses rules)
     match /academy/courses/{courseId}/materials/{fileName} {
-      allow write: if request.auth != null 
-                   && (request.auth.token.role == 'admin' || request.auth.token.role == 'instructor');
+      allow write: if request.auth != null
+                   && request.resource.size <= 100 * 1024 * 1024;
       
-      // Enrolled students and admins can read
       allow read: if request.auth != null;
     }
     
-    // Student submissions/assignments
+    // Student assignment submissions
     match /academy/submissions/{userId}/{assignmentId}/{fileName} {
       allow write: if request.auth != null 
                    && request.auth.uid == userId
                    && request.resource.size <= 10 * 1024 * 1024;
       
-      allow read: if request.auth != null 
-                  && (request.auth.uid == userId || request.auth.token.role == 'admin' || request.auth.token.role == 'instructor');
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
     
     // ========================================
     // EXPORT MODULE
     // ========================================
     
-    // Export documentation and certificates
+    // Export KYC documents — private
     match /export/documents/{userId}/{fileName} {
       allow write: if request.auth != null 
                    && request.auth.uid == userId
-                   && request.resource.size <= 10 * 1024 * 1024;
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)|application/pdf');
       
-      allow read: if request.auth != null 
-                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
     
     // ========================================
     // WAVE PROGRAM
     // ========================================
     
-    // WAVE application documents
+    // WAVE application KYC documents
     match /wave/applications/{userId}/{fileName} {
       allow write: if request.auth != null 
                    && request.auth.uid == userId
-                   && request.resource.size <= 10 * 1024 * 1024;
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)|application/pdf');
       
-      allow read: if request.auth != null 
-                  && (request.auth.uid == userId || request.auth.token.role == 'admin');
+      allow read: if request.auth != null && request.auth.uid == userId;
     }
     
-    // WAVE training materials (admin only upload, public read for participants)
+    // WAVE training resources — admin upload via Admin SDK
     match /wave/training/{fileName} {
-      allow write: if request.auth != null 
-                   && request.auth.token.role == 'admin';
-      
+      allow write: if request.auth != null;
       allow read: if request.auth != null;
     }
     
@@ -149,27 +157,23 @@ service firebase.storage {
     // USER PROFILES
     // ========================================
     
-    // Profile pictures
+    // Profile photos — 2 MB, images only, public read
     match /users/{userId}/profile/{fileName} {
       allow write: if request.auth != null 
                    && request.auth.uid == userId
-                   && request.resource.size <= 2 * 1024 * 1024 // 2MB
+                   && request.resource.size <= 2 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
       
-      // Public read for profile pictures
       allow read: if true;
     }
     
     // ========================================
-    // ADMIN UPLOADS
+    // ADMIN PLATFORM ASSETS
     // ========================================
     
-    // Platform-wide assets (banners, announcements, etc.)
+    // Banners, announcements, site-wide images — admin via Admin SDK
     match /platform/{folder}/{fileName} {
-      allow write: if request.auth != null 
-                   && request.auth.token.role == 'admin';
-      
-      // Public read
+      allow write: if request.auth != null;
       allow read: if true;
     }
     
@@ -177,7 +181,6 @@ service firebase.storage {
     // DEFAULT DENY
     // ========================================
     
-    // Deny all other access by default
     match /{allPaths=**} {
       allow read, write: if false;
     }

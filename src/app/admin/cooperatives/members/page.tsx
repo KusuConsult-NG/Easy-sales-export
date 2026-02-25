@@ -42,7 +42,7 @@ export default function CooperativeMembersPage() {
     const [selectedApplication, setSelectedApplication] = useState<MembershipApplication | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "suspended">("all");
+    const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "under_review" | "suspended">("all");
     const [searchQuery, setSearchQuery] = useState("");
 
     // Pagination State
@@ -149,10 +149,10 @@ export default function CooperativeMembersPage() {
                 return;
             }
 
-            const response = await fetch(`/api/admin/cooperatives/members/${selectedApplication.id}/reject`, {
+            const response = await fetch("/api/admin/cooperative/reject-member", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reason }),
+                body: JSON.stringify({ memberId: selectedApplication.id, reason }),
             });
 
             const data = await response.json();
@@ -217,11 +217,12 @@ export default function CooperativeMembersPage() {
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <select
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value as "all" | "pending" | "approved" | "suspended")}
+                            onChange={(e) => setStatusFilter(e.target.value as "all" | "pending" | "approved" | "under_review" | "suspended")}
                             className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                             <option value="all">All Applications</option>
                             <option value="pending">Pending</option>
+                            <option value="under_review">Under Review</option>
                             <option value="approved">Approved</option>
                             <option value="suspended">Suspended</option>
                         </select>
@@ -236,7 +237,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-yellow-600 mb-1">Pending</p>
                             <p className="text-3xl font-bold text-yellow-700">
-                                {applications.filter(a => a.membershipStatus === "pending").length}
+                                {applications.filter(a => (a.membershipStatus || (a as any).status) === "pending").length}
                             </p>
                         </div>
                         <Clock className="w-12 h-12 text-yellow-500 opacity-50" />
@@ -248,7 +249,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-green-600 mb-1">Approved</p>
                             <p className="text-3xl font-bold text-green-700">
-                                {applications.filter(a => a.membershipStatus === "approved").length}
+                                {applications.filter(a => (a.membershipStatus || (a as any).status) === "approved").length}
                             </p>
                         </div>
                         <CheckCircle className="w-12 h-12 text-green-500 opacity-50" />

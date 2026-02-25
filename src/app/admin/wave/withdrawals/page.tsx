@@ -3,14 +3,13 @@
 import { useState, useEffect } from "react";
 import { DollarSign, CheckCircle, XCircle, Loader2, AlertCircle, Clock, User } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import { getAdminDb } from "@/lib/firebase-admin";
 
 interface WaveWithdrawal {
     withdrawalId: string;
     userId: string;
     userEmail?: string;
     amount: number;
-    status: "pending" | "processing" | "completed" | "rejected";
+    status: "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected";
     requestedAt: any;
     processedAt?: any;
     processedBy?: string;
@@ -24,6 +23,8 @@ interface WaveWithdrawal {
 const STATUS_COLORS: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-700",
     processing: "bg-blue-100 text-blue-700",
+    approved: "bg-indigo-100 text-indigo-700",
+    approved_pending_payout: "bg-orange-100 text-orange-700",
     completed: "bg-green-100 text-green-700",
     rejected: "bg-red-100 text-red-700",
 };
@@ -33,7 +34,7 @@ export default function AdminWaveWithdrawalsPage() {
     const [withdrawals, setWithdrawals] = useState<WaveWithdrawal[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "completed" | "rejected">("pending");
+    const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
 
     const fetchWithdrawals = async () => {
@@ -112,6 +113,8 @@ export default function AdminWaveWithdrawalsPage() {
                 >
                     <option value="pending">Pending</option>
                     <option value="processing">Processing</option>
+                    <option value="approved">Approved</option>
+                    <option value="approved_pending_payout">Approved (Pending Payout)</option>
                     <option value="completed">Completed</option>
                     <option value="rejected">Rejected</option>
                     <option value="all">All</option>
