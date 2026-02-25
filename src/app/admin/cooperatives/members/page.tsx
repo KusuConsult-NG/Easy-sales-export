@@ -282,88 +282,127 @@ export default function CooperativeMembersPage() {
                         <p className="text-slate-600">No applications found</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-slate-50 border-b border-slate-200">
-                                <tr>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
-                                        Name
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
-                                        Contact
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
-                                        Tier
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
-                                        Payment
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
-                                        Status
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
-                                {filteredApplications.map((app) => (
-                                    <tr key={app.id} className="hover:bg-slate-50">
-                                        <td className="px-6 py-4">
-                                            <div>
-                                                <p className="font-semibold text-slate-900">
-                                                    {app.firstName || app.lastName
-                                                        ? `${app.firstName} ${app.lastName}`.trim()
-                                                        : <span className="text-amber-600 italic">Incomplete registration</span>}
-                                                </p>
-                                                <p className="text-sm text-slate-500">
-                                                    {new Date(app.createdAt).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div>
-                                                <p className="text-sm text-slate-900">{app.email || "—"}</p>
-                                                <p className="text-sm text-slate-500">{app.phone || "—"}</p>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 capitalize">
-                                                {app.membershipTier}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div>
-                                                <p className="font-semibold text-slate-900">
-                                                    ₦{(app.registrationFee || 0).toLocaleString()}
-                                                </p>
-                                                <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${app.paymentStatus === "completed"
-                                                    ? "bg-green-100 text-green-700"
-                                                    : "bg-yellow-100 text-yellow-700"
-                                                    } `}>
-                                                    {app.paymentStatus}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.membershipStatus)} `}>
-                                                {app.membershipStatus}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <button
-                                                onClick={() => viewDetails(app)}
-                                                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors"
-                                            >
-                                                <Eye className="w-4 h-4" />
-                                                View
-                                            </button>
-                                        </td>
+                    <>
+                        {/* Mobile Card View */}
+                        <div className="md:hidden divide-y divide-slate-100">
+                            {filteredApplications.map((app) => (
+                                <div key={app.id} className="p-4 space-y-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <p className="font-semibold text-slate-900 text-sm">
+                                                {app.firstName || app.lastName
+                                                    ? `${app.firstName} ${app.lastName}`.trim()
+                                                    : <span className="text-amber-600 italic text-xs">Incomplete</span>}
+                                            </p>
+                                            <p className="text-xs text-slate-500 mt-0.5">{app.email || "—"}</p>
+                                        </div>
+                                        <span className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.membershipStatus)}`}>
+                                            {app.membershipStatus}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 capitalize">
+                                            {app.membershipTier}
+                                        </span>
+                                        <span className="text-xs text-slate-500">
+                                            ₦{(app.registrationFee || 0).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => viewDetails(app)}
+                                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                                    >
+                                        <Eye className="w-4 h-4" />
+                                        View Details
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
+                                            Name
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
+                                            Contact
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
+                                            Tier
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
+                                            Payment
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
+                                            Status
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">
+                                            Actions
+                                        </th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200">
+                                    {filteredApplications.map((app) => (
+                                        <tr key={app.id} className="hover:bg-slate-50">
+                                            <td className="px-6 py-4">
+                                                <div>
+                                                    <p className="font-semibold text-slate-900">
+                                                        {app.firstName || app.lastName
+                                                            ? `${app.firstName} ${app.lastName}`.trim()
+                                                            : <span className="text-amber-600 italic">Incomplete registration</span>}
+                                                    </p>
+                                                    <p className="text-sm text-slate-500">
+                                                        {new Date(app.createdAt).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div>
+                                                    <p className="text-sm text-slate-900">{app.email || "—"}</p>
+                                                    <p className="text-sm text-slate-500">{app.phone || "—"}</p>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 capitalize">
+                                                    {app.membershipTier}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div>
+                                                    <p className="font-semibold text-slate-900">
+                                                        ₦{(app.registrationFee || 0).toLocaleString()}
+                                                    </p>
+                                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${app.paymentStatus === "completed"
+                                                        ? "bg-green-100 text-green-700"
+                                                        : "bg-yellow-100 text-yellow-700"
+                                                        } `}>
+                                                        {app.paymentStatus}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.membershipStatus)} `}>
+                                                    {app.membershipStatus}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <button
+                                                    onClick={() => viewDetails(app)}
+                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                    View
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )}
             </div>
 

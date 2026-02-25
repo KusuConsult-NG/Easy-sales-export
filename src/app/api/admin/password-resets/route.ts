@@ -4,9 +4,10 @@ import { db } from "@/lib/firebase-admin";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { withRateLimit } from "@/lib/rate-limit";
 
 /** GET /api/admin/password-resets — list all reset token records */
-export async function GET(_req: NextRequest) {
+async function getPasswordResetsHandler(_req: NextRequest) {
     try {
         const session = await auth();
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
@@ -38,8 +39,10 @@ export async function GET(_req: NextRequest) {
     }
 }
 
+export const GET = withRateLimit(getPasswordResetsHandler);
+
 /** DELETE /api/admin/password-resets — purge expired and used tokens */
-export async function DELETE(_req: NextRequest) {
+async function deletePasswordResetsHandler(_req: NextRequest) {
     try {
         const session = await auth();
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
@@ -84,3 +87,5 @@ export async function DELETE(_req: NextRequest) {
         return NextResponse.json({ success: false, error: "Failed to purge tokens" }, { status: 500 });
     }
 }
+
+export const DELETE = withRateLimit(deletePasswordResetsHandler);

@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { qoreIdService } from '@/lib/qoreid';
 import { logger } from "@/lib/logger";
+import { withRateLimit } from "@/lib/rate-limit";
 
-export async function POST(req: Request) {
+async function verifyBusinessHandler(req: NextRequest) {
     try {
         const session = await auth();
 
@@ -59,3 +60,5 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
+
+export const POST = withRateLimit(verifyBusinessHandler);

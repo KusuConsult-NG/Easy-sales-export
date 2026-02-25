@@ -3,14 +3,16 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { withRateLimit } from "@/lib/rate-limit";
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
  * Enable MFA after verification
+ * Rate-limited to prevent TOTP token brute-forcing.
  */
-export async function POST(request: NextRequest) {
+async function enableMFAHandler(request: NextRequest) {
     try {
         const session = await auth();
 
@@ -82,3 +84,5 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
+export const POST = withRateLimit(enableMFAHandler);

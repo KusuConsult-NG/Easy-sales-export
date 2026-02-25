@@ -3,11 +3,13 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { withRateLimit } from "@/lib/rate-limit";
 
 /**
  * Disable MFA
+ * Rate-limited to prevent account takeover via rapid disable attempts.
  */
-export async function POST(request: NextRequest) {
+async function disableMFAHandler(request: NextRequest) {
     try {
         const session = await auth();
 
@@ -38,3 +40,5 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
+export const POST = withRateLimit(disableMFAHandler);

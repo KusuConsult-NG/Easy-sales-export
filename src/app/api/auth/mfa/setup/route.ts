@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { withRateLimit } from "@/lib/rate-limit";
 
 // Force server-side execution (prevents build-time crypto errors)
 export const runtime = 'nodejs';
@@ -10,8 +11,9 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Setup MFA - Generate QR code and recovery codes
+ * Rate-limited to prevent abuse of TOTP secret generation.
  */
-export async function POST(request: NextRequest) {
+async function setupMFAHandler(request: NextRequest) {
     try {
         const session = await auth();
 
@@ -61,3 +63,5 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
+export const POST = withRateLimit(setupMFAHandler);

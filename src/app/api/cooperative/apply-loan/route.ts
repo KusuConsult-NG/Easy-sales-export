@@ -3,11 +3,13 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { withRateLimit } from "@/lib/rate-limit";
 
 /**
  * API Route: Submit Loan Application
+ * Rate-limited to prevent duplicate/spam submissions.
  */
-export async function POST(request: NextRequest) {
+async function applyLoanHandler(request: NextRequest) {
     try {
         const session = await auth();
         if (!session?.user) {
@@ -162,3 +164,5 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+
+export const POST = withRateLimit(applyLoanHandler);
