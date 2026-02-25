@@ -100,7 +100,11 @@ export default function SessionActivityTracker() {
 
     const handleLogout = async () => {
         localStorage.removeItem("lastActivity");
-        await signOut({ callbackUrl: "/auth/login" });
+        // Preserve current path so user resumes from where they left off
+        const returnUrl = typeof window !== "undefined"
+            ? window.location.pathname + window.location.search
+            : "/dashboard";
+        await signOut({ callbackUrl: `/auth/login?callbackUrl=${encodeURIComponent(returnUrl)}` });
     };
 
     const handleExtendSession = () => {
