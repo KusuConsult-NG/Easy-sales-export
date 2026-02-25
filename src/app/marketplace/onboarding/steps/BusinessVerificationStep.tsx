@@ -1,7 +1,8 @@
 /**
  * Step 5: Business Verification (Sellers Only)
- * 
- * Collects business documents for seller verification
+ *
+ * Collects business documents. TIN and CAC verification is manual (admin-reviewed).
+ * QoreID live verification has been removed.
  */
 
 "use client";
@@ -9,15 +10,12 @@
 import { useState } from "react";
 import DocumentUpload from "@/components/shared/DocumentUpload";
 import { FileText, Image, Package } from "lucide-react";
-import { useToast } from "@/contexts/ToastContext";
 
 interface BusinessVerificationData {
-    businessRegistration?: { name: string; url: string }; // Changed to object for URL mapping if using Firebase
+    businessRegistration?: { name: string; url: string };
     cacNumber?: string;
-    cacVerified?: boolean;
     companyName?: string;
     taxId?: string;
-    tinVerified?: boolean;
     farmPhotos?: { name: string; url: string }[];
     productSamples?: { name: string; url: string }[];
 }
@@ -31,11 +29,6 @@ interface BusinessVerificationStepProps {
 
 export default function BusinessVerificationStep({ data = {}, onChange, onNext, onBack }: BusinessVerificationStepProps) {
     const [documents, setDocuments] = useState<BusinessVerificationData>(data);
-    const [errors, setErrors] = useState<Record<string, string>>({});
-
-    // Verification loading states
-    const [verifyingTin, setVerifyingTin] = useState(false);
-    const [verifyingCac, setVerifyingCac] = useState(false);
 
     const updateDocuments = (updates: Partial<BusinessVerificationData>) => {
         setDocuments(prev => {
@@ -43,101 +36,6 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
             onChange(next);
             return next;
         });
-    };
-
-    const { showToast } = useToast();
-
-    const validate = () => {
-        const newErrors: Record<string, string> = {};
-
-        // Tax ID is required
-        if (!documents.taxId || !documents.taxId.trim()) {
-            newErrors.taxId = "Tax Identification Number is required";
-        } else if (!documents.tinVerified) {
-            newErrors.taxId = "You must verify your TIN";
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const verifyTIN = async () => {
-        if (!documents.taxId) {
-            showToast("Please enter a TIN to verify", "error");
-            return;
-        }
-
-        setVerifyingTin(true);
-        setErrors(prev => ({ ...prev, verifyTin: "" }));
-
-        try {
-            const res = await fetch('/api/kyc/verify-business', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'tin',
-                    number: documents.taxId,
-                })
-            });
-            const resData = await res.json();
-
-            if (resData.success && resData.isMatch) {
-                updateDocuments({ tinVerified: true });
-                showToast("TIN successfully verified via QoreID", "success");
-            } else {
-                updateDocuments({ tinVerified: false });
-                setErrors(prev => ({ ...prev, verifyTin: resData.error || "TIN Verification failed" }));
-                showToast(resData.error || "TIN Verification failed", "error");
-            }
-        } catch (err) {
-            updateDocuments({ tinVerified: false });
-            setErrors(prev => ({ ...prev, verifyTin: "Network error during verification" }));
-        } finally {
-            setVerifyingTin(false);
-        }
-    };
-
-    const verifyCAC = async () => {
-        if (!documents.cacNumber || !documents.companyName) {
-            showToast("Please enter an RC Number and Company Name to verify", "error");
-            return;
-        }
-
-        setVerifyingCac(true);
-        setErrors(prev => ({ ...prev, verifyCac: "" }));
-
-        try {
-            const res = await fetch('/api/kyc/verify-business', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'cac',
-                    number: documents.cacNumber,
-                    companyName: documents.companyName
-                })
-            });
-            const resData = await res.json();
-
-            if (resData.success && resData.isMatch) {
-                updateDocuments({ cacVerified: true });
-                showToast("CAC successfully verified via QoreID", "success");
-            } else {
-                updateDocuments({ cacVerified: false });
-                setErrors(prev => ({ ...prev, verifyCac: resData.error || "CAC Verification failed" }));
-                showToast(resData.error || "CAC Verification failed", "error");
-            }
-        } catch (err) {
-            updateDocuments({ cacVerified: false });
-            setErrors(prev => ({ ...prev, verifyCac: "Network error during verification" }));
-        } finally {
-            setVerifyingCac(false);
-        }
-    };
-
-    const handleContinue = () => {
-        if (validate()) {
-            onNext();
-        }
     };
 
     return (
@@ -156,8 +54,8 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 {/* Info Banner */}
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center shrink-0 mt-0.5">
-                            <span className="text-white text-sm">ℹ</span>
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                            <span className="text-blue-600 text-sm font-bold">ℹ</span>
                         </div>
                         <div className="text-sm">
                             <p className="font-semibold text-blue-900 mb-1">
@@ -171,7 +69,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                     </div>
                 </div>
 
-                {/* Business Registration */}
+                {/* Business Registration Certificate */}
                 <div>
                     <div className="flex items-center gap-2 mb-3">
                         <FileText className="w-5 h-5 text-slate-600" />
@@ -191,101 +89,55 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
 
                     {documents.businessRegistration && (
                         <div className="mt-4 p-4 border border-slate-200 rounded-xl bg-white space-y-4">
-                            <h4 className="font-semibold text-slate-900 text-sm">Verify Business Registration</h4>
+                            <h4 className="font-semibold text-slate-900 text-sm">Business Registration Details</h4>
+                            <p className="text-xs text-slate-500">
+                                Our team will manually review your registration document within 1-3 business days.
+                            </p>
                             <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        Company Name <span className="text-red-500">*</span>
+                                        Company Name
                                     </label>
                                     <input
                                         type="text"
                                         value={documents.companyName || ""}
-                                        onChange={(e) => {
-                                            updateDocuments({ companyName: e.target.value, cacVerified: false });
-                                        }}
-                                        disabled={documents.cacVerified || verifyingCac}
+                                        onChange={(e) => updateDocuments({ companyName: e.target.value })}
                                         placeholder="Enter full company name"
                                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
                                     />
-                                    {errors.companyName && <p className="text-xs text-red-600 mt-1">{errors.companyName}</p>}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        RC Number / Business Number <span className="text-red-500">*</span>
+                                        RC Number / Business Number
                                     </label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={documents.cacNumber || ""}
-                                            onChange={(e) => {
-                                                updateDocuments({ cacNumber: e.target.value, cacVerified: false });
-                                            }}
-                                            placeholder="RC-123456"
-                                            disabled={documents.cacVerified || verifyingCac}
-                                            className="flex-1 min-w-0 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={verifyCAC}
-                                            disabled={documents.cacVerified || verifyingCac}
-                                            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors whitespace-nowrap ${documents.cacVerified
-                                                ? "bg-green-100 text-green-700 cursor-default"
-                                                : verifyingCac
-                                                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                                    : "bg-green-100 text-green-700 hover:bg-green-200"
-                                                }`}
-                                        >
-                                            {verifyingCac ? "Verifying..." : documents.cacVerified ? "Verified ✓" : "Verify CAC"}
-                                        </button>
-                                    </div>
-                                    {errors.cacNumber && <p className="text-xs text-red-600 mt-1">{errors.cacNumber}</p>}
-                                    {errors.cacVerified && <p className="text-xs text-red-600 mt-1">{errors.cacVerified}</p>}
-                                    {errors.verifyCac && <p className="text-xs text-red-600 mt-1">{errors.verifyCac}</p>}
+                                    <input
+                                        type="text"
+                                        value={documents.cacNumber || ""}
+                                        onChange={(e) => updateDocuments({ cacNumber: e.target.value })}
+                                        placeholder="RC-123456"
+                                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                                    />
                                 </div>
                             </div>
                         </div>
                     )}
                 </div>
 
-                {/* Tax ID */}
+                {/* Tax ID — plain text, admin reviews manually */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Tax Identification Number (TIN) *
+                        Tax Identification Number (TIN){" "}
+                        <span className="text-slate-400 text-xs font-normal">(Optional)</span>
                     </label>
-                    <div className="flex gap-3">
-                        <input
-                            type="text"
-                            value={documents.taxId || ""}
-                            onChange={(e) => {
-                                updateDocuments({ taxId: e.target.value, tinVerified: false });
-                            }}
-                            disabled={documents.tinVerified || verifyingTin}
-                            placeholder="Enter your TIN"
-                            className={`flex-1 px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.taxId ? "border-red-500" : "border-slate-300"
-                                } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
-                        />
-                        <button
-                            type="button"
-                            onClick={verifyTIN}
-                            disabled={documents.tinVerified || verifyingTin}
-                            className={`px-6 py-3 rounded-xl font-semibold transition-colors whitespace-nowrap ${documents.tinVerified
-                                ? "bg-green-100 text-green-700 cursor-default"
-                                : verifyingTin
-                                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                    : "bg-green-100 text-green-700 hover:bg-green-200"
-                                }`}
-                        >
-                            {verifyingTin ? "Verifying..." : documents.tinVerified ? "Verified ✓" : "Verify TIN"}
-                        </button>
-                    </div>
-                    {errors.taxId && (
-                        <p className="mt-1 text-sm text-red-600">{errors.taxId}</p>
-                    )}
-                    {errors.verifyTin && (
-                        <p className="mt-1 text-sm text-red-600">{errors.verifyTin}</p>
-                    )}
+                    <input
+                        type="text"
+                        value={documents.taxId || ""}
+                        onChange={(e) => updateDocuments({ taxId: e.target.value })}
+                        placeholder="Enter your TIN"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
                     <p className="mt-2 text-sm text-slate-600">
-                        Required for tax compliance and payment processing
+                        Collected for tax compliance — reviewed by our team
                     </p>
                 </div>
 
@@ -394,7 +246,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                     Back
                 </button>
                 <button
-                    onClick={handleContinue}
+                    onClick={onNext}
                     className="px-8 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors"
                 >
                     Continue

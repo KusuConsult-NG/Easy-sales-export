@@ -28,17 +28,14 @@ export function KYCVerificationStep({
     const { showToast } = useToast();
 
     const handleSubmit = () => {
-        // Validate KYC data
+        // Validate KYC data (BVN and ID number are now optional — admin-reviewed)
         if (
             !kycData.fullName ||
             !kycData.dateOfBirth ||
             !kycData.phoneNumber ||
             !kycData.address ||
             !kycData.city ||
-            !kycData.state ||
-            !kycData.bvn ||
-            !kycData.idType ||
-            !kycData.idNumber
+            !kycData.state
         ) {
             showToast("Please fill in all required fields", "error");
             return;

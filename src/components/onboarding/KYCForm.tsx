@@ -17,9 +17,6 @@ export interface KYCData {
     state: string;
     phoneNumber: string;
     bvn?: string;
-    bvnVerified?: boolean;
-    bvnError?: string;
-    bvnVerifying?: boolean;
     idType?: "nin" | "drivers_license" | "international_passport" | "voters_card";
     idNumber?: string;
 }
@@ -39,35 +36,12 @@ const NIGERIAN_STATES = [
 ];
 
 const ID_TYPES = [
-    { value: "nin", label: "Virtual NIN (vNIN)" },
+    { value: "nin", label: "NIN (National Identity Number)" },
+    { value: "drivers_license", label: "Driver's License" },
+    { value: "international_passport", label: "International Passport" },
+    { value: "voters_card", label: "Voter's Card" },
 ];
 
-// Max digit length per ID type
-const ID_MAX_LENGTH: Record<string, number> = {
-    nin: 16,            // QoreID requires 16-digit Virtual NIN (vNIN)
-    drivers_license: 12,
-    international_passport: 9,
-    voters_card: 19,
-};
-
-// Helper hint per ID type (shown when no error)
-const ID_HINTS: Record<string, string> = {
-    nin: "Enter your 16-digit Virtual NIN (vNIN) — not the standard 11-digit NIN.",
-    drivers_license: "Enter your 12-character licence number (e.g. ABC123456789).",
-    international_passport: "Enter your 9-character passport number.",
-    voters_card: "Enter your Voter Identification Number (VIN) as printed on your PVC.",
-};
-
-// Shown when user has typed exactly 11 digits into the NIN field
-const NIN_ELEVEN_DIGIT_TIP = "This looks like your standard 11-digit NIN. To verify, you need the 16-digit Virtual NIN (vNIN). Dial *346*1*[YOUR NIN]# from your registered phone or use the NIMC Mobile App to generate it.";
-
-// Returns true only if the ID number is ready for API verification
-function isIdReadyToVerify(idType: string | undefined, idNumber: string | undefined): boolean {
-    if (!idType || !idNumber) return false;
-    const digits = idNumber.replace(/\D/g, "");
-    if (idType === "nin") return digits.length === 16;
-    return digits.length >= 5; // relax for other types
-}
 
 export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFormProps) {
     const [formData, setFormData] = useState<Partial<KYCData>>(initialData || {});
@@ -183,80 +157,22 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 </div>
             </div>
 
-            {/* BVN */}
+            {/* BVN — plain text, admin reviews manually */}
             {includeBVN && (
                 <div>
                     <label className="block text-sm font-medium text-slate-900 mb-2">
-                        Bank Verification Number (BVN) <span className="text-red-500">*</span>
+                        Bank Verification Number (BVN){" "}
+                        <span className="text-slate-400 text-xs">(Optional)</span>
                     </label>
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={formData.bvn || ""}
-                            onChange={(e) => {
-                                const value = e.target.value.replace(/\D/g, "").slice(0, 11);
-                                handleChange("bvn", value);
-                                handleChange("bvnVerified", false);
-                                handleChange("bvnError", "");
-                            }}
-                            placeholder="12345678901"
-                            maxLength={11}
-                            className="flex-1 px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        />
-                        <button
-                            type="button"
-                            disabled={formData.bvnVerified || formData.bvnVerifying || (formData.bvn || "").length !== 11}
-                            onClick={async () => {
-                                if (!formData.bvn || formData.bvn.length !== 11) {
-                                    handleChange("bvnError", "Please enter your 11-digit BVN");
-                                    return;
-                                }
-                                handleChange("bvnVerifying", true);
-                                handleChange("bvnError", "");
-                                try {
-                                    const res = await fetch('/api/kyc/verify-id', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            idType: 'bvn',
-                                            idNumber: formData.bvn,
-                                            firstName: formData.fullName?.split(' ')[0] || '',
-                                            lastName: formData.fullName?.split(' ').slice(1).join(' ') || ''
-                                        })
-                                    });
-                                    const data = await res.json();
-                                    if (data.success && data.isMatch) {
-                                        handleChange("bvnVerified", true);
-                                        handleChange("bvnError", "");
-                                    } else {
-                                        handleChange("bvnVerified", false);
-                                        handleChange("bvnError", data.error || "BVN verification failed. Please check your details.");
-                                    }
-                                } catch {
-                                    handleChange("bvnVerified", false);
-                                    handleChange("bvnError", "Network error during verification. Please try again.");
-                                } finally {
-                                    handleChange("bvnVerifying", false);
-                                }
-                            }}
-                            className={`px-4 py-2.5 rounded-lg font-medium whitespace-nowrap transition-colors ${formData.bvnVerified
-                                ? "bg-green-100 text-green-700 cursor-default"
-                                : formData.bvnVerifying
-                                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                    : (formData.bvn || "").length !== 11
-                                        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                                        : "bg-orange-100 text-orange-700 hover:bg-orange-200"
-                                }`}
-                        >
-                            {formData.bvnVerifying ? "Verifying..." : formData.bvnVerified ? "Verified ✓" : "Verify BVN"}
-                        </button>
-                    </div>
-                    {formData.bvnError && (
-                        <p className="mt-1 text-xs text-red-600">{formData.bvnError}</p>
-                    )}
-                    {!formData.bvnError && !formData.bvnVerified && (
-                        <p className="mt-1 text-xs text-slate-500">Enter your 11-digit BVN to verify your identity.</p>
-                    )}
+                    <input
+                        type="text"
+                        value={formData.bvn || ""}
+                        onChange={(e) => handleChange("bvn", e.target.value.replace(/\D/g, "").slice(0, 11))}
+                        placeholder="12345678901"
+                        maxLength={11}
+                        className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Your 11-digit BVN — reviewed by our team. Dial *565*0# to retrieve it.</p>
                 </div>
             )}
 
