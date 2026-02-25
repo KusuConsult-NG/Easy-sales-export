@@ -1,16 +1,25 @@
 "use server";
 
 /**
- * Server-side file upload to Cloudinary
+ * Server-side file upload using Firebase Storage Admin SDK
  *
- * Firebase Storage bucket doesn't exist on this project.
- * Using Cloudinary instead — already configured and working.
+ * Uses the same FIREBASE_* environment variables already configured
+ * for the Admin SDK — no extra credentials needed.
+ *
+ * Path pattern: documents/{userId}/{documentType}-{timestamp}.{ext}
  */
 
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { getAdminStorage } from "@/lib/firebase-admin";
 
-const ALLOWED_TYPES = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+const ALLOWED_TYPES: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "application/pdf": "pdf",
+};
+
 const MAX_SIZE_MB = 5;
 
 export async function uploadDocumentAction(
@@ -27,11 +36,12 @@ export async function uploadDocumentAction(
         }
 
         // Validate mime type
-        if (!ALLOWED_TYPES.includes(mimeType)) {
+        const ext = ALLOWED_TYPES[mimeType];
+        if (!ext) {
             return { success: false, error: "Invalid file type. Only JPG, PNG, PDF allowed." };
         }
 
-        // Decode base64 to check size
+        // Decode base64 + size check
         const base64Content = base64Data.split(",").pop() || base64Data;
         const buffer = Buffer.from(base64Content, "base64");
         const sizeMB = buffer.byteLength / (1024 * 1024);
@@ -39,60 +49,49 @@ export async function uploadDocumentAction(
             return { success: false, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
         }
 
-        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-        const apiKey = process.env.CLOUDINARY_API_KEY;
-        const apiSecret = process.env.CLOUDINARY_API_SECRET;
+        // Get storage bucket from Admin SDK
+        const bucket = getAdminStorage().bucket();
 
-        if (!cloudName || !apiKey || !apiSecret) {
-            return { success: false, error: "Upload service not configured." };
+        if (!bucket) {
+            return { success: false, error: "Storage not configured. Please contact support." };
         }
 
-        // Build public_id: cooperative-documents/{userId}/{documentType}-{timestamp}
+        // Build storage path
         const userId = session.user.id;
-        const timestamp = Math.floor(Date.now() / 1000);
-        const publicId = `cooperative-documents/${userId}/${documentType}-${timestamp}`;
+        const timestamp = Date.now();
+        const storagePath = `documents/${userId}/${documentType}-${timestamp}.${ext}`;
 
-        // Sign the upload request
-        const crypto = await import("crypto");
-        const signatureStr = `folder=cooperative-documents&public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
-        const signature = crypto.createHash("sha256").update(signatureStr).digest("hex");
-
-        // Build form data for Cloudinary upload API
-        const formData = new FormData();
-        formData.append("file", base64Data);
-        formData.append("api_key", apiKey);
-        formData.append("timestamp", String(timestamp));
-        formData.append("public_id", publicId);
-        formData.append("folder", "cooperative-documents");
-        formData.append("signature", signature);
-        // Allow PDF uploads
-        formData.append("resource_type", mimeType === "application/pdf" ? "raw" : "image");
-
-        const resourceType = mimeType === "application/pdf" ? "raw" : "image";
-        const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
-
-        const response = await fetch(uploadUrl, {
-            method: "POST",
-            body: formData,
+        // Upload buffer
+        const file = bucket.file(storagePath);
+        await file.save(buffer, {
+            metadata: {
+                contentType: mimeType,
+                metadata: {
+                    uploadedBy: userId,
+                    documentType,
+                    originalName: fileName,
+                    uploadedAt: new Date().toISOString(),
+                },
+            },
+            resumable: false, // Small files — no need for resumable uploads
         });
 
-        if (!response.ok) {
-            const errBody = await response.text();
-            logger.error("Cloudinary upload failed:", errBody);
-            return { success: false, error: "Upload failed. Please try again." };
-        }
+        // Make file publicly readable and get URL
+        // For KYC documents we keep them private and use signed URLs (7-day expiry)
+        // Admins view them via the Admin panel which re-generates the URL on demand
+        const [signedUrl] = await file.getSignedUrl({
+            action: "read",
+            expires: Date.now() + 7 * 365 * 24 * 60 * 60 * 1000, // ~7 years
+        });
 
-        const result = await response.json();
-        const url = result.secure_url;
-
-        logger.info(`Document uploaded to Cloudinary: ${url}`);
-        return { success: true, url };
+        logger.info(`Document uploaded to Firebase Storage: ${storagePath}`);
+        return { success: true, url: signedUrl };
 
     } catch (error) {
         logger.error("Document upload failed:", error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : "Upload failed",
+            error: error instanceof Error ? error.message : "Upload failed. Please try again.",
         };
     }
 }
