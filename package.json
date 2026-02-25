@@ -23,7 +23,8 @@
     "seed:products": "node scripts/seed.js products",
     "seed:land": "node scripts/seed.js land",
     "seed:wave": "node scripts/seed.js wave",
-    "seed:cooperatives": "node scripts/seed.js cooperatives"
+    "seed:cooperatives": "node scripts/seed.js cooperatives",
+    "setup:firebase": "node scripts/setup-firebase.js"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

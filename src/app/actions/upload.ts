@@ -1,17 +1,21 @@
 "use server";
 
 /**
- * Server-side file upload using Firebase Storage Admin SDK
+ * Server-side file upload — Firebase Storage with Firestore fallback
  *
- * Uses the same FIREBASE_* environment variables already configured.
- * Falls back to a clear error if Storage bucket is not set up on this project.
+ * STRATEGY (never returns a 500):
+ *  1. Try Firebase Storage (primary) — stores file, returns signed URL
+ *  2. If Storage unavailable → store base64 in Firestore (fallback)
+ *     The admin panel can download/migrate these later once Storage is set up.
+ *  3. If both fail → return a structured error (no throw, no 500)
  *
- * Path pattern: documents/{userId}/{documentType}-{timestamp}.{ext}
+ * Both paths return { success: true, url } so the UI always proceeds.
  */
 
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
-import { getAdminStorage } from "@/lib/firebase-admin";
+import { getAdminStorage, getAdminDb } from "@/lib/firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 
 const ALLOWED_TYPES: Record<string, string> = {
     "image/jpeg": "jpg",
@@ -22,12 +26,92 @@ const ALLOWED_TYPES: Record<string, string> = {
 
 const MAX_SIZE_MB = 5;
 
+// ── Primary: Firebase Storage ────────────────────────────────────────────────
+async function uploadToStorage(
+    buffer: Buffer,
+    userId: string,
+    fileName: string,
+    mimeType: string,
+    documentType: string,
+    ext: string
+): Promise<string> {
+    const bucketName =
+        process.env.FIREBASE_STORAGE_BUCKET ||
+        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+
+    if (!bucketName) throw new Error("FIREBASE_STORAGE_BUCKET not configured");
+
+    const storage = getAdminStorage();
+    const bucket = storage.bucket(bucketName);
+
+    const [exists] = await bucket.exists();
+    if (!exists) throw new Error(`Storage bucket '${bucketName}' does not exist`);
+
+    const timestamp = Date.now();
+    const storagePath = `documents/${userId}/${documentType}-${timestamp}.${ext}`;
+
+    const file = bucket.file(storagePath);
+    await file.save(buffer, {
+        metadata: {
+            contentType: mimeType,
+            metadata: {
+                uploadedBy: userId,
+                documentType,
+                originalName: fileName,
+                uploadedAt: new Date().toISOString(),
+            },
+        },
+        resumable: false,
+    });
+
+    // 7-year signed read URL
+    const [signedUrl] = await file.getSignedUrl({
+        action: "read",
+        expires: Date.now() + 7 * 365 * 24 * 60 * 60 * 1000,
+    });
+
+    return signedUrl;
+}
+
+// ── Fallback: Firestore document storage ────────────────────────────────────
+async function uploadToFirestore(
+    base64Content: string,
+    userId: string,
+    fileName: string,
+    mimeType: string,
+    documentType: string
+): Promise<string> {
+    const db = getAdminDb();
+    const docRef = db.collection("_document_uploads").doc();
+    const docId = docRef.id;
+
+    await docRef.set({
+        userId,
+        documentType,
+        fileName,
+        mimeType,
+        base64: base64Content,
+        storedVia: "firestore_fallback",
+        uploadedAt: Timestamp.now(),
+        migrated: false,
+    });
+
+    logger.warn(
+        `File stored in Firestore fallback (Storage not available). Doc: ${docId}`
+    );
+
+    // Return a internal reference URL so the app can still function.
+    // Admin panel reads /api/admin/documents/[docId] to serve the file.
+    return `/api/admin/documents/${docId}`;
+}
+
+// ── Main export ──────────────────────────────────────────────────────────────
 export async function uploadDocumentAction(
     base64Data: string,
     fileName: string,
     mimeType: string,
     documentType: string
-): Promise<{ success: boolean; url?: string; error?: string }> {
+): Promise<{ success: boolean; url?: string; error?: string; fallback?: boolean }> {
     try {
         // Auth check
         const session = await auth();
@@ -41,74 +125,46 @@ export async function uploadDocumentAction(
             return { success: false, error: "Invalid file type. Only JPG, PNG, PDF allowed." };
         }
 
-        // Decode base64 + size check
+        // Decode base64
         const base64Content = base64Data.split(",").pop() || base64Data;
         const buffer = Buffer.from(base64Content, "base64");
+
+        // Size check
         const sizeMB = buffer.byteLength / (1024 * 1024);
         if (sizeMB > MAX_SIZE_MB) {
             return { success: false, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
         }
 
-        // Check that a storage bucket is configured
-        const bucketName =
-            process.env.FIREBASE_STORAGE_BUCKET ||
-            process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-
-        if (!bucketName) {
-            logger.error("FIREBASE_STORAGE_BUCKET is not set — cannot upload files");
-            return {
-                success: false,
-                error: "File storage is not configured on this server. Please contact support.",
-            };
-        }
-
-        // Get storage bucket from Admin SDK
-        let bucket;
-        try {
-            const storage = getAdminStorage();
-            bucket = storage.bucket(bucketName);
-        } catch (storageErr) {
-            logger.error("Failed to access Firebase Storage bucket:", storageErr);
-            return {
-                success: false,
-                error: "File storage is temporarily unavailable. Please try again later.",
-            };
-        }
-
-        // Build storage path
         const userId = session.user.id;
-        const timestamp = Date.now();
-        const storagePath = `documents/${userId}/${documentType}-${timestamp}.${ext}`;
 
-        // Upload buffer
-        const file = bucket.file(storagePath);
-        await file.save(buffer, {
-            metadata: {
-                contentType: mimeType,
-                metadata: {
-                    uploadedBy: userId,
-                    documentType,
-                    originalName: fileName,
-                    uploadedAt: new Date().toISOString(),
-                },
-            },
-            resumable: false,
-        });
+        // ── Path 1: Firebase Storage ──────────────────────────────────────
+        try {
+            const url = await uploadToStorage(buffer, userId, fileName, mimeType, documentType, ext);
+            logger.info(`Document uploaded to Storage: ${documentType} for user ${userId}`);
+            return { success: true, url };
+        } catch (storageErr) {
+            logger.warn(
+                `Firebase Storage unavailable (${(storageErr as Error).message}), using Firestore fallback`
+            );
+        }
 
-        // Generate a long-lived signed URL (~7 years) for admin access
-        const [signedUrl] = await file.getSignedUrl({
-            action: "read",
-            expires: Date.now() + 7 * 365 * 24 * 60 * 60 * 1000,
-        });
-
-        logger.info(`Document uploaded: ${storagePath}`);
-        return { success: true, url: signedUrl };
+        // ── Path 2: Firestore Fallback ────────────────────────────────────
+        try {
+            const url = await uploadToFirestore(base64Content, userId, fileName, mimeType, documentType);
+            return { success: true, url, fallback: true };
+        } catch (firestoreErr) {
+            logger.error("Firestore fallback also failed:", firestoreErr);
+            return {
+                success: false,
+                error: "Upload failed — please try again or contact support.",
+            };
+        }
 
     } catch (error) {
-        logger.error("Document upload failed:", error);
+        logger.error("uploadDocumentAction unexpected error:", error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : "Upload failed. Please try again.",
+            error: error instanceof Error ? error.message : "Upload failed.",
         };
     }
 }
