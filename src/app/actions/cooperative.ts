@@ -41,6 +41,7 @@ import { revalidatePath } from "next/cache";
 // MEMBERSHIP REGISTRATION (PRD Phase 2)
 // =========================================
 
+
 /**
  * Register a new cooperative member with Paystack payment integration
  */

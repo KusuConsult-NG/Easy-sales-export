@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger';
 import { ArrowLeft, CreditCard, CheckCircle, ShieldCheck, Loader2, Home } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { registerCooperativeMemberAction, initiateCooperativePaymentAction } from "@/app/actions/cooperative";
+import { registerCooperativeMemberAction, initiateCooperativePaymentAction, checkCooperativeStatusAction } from "@/app/actions/cooperative";
 import { CooperativeErrorBoundary } from "@/components/errors/CooperativeErrorBoundary";
 import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
@@ -35,6 +35,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     const [currentStep, setCurrentStep] = useState(paymentStatus === "completed" ? 4 : 1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
+    const [isCheckingStatus, setIsCheckingStatus] = useState(true);
 
     const [tier] = useState<"basic" | "premium">(initialTier);
 
@@ -65,6 +66,24 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         proofOfAddress: undefined as { name: string; url: string } | undefined,
         bvn: ""
     });
+
+    // ── Status check on mount — replaces server-side Firestore read ────────────
+    useEffect(() => {
+        checkCooperativeStatusAction().then((status) => {
+            if (status === "active" || status === "approved") {
+                router.replace("/cooperatives/dashboard");
+                return;
+            }
+            if (status === "pending" || status === "under_review") {
+                router.replace("/cooperatives/onboarding/pending");
+                return;
+            }
+            // null = no application yet, or error — show the form
+            setIsCheckingStatus(false);
+        }).catch(() => {
+            setIsCheckingStatus(false);
+        });
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── User-scoped localStorage keys ────────────────────────────────────────
     // Keys are namespaced by userId so two users on the same device never share
@@ -192,6 +211,15 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             setIsSubmitting(false);
         }
     };
+
+    // Show spinner while checking status to avoid flash of incorrect step
+    if (isCheckingStatus) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50">
