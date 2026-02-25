@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
+import { Resend } from "resend";
 
 /**
  * WAVE (Women in Agribusiness Ventures & Exports) Actions
@@ -68,11 +69,11 @@ const waveApplicationSchema = z.object({
 
     // SECTION B: National Identity & Civic Status
     nin: z.string().min(11, "Valid NIN is required"),
-    votersCardNumber: z.string().min(5, "Voter's card number is required"),
-    pollingUnit: z.string().min(2, "Polling unit is required"),
-    ward: z.string().min(2, "Ward is required"),
-    yearOfVoterRegistration: z.string().min(4, "Year of registration is required"),
-    votedInLastElection: z.boolean(),
+    votersCardNumber: z.string().optional(),
+    pollingUnit: z.string().optional(),
+    ward: z.string().optional(),
+    yearOfVoterRegistration: z.string().optional(),
+    votedInLastElection: z.boolean().optional(),
 
     // SECTION C: Socio-Economic Profile
     highestEducation: z.enum(["none", "primary", "secondary", "tertiary", "vocational", ""]),
@@ -287,6 +288,66 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
                 ageVerification: `Verified 18+ (Auto-calculated: ${calculatedAge})`
             },
         });
+
+        // Send email notifications (non-blocking — don't fail submission if email fails)
+        try {
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            const applicantEmail = session.user.email || validatedData.email;
+            const adminEmail = process.env.ADMIN_EMAIL || 'admin@easysalesexport.com';
+
+            const applicantName = `${validatedData.firstName} ${validatedData.surname}`;
+
+            // Email to applicant
+            if (applicantEmail) {
+                await resend.emails.send({
+                    from: 'RH-WAVE 774 <noreply@easysalesexport.com>',
+                    to: applicantEmail,
+                    subject: 'Your WAVE Application Has Been Received — RH-WAVE 774',
+                    html: `
+                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                            <div style="background:linear-gradient(135deg,#166534,#16a34a);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
+                                <h1 style="color:white;margin:0;font-size:24px;">RH-WAVE 774</h1>
+                                <p style="color:#bbf7d0;margin:8px 0 0;">Women Agro-Value Expansion Programme</p>
+                            </div>
+                            <h2 style="color:#166534;">Application Received!</h2>
+                            <p style="color:#374151;">Dear <strong>${applicantName}</strong>,</p>
+                            <p style="color:#374151;">Thank you for applying to the <strong>RH-WAVE 774 Women Agro-Value Expansion Programme</strong>. Your application has been successfully submitted and is now under review.</p>
+                            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0;">
+                                <p style="margin:0;color:#166534;"><strong>Application ID:</strong> ${applicationId}</p>
+                                <p style="margin:8px 0 0;color:#166534;"><strong>Status:</strong> Pending Review</p>
+                            </div>
+                            <p style="color:#374151;">Our team will review your application and contact you with next steps. You can also check your application status at any time by logging into your dashboard.</p>
+                            <p style="color:#374151;">Thank you for being part of this national movement.
+                            <br/><br/><strong style="color:#166534;">RH-WAVE 774 Team</strong><br/>Easy Sales Export Nigeria Ltd</p>
+                        </div>
+                    `,
+                });
+            }
+
+            // Email to admin
+            await resend.emails.send({
+                from: 'RH-WAVE 774 System <noreply@easysalesexport.com>',
+                to: adminEmail,
+                subject: `New WAVE Application: ${applicantName} — ${applicationId}`,
+                html: `
+                    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                        <h2 style="color:#166534;">New WAVE Application Received</h2>
+                        <table style="width:100%;border-collapse:collapse;">
+                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>Name</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${applicantName}</td></tr>
+                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>Application ID</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${applicationId}</td></tr>
+                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>Email</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${applicantEmail || 'N/A'}</td></tr>
+                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>Phone</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${validatedData.phone}</td></tr>
+                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>State</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${validatedData.stateOfResidence}</td></tr>
+                            <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;"><strong>LGA</strong></td><td style="padding:8px;border-bottom:1px solid #e5e7eb;">${validatedData.lgaOfResidence}</td></tr>
+                            <tr><td style="padding:8px;"><strong>Submitted</strong></td><td style="padding:8px;">${new Date().toLocaleString('en-NG')}</td></tr>
+                        </table>
+                        <p style="margin-top:16px;"><a href="https://easysalesexport.com/admin/wave" style="background:#166534;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Review in Admin Panel</a></p>
+                    </div>
+                `,
+            });
+        } catch (emailError) {
+            logger.error("WAVE application email notification failed (non-blocking):", emailError);
+        }
 
         return {
             success: true,

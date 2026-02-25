@@ -12,6 +12,46 @@ import Link from "next/link";
 import Image from "next/image";
 import BackToHub from "@/components/common/BackToHub";
 
+function ClickToPlayVideo({ videoId }: { videoId: string }) {
+    const [playing, setPlaying] = useState(false);
+    const thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    return (
+        <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-green-100 bg-slate-900">
+            {playing ? (
+                <iframe
+                    className="absolute inset-0 w-full h-full"
+                    src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
+                    title="RH-WAVE 774 Program - Women Agro-Value Expansion"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    referrerPolicy="strict-origin-when-cross-origin"
+                />
+            ) : (
+                <button
+                    onClick={() => setPlaying(true)}
+                    className="absolute inset-0 w-full h-full group focus:outline-none"
+                    aria-label="Play RH-WAVE 774 video"
+                >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={thumbnail}
+                        alt="RH-WAVE 774 video thumbnail"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`; }}
+                    />
+                    <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition flex items-center justify-center">
+                        <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
+                            <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        </div>
+                    </div>
+                </button>
+            )}
+        </div>
+    );
+}
+
 export default function WaveLandingPage() {
     // Image Slider State
     const images = [
@@ -179,19 +219,8 @@ export default function WaveLandingPage() {
                         </p>
                     </div>
 
-                    {/* YouTube Video Embed */}
-                    <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-green-100 bg-slate-900">
-                        <iframe
-                            className="absolute inset-0 w-full h-full"
-                            src="https://www.youtube.com/embed/pijwn6DGhbQ?si=7BtMi-m3l9-zcJ8W"
-                            title="RH-WAVE 774 Program - Women Agro-Value Expansion"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                            allowFullScreen
-                            tabIndex={-1}
-                            referrerPolicy="strict-origin-when-cross-origin"
-                            loading="lazy"
-                        />
-                    </div>
+                    {/* YouTube Video — click-to-play so browser doesn't auto-focus iframe on load */}
+                    <ClickToPlayVideo videoId="pijwn6DGhbQ" />
 
                     {/* CTA Below Video */}
                     <div className="text-center mt-8">
