@@ -376,7 +376,7 @@ export type { EscrowTransaction, Dispute };
 export interface WaveApplication {
     id: string;
     userId: string;
-    userEmail?: string;
+    userEmail?: string;   // Canonical field — populated from session at submission
     // Section A: Personal Identification
     surname: string;
     firstName: string;
@@ -385,6 +385,7 @@ export interface WaveApplication {
     age: number;
     phone: string;
     alternativePhone?: string;
+    /** @deprecated Use userEmail instead. Present on older docs — read both for compatibility */
     email?: string;
     residentialAddress: string;
     stateOfOrigin: string;
@@ -435,12 +436,12 @@ export interface WaveApplication {
     status: "draft" | "pending" | "submitted" | "under_review" | "approved" | "rejected";
     applicationDate?: Date;
     submittedAt?: Date;
+    createdAt?: Date;      // Set at document creation
+    updatedAt?: Date;
     reviewedAt?: Date;
     reviewedBy?: string;
+    reviewNotes?: string;  // Internal admin notes
     rejectionReason?: string;
-    reviewNotes?: string;
-    createdAt: Date;
-    updatedAt?: Date;
 }
 
 export interface WaveCertificate {

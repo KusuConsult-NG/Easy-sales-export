@@ -180,3 +180,38 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
         };
     }
 }
+
+export interface GetEmailHistoryState {
+    success: boolean;
+    history?: any[];
+    error?: string;
+}
+
+/**
+ * Fetch admin email send history from Firestore (email_history collection)
+ */
+export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+        if (!session.user.roles?.includes('admin') && !session.user.roles?.includes('super_admin')) {
+            return { success: false, error: 'Unauthorized' };
+        }
+
+        const snapshot = await db.collection('email_history')
+            .orderBy('sentAt', 'desc')
+            .limit(50)
+            .get();
+
+        const history = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            sentAt: doc.data().sentAt?.toDate?.()?.toISOString?.() ?? null,
+        }));
+
+        return { success: true, history };
+    } catch (error) {
+        logger.error('Failed to fetch email history:', error);
+        return { success: false, error: 'Failed to load email history' };
+    }
+}

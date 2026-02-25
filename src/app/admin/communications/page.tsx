@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useActionState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
     ArrowLeft,
@@ -14,7 +13,7 @@ import {
     Clock,
     CheckCircle,
 } from "lucide-react";
-import { sendBulkEmailAction, createAnnouncementAction } from "@/app/actions/admin-communications";
+import { sendBulkEmailAction, createAnnouncementAction, getEmailHistoryAction } from "@/app/actions/admin-communications";
 import { useToast } from "@/contexts/ToastContext";
 
 export default function AdminCommunicationsPage() {
@@ -27,9 +26,15 @@ export default function AdminCommunicationsPage() {
     const [announcementMessage, setAnnouncementMessage] = useState("");
     const [announcementPriority, setAnnouncementPriority] = useState("info");
     const [sending, setSending] = useState(false);
+    const [emailHistory, setEmailHistory] = useState<any[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     const handleSendEmail = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!emailSubject.trim() || !emailBody.trim()) {
+            showToast("Subject and message are required", "error");
+            return;
+        }
         setSending(true);
 
         const formData = new FormData();
@@ -43,6 +48,8 @@ export default function AdminCommunicationsPage() {
             showToast(`Email sent to ${result.recipientCount} recipients!`, 'success');
             setEmailSubject("");
             setEmailBody("");
+            // Refresh history if on history tab
+            if (activeTab === "history") loadEmailHistory();
         } else {
             showToast(result.error || 'Failed to send email', 'error');
         }
@@ -52,6 +59,10 @@ export default function AdminCommunicationsPage() {
 
     const handleCreateAnnouncement = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!announcementTitle.trim() || !announcementMessage.trim()) {
+            showToast("Title and message are required", "error");
+            return;
+        }
         setSending(true);
 
         const formData = new FormData();
@@ -71,6 +82,22 @@ export default function AdminCommunicationsPage() {
 
         setSending(false);
     };
+
+    const loadEmailHistory = async () => {
+        setHistoryLoading(true);
+        try {
+            const result = await getEmailHistoryAction();
+            if (result.success) setEmailHistory(result.history || []);
+        } catch {
+            // non-blocking
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === "history") loadEmailHistory();
+    }, [activeTab]);
 
     return (
         <div className="min-h-screen bg-slate-50 p-8">
@@ -194,8 +221,9 @@ export default function AdminCommunicationsPage() {
                                 {/* Send Button */}
                                 <div className="flex items-center gap-4">
                                     <button
-                                        type="submit"
-                                        disabled={!emailSubject || !emailBody || sending}
+                                        type="button"
+                                        onClick={handleSendEmail}
+                                        disabled={!emailSubject.trim() || !emailBody.trim() || sending}
                                         className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-semibold rounded-xl transition"
                                     >
                                         {sending ? (
@@ -210,9 +238,8 @@ export default function AdminCommunicationsPage() {
                                             </>
                                         )}
                                     </button>
-                                    <p className="text-sm text-slate-600">
-                                        <Users className="w-4 h-4 inline mr-1" />
-                                        Estimated recipients: ~1,245
+                                    <p className="text-sm text-slate-500">
+                                        Recipients will be fetched from Firestore when sent
                                     </p>
                                 </div>
                             </div>
@@ -328,72 +355,52 @@ export default function AdminCommunicationsPage() {
                                         Communication History
                                     </h2>
                                     <p className="text-slate-600 mb-6">
-                                        View past emails and announcements
+                                        Past emails sent from this admin panel
                                     </p>
                                 </div>
 
-                                {/* Mock History */}
-                                <div className="space-y-4">
-                                    {[
-                                        {
-                                            type: "email",
-                                            subject: "Platform Maintenance Notice",
-                                            recipients: "All Users (1,245)",
-                                            date: "Feb 6, 2026",
-                                            status: "sent",
-                                        },
-                                        {
-                                            type: "announcement",
-                                            subject: "New Feature: Cooperative Loans",
-                                            recipients: "Dashboard",
-                                            date: "Feb 5, 2026",
-                                            status: "active",
-                                        },
-                                        {
-                                            type: "email",
-                                            subject: "Welcome to Easy Sales Export",
-                                            recipients: "New Users (47)",
-                                            date: "Feb 4, 2026",
-                                            status: "sent",
-                                        },
-                                    ].map((item, index) => (
-                                        <div
-                                            key={index}
-                                            className="flex items-center justify-between p-4 bg-slate-50 rounded-xl"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div
-                                                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${item.type === "email"
-                                                        ? "bg-blue-100"
-                                                        : "bg-purple-100"
-                                                        }`}
-                                                >
-                                                    {item.type === "email" ? (
-                                                        <Mail className="w-6 h-6 text-blue-600" />
-                                                    ) : (
-                                                        <Megaphone className="w-6 h-6 text-purple-600" />
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-semibold text-slate-900">
-                                                        {item.subject}
-                                                    </h4>
-                                                    <p className="text-sm text-slate-600">
-                                                        {item.recipients} • {item.date}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <span
-                                                className={`px-3 py-1 rounded-full text-xs font-semibold ${item.status === "sent"
-                                                    ? "bg-green-100 text-green-700"
-                                                    : "bg-blue-100 text-blue-700"
-                                                    }`}
+                                {historyLoading ? (
+                                    <div className="flex items-center justify-center py-12">
+                                        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                                    </div>
+                                ) : emailHistory.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <Mail className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                                        <p className="text-slate-600">No emails sent yet</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {emailHistory.map((item: any, index: number) => (
+                                            <div
+                                                key={item.id || index}
+                                                className="flex items-center justify-between p-4 bg-slate-50 rounded-xl"
                                             >
-                                                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-100">
+                                                        <Mail className="w-6 h-6 text-blue-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-semibold text-slate-900">
+                                                            {item.subject}
+                                                        </h4>
+                                                        <p className="text-sm text-slate-600">
+                                                            {item.recipients ? `${item.recipients} segment` : "Custom"}
+                                                            {" • "}
+                                                            {item.recipientCount ? `${item.recipientCount} recipients` : ""}
+                                                            {" • "}
+                                                            {item.sentAt
+                                                                ? new Date(item.sentAt).toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "numeric" })
+                                                                : "Unknown date"}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                                    {item.status || "Sent"}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
