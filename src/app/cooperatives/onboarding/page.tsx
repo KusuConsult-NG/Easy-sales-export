@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase-admin";
 import OnboardingClient from "./OnboardingClient";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { logger } from "@/lib/logger";
 
 export default async function CooperativeOnboardingPage() {
     const session = await auth();
@@ -13,12 +14,17 @@ export default async function CooperativeOnboardingPage() {
     }
 
     const userId = session.user.id;
-    const db = getAdminDb();
 
-    // Check membership status
-    const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-
-    const memberData = memberDoc.exists ? memberDoc.data() : null;
+    // Defensive fetch — Firebase Admin init failure must never produce a raw 500
+    let memberData: Record<string, any> | null = null;
+    try {
+        const db = getAdminDb();
+        const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+        memberData = memberDoc.exists ? (memberDoc.data() ?? null) : null;
+    } catch (err) {
+        logger.error("CooperativeOnboardingPage: Firestore read failed, rendering form with defaults", err);
+        // Fall through — user can still see the form; submit action will handle the real state
+    }
 
     // If already approved/active, send to dashboard
     const status = memberData?.membershipStatus;
