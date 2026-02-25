@@ -3,8 +3,8 @@
 /**
  * Server-side file upload using Firebase Storage Admin SDK
  *
- * Uses the same FIREBASE_* environment variables already configured
- * for the Admin SDK — no extra credentials needed.
+ * Uses the same FIREBASE_* environment variables already configured.
+ * Falls back to a clear error if Storage bucket is not set up on this project.
  *
  * Path pattern: documents/{userId}/{documentType}-{timestamp}.{ext}
  */
@@ -49,11 +49,30 @@ export async function uploadDocumentAction(
             return { success: false, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
         }
 
-        // Get storage bucket from Admin SDK
-        const bucket = getAdminStorage().bucket();
+        // Check that a storage bucket is configured
+        const bucketName =
+            process.env.FIREBASE_STORAGE_BUCKET ||
+            process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
 
-        if (!bucket) {
-            return { success: false, error: "Storage not configured. Please contact support." };
+        if (!bucketName) {
+            logger.error("FIREBASE_STORAGE_BUCKET is not set — cannot upload files");
+            return {
+                success: false,
+                error: "File storage is not configured on this server. Please contact support.",
+            };
+        }
+
+        // Get storage bucket from Admin SDK
+        let bucket;
+        try {
+            const storage = getAdminStorage();
+            bucket = storage.bucket(bucketName);
+        } catch (storageErr) {
+            logger.error("Failed to access Firebase Storage bucket:", storageErr);
+            return {
+                success: false,
+                error: "File storage is temporarily unavailable. Please try again later.",
+            };
         }
 
         // Build storage path
@@ -73,18 +92,16 @@ export async function uploadDocumentAction(
                     uploadedAt: new Date().toISOString(),
                 },
             },
-            resumable: false, // Small files — no need for resumable uploads
+            resumable: false,
         });
 
-        // Make file publicly readable and get URL
-        // For KYC documents we keep them private and use signed URLs (7-day expiry)
-        // Admins view them via the Admin panel which re-generates the URL on demand
+        // Generate a long-lived signed URL (~7 years) for admin access
         const [signedUrl] = await file.getSignedUrl({
             action: "read",
-            expires: Date.now() + 7 * 365 * 24 * 60 * 60 * 1000, // ~7 years
+            expires: Date.now() + 7 * 365 * 24 * 60 * 60 * 1000,
         });
 
-        logger.info(`Document uploaded to Firebase Storage: ${storagePath}`);
+        logger.info(`Document uploaded: ${storagePath}`);
         return { success: true, url: signedUrl };
 
     } catch (error) {
