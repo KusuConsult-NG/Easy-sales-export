@@ -429,3 +429,105 @@ export async function sendExportWindowCompleteEmail(
     });
 }
 
+
+/**
+ * Send WAVE Briefing WhatsApp Group Invite Email
+ * Contains a one-time-use button. The inviteUrl encodes a single-use token.
+ */
+export async function sendWaveWhatsAppInviteEmail(
+    userEmail: string,
+    userName: string,
+    inviteUrl: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: "Your WAVE Briefing WhatsApp Group Access",
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <div style="background: #14532d; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 22px;">WAVE Briefing</h1>
+                    <p style="color: #bbf7d0; margin: 6px 0 0; font-size: 14px;">Women Agripreneurs Value-creation Empowerment</p>
+                </div>
+                <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName}</strong>,</p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 8px;">
+                        Your seat for the <strong>WAVE National Awareness &amp; Opportunity Briefing</strong> has been confirmed.
+                    </p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
+                        Click the button below to join our exclusive WhatsApp group, where you will receive event updates, venue details, and briefing materials.
+                    </p>
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="${inviteUrl}"
+                           style="background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+                            Join WAVE WhatsApp Group &rarr;
+                        </a>
+                    </div>
+                    <div style="background: #fef9c3; border-left: 4px solid #ca8a04; padding: 12px 16px; border-radius: 4px; margin: 24px 0;">
+                        <p style="margin: 0; font-size: 13px; color: #92400e;">
+                            &#9888; <strong>Important:</strong> This button can only be clicked once. Do not forward this email &mdash; each registrant receives their own personal invite link.
+                        </p>
+                    </div>
+                    <p style="font-size: 13px; color: #6b7280; margin: 24px 0 0;">
+                        This link expires in 7 days. If you need a new invite, please contact our support team.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">
+                        Easy Sales Export &mdash; Nigeria's Premier Agricultural Export Platform
+                    </p>
+                </div>
+            </div>
+        `,
+        metadata: { type: "wave_whatsapp_invite" },
+    });
+}
+
+/**
+ * Send Cooperative WhatsApp Group Invite Email
+ * Contains a one-time-use button. The inviteUrl encodes a single-use token.
+ */
+export async function sendCooperativeWhatsAppInviteEmail(
+    userEmail: string,
+    userName: string,
+    inviteUrl: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: "Your EasySales Cooperative WhatsApp Group Access",
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <div style="background: #4c1d95; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 22px;">EasySales Cooperative</h1>
+                    <p style="color: #ddd6fe; margin: 6px 0 0; font-size: 14px;">Your Membership is Active</p>
+                </div>
+                <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName}</strong>,</p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 8px;">
+                        Welcome to the <strong>EasySales Cooperative</strong>! Your membership registration and payment have been successfully verified.
+                    </p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
+                        Click the button below to join our exclusive members-only WhatsApp group for cooperative updates, financial news, and member announcements.
+                    </p>
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="${inviteUrl}"
+                           style="background-color: #7c3aed; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+                            Join Cooperative WhatsApp Group &rarr;
+                        </a>
+                    </div>
+                    <div style="background: #fef9c3; border-left: 4px solid #ca8a04; padding: 12px 16px; border-radius: 4px; margin: 24px 0;">
+                        <p style="margin: 0; font-size: 13px; color: #92400e;">
+                            &#9888; <strong>Important:</strong> This button can only be clicked once. Do not forward this email &mdash; access is exclusive to verified, paid members only.
+                        </p>
+                    </div>
+                    <p style="font-size: 13px; color: #6b7280; margin: 24px 0 0;">
+                        This link expires in 7 days. If you need a new invite, please contact our support team.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">
+                        Easy Sales Export &mdash; Nigeria's Premier Agricultural Export Platform
+                    </p>
+                </div>
+            </div>
+        `,
+        metadata: { type: "cooperative_whatsapp_invite" },
+    });
+}

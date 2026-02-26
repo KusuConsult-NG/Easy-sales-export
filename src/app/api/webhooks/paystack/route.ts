@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 
 // Force dynamic since we read headers
 export const dynamic = 'force-dynamic';
@@ -270,6 +271,27 @@ async function processCooperativeRegistration(reference: string, amount: number,
     });
 
     logger.info(`[Paystack Webhook] Processed Cooperative Registration for ${userId}`);
+
+    // Send one-time WhatsApp group invite via email — non-blocking
+    try {
+        const userSnap = await db.collection("users").doc(userId).get();
+        const userData = userSnap.data();
+        const userEmail = userData?.email;
+        const userName = userData?.fullName || userData?.name || userEmail?.split("@")[0] || "Member";
+
+        if (userEmail) {
+            await generateAndSendWhatsAppInvite("cooperative", {
+                email: userEmail,
+                name: userName,
+                userId,
+            });
+        } else {
+            logger.warn(`[Paystack Webhook] No email found for user ${userId} — WhatsApp invite skipped`);
+        }
+    } catch (inviteError: any) {
+        logger.error(`[Paystack Webhook] WhatsApp invite failed for cooperative user ${userId}:`, inviteError);
+        // Non-blocking: cooperative registration is already committed
+    }
 }
 
 /**

@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { sendBriefingConfirmationEmail } from "@/lib/email-notifications";
+import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { ActionResponse, withSafeAction } from "@/lib/safe-action";
 
 // Status type for strict typing
@@ -95,6 +96,17 @@ export const registerForBriefingAction = withSafeAction(
                     logger.info(`[WAVE Briefing] Confrimation email sent to ${emailToStore}`);
                 } else {
                     logger.warn(`[WAVE Briefing] Email failed for ${emailToStore}: ${emailResult.error}`);
+                }
+
+                // Send WhatsApp group invite (one-time link via email)
+                try {
+                    await generateAndSendWhatsAppInvite("wave_briefing", {
+                        email: emailToStore,
+                        name: validData.fullName,
+                    });
+                } catch (waError) {
+                    logger.error(`[WAVE Briefing] WhatsApp invite failed for ${emailToStore}:`, waError);
+                    // Non-blocking: registration still succeeds
                 }
             } catch (emailError) {
                 logger.error(`[WAVE Briefing] Email system error for ${emailToStore}:`, emailError);
