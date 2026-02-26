@@ -28,12 +28,13 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
     },
 };
 
-export default function InviteErrorPage({
+export default async function InviteErrorPage({
     searchParams,
 }: {
-    searchParams: { reason?: string };
+    searchParams: Promise<{ reason?: string }>;
 }) {
-    const reason = searchParams?.reason || "invalid";
+    const params = await searchParams;
+    const reason = params?.reason || "invalid";
     const msg = MESSAGES[reason] || MESSAGES["invalid"];
 
     return (
