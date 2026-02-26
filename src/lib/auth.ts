@@ -190,7 +190,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     session: {
         strategy: "jwt",
-        maxAge: 30 * 24 * 60 * 60, // 30 days
+        maxAge: 8 * 60 * 60, // 8 hours — financial platform security standard
+        updateAge: 60 * 60, // Refresh session token every 1 hour of activity
     },
     // CRITICAL: Allow login on localhost even in production mode (if using http)
     cookies: {

@@ -309,8 +309,11 @@ export async function joinCooperativeAction(
             return { error: "You are already a member of this cooperative", success: false };
         }
 
-        // Create membership
-        await membershipsRef.add({
+        // Atomic batch: all 3-4 writes committed together so no partial state on crash.
+        const batch = db.batch();
+
+        const newMemberRef = membershipsRef.doc();
+        batch.set(newMemberRef, {
             userId,
             cooperativeId,
             savingsBalance: initialContribution,
@@ -320,10 +323,13 @@ export async function joinCooperativeAction(
             status: "active"
         });
 
-        // Record initial contribution if any
+        const cooperativeUpdateData: Record<string, any> = {
+            memberCount: FieldValue.increment(1)
+        };
+
         if (initialContribution > 0) {
-            const transactionsRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
-            await transactionsRef.add({
+            const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
+            batch.set(txRef, {
                 userId,
                 cooperativeId,
                 type: "contribution",
@@ -332,17 +338,11 @@ export async function joinCooperativeAction(
                 status: "completed",
                 description: "Initial contribution upon joining"
             });
-
-            // Update cooperative total savings
-            await cooperativeRef.update({
-                totalSavings: FieldValue.increment(initialContribution),
-                memberCount: FieldValue.increment(1)
-            });
-        } else {
-            await cooperativeRef.update({
-                memberCount: FieldValue.increment(1)
-            });
+            cooperativeUpdateData.totalSavings = FieldValue.increment(initialContribution);
         }
+
+        batch.update(cooperativeRef, cooperativeUpdateData);
+        await batch.commit();
 
         revalidatePath("/cooperatives");
         revalidatePath("/dashboard/cooperatives");
@@ -407,31 +407,38 @@ export async function makeContributionAction(
 
         const membershipDoc = membershipSnapshot.docs[0];
 
-        // Record transaction
-        await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).add({
-            userId,
-            cooperativeId,
-            type,
-            amount,
-            date: FieldValue.serverTimestamp(),
-            status: "completed",
-            description: type === "savings" ? "Savings contribution" : "Loan repayment"
+        // Atomic transaction: Record contribution + update both balances in one commit.
+        // Without this, two concurrent contributions can both read the old balance
+        // before either write lands, causing double-counting in cooperative totals.
+        await db.runTransaction(async (t) => {
+            // Re-read membership inside transaction for consistency
+            const freshMembership = await t.get(membershipDoc.ref);
+            if (!freshMembership.exists) throw new Error("Membership not found");
+
+            const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
+            t.set(txRef, {
+                userId,
+                cooperativeId,
+                type,
+                amount,
+                date: FieldValue.serverTimestamp(),
+                status: "completed",
+                description: type === "savings" ? "Savings contribution" : "Loan repayment"
+            });
+
+            if (type === "savings") {
+                t.update(membershipDoc.ref, {
+                    savingsBalance: FieldValue.increment(amount)
+                });
+                t.update(db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId), {
+                    totalSavings: FieldValue.increment(amount)
+                });
+            } else {
+                t.update(membershipDoc.ref, {
+                    loanBalance: FieldValue.increment(-amount)
+                });
+            }
         });
-
-        // Update balances
-        if (type === "savings") {
-            await membershipDoc.ref.update({
-                savingsBalance: FieldValue.increment(amount)
-            });
-
-            await db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId).update({
-                totalSavings: FieldValue.increment(amount)
-            });
-        } else {
-            await membershipDoc.ref.update({
-                loanBalance: FieldValue.increment(-amount)
-            });
-        }
 
         revalidatePath("/cooperatives");
         revalidatePath("/dashboard/cooperatives");

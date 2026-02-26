@@ -29,10 +29,10 @@ const inter = Inter({
 import type { Metadata, Viewport } from "next";
 
 export const viewport: Viewport = {
-  themeColor: "#166534",
+  themeColor: "#2E519F",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  maximumScale: 5,
 };
 
 export const metadata: Metadata = {
@@ -54,8 +54,8 @@ export const metadata: Metadata = {
     siteName: "Easy Sales Export",
     images: [
       {
-        url: "/images/og-image.jpg", // Ensure this exists or use logo
-        width: 1200,
+        url: "/images/logo.jpg",
+        width: 630,
         height: 630,
         alt: "Easy Sales Export Platform",
       },
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Easy Sales Export",
     description: "Nigeria's premier agricultural export platform.",
-    images: ["/images/og-image.jpg"], // Fallback to same image
+    images: ["/images/logo.jpg"],
     creator: "@EasySalesExport",
   },
   icons: {
@@ -83,8 +83,33 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const organizationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Easy Sales Export",
+    "alternateName": "ESE",
+    "url": "https://easysalesexport.com",
+    "logo": "https://easysalesexport.com/images/logo.jpg",
+    "description": "Nigeria's premier platform for agricultural export management. Connecting Nigerian exporters with international markets for yam, sesame seeds, and dried hibiscus.",
+    "address": {
+      "@type": "PostalAddress",
+      "addressCountry": "NG"
+    },
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "customer service",
+      "availableLanguage": "English"
+    },
+    "sameAs": [
+      "https://easysalesacademy.com",
+      "https://farmnation.ng",
+      "https://market.easysalesexport.com",
+      "https://wave.ng"
+    ]
+  }
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en-NG" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -102,6 +127,10 @@ export default function RootLayout({
             `,
           }}
         />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
       </head>
       <body
         className={inter.variable}
@@ -113,3 +142,4 @@ export default function RootLayout({
     </html>
   );
 }
+

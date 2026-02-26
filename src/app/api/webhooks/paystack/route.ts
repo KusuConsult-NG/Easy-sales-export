@@ -47,17 +47,29 @@ export async function POST(req: NextRequest) {
             }
 
             // Route based on Payment Type
-            if (type === "marketplace_order") {
-                processMarketplaceOrder(reference, amountPaidv, userId);
-            } else if (type === "export_investment") {
-                const exportId = metadata.exportId;
-                processExportInvestment(reference, amountPaidv, userId, exportId);
-            } else if (type === "cooperative_membership_registration") {
-                const tier = metadata.membershipTier;
-                processCooperativeRegistration(reference, amountPaidv, userId, tier);
-            } else if (type === "academy_registration") {
-                const plan = metadata.plan;
-                processAcademyRegistration(reference, amountPaidv, userId, plan);
+            // NOTE: Must await each handler — Paystack expects 200 only after full commit.
+            // Without await, the function returns before the Firestore transaction completes.
+            try {
+                if (type === "marketplace_order") {
+                    await processMarketplaceOrder(reference, amountPaidv, userId);
+                } else if (type === "export_investment") {
+                    const exportId = metadata.exportId;
+                    await processExportInvestment(reference, amountPaidv, userId, exportId);
+                } else if (type === "cooperative_membership_registration") {
+                    const tier = metadata.membershipTier;
+                    await processCooperativeRegistration(reference, amountPaidv, userId, tier);
+                } else if (type === "academy_registration") {
+                    const plan = metadata.plan;
+                    await processAcademyRegistration(reference, amountPaidv, userId, plan);
+                }
+            } catch (processingError: any) {
+                logger.error(`[Paystack Webhook] Processing failed for ${reference}:`, processingError);
+                // Return 500 so Paystack retries the webhook delivery.
+                // Do NOT return 200 here — that would tell Paystack the payment was handled.
+                return NextResponse.json(
+                    { message: "Processing failed, will retry", error: processingError.message },
+                    { status: 500 }
+                );
             }
 
             return NextResponse.json({ message: "Event processed" }, { status: 200 });
