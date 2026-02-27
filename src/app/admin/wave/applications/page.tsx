@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter } from "lucide-react";
+import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Download } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { collection, query, where, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
@@ -142,6 +142,36 @@ export default function AdminWaveApplicationsPage() {
         setProcessingId(null);
     };
 
+    const handleExportCSV = () => {
+        if (applications.length === 0) return;
+        const headers = [
+            "Application ID", "Surname", "First Name", "Email", "Phone",
+            "State", "LGA", "NIN", "BVN", "Voter Card",
+            "Bank Name", "Account Number", "Status", "Applied Date"
+        ];
+        const rows = applications.map(app => [
+            app.id, app.surname || "", app.firstName || "",
+            app.email || "", app.phone || "",
+            app.stateOfResidence || "", app.lgaOfResidence || "",
+            app.nin || "", app.bvn || "", app.votersCardNumber || "",
+            app.bankName || "", app.accountNumber || "",
+            app.status, new Date(app.createdAt).toLocaleDateString("en-NG")
+        ]);
+        const csvContent = [
+            headers.join(","),
+            ...rows.map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        ].join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `wave_applications_${statusFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     const formatDate = (date: Date) => {
         return new Intl.DateTimeFormat("en-NG", {
             year: "numeric",
@@ -192,6 +222,16 @@ export default function AdminWaveApplicationsPage() {
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                     <span className="text-xs text-slate-500">Live</span>
                 </div>
+                {/* CSV Export */}
+                {applications.length > 0 && (
+                    <button
+                        onClick={handleExportCSV}
+                        className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all"
+                    >
+                        <Download className="w-4 h-4" />
+                        Export CSV ({applications.length})
+                    </button>
+                )}
             </div>
 
             {/* Loading State */}
