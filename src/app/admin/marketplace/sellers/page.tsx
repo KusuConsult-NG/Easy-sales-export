@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { logger } from '@/lib/logger';
 import {
     Store, CheckCircle, XCircle, Clock, Search,
-    Eye, FileText, MapPin, CreditCard, Ban
+    Eye, FileText, MapPin, CreditCard, Ban, Download
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
@@ -96,6 +96,33 @@ export default function AdminSellersPage() {
         setFilteredVerifications(filtered);
     }, [verifications, searchQuery, filterStatus]);
 
+    const handleExportCSV = () => {
+        if (verifications.length === 0) return;
+        const headers = [
+            "Business Name", "Business Type", "Owner Name", "Email", "Phone",
+            "State", "LGA", "Address", "Bank Name", "Account Number", "Account Name",
+            "Status", "Applied Date"
+        ];
+        const rows = verifications.map(v => [
+            v.businessName || "", v.businessType || "",
+            v.userName || "", v.email || v.userEmail || "", v.phone || "",
+            v.state || "", v.lga || "", v.address || "",
+            v.bankDetails?.bankName || "", v.bankDetails?.accountNumber || "", v.bankDetails?.accountName || "",
+            v.status, new Date(v.createdAt).toLocaleDateString("en-NG")
+        ]);
+        const csv = [
+            headers.join(","),
+            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        ].join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `seller_verifications_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    };
+
     const handleApprove = async (verificationId: string) => {
         if (!confirm("Approve this seller?")) return;
         setIsProcessing(true);
@@ -185,6 +212,13 @@ export default function AdminSellersPage() {
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                     <span className="text-xs text-slate-500">Live</span>
                 </div>
+                <button
+                    onClick={handleExportCSV}
+                    disabled={verifications.length === 0}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+                >
+                    <Download className="w-4 h-4" /> Export CSV ({verifications.length})
+                </button>
             </div>
 
             {/* Stats Cards */}
@@ -274,8 +308,8 @@ export default function AdminSellersPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${v.status === "pending" ? "bg-yellow-100 text-yellow-700"
-                                                    : v.status === "approved" ? "bg-green-100 text-green-700"
-                                                        : "bg-red-100 text-red-700"
+                                                : v.status === "approved" ? "bg-green-100 text-green-700"
+                                                    : "bg-red-100 text-red-700"
                                                 }`}>
                                                 {v.status.charAt(0).toUpperCase() + v.status.slice(1)}
                                             </span>

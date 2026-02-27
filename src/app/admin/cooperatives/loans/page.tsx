@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { logger } from '@/lib/logger';
 import {
     DollarSign, CheckCircle, XCircle, Clock,
-    Search, Eye, FileText
+    Search, Eye, FileText, Download
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
@@ -167,6 +167,33 @@ export default function AdminLoansPage() {
         }
     };
 
+    const handleExportCSV = () => {
+        if (applications.length === 0) return;
+        const headers = [
+            "Name", "Email", "Loan Product", "Amount (₦)",
+            "Interest Rate", "Duration (months)", "Monthly Payment (₦)",
+            "Purpose", "Status", "Applied Date"
+        ];
+        const rows = applications.map(a => [
+            a.userName || "", a.userEmail || "",
+            a.productName || "", a.amount,
+            `${a.interestRate}%`, a.durationMonths, a.monthlyPayment,
+            a.purpose || "", a.status,
+            new Date(a.appliedAt).toLocaleDateString("en-NG")
+        ]);
+        const csv = [
+            headers.join(","),
+            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        ].join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `loan_applications_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    };
+
     const stats = {
         total: applications.length,
         pending: applications.filter(a => a.status === "pending").length,
@@ -185,6 +212,13 @@ export default function AdminLoansPage() {
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                     <span className="text-xs text-slate-500">Live</span>
                 </div>
+                <button
+                    onClick={handleExportCSV}
+                    disabled={applications.length === 0}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+                >
+                    <Download className="w-4 h-4" /> Export CSV ({applications.length})
+                </button>
             </div>
 
             {/* Stats Cards */}
@@ -279,9 +313,9 @@ export default function AdminLoansPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${app.status === "pending" ? "bg-yellow-100 text-yellow-700"
-                                                    : ["approved", "disbursed", "active"].includes(app.status) ? "bg-green-100 text-green-700"
-                                                        : app.status === "rejected" ? "bg-red-100 text-red-700"
-                                                            : "bg-blue-100 text-blue-700"
+                                                : ["approved", "disbursed", "active"].includes(app.status) ? "bg-green-100 text-green-700"
+                                                    : app.status === "rejected" ? "bg-red-100 text-red-700"
+                                                        : "bg-blue-100 text-blue-700"
                                                 }`}>
                                                 {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                                             </span>
@@ -329,8 +363,8 @@ export default function AdminLoansPage() {
                             </div>
                             <div>
                                 <span className={`inline-flex px-3 py-1 rounded-full text-sm font-bold ${selectedApplication.status === "pending" ? "bg-yellow-100 text-yellow-700"
-                                        : ["approved", "disbursed", "active"].includes(selectedApplication.status) ? "bg-green-100 text-green-700"
-                                            : "bg-red-100 text-red-700"
+                                    : ["approved", "disbursed", "active"].includes(selectedApplication.status) ? "bg-green-100 text-green-700"
+                                        : "bg-red-100 text-red-700"
                                     }`}>
                                     {selectedApplication.status.charAt(0).toUpperCase() + selectedApplication.status.slice(1)}
                                 </span>

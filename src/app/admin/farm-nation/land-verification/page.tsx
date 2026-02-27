@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { logger } from '@/lib/logger';
-import { MapPin, FileText, Check, X, Eye, Loader2 } from "lucide-react";
+import { MapPin, FileText, Check, X, Eye, Loader2, Download } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
@@ -133,6 +133,34 @@ export default function AdminLandVerificationPage() {
         }
     };
 
+    const handleExportCSV = () => {
+        if (verifications.length === 0) return;
+        const headers = [
+            "Owner Name", "Title", "Category", "State", "LGA",
+            "Size", "Unit", "Total Price (₦)", "GPS Lat", "GPS Lng",
+            "Verification Status", "Submitted Date"
+        ];
+        const rows = verifications.map(v => [
+            v.ownerName || "", v.title || "", v.category || "",
+            v.state || "", v.lga || "",
+            v.size, v.unit || "", v.totalPrice,
+            v.gpsCoordinates?.latitude || "", v.gpsCoordinates?.longitude || "",
+            v.verificationStatus || "",
+            new Date(v.createdAt).toLocaleDateString("en-NG")
+        ]);
+        const csv = [
+            headers.join(","),
+            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        ].join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `land_verifications_${filterStatus}_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    };
+
     const stats = {
         total: verifications.length,
         pending: verifications.filter(v => v.verificationStatus === "pending").length,
@@ -148,9 +176,18 @@ export default function AdminLandVerificationPage() {
                         <h1 className="text-3xl font-bold text-slate-900 mb-2">Land Verification</h1>
                         <p className="text-slate-600">Review and verify land listing submissions</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <span className="text-xs text-slate-500">Live</span>
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-xs text-slate-500">Live</span>
+                        </div>
+                        <button
+                            onClick={handleExportCSV}
+                            disabled={verifications.length === 0}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+                        >
+                            <Download className="w-4 h-4" /> Export CSV ({filteredVerifications.length})
+                        </button>
                     </div>
                 </div>
 
@@ -234,8 +271,8 @@ export default function AdminLandVerificationPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${verification.verificationStatus === "pending" ? "bg-yellow-100 text-yellow-700"
-                                                        : verification.verificationStatus === "verified" ? "bg-green-100 text-green-700"
-                                                            : "bg-red-100 text-red-700"
+                                                    : verification.verificationStatus === "verified" ? "bg-green-100 text-green-700"
+                                                        : "bg-red-100 text-red-700"
                                                     }`}>
                                                     {verification.verificationStatus}
                                                 </span>
