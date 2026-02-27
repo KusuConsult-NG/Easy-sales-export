@@ -84,7 +84,10 @@ service cloud.firestore {
       allow update: if isAdmin() &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                          'status', 'reviewedBy', 'reviewedAt', 'rejectionReason',
-                         'reviewNotes', 'updatedAt'
+                         'reviewNotes', 'updatedAt',
+                         // Standardized approval fields
+                         'approvedBy', 'approvalTimestamp', 'approvalNote',
+                         'rejectedBy', 'rejectedAt'
                        ]);
       
       allow delete: if isAdmin();
@@ -206,7 +209,10 @@ service cloud.firestore {
                          'status', 'reviewedBy', 'reviewedAt', 'rejectionReason',
                          'disbursedAt', 'disbursed', 'disbursementNote',
                          'disbursementTransferCode', 'pendingManualDisbursement',
-                         'approvalChain', 'updatedAt'
+                         'approvalChain', 'updatedAt',
+                         // Standardized approval fields
+                         'approvedBy', 'approvedAt', 'approvalTimestamp',
+                         'rejectedBy', 'rejectedAt'
                        ]);
       
       allow delete: if isAdmin();

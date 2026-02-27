@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { logger } from '@/lib/logger';
 import {
-    DollarSign, Users, CheckCircle, XCircle, Clock,
-    Search, Filter, Eye, FileText, TrendingUp, Calendar
+    DollarSign, CheckCircle, XCircle, Clock,
+    Search, Eye, FileText
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
+import { db } from "@/lib/firebase";
+import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 
 type LoanApplication = {
     id: string;
@@ -24,6 +26,8 @@ type LoanApplication = {
     status: "pending" | "approved" | "rejected" | "disbursed" | "active" | "completed";
     appliedAt: Date;
     rejectionReason?: string;
+    approvedBy?: string;
+    approvedAt?: Date;
 };
 
 type FilterType = "all" | "pending" | "approved" | "rejected";
@@ -38,58 +42,63 @@ export default function AdminLoansPage() {
     const [selectedApplication, setSelectedApplication] = useState<LoanApplication | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const unsubscribeRef = useRef<Unsubscribe | null>(null);
 
-    const fetchApplications = useCallback(async () => {
+    // Real-time listener — replaces manual fetch
+    useEffect(() => {
+        if (unsubscribeRef.current) unsubscribeRef.current();
+
         setIsLoading(true);
-        try {
-            const response = await fetch("/api/admin/cooperative/loan-applications");
-            const data = await response.json();
 
-            if (data.success) {
-                setApplications(data.applications || []);
+        const q = query(collection(db, "loan_applications"), orderBy("appliedAt", "desc"));
+
+        const unsubscribe = onSnapshot(
+            q,
+            (snapshot) => {
+                const docs = snapshot.docs.map((doc) => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        ...data,
+                        appliedAt: data.appliedAt?.toDate() || new Date(),
+                        approvedAt: data.approvedAt?.toDate(),
+                    } as LoanApplication;
+                });
+                setApplications(docs);
+                setIsLoading(false);
+            },
+            (err) => {
+                logger.error("Loan applications snapshot error:", err);
+                showToast("Failed to load loan applications", "error");
+                setIsLoading(false);
             }
-        } catch (error) {
-            logger.error("Failed to fetch loan applications:", error);
-            showToast("Failed to fetch loan applications.", "error");
-        } finally {
-            setIsLoading(false);
-        }
+        );
+
+        unsubscribeRef.current = unsubscribe;
+
+        return () => { unsubscribeRef.current?.(); };
     }, [showToast]);
 
-    const filterApplications = useCallback(() => {
+    // Filter locally (no re-fetch needed)
+    useEffect(() => {
         let filtered = applications;
-
-        // Filter by status
         if (filterStatus !== "all") {
             filtered = filtered.filter(app => app.status === filterStatus);
         }
-
-        // Filter by search query
         if (searchQuery) {
-            const query = searchQuery.toLowerCase();
+            const q = searchQuery.toLowerCase();
             filtered = filtered.filter(app =>
-                app.userName?.toLowerCase().includes(query) ||
-                app.userEmail?.toLowerCase().includes(query) ||
-                app.productName?.toLowerCase().includes(query) ||
-                app.purpose?.toLowerCase().includes(query)
+                app.userName?.toLowerCase().includes(q) ||
+                app.userEmail?.toLowerCase().includes(q) ||
+                app.productName?.toLowerCase().includes(q) ||
+                app.purpose?.toLowerCase().includes(q)
             );
         }
-
         setFilteredApplications(filtered);
     }, [applications, searchQuery, filterStatus]);
 
-    useEffect(() => {
-        fetchApplications();
-    }, [fetchApplications]);
-
-    useEffect(() => {
-        filterApplications();
-    }, [filterApplications]);
-
     const handleApprove = async (applicationId: string) => {
-        if (!confirm("Are you sure you want to approve this loan application?")) {
-            return;
-        }
+        if (!confirm("Approve this loan application?")) return;
 
         setIsProcessing(true);
         try {
@@ -98,18 +107,16 @@ export default function AdminLoansPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ applicationId }),
             });
-
             const data = await response.json();
-
             if (data.success) {
-                showToast("Loan application approved successfully!", "success");
-                fetchApplications();
+                showToast("Loan application approved!", "success");
                 setIsDetailsModalOpen(false);
+                // onSnapshot auto-updates the list
             } else {
                 showToast(data.message || "Failed to approve loan", "error");
             }
         } catch (error) {
-            showToast("An error occurred while approving the loan", "error");
+            showToast("An error occurred", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -126,43 +133,35 @@ export default function AdminLoansPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ applicationId, reason }),
             });
-
             const data = await response.json();
-
             if (data.success) {
                 showToast("Loan application rejected", "success");
-                fetchApplications();
                 setIsDetailsModalOpen(false);
             } else {
                 showToast(data.message || "Failed to reject loan", "error");
             }
         } catch (error) {
-            showToast("An error occurred while rejecting the loan", "error");
+            showToast("An error occurred", "error");
         } finally {
             setIsProcessing(false);
         }
     };
 
     const handleDisburse = async (applicationId: string) => {
-        if (!confirm("Are you sure you want to disburse funds for this loan? This action cannot be undone.")) {
-            return;
-        }
+        if (!confirm("Disburse funds for this loan? This cannot be undone.")) return;
 
         setIsProcessing(true);
         try {
-            // Import dynamically or ensure it is imported at top
             const { disburseLoanAction } = await import("@/app/actions/loans");
             const result = await disburseLoanAction(applicationId);
-
             if (result.success) {
-                showToast("Loan funds disbursed successfully!", "success");
-                fetchApplications();
+                showToast("Loan funds disbursed!", "success");
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(result.error || "Failed to disburse loan", "error");
+                showToast(result.error || "Failed to disburse", "error");
             }
         } catch (error) {
-            showToast("An error occurred while disbursing the loan", "error");
+            showToast("An error occurred", "error");
         } finally {
             setIsProcessing(false);
         }
@@ -171,62 +170,41 @@ export default function AdminLoansPage() {
     const stats = {
         total: applications.length,
         pending: applications.filter(a => a.status === "pending").length,
-        approved: applications.filter(a => a.status === "approved" || a.status === "disbursed" || a.status === "active").length,
+        approved: applications.filter(a => ["approved", "disbursed", "active"].includes(a.status)).length,
         rejected: applications.filter(a => a.status === "rejected").length,
     };
 
     return (
         <div className="p-8">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                    Loan Applications
-                </h1>
-                <p className="text-slate-600">
-                    Review and manage cooperative loan applications
-                </p>
+            <div className="mb-8 flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">Loan Applications</h1>
+                    <p className="text-slate-600">Review and manage cooperative loan applications</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-xs text-slate-500">Live</span>
+                </div>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white rounded-xl p-6 shadow-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-blue-600" />
+                {[
+                    { label: "Total", value: stats.total, icon: FileText, color: "blue" },
+                    { label: "Pending", value: stats.pending, icon: Clock, color: "yellow" },
+                    { label: "Approved", value: stats.approved, icon: CheckCircle, color: "green" },
+                    { label: "Rejected", value: stats.rejected, icon: XCircle, color: "red" },
+                ].map(({ label, value, icon: Icon, color }) => (
+                    <div key={label} className="bg-white rounded-xl p-6 shadow-lg">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className={`w-10 h-10 bg-${color}-100 rounded-lg flex items-center justify-center`}>
+                                <Icon className={`w-5 h-5 text-${color}-600`} />
+                            </div>
+                            <p className="text-sm text-slate-600">{label}</p>
                         </div>
-                        <p className="text-sm text-slate-600">Total Applications</p>
+                        <p className="text-3xl font-bold text-slate-900">{value}</p>
                     </div>
-                    <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
-                </div>
-
-                <div className="bg-white rounded-xl p-6 shadow-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-yellow-600" />
-                        </div>
-                        <p className="text-sm text-slate-600">Pending Review</p>
-                    </div>
-                    <p className="text-3xl font-bold text-slate-900">{stats.pending}</p>
-                </div>
-
-                <div className="bg-white rounded-xl p-6 shadow-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                            <CheckCircle className="w-5 h-5 text-green-600" />
-                        </div>
-                        <p className="text-sm text-slate-600">Approved</p>
-                    </div>
-                    <p className="text-3xl font-bold text-slate-900">{stats.approved}</p>
-                </div>
-
-                <div className="bg-white rounded-xl p-6 shadow-lg">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                            <XCircle className="w-5 h-5 text-red-600" />
-                        </div>
-                        <p className="text-sm text-slate-600">Rejected</p>
-                    </div>
-                    <p className="text-3xl font-bold text-slate-900">{stats.rejected}</p>
-                </div>
+                ))}
             </div>
 
             {/* Filters */}
@@ -237,7 +215,7 @@ export default function AdminLoansPage() {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                             <input
                                 type="text"
-                                placeholder="Search by name, email, product, or purpose..."
+                                placeholder="Search by name, email, product..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
@@ -249,10 +227,7 @@ export default function AdminLoansPage() {
                             <button
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
-                                className={`px - 4 py - 2 rounded - lg font - medium transition - colors ${filterStatus === status
-                                    ? "bg-primary text-white"
-                                    : "bg-slate-100 text-slate-900 hover:bg-slate-200"
-                                    } `}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === status ? "bg-primary text-white" : "bg-slate-100 text-slate-900 hover:bg-slate-200"}`}
                             >
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                             </button>
@@ -271,86 +246,43 @@ export default function AdminLoansPage() {
                 ) : filteredApplications.length === 0 ? (
                     <div className="p-12 text-center">
                         <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">
-                            No Loan Applications Found
-                        </h3>
-                        <p className="text-slate-600">
-                            {searchQuery || filterStatus !== "all"
-                                ? "Try adjusting your filters"
-                                : "No loan applications have been submitted yet"}
-                        </p>
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">No Loan Applications Found</h3>
+                        <p className="text-slate-600">{searchQuery || filterStatus !== "all" ? "Try adjusting filters" : "No applications submitted yet"}</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Applicant
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Loan Product
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Amount
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Duration
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Status
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Applied
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Actions
-                                    </th>
+                                    {["Applicant", "Loan Product", "Amount", "Duration", "Status", "Applied", "Actions"].map(h => (
+                                        <th key={h} className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase">{h}</th>
+                                    ))}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
                                 {filteredApplications.map((app) => (
                                     <tr key={app.id} className="hover:bg-slate-50">
                                         <td className="px-6 py-4">
-                                            <div>
-                                                <p className="font-semibold text-slate-900">
-                                                    {app.userName || "Unknown"}
-                                                </p>
-                                                <p className="text-sm text-slate-500">
-                                                    {app.userEmail}
-                                                </p>
-                                            </div>
+                                            <p className="font-semibold text-slate-900">{app.userName || "Unknown"}</p>
+                                            <p className="text-sm text-slate-500">{app.userEmail}</p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <p className="font-medium text-slate-900">
-                                                {app.productName}
-                                            </p>
-                                            <p className="text-sm text-slate-500">
-                                                {app.interestRate}% APR
-                                            </p>
+                                            <p className="font-medium text-slate-900">{app.productName}</p>
+                                            <p className="text-sm text-slate-500">{app.interestRate}% APR</p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <p className="font-bold text-slate-900">
-                                                {formatCurrency(app.amount)}
-                                            </p>
-                                            <p className="text-xs text-slate-500">
-                                                {formatCurrency(app.monthlyPayment)}/month
-                                            </p>
+                                            <p className="font-bold text-slate-900">{formatCurrency(app.amount)}</p>
+                                            <p className="text-xs text-slate-500">{formatCurrency(app.monthlyPayment)}/mo</p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <p className="text-slate-900">
-                                                {app.durationMonths} months
-                                            </p>
+                                            <p className="text-slate-900">{app.durationMonths} months</p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${app.status === "pending"
-                                                ? "bg-yellow-100 text-yellow-700"
-                                                : app.status === "approved" || app.status === "disbursed" || app.status === "active"
-                                                    ? "bg-green-100 text-green-700"
-                                                    : app.status === "rejected"
-                                                        ? "bg-red-100 text-red-700"
-                                                        : "bg-blue-100 text-blue-700"
-                                                } `}>
+                                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${app.status === "pending" ? "bg-yellow-100 text-yellow-700"
+                                                    : ["approved", "disbursed", "active"].includes(app.status) ? "bg-green-100 text-green-700"
+                                                        : app.status === "rejected" ? "bg-red-100 text-red-700"
+                                                            : "bg-blue-100 text-blue-700"
+                                                }`}>
                                                 {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
                                             </span>
                                         </td>
@@ -359,13 +291,10 @@ export default function AdminLoansPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <button
-                                                onClick={() => {
-                                                    setSelectedApplication(app);
-                                                    setIsDetailsModalOpen(true);
-                                                }}
-                                                className="text-primary hover:text-primary/80 font-medium"
+                                                onClick={() => { setSelectedApplication(app); setIsDetailsModalOpen(true); }}
+                                                className="text-primary hover:text-primary/80 font-medium flex items-center gap-1"
                                             >
-                                                View Details
+                                                <Eye className="w-4 h-4" /> View
                                             </button>
                                         </td>
                                     </tr>
@@ -381,150 +310,58 @@ export default function AdminLoansPage() {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="p-6 border-b border-slate-200">
-                            <h2 className="text-2xl font-bold text-slate-900">
-                                Loan Application Details
-                            </h2>
+                            <h2 className="text-2xl font-bold text-slate-900">Loan Application Details</h2>
                         </div>
-
                         <div className="p-6 space-y-6">
-                            {/* Applicant Info */}
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-900 mb-3">
-                                    Applicant Information
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-sm text-slate-600">Name</p>
-                                        <p className="font-semibold text-slate-900">
-                                            {selectedApplication.userName || "Unknown"}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-slate-600">Email</p>
-                                        <p className="font-semibold text-slate-900">
-                                            {selectedApplication.userEmail}
-                                        </p>
-                                    </div>
-                                </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><p className="text-sm text-slate-600">Name</p><p className="font-semibold">{selectedApplication.userName || "Unknown"}</p></div>
+                                <div><p className="text-sm text-slate-600">Email</p><p className="font-semibold">{selectedApplication.userEmail}</p></div>
+                                <div><p className="text-sm text-slate-600">Product</p><p className="font-semibold">{selectedApplication.productName}</p></div>
+                                <div><p className="text-sm text-slate-600">Amount</p><p className="font-semibold">{formatCurrency(selectedApplication.amount)}</p></div>
+                                <div><p className="text-sm text-slate-600">Interest Rate</p><p className="font-semibold">{selectedApplication.interestRate}% APR</p></div>
+                                <div><p className="text-sm text-slate-600">Duration</p><p className="font-semibold">{selectedApplication.durationMonths} months</p></div>
+                                <div><p className="text-sm text-slate-600">Monthly Payment</p><p className="font-semibold text-green-600">{formatCurrency(selectedApplication.monthlyPayment)}</p></div>
+                                <div><p className="text-sm text-slate-600">Applied</p><p className="font-semibold">{new Date(selectedApplication.appliedAt).toLocaleDateString()}</p></div>
                             </div>
-
-                            {/* Loan Details */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 mb-3">
-                                    Loan Details
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-sm text-slate-600">Product</p>
-                                        <p className="font-semibold text-slate-900">
-                                            {selectedApplication.productName}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-slate-600">Amount</p>
-                                        <p className="font-semibold text-slate-900">
-                                            {formatCurrency(selectedApplication.amount)}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-slate-600">Interest Rate</p>
-                                        <p className="font-semibold text-slate-900">
-                                            {selectedApplication.interestRate}% APR
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-slate-600">Duration</p>
-                                        <p className="font-semibold text-slate-900">
-                                            {selectedApplication.durationMonths} months
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-slate-600">Monthly Payment</p>
-                                        <p className="font-semibold text-green-600">
-                                            {formatCurrency(selectedApplication.monthlyPayment)}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-slate-600">Application Date</p>
-                                        <p className="font-semibold text-slate-900">
-                                            {new Date(selectedApplication.appliedAt).toLocaleDateString()}
-                                        </p>
-                                    </div>
-                                </div>
+                                <h3 className="font-bold text-slate-900 mb-2">Purpose</h3>
+                                <p className="text-slate-600">{selectedApplication.purpose}</p>
                             </div>
-
-                            {/* Purpose */}
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 mb-2">
-                                    Purpose
-                                </h3>
-                                <p className="text-slate-600">
-                                    {selectedApplication.purpose}
-                                </p>
-                            </div>
-
-                            {/* Status & Rejection Reason */}
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-900 mb-2">
-                                    Status
-                                </h3>
-                                <span className={`inline-flex px-3 py-1 rounded-full text-sm font-bold ${selectedApplication.status === "pending"
-                                    ? "bg-yellow-100 text-yellow-700"
-                                    : selectedApplication.status === "approved" || selectedApplication.status === "disbursed" || selectedApplication.status === "active"
-                                        ? "bg-green-100 text-green-700"
-                                        : "bg-red-100 text-red-700"
-                                    } `}>
+                                <span className={`inline-flex px-3 py-1 rounded-full text-sm font-bold ${selectedApplication.status === "pending" ? "bg-yellow-100 text-yellow-700"
+                                        : ["approved", "disbursed", "active"].includes(selectedApplication.status) ? "bg-green-100 text-green-700"
+                                            : "bg-red-100 text-red-700"
+                                    }`}>
                                     {selectedApplication.status.charAt(0).toUpperCase() + selectedApplication.status.slice(1)}
                                 </span>
                                 {selectedApplication.rejectionReason && (
                                     <div className="mt-2 p-3 bg-red-50 rounded-lg">
-                                        <p className="text-sm font-semibold text-red-900 mb-1">
-                                            Rejection Reason:
-                                        </p>
-                                        <p className="text-sm text-red-700">
-                                            {selectedApplication.rejectionReason}
-                                        </p>
+                                        <p className="text-sm font-semibold text-red-900">Reason: {selectedApplication.rejectionReason}</p>
                                     </div>
                                 )}
                             </div>
                         </div>
-
-                        {/* Actions */}
                         <div className="p-6 border-t border-slate-200 flex gap-4">
                             {selectedApplication.status === "pending" && (
                                 <>
-                                    <button
-                                        onClick={() => handleApprove(selectedApplication.id)}
-                                        disabled={isProcessing}
-                                        className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50"
-                                    >
-                                        <CheckCircle className="w-5 h-5 inline mr-2" />
-                                        Approve Loan
+                                    <button onClick={() => handleApprove(selectedApplication.id)} disabled={isProcessing}
+                                        className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50">
+                                        <CheckCircle className="w-5 h-5 inline mr-2" />Approve Loan
                                     </button>
-                                    <button
-                                        onClick={() => handleReject(selectedApplication.id)}
-                                        disabled={isProcessing}
-                                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all disabled:opacity-50"
-                                    >
-                                        <XCircle className="w-5 h-5 inline mr-2" />
-                                        Reject
+                                    <button onClick={() => handleReject(selectedApplication.id)} disabled={isProcessing}
+                                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all disabled:opacity-50">
+                                        <XCircle className="w-5 h-5 inline mr-2" />Reject
                                     </button>
                                 </>
                             )}
                             {selectedApplication.status === "approved" && (
-                                <button
-                                    onClick={() => handleDisburse(selectedApplication.id)}
-                                    disabled={isProcessing}
-                                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all disabled:opacity-50"
-                                >
-                                    <DollarSign className="w-5 h-5 inline mr-2" />
-                                    Disburse Funds
+                                <button onClick={() => handleDisburse(selectedApplication.id)} disabled={isProcessing}
+                                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all disabled:opacity-50">
+                                    <DollarSign className="w-5 h-5 inline mr-2" />Disburse Funds
                                 </button>
                             )}
-                            <button
-                                onClick={() => setIsDetailsModalOpen(false)}
-                                className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-xl transition-all"
-                            >
+                            <button onClick={() => setIsDetailsModalOpen(false)}
+                                className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-xl transition-all">
                                 Close
                             </button>
                         </div>

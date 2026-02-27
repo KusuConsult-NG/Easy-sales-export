@@ -70,6 +70,8 @@ export async function approveWaveApplicationAction(
             status: "approved",
             reviewedBy: session.user.id,
             reviewedAt: FieldValue.serverTimestamp(),
+            approvedBy: session.user.id,
+            approvalTimestamp: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -179,6 +181,8 @@ export async function rejectWaveApplicationAction(
             rejectionReason: reason,
             reviewedBy: session.user.id,
             reviewedAt: FieldValue.serverTimestamp(),
+            rejectedBy: session.user.id,
+            rejectedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 

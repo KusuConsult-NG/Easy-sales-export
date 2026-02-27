@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Search, Eye, Calendar, MapPin, User } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
+import { db } from "@/lib/firebase";
+import { collection, query, where, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 import {
-    getWaveApplicationsAction,
     approveWaveApplicationAction,
     rejectWaveApplicationAction
 } from "@/app/actions/admin";
@@ -13,7 +14,6 @@ type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
 interface WaveApplication {
     id: string;
-    // Section A: Personal
     surname?: string;
     firstName?: string;
     otherNames?: string;
@@ -22,24 +22,22 @@ interface WaveApplication {
     userEmail?: string;
     stateOfResidence?: string;
     lgaOfResidence?: string;
-    // Section B: Identity (new mandatory fields)
     nin?: string;
     votersCardNumber?: string;
-    // Section E: Financial (new mandatory fields)
     bvn?: string;
     bankName?: string;
     accountNumber?: string;
-    // Legacy fallback
     fullName?: string;
     farmSize?: string;
     status: ApplicationStatus;
     createdAt: Date;
     reviewedAt?: Date;
     reviewedBy?: string;
+    approvedBy?: string;
+    approvalTimestamp?: Date;
     rejectionReason?: string;
 }
 
-/** Derives display name from new or legacy schema */
 function getDisplayName(app: WaveApplication): string {
     if (app.surname || app.firstName) {
         return `${app.surname || ''} ${app.firstName || ''}`.trim();
@@ -51,59 +49,66 @@ export default function AdminWaveApplicationsPage() {
     const { showToast } = useToast();
     const [applications, setApplications] = useState<WaveApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
-
-    // Pagination
-    const [lastCreatedAt, setLastCreatedAt] = useState<Date | string | undefined>(undefined);
-    const [hasMore, setHasMore] = useState(false);
-
-    const fetchApplications = async (loadMore = false) => {
-        if (loadMore) {
-            setIsLoadingMore(true);
-        } else {
-            setIsLoading(true);
-            setError(null);
-        }
-
-        try {
-            const result = await getWaveApplicationsAction(
-                statusFilter !== "all" ? statusFilter as "pending" | "approved" | "rejected" : undefined,
-                20,
-                loadMore ? lastCreatedAt : undefined
-            );
-
-            if (result.success && result.data) {
-                if (loadMore) {
-                    setApplications(prev => [...prev, ...result.data!]);
-                } else {
-                    setApplications(result.data);
-                }
-
-                setHasMore(!!result.hasMore);
-
-                // Update cursor
-                if (result.data.length > 0) {
-                    const lastItem = result.data[result.data.length - 1];
-                    // The action returns createdAt as Date object (from toDate())
-                    setLastCreatedAt(lastItem.createdAt);
-                }
-            } else {
-                setError(result.error || "Failed to load applications");
-            }
-        } catch (err) {
-            setError("Failed to fetch applications");
-        } finally {
-            setIsLoading(false);
-            setIsLoadingMore(false);
-        }
-    };
+    const unsubscribeRef = useRef<Unsubscribe | null>(null);
 
     useEffect(() => {
-        setLastCreatedAt(undefined);
-        fetchApplications(false);
+        // Clean up previous listener
+        if (unsubscribeRef.current) {
+            unsubscribeRef.current();
+        }
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const col = collection(db, "wave_applications");
+
+            // Build query based on filter
+            const q = statusFilter !== "all"
+                ? query(col, where("status", "==", statusFilter), orderBy("createdAt", "desc"))
+                : query(col, orderBy("createdAt", "desc"));
+
+            // Real-time listener — updates automatically when Firestore changes
+            const unsubscribe = onSnapshot(
+                q,
+                (snapshot) => {
+                    const docs = snapshot.docs.map((doc) => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            ...data,
+                            createdAt: data.createdAt?.toDate() || new Date(),
+                            reviewedAt: data.reviewedAt?.toDate(),
+                            approvalTimestamp: data.approvalTimestamp?.toDate(),
+                        } as WaveApplication;
+                    });
+                    setApplications(docs);
+                    setIsLoading(false);
+                },
+                (err) => {
+                    console.error("[WAVE Admin] Snapshot error:", err);
+                    setError("Failed to load applications. Check your permissions.");
+                    setIsLoading(false);
+                }
+            );
+
+            unsubscribeRef.current = unsubscribe;
+        } catch (err) {
+            console.error("[WAVE Admin] Setup error:", err);
+            setError("Failed to initialize real-time listener.");
+            setIsLoading(false);
+        }
+
+        // Cleanup on unmount or filter change
+        return () => {
+            if (unsubscribeRef.current) {
+                unsubscribeRef.current();
+                unsubscribeRef.current = null;
+            }
+        };
     }, [statusFilter]);
 
     const handleApprove = async (applicationId: string) => {
@@ -112,10 +117,7 @@ export default function AdminWaveApplicationsPage() {
 
         if (result.success) {
             showToast("Application approved successfully", "success");
-            // Update local state
-            setApplications(applications.map(app =>
-                app.id === applicationId ? { ...app, status: "approved" } : app
-            ));
+            // No need to manually update state — onSnapshot will fire automatically
         } else {
             showToast(result.error || "Failed to approve application", "error");
         }
@@ -132,10 +134,7 @@ export default function AdminWaveApplicationsPage() {
 
         if (result.success) {
             showToast("Application rejected successfully", "success");
-            // Update local state
-            setApplications(applications.map(app =>
-                app.id === applicationId ? { ...app, status: "rejected", rejectionReason: reason } : app
-            ));
+            // onSnapshot will update automatically
         } else {
             showToast(result.error || "Failed to reject application", "error");
         }
@@ -155,15 +154,10 @@ export default function AdminWaveApplicationsPage() {
 
     const getStatusColor = (status: ApplicationStatus) => {
         switch (status) {
-            case "approved":
-                return "bg-green-100 text-green-700";
-            case "rejected":
-                return "bg-red-100 text-red-700";
-            case "under_review":
-                return "bg-blue-100 text-blue-700";
-            case "pending":
-            default:
-                return "bg-yellow-100 text-yellow-700";
+            case "approved": return "bg-green-100 text-green-700";
+            case "rejected": return "bg-red-100 text-red-700";
+            case "under_review": return "bg-blue-100 text-blue-700";
+            default: return "bg-yellow-100 text-yellow-700";
         }
     };
 
@@ -175,7 +169,7 @@ export default function AdminWaveApplicationsPage() {
                     WAVE Applications
                 </h1>
                 <p className="text-slate-600">
-                    Review and manage WAVE program applications
+                    Review and manage WAVE program applications — updates in real-time
                 </p>
             </div>
 
@@ -193,6 +187,11 @@ export default function AdminWaveApplicationsPage() {
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                 </select>
+                {/* Live indicator */}
+                <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-xs text-slate-500">Live</span>
+                </div>
             </div>
 
             {/* Loading State */}
@@ -204,139 +203,19 @@ export default function AdminWaveApplicationsPage() {
 
             {/* Error State */}
             {error && !isLoading && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                    <p className="text-red-300">{error}</p>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 mb-6">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-red-800 font-semibold">Error Loading Applications</p>
+                        <p className="text-red-600 text-sm mt-1">{error}</p>
+                    </div>
                 </div>
             )}
 
             {/* Applications List */}
             {!isLoading && !error && (
                 <div className="space-y-4">
-                    {applications.map((app) => (
-                        <div
-                            key={app.id}
-                            className="bg-white rounded-2xl p-6 elevation-2"
-                        >
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                                        <FileText className="w-6 h-6 text-primary" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-slate-900">
-                                            {getDisplayName(app)}
-                                        </h3>
-                                        <p className="text-sm text-slate-500">
-                                            {app.email || app.userEmail || '—'} • {app.phone || '—'}
-                                        </p>
-                                        {app.stateOfResidence && (
-                                            <p className="text-sm text-slate-600 mt-1">
-                                                State: <span className="font-semibold">{app.stateOfResidence}</span>
-                                                {app.lgaOfResidence && ` • LGA: `}
-                                                {app.lgaOfResidence && <span className="font-semibold">{app.lgaOfResidence}</span>}
-                                            </p>
-                                        )}
-
-                                        {/* Identity & KYC Fields — key for admin review */}
-                                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                            <div className="bg-slate-50 rounded-lg px-3 py-2">
-                                                <p className="text-xs text-slate-500 mb-0.5">NIN</p>
-                                                <p className="text-sm font-mono font-semibold text-slate-800">
-                                                    {app.nin ? `${app.nin.slice(0, 3)}****${app.nin.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
-                                                </p>
-                                            </div>
-                                            <div className="bg-slate-50 rounded-lg px-3 py-2">
-                                                <p className="text-xs text-slate-500 mb-0.5">Voter's Card (PVC)</p>
-                                                <p className="text-sm font-mono font-semibold text-slate-800">
-                                                    {app.votersCardNumber || <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
-                                                </p>
-                                            </div>
-                                            <div className="bg-slate-50 rounded-lg px-3 py-2">
-                                                <p className="text-xs text-slate-500 mb-0.5">BVN</p>
-                                                <p className="text-sm font-mono font-semibold text-slate-800">
-                                                    {app.bvn ? `${app.bvn.slice(0, 3)}****${app.bvn.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        {app.bankName && (
-                                            <p className="text-xs text-slate-500 mt-2">
-                                                🏦 {app.bankName} {app.accountNumber ? `• ****${app.accountNumber.slice(-4)}` : ''}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-                                <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(app.status)}`}>
-                                    {app.status}
-                                </span>
-                            </div>
-
-                            <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-                                <p className="text-xs text-slate-500">
-                                    Applied: {formatDate(app.createdAt)}
-                                </p>
-
-                                {app.status === "pending" && (
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => handleReject(app.id)}
-                                            disabled={processingId === app.id}
-                                            className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
-                                        >
-                                            {processingId === app.id ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <XCircle className="w-4 h-4" />
-                                            )}
-                                            Reject
-                                        </button>
-                                        <button
-                                            onClick={() => handleApprove(app.id)}
-                                            disabled={processingId === app.id}
-                                            className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
-                                        >
-                                            {processingId === app.id ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <CheckCircle className="w-4 h-4" />
-                                            )}
-                                            Approve
-                                        </button>
-                                    </div>
-                                )}
-
-                                {app.status === "rejected" && app.rejectionReason && (
-                                    <p className="text-sm text-red-600">
-                                        Reason: {app.rejectionReason}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Load More Button */}
-                    {hasMore && (
-                        <div className="mt-8 flex justify-center">
-                            <button
-                                onClick={() => fetchApplications(true)}
-                                disabled={isLoadingMore}
-                                className="px-6 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
-                            >
-                                {isLoadingMore ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                                        Loading...
-                                    </>
-                                ) : (
-                                    <>
-                                        Load More Applications
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    )}
-
-                    {applications.length === 0 && (
+                    {applications.length === 0 ? (
                         <div className="bg-white rounded-2xl p-12 text-center">
                             <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                             <h3 className="text-xl font-bold text-slate-900 mb-2">
@@ -348,6 +227,113 @@ export default function AdminWaveApplicationsPage() {
                                     : "No applications have been submitted yet"}
                             </p>
                         </div>
+                    ) : (
+                        applications.map((app) => (
+                            <div
+                                key={app.id}
+                                className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100"
+                            >
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                            <FileText className="w-6 h-6 text-primary" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-slate-900">
+                                                {getDisplayName(app)}
+                                            </h3>
+                                            <p className="text-sm text-slate-500">
+                                                {app.email || app.userEmail || '—'} • {app.phone || '—'}
+                                            </p>
+                                            {app.stateOfResidence && (
+                                                <p className="text-sm text-slate-600 mt-1">
+                                                    State: <span className="font-semibold">{app.stateOfResidence}</span>
+                                                    {app.lgaOfResidence && ` • LGA: `}
+                                                    {app.lgaOfResidence && <span className="font-semibold">{app.lgaOfResidence}</span>}
+                                                </p>
+                                            )}
+
+                                            {/* Identity & KYC Fields */}
+                                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                <div className="bg-slate-50 rounded-lg px-3 py-2">
+                                                    <p className="text-xs text-slate-500 mb-0.5">NIN</p>
+                                                    <p className="text-sm font-mono font-semibold text-slate-800">
+                                                        {app.nin ? `${app.nin.slice(0, 3)}****${app.nin.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-slate-50 rounded-lg px-3 py-2">
+                                                    <p className="text-xs text-slate-500 mb-0.5">Voter&apos;s Card (PVC)</p>
+                                                    <p className="text-sm font-mono font-semibold text-slate-800">
+                                                        {app.votersCardNumber || <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-slate-50 rounded-lg px-3 py-2">
+                                                    <p className="text-xs text-slate-500 mb-0.5">BVN</p>
+                                                    <p className="text-sm font-mono font-semibold text-slate-800">
+                                                        {app.bvn ? `${app.bvn.slice(0, 3)}****${app.bvn.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {app.bankName && (
+                                                <p className="text-xs text-slate-500 mt-2">
+                                                    🏦 {app.bankName} {app.accountNumber ? `• ****${app.accountNumber.slice(-4)}` : ''}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(app.status)}`}>
+                                        {app.status.replace('_', ' ')}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                                    <p className="text-xs text-slate-500">
+                                        Applied: {formatDate(app.createdAt)}
+                                    </p>
+
+                                    {app.status === "pending" && (
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleReject(app.id)}
+                                                disabled={processingId === app.id}
+                                                className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                {processingId === app.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <XCircle className="w-4 h-4" />
+                                                )}
+                                                Reject
+                                            </button>
+                                            <button
+                                                onClick={() => handleApprove(app.id)}
+                                                disabled={processingId === app.id}
+                                                className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                {processingId === app.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <CheckCircle className="w-4 h-4" />
+                                                )}
+                                                Approve
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {app.status === "approved" && app.approvedBy && (
+                                        <p className="text-xs text-green-600 font-semibold">
+                                            ✓ Approved {app.approvalTimestamp ? `• ${formatDate(app.approvalTimestamp)}` : ''}
+                                        </p>
+                                    )}
+
+                                    {app.status === "rejected" && app.rejectionReason && (
+                                        <p className="text-sm text-red-600">
+                                            Reason: {app.rejectionReason}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        ))
                     )}
                 </div>
             )}
