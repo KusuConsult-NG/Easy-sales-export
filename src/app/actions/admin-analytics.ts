@@ -2,6 +2,8 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { unstable_cache } from "next/cache";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 export interface AnalyticsData {
     platformOverview: {
@@ -189,4 +191,100 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         totalLoansDisbursed,
         recentTransactions,
     };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Module Registration Stats (for admin pie/bar chart)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ModuleRegistrationStats {
+    /** Total registered accounts on the platform (users collection) */
+    hub: number;
+    /** Full WAVE programme applicants (wave_applications) */
+    wave: number;
+    /** Walk-in briefing registrations (wave_briefing_registrations) */
+    waveBriefing: number;
+    /** Academy applicants (ACADEMY_APPLICATIONS) */
+    academy: number;
+    /** Cooperative enrolled members (cooperative_members) */
+    cooperatives: number;
+    /** Cooperative onboarding applicants still in pipeline (cooperative_onboarding_applications) */
+    cooperativeOnboarding: number;
+    /** Farm Nation registered sellers (farm_nation_properties) */
+    farmNation: number;
+    /** Export Hub investors with a slot (export_slots) */
+    exportHub: number;
+    /** Export onboarding applicants still in pipeline (export_onboarding_applications) */
+    exportOnboarding: number;
+    /** Marketplace seller verification requests (seller_verifications) */
+    marketplace: number;
+}
+
+async function safeCount(query: FirebaseFirestore.Query | FirebaseFirestore.CollectionReference): Promise<number> {
+    try {
+        const snap = await query.count().get();
+        return snap.data().count;
+    } catch {
+        return 0;
+    }
+}
+
+// ─── Cached inner fetcher (5-min TTL, admin-only route) ─────────────────────
+const fetchModuleRegistrationStats = unstable_cache(
+    async (): Promise<ModuleRegistrationStats> => {
+        const [
+            hub,
+            wave,
+            waveBriefing,
+            academy,
+            cooperatives,
+            cooperativeOnboarding,
+            farmNation,
+            exportHub,
+            exportOnboarding,
+            marketplace,
+        ] = await Promise.all([
+            // Hub: all registered platform accounts
+            safeCount(db.collection(COLLECTIONS.USERS)),
+
+            // WAVE: submitted applications (exclude drafts by requiring a status field)
+            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS).where("status", "in", ["pending", "submitted", "under_review", "approved", "rejected"])),
+
+            // WAVE Briefings: all walk-in event registrations
+            safeCount(db.collection("wave_briefing_registrations")), // no COLLECTIONS key — raw string matches action files
+
+            // Academy applicants — COLLECTIONS.ACADEMY_APPLICATIONS = "ACADEMY_APPLICATIONS" (verified)
+            safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
+
+            // Cooperatives: enrolled members excluding rejected
+            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "!=", "rejected")),
+
+            // Cooperative onboarding pipeline (pending only)
+            safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING).where("status", "==", "pending")),
+
+            // Farm Nation: unique registered sellers via user profile
+            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "in", ["pending", "approved"])),
+
+            // Export Hub: unique investors via user profile (not slots — 1:many)
+            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.export.status", "in", ["pending", "approved"])),
+
+            // Export onboarding pipeline (pending_review only)
+            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending_review")),
+
+            // Marketplace: seller verifications excluding rejected
+            safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "!=", "rejected")),
+        ]);
+        return { hub, wave, waveBriefing, academy, cooperatives, cooperativeOnboarding, farmNation, exportHub, exportOnboarding, marketplace };
+    },
+    ["module-registration-stats"],
+    { revalidate: 300, tags: ["module-registration-stats"] } // 5-minute cache
+);
+
+export async function getModuleRegistrationStatsAction(): Promise<ModuleRegistrationStats> {
+    const session = await auth();
+    if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+        throw new Error("Unauthorized");
+    }
+    // Auth passes — serve from cache (Firestore only hit every 5 minutes)
+    return fetchModuleRegistrationStats();
 }

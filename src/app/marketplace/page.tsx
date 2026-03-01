@@ -4,6 +4,21 @@ import Image from "next/image";
 import Link from "next/link";
 import { getRecommendedProductsAction } from "@/app/actions/marketplace";
 import BackToHub from "@/components/common/BackToHub";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+    title: "Easy Market Nigeria — Buy & Sell Agricultural Products",
+    description: "Connect with verified buyers and sellers across Nigeria. Trade premium yam, sesame seeds, hibiscus and more with secure escrow protection.",
+    alternates: { canonical: "https://easysalesexport.com/marketplace" },
+    openGraph: {
+        title: "Easy Market Nigeria — Agricultural Marketplace",
+        description: "Nigeria's largest agricultural marketplace. Buy or sell premium commodities with verified sellers and escrow-protected payments.",
+        url: "https://easysalesexport.com/marketplace",
+        images: [{ url: "/images/og-banner.png", width: 1200, height: 630, alt: "Easy Market Nigeria" }],
+    },
+};
+
+
 
 // Removed force-dynamic to allow static rendering
 

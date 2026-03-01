@@ -41,10 +41,13 @@ export const metadata: Metadata = {
     template: "%s | Easy Sales Export"
   },
   description: "Nigeria's premier platform for agricultural export management. Export yam, sesame seeds, and dried hibiscus to international markets.",
-  keywords: ["agricultural export", "Nigeria", "yam export", "sesame seeds", "hibiscus", "export platform", "Easy Sales Export"],
+  keywords: ["agricultural export", "Nigeria", "yam export", "sesame seeds", "hibiscus", "export platform", "Easy Sales Export", "cooperative", "farm nation", "academy"],
   authors: [{ name: "KusuConsult-NG" }],
   creator: "KusuConsult-NG",
   metadataBase: new URL("https://easysalesexport.com"),
+  alternates: {
+    canonical: "https://easysalesexport.com",
+  },
   openGraph: {
     type: "website",
     locale: "en_NG",
@@ -54,18 +57,19 @@ export const metadata: Metadata = {
     siteName: "Easy Sales Export",
     images: [
       {
-        url: "/images/logo.jpg",
-        width: 630,
+        // Primary OG banner — 1200×630 landscape for social cards
+        url: "/images/og-banner.png",
+        width: 1200,
         height: 630,
-        alt: "Easy Sales Export Platform",
+        alt: "Easy Sales Export — Nigeria's Premier Agricultural Export Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Easy Sales Export",
-    description: "Nigeria's premier agricultural export platform.",
-    images: ["/images/logo.jpg"],
+    title: "Easy Sales Export — Agricultural Export Platform",
+    description: "Nigeria's premier agricultural export platform. Export yam, sesame, hibiscus and more.",
+    images: ["/images/og-banner.png"],
     creator: "@EasySalesExport",
   },
   icons: {
@@ -75,6 +79,7 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+    googleBot: { index: true, follow: true },
   },
 };
 
@@ -106,6 +111,22 @@ export default function RootLayout({
       "https://market.easysalesexport.com",
       "https://wave.ng"
     ]
+  };
+
+  // WebSite schema — enables Google Sitelinks Searchbox in brand search results
+  const websiteJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Easy Sales Export",
+    "url": "https://easysalesexport.com",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "https://easysalesexport.com/marketplace/products?q={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    }
   }
 
   return (
@@ -130,6 +151,10 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
         />
       </head>
       <body

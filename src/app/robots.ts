@@ -45,6 +45,12 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
             { userAgent: 'GPTBot', disallow: ['/'] },
             { userAgent: 'CCBot', disallow: ['/'] },
             { userAgent: 'anthropic-ai', disallow: ['/'] },
+            { userAgent: 'ClaudeBot', disallow: ['/'] },
+            { userAgent: 'Bytespider', disallow: ['/'] },
+            { userAgent: 'Amazonbot', disallow: ['/'] },
+            { userAgent: 'PerplexityBot', disallow: ['/'] },
+            { userAgent: 'Applebot-Extended', disallow: ['/'] },
+            { userAgent: 'Diffbot', disallow: ['/'] },
         ],
         sitemap,
     }

@@ -64,13 +64,13 @@ export async function generateMetadata(
                 title: `${title} | Easy Sales Academy`,
                 description,
                 url: `https://easysalesacademy.com/academy/${courseId}`,
-                images: [{ url: '/images/logo.jpg', width: 630, height: 630, alt: title }],
+                images: [{ url: '/images/og-banner.png', width: 1200, height: 630, alt: title }],
             },
             twitter: {
                 card: 'summary_large_image',
                 title: `${title} | Easy Sales Academy`,
                 description,
-                images: ['/images/logo.jpg'],
+                images: ['/images/og-banner.png'],
             },
             other: {
                 'application/ld+json': JSON.stringify(jsonLd),

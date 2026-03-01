@@ -15,7 +15,7 @@ export async function generateMetadata(
 
     try {
         const db = getAdminDb()
-        const doc = await db.collection('marketplace_products').doc(id).get()
+        const doc = await db.collection('products').doc(id).get()
 
         if (!doc.exists) {
             return {

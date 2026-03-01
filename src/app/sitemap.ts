@@ -28,18 +28,18 @@ const STATIC_ROUTES: MetadataRoute.Sitemap = [
     { url: `${WAVE_URL}`, lastModified: new Date('2026-02-01'), changeFrequency: 'monthly', priority: 0.8 },
 ]
 
-export const revalidate = 3600 // Regenerate sitemap at most once per hour
+export const revalidate = 600 // Regenerate sitemap every 10 minutes (was 1 hour)
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     try {
         const db = getAdminDb()
 
-        // Fetch approved marketplace products
+        // Fetch approved marketplace products — collection is 'products' (not 'marketplace_products')
         const productsSnap = await db
-            .collection('marketplace_products')
+            .collection('products')
             .where('status', '==', 'approved')
             .select('updatedAt', 'createdAt')
-            .limit(200)
+            .limit(500)
             .get()
 
         const productUrls: MetadataRoute.Sitemap = productsSnap.docs.map((doc) => {

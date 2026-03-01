@@ -12,12 +12,16 @@ import {
     AlertCircle,
     Loader2,
 } from "lucide-react";
-import type { AnalyticsData } from "@/app/actions/admin-analytics";
+import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin-analytics";
+import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<AnalyticsData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    const [moduleStats, setModuleStats] = useState<ModuleRegistrationStats | null>(null);
+    const [moduleStatsLoading, setModuleStatsLoading] = useState(true);
 
     useEffect(() => {
         async function fetchStats() {
@@ -34,7 +38,21 @@ export default function AdminDashboardPage() {
             }
         }
 
+        async function fetchModuleStats() {
+            try {
+                const { getModuleRegistrationStatsAction } = await import("@/app/actions/admin-analytics");
+                const data = await getModuleRegistrationStatsAction();
+                setModuleStats(data);
+            } catch (err) {
+                logger.error("Failed to load module registration stats", err);
+                // Non-fatal — chart just won't render
+            } finally {
+                setModuleStatsLoading(false);
+            }
+        }
+
         fetchStats();
+        fetchModuleStats();
     }, []);
 
     if (loading) {
@@ -194,7 +212,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                     <a
                         href="/admin/loans"
                         className="bg-white rounded-lg p-6 hover:bg-slate-50 transition shadow-sm"
@@ -219,6 +237,16 @@ export default function AdminDashboardPage() {
                         </p>
                     </a>
                 </div>
+
+                {/* Module Registration Chart */}
+                {moduleStatsLoading ? (
+                    <div className="bg-white rounded-2xl shadow-sm p-8 flex items-center justify-center gap-3 text-slate-400 text-sm">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Loading registration stats...
+                    </div>
+                ) : moduleStats ? (
+                    <RegistrationPieChart stats={moduleStats} />
+                ) : null}
             </div>
         </div>
     );
