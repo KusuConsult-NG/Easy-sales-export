@@ -122,8 +122,12 @@ export interface User {
             submittedAt?: Date;
         };
         academy?: {
-            status: "active" | "suspended";
+            status: "pending" | "approved" | "active" | "suspended" | "rejected";
             enrolledAt?: Date;
+            applicationId?: string;
+            submittedAt?: Date;
+            paymentStatus?: "pending" | "completed" | "failed";
+            plan?: string;
         };
     };
 
@@ -826,7 +830,7 @@ export const COLLECTIONS = {
 
 
     // Education & Training
-    ACADEMY_APPLICATIONS: "ACADEMY_APPLICATIONS",
+    ACADEMY_APPLICATIONS: "academy_applications",
     COURSES: "courses",
     ENROLLMENTS: "enrollments",
     ACADEMY_COURSES: "academy_courses",
@@ -882,6 +886,9 @@ export const COLLECTIONS = {
 
     // WAVE Earnings Withdrawals
     WAVE_WITHDRAWALS: "wave_withdrawals",
+
+    // Cooperative Withdrawals (member savings withdrawals)
+    COOPERATIVE_WITHDRAWALS: "cooperative_withdrawals",
 
     // Platform / Admin Configuration
     PLATFORM_SETTINGS: "platform_settings",

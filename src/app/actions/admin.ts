@@ -284,8 +284,14 @@ export async function processWithdrawalAction(
             return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
-        const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
-        const withdrawalDoc = await withdrawalRef.get();
+        // Try standard withdrawals first, then cooperative_withdrawals
+        let withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc(withdrawalId);
+        let withdrawalDoc = await withdrawalRef.get();
+
+        if (!withdrawalDoc.exists) {
+            withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);
+            withdrawalDoc = await withdrawalRef.get();
+        }
 
         if (!withdrawalDoc.exists) {
             return { error: "Withdrawal request not found", success: false };
@@ -589,37 +595,47 @@ export async function getPendingWithdrawalsAction(
             return { error: "Unauthorized: Permission required - finance:read", success: false };
         }
 
-        let query: FirebaseFirestore.Query = statusFilter === "all"
-            ? db.collection(COLLECTIONS.WITHDRAWALS).orderBy("createdAt", "desc").limit(limit)
-            : db.collection(COLLECTIONS.WITHDRAWALS)
-                .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc")
-                .limit(limit);
+        // Helper to build a query per collection
+        const buildQuery = (collectionName: string) => {
+            return statusFilter === "all"
+                ? db.collection(collectionName).orderBy("createdAt", "desc").limit(limit)
+                : db.collection(collectionName)
+                    .where("status", "==", statusFilter)
+                    .orderBy("createdAt", "desc")
+                    .limit(limit);
+        };
 
-        if (lastCreatedAt) {
-            const cursorDate = typeof lastCreatedAt === 'string' ? new Date(lastCreatedAt) : lastCreatedAt;
-            query = query.startAfter(Timestamp.fromDate(cursorDate));
-        }
+        // Query both standard withdrawals AND cooperative_withdrawals
+        const [stdSnap, coopSnap] = await Promise.all([
+            buildQuery(COLLECTIONS.WITHDRAWALS).get(),
+            buildQuery(COLLECTIONS.COOPERATIVE_WITHDRAWALS).get(),
+        ]);
 
-        const snapshot = await query.get();
-
-        const withdrawals = snapshot.docs.map(doc => ({
+        const toRecord = (doc: FirebaseFirestore.QueryDocumentSnapshot, source: string) => ({
             id: doc.id,
             ...doc.data(),
+            source,
             createdAt: doc.data().createdAt?.toDate() || new Date(),
-        }));
+        });
+
+        const all = [
+            ...stdSnap.docs.map(d => toRecord(d, "withdrawal")),
+            ...coopSnap.docs.map(d => toRecord(d, "cooperative_withdrawal")),
+        ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(0, limit);
 
         return {
             error: null,
             success: true,
-            data: withdrawals,
-            hasMore: withdrawals.length === limit
+            data: all,
+            hasMore: all.length === limit,
         };
     } catch (error: any) {
         logger.error("Get withdrawals error:", error);
         return { error: "Failed to fetch withdrawals", success: false };
     }
 }
+
 
 // ============================================
 // Land Verification (Admin)

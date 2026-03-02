@@ -30,7 +30,7 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ success: false, error: "withdrawalId is required" }, { status: 400 });
         }
 
-        const ref = db.collection("withdrawals").doc(withdrawalId);
+        const ref = db.collection("cooperative_withdrawals").doc(withdrawalId);
         const snap = await ref.get();
 
         if (!snap.exists) {

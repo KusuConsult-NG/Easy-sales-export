@@ -838,7 +838,7 @@ export async function submitWithdrawalAction(
             });
 
             // Create withdrawal request
-            const withdrawalRef = db.collection("cooperative_withdrawals").doc();
+            const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
             transaction.set(withdrawalRef, {
                 userId,
                 amount,

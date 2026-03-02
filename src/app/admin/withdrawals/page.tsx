@@ -20,6 +20,7 @@ interface WithdrawalRequest {
     status: "pending" | "completed" | "rejected" | "approved_pending_payout";
     createdAt: Date;
     adminNotes?: string;
+    source?: "withdrawal" | "cooperative_withdrawal";
 }
 
 export default function AdminWithdrawalsPage() {
@@ -212,6 +213,11 @@ export default function AdminWithdrawalsPage() {
                                     <p className="text-2xl font-bold text-slate-900">
                                         {formatCurrency(withdrawal.amount)}
                                     </p>
+                                    {withdrawal.source === "cooperative_withdrawal" && (
+                                        <span className="mt-1 inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
+                                            Cooperative
+                                        </span>
+                                    )}
                                     <p className="text-xs text-slate-500 mt-1">
                                         {withdrawal.bankAccount}
                                     </p>
