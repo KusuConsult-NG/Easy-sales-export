@@ -52,6 +52,8 @@ export type AuditAction =
     | "export_reject"
     | "academy_approve"
     | "academy_reject"
+    | "academy_under_review"
+    | "farm_nation_reject"
     | "export_investment";
 
 export interface AuditLog {

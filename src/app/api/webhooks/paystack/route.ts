@@ -58,7 +58,8 @@ export async function POST(req: NextRequest) {
                     await processExportInvestment(reference, amountPaidv, userId, exportId);
                 } else if (type === "cooperative_membership_registration") {
                     const tier = metadata.membershipTier;
-                    await processCooperativeRegistration(reference, amountPaidv, userId, tier);
+                    const membershipId = metadata.membershipId;
+                    await processCooperativeRegistration(reference, amountPaidv, userId, tier, membershipId);
                 } else if (type === "academy_registration") {
                     const plan = metadata.plan;
                     await processAcademyRegistration(reference, amountPaidv, userId, plan);
@@ -224,41 +225,49 @@ async function processExportInvestment(reference: string, amount: number, userId
 /**
  * Handle Cooperative Membership Registration Fulfillment
  */
-async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string) {
+async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string, membershipId?: string) {
+    // Normalise tier to lowercase for consistent comparison
+    const normalisedTier = (tier || "basic").toLowerCase();
+
     // Validate Amount based on Tier
-    let expectedAmount = 10000; // Basic
-    if (tier === "premium") expectedAmount = 20000;
+    let expectedAmount = 10000; // basic
+    if (normalisedTier === "premium") expectedAmount = 20000;
 
     // Strict check (allow 1 naira variance)
     if (amount < expectedAmount - 1) {
         logger.error(`[Paystack Webhook] Cooperative Payment Underpaid. Expected ${expectedAmount}, Paid ${amount}`);
-        // Log it but maybe don't fulfill? 
-        // For safety, we THROW to bubble up error and NOT return 200 OK so Paystack retries?
-        // No, Paystack will retry forever if we fail. 
-        // Better to record it as "failed_verification" in processedPayments?
-        // For now, let's THROW to fail the webhook.
         throw new Error("Insufficient payment amount");
     }
 
+    // Resolve the membership document reference.
+    // The doc ID is membershipId (not userId). Prefer direct lookup via membershipId from metadata.
+    let memberRef: FirebaseFirestore.DocumentReference;
+    if (membershipId) {
+        memberRef = db.collection("cooperative_members").doc(membershipId);
+    } else {
+        // Fallback: query by userId field
+        const querySnap = await db.collection("cooperative_members")
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .limit(1)
+            .get();
+        if (querySnap.empty) {
+            throw new Error(`[Paystack Webhook] No cooperative_members doc found for userId ${userId}`);
+        }
+        memberRef = querySnap.docs[0].ref;
+    }
+
     await db.runTransaction(async (t) => {
-        const memberRef = db.collection("cooperative_members").doc(userId);
         const processedRef = db.collection("processedPayments").doc(reference);
 
-        // 1. Update Member Record
-        // We use set with merge to ensure we don't overwrite if existing data
         t.set(memberRef, {
             paymentStatus: "completed",
             paymentReference: reference,
-            membershipTier: tier,
+            membershipTier: normalisedTier,
             paymentVerifiedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
-            // Initialize balances if they don't exist (using merge will keep existing if present? No, merge doesn't default.)
-            // We can't easily "default if missing" in a set merge without reading first.
-            // But this is a blind write for speed? 
-            // Actually, let's just set the status. The application form will handle the rest or the user is already partially created.
         }, { merge: true });
 
-        // 2. Mark Processed
         t.set(processedRef, {
             reference,
             type: "cooperative_membership_registration",
@@ -298,10 +307,13 @@ async function processCooperativeRegistration(reference: string, amount: number,
  * Handle Academy Registration Fulfillment
  */
 async function processAcademyRegistration(reference: string, amount: number, userId: string, plan: string) {
+    // Normalise plan to lowercase for consistent comparison
+    const normalisedPlan = (plan || "foundation").toLowerCase();
+
     // Validate Amount
-    let expectedAmount = 25000; // Foundation
-    if (plan === "advanced") expectedAmount = 50000;
-    if (plan === "elite") expectedAmount = 100000;
+    let expectedAmount = 25000; // foundation
+    if (normalisedPlan === "advanced") expectedAmount = 50000;
+    if (normalisedPlan === "elite") expectedAmount = 100000;
 
     if (amount < expectedAmount - 1) {
         logger.error(`[Paystack Webhook] Academy Payment Underpaid. Expected ${expectedAmount}, Paid ${amount}`);
@@ -319,7 +331,7 @@ async function processAcademyRegistration(reference: string, amount: number, use
                     paymentStatus: "completed",
                     paymentReference: reference,
                     paymentAmount: amount,
-                    plan: plan || "foundation",
+                    plan: normalisedPlan,
                     paidAt: FieldValue.serverTimestamp(),
                 }
             },

@@ -171,6 +171,26 @@ export async function approveFarmNationSellerAction(userId: string) {
     }
 }
 
+export async function rejectFarmNationSellerAction(userId: string, reason: string) {
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            "serviceRegistrations.farmNation.status": "rejected",
+            "serviceRegistrations.farmNation.rejectionReason": reason,
+            "serviceRegistrations.farmNation.rejectedAt": FieldValue.serverTimestamp(),
+            "serviceRegistrations.farmNation.rejectedBy": session.user.id,
+            roles: FieldValue.arrayRemove("farm-nation-seller"),
+        });
+
+        return { success: true, message: "Seller application rejected" };
+    } catch (error: any) {
+        logger.error("Reject Farm Nation seller error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
 /**
  * Get property by ID
  */

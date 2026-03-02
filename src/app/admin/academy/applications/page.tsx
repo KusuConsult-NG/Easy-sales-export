@@ -6,10 +6,11 @@ import { useToast } from "@/contexts/ToastContext";
 import {
     getAcademyApplicationsAction,
     approveAcademyApplicationAction,
-    rejectAcademyApplicationAction
+    rejectAcademyApplicationAction,
+    markAcademyApplicationUnderReviewAction
 } from "@/app/actions/admin";
 
-type ApplicationStatus = "pending" | "approved" | "rejected";
+type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
 interface AcademyApplication {
     id: string;
@@ -86,12 +87,27 @@ export default function AdminAcademyApplicationsPage() {
 
         if (result.success) {
             showToast("Application rejected successfully", "success");
-            // Update local state
             setApplications(applications.map(app =>
                 app.id === applicationId ? { ...app, status: "rejected", rejectionReason: reason } : app
             ));
         } else {
             showToast(result.error || "Failed to reject application", "error");
+        }
+
+        setProcessingId(null);
+    };
+
+    const handleMarkUnderReview = async (applicationId: string) => {
+        setProcessingId(applicationId + "_review");
+        const result = await markAcademyApplicationUnderReviewAction(applicationId);
+
+        if (result.success) {
+            showToast("Application marked as under review", "success");
+            setApplications(applications.map(app =>
+                app.id === applicationId ? { ...app, status: "under_review" } : app
+            ));
+        } else {
+            showToast(result.error || "Failed to update status", "error");
         }
 
         setProcessingId(null);
@@ -109,12 +125,10 @@ export default function AdminAcademyApplicationsPage() {
 
     const getStatusColor = (status: ApplicationStatus) => {
         switch (status) {
-            case "approved":
-                return "bg-green-100 text-green-700";
-            case "rejected":
-                return "bg-red-100 text-red-700";
-            case "pending":
-                return "bg-yellow-100 text-yellow-700";
+            case "approved": return "bg-green-100 text-green-700";
+            case "rejected": return "bg-red-100 text-red-700";
+            case "under_review": return "bg-blue-100 text-blue-700";
+            default: return "bg-yellow-100 text-yellow-700";
         }
     };
 
@@ -140,6 +154,7 @@ export default function AdminAcademyApplicationsPage() {
                 >
                     <option value="all">All Applications</option>
                     <option value="pending">Pending</option>
+                    <option value="under_review">Under Review</option>
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                 </select>
@@ -199,26 +214,26 @@ export default function AdminAcademyApplicationsPage() {
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => handleReject(app.id)}
-                                            disabled={processingId === app.id}
+                                            disabled={processingId === app.id || processingId === app.id + "_review"}
                                             className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
                                         >
-                                            {processingId === app.id ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <XCircle className="w-4 h-4" />
-                                            )}
+                                            {processingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                                             Reject
                                         </button>
                                         <button
+                                            onClick={() => handleMarkUnderReview(app.id)}
+                                            disabled={processingId === app.id || processingId === app.id + "_review"}
+                                            className="px-4 py-2 rounded-lg border border-amber-400 text-amber-700 font-semibold hover:bg-amber-50 transition disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            {processingId === app.id + "_review" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                                            Under Review
+                                        </button>
+                                        <button
                                             onClick={() => handleApprove(app.id)}
-                                            disabled={processingId === app.id}
+                                            disabled={processingId === app.id || processingId === app.id + "_review"}
                                             className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
                                         >
-                                            {processingId === app.id ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <CheckCircle className="w-4 h-4" />
-                                            )}
+                                            {processingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                                             Approve
                                         </button>
                                     </div>

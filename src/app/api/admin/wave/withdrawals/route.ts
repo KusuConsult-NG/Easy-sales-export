@@ -66,7 +66,7 @@ export async function PATCH(request: NextRequest) {
         const body = await request.json();
         const { withdrawalId, action, adminNotes, transactionReference } = body;
 
-        if (!withdrawalId || !action || !["approve", "reject"].includes(action)) {
+        if (!withdrawalId || !action || !["approve", "reject", "complete"].includes(action)) {
             return NextResponse.json({ success: false, error: "Invalid request" }, { status: 400 });
         }
 
@@ -75,6 +75,22 @@ export async function PATCH(request: NextRequest) {
 
         if (!doc.exists) {
             return NextResponse.json({ success: false, error: "Withdrawal not found" }, { status: 404 });
+        }
+
+        // For "complete" action, we accept approved_pending_payout; for approve/reject we need pending
+        if (action === "complete") {
+            if (doc.data()?.status !== "approved_pending_payout") {
+                return NextResponse.json({ success: false, error: "Can only complete approved_pending_payout withdrawals" }, { status: 409 });
+            }
+            await ref.update({
+                status: "completed",
+                completedBy: session.user.id,
+                completedAt: FieldValue.serverTimestamp(),
+                ...(adminNotes ? { adminNotes } : {}),
+                ...(transactionReference ? { transactionReference } : {}),
+            });
+            logger.info(`WAVE withdrawal ${withdrawalId} completed by admin ${session.user.id}`);
+            return NextResponse.json({ success: true, status: "completed" });
         }
 
         if (doc.data()?.status !== "pending") {

@@ -17,8 +17,9 @@ interface WithdrawalRequest {
     amount: number;
     bankAccount: string;
     reason?: string;
-    status: "pending" | "completed" | "rejected";
+    status: "pending" | "completed" | "rejected" | "approved_pending_payout";
     createdAt: Date;
+    adminNotes?: string;
 }
 
 export default function AdminWithdrawalsPage() {
@@ -27,15 +28,16 @@ export default function AdminWithdrawalsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState<"pending" | "completed" | "rejected" | "approved_pending_payout" | "all">("pending");
 
     const fetchWithdrawals = async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const result = await getPendingWithdrawalsAction();
+            const result = await getPendingWithdrawalsAction(50, undefined, statusFilter);
 
             if (result.success && result.data) {
-                setWithdrawals(result.data);
+                setWithdrawals(result.data as WithdrawalRequest[]);
             } else {
                 throw new Error(result.error || "Failed to load withdrawal requests");
             }
@@ -47,7 +49,7 @@ export default function AdminWithdrawalsPage() {
 
     useEffect(() => {
         fetchWithdrawals();
-    }, []);
+    }, [statusFilter]);
 
     const handleApprove = async (withdrawalId: string) => {
         const notes = prompt("Optional admin notes:");
@@ -56,7 +58,7 @@ export default function AdminWithdrawalsPage() {
         const result = await processWithdrawalAction(withdrawalId, "approve", notes || undefined);
 
         if (result.success) {
-            fetchWithdrawals(); // Refresh list
+            fetchWithdrawals();
         } else {
             showToast(result.error, "error");
         }
@@ -72,11 +74,33 @@ export default function AdminWithdrawalsPage() {
         const result = await processWithdrawalAction(withdrawalId, "reject", notes);
 
         if (result.success) {
-            fetchWithdrawals(); // Refresh list
+            fetchWithdrawals();
         } else {
             showToast(result.error, "error");
         }
 
+        setProcessingId(null);
+    };
+
+    const handleMarkCompleted = async (withdrawalId: string) => {
+        const ref = prompt("Enter bank transfer reference (optional):");
+        setProcessingId(withdrawalId + "_complete");
+        try {
+            const res = await fetch("/api/admin/cooperative/mark-withdrawal-completed", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ withdrawalId, transactionReference: ref || undefined }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast("Withdrawal marked as completed", "success");
+                fetchWithdrawals();
+            } else {
+                showToast(data.error || "Failed to mark completed", "error");
+            }
+        } catch {
+            showToast("Network error", "error");
+        }
         setProcessingId(null);
     };
 
@@ -90,16 +114,38 @@ export default function AdminWithdrawalsPage() {
         }).format(new Date(date));
     };
 
+    const STATUS_COLORS: Record<string, string> = {
+        pending: "bg-yellow-100 text-yellow-700",
+        approved_pending_payout: "bg-orange-100 text-orange-700",
+        completed: "bg-green-100 text-green-700",
+        rejected: "bg-red-100 text-red-700",
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 p-8">
             {/* Header */}
-            <div className="mb-8">
+            <div className="mb-6 sm:mb-8">
                 <h1 className="text-3xl font-bold text-slate-900 mb-2">
                     Withdrawal Requests
                 </h1>
                 <p className="text-slate-600">
-                    Review and process pending cooperative withdrawal requests
+                    Review and process cooperative withdrawal requests
                 </p>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-4 mb-6">
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
+                >
+                    <option value="pending">Pending</option>
+                    <option value="approved_pending_payout">Approved (Pending Payout)</option>
+                    <option value="completed">Completed</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="all">All</option>
+                </select>
             </div>
 
             {/* Summary Card */}
@@ -178,30 +224,56 @@ export default function AdminWithdrawalsPage() {
                                 </p>
 
                                 <div className="flex gap-2">
-                                    <button
-                                        onClick={() => handleReject(withdrawal.id)}
-                                        disabled={processingId === withdrawal.id}
-                                        className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
-                                    >
-                                        {processingId === withdrawal.id ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <XCircle className="w-4 h-4" />
-                                        )}
-                                        Reject
-                                    </button>
-                                    <button
-                                        onClick={() => handleApprove(withdrawal.id)}
-                                        disabled={processingId === withdrawal.id}
-                                        className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
-                                    >
-                                        {processingId === withdrawal.id ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <CheckCircle className="w-4 h-4" />
-                                        )}
-                                        Approve & Process
-                                    </button>
+                                    {/* Pending: show Reject + Approve */}
+                                    {withdrawal.status === "pending" && (
+                                        <>
+                                            <button
+                                                onClick={() => handleReject(withdrawal.id)}
+                                                disabled={!!processingId}
+                                                className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                {processingId === withdrawal.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <XCircle className="w-4 h-4" />
+                                                )}
+                                                Reject
+                                            </button>
+                                            <button
+                                                onClick={() => handleApprove(withdrawal.id)}
+                                                disabled={!!processingId}
+                                                className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                {processingId === withdrawal.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <CheckCircle className="w-4 h-4" />
+                                                )}
+                                                Approve & Process
+                                            </button>
+                                        </>
+                                    )}
+                                    {/* Approved but awaiting manual bank transfer: show Mark Completed */}
+                                    {withdrawal.status === "approved_pending_payout" && (
+                                        <button
+                                            onClick={() => handleMarkCompleted(withdrawal.id)}
+                                            disabled={!!processingId}
+                                            className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2"
+                                        >
+                                            {processingId === withdrawal.id + "_complete" ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <CheckCircle className="w-4 h-4" />
+                                            )}
+                                            Mark Completed
+                                        </button>
+                                    )}
+                                    {/* Status badge for completed / rejected */}
+                                    {(withdrawal.status === "completed" || withdrawal.status === "rejected") && (
+                                        <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${STATUS_COLORS[withdrawal.status] || "bg-slate-100 text-slate-700"}`}>
+                                            {withdrawal.status}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>

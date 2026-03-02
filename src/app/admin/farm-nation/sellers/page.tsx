@@ -69,14 +69,6 @@ export default function FarmNationSellersPage() {
         setProcessingId(seller.id);
 
         try {
-            // Logic to approve: 
-            // 1. Update serviceRegistrations.farmNation.status = 'approved'
-            // 2. Ensure they have 'farm-nation-seller' role (likely already do)
-            // We might need a specific action for this, or use generic update
-            // For now, using toggleVerification as a placeholder or we need a new action
-
-            // Note: Implementation Plan calls for refactoring `farm-nation.ts` to include approval actions
-            // I will use a placeholder action call here assuming I'll implement it next
             const { approveFarmNationSellerAction } = await import("@/app/actions/farm-nation");
             const result = await approveFarmNationSellerAction(seller.id);
 
@@ -89,6 +81,28 @@ export default function FarmNationSellersPage() {
         } catch (err) {
             console.error(err);
             showToast("Error approving seller", "error");
+        }
+        setProcessingId(null);
+    };
+
+    const handleRejectSeller = async (seller: SellerProfile) => {
+        const reason = prompt("Enter rejection reason:");
+        if (!reason?.trim()) return;
+        setProcessingId(seller.id + "_reject");
+
+        try {
+            const { rejectFarmNationSellerAction } = await import("@/app/actions/farm-nation");
+            const result = await rejectFarmNationSellerAction(seller.id, reason);
+
+            if (result.success) {
+                showToast("Seller application rejected", "success");
+                refresh();
+            } else {
+                showToast(result.error || "Failed to reject", "error");
+            }
+        } catch (err) {
+            console.error(err);
+            showToast("Error rejecting seller", "error");
         }
         setProcessingId(null);
     };
@@ -122,8 +136,8 @@ export default function FarmNationSellersPage() {
                 const status = item.serviceRegistrations?.farmNation?.status || "unknown";
                 return (
                     <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${status === "approved" ? "bg-green-100 text-green-700" :
-                            status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                                "bg-slate-100 text-slate-700"
+                        status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                            "bg-slate-100 text-slate-700"
                         }`}>
                         {status}
                     </span>
@@ -151,18 +165,29 @@ export default function FarmNationSellersPage() {
                     <button
                         onClick={(e) => { e.stopPropagation(); setSelectedSeller(item); setIsDetailOpen(true); }}
                         className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        title="View Details"
                     >
                         <Shield className="w-4 h-4" />
                     </button>
                     {item.serviceRegistrations?.farmNation?.status === "pending" && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); handleApproveSeller(item); }}
-                            disabled={processingId === item.id}
-                            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-50"
-                            title="Approve"
-                        >
-                            {processingId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                        </button>
+                        <>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleRejectSeller(item); }}
+                                disabled={processingId === item.id || processingId === item.id + "_reject"}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
+                                title="Reject"
+                            >
+                                {processingId === item.id + "_reject" ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleApproveSeller(item); }}
+                                disabled={processingId === item.id || processingId === item.id + "_reject"}
+                                className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-50"
+                                title="Approve"
+                            >
+                                {processingId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                            </button>
+                        </>
                     )}
                 </div>
             )

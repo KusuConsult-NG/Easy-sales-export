@@ -575,7 +575,8 @@ export async function getWaveApplicationsAction(
 
 export async function getPendingWithdrawalsAction(
     limit = 50,
-    lastCreatedAt?: Date | string
+    lastCreatedAt?: Date | string,
+    statusFilter: "pending" | "completed" | "rejected" | "approved_pending_payout" | "all" = "pending"
 ): Promise<{
     error: string | null;
     success: boolean;
@@ -588,10 +589,12 @@ export async function getPendingWithdrawalsAction(
             return { error: "Unauthorized: Permission required - finance:read", success: false };
         }
 
-        let query = db.collection(COLLECTIONS.WITHDRAWALS)
-            .where("status", "==", "pending")
-            .orderBy("createdAt", "desc")
-            .limit(limit);
+        let query: FirebaseFirestore.Query = statusFilter === "all"
+            ? db.collection(COLLECTIONS.WITHDRAWALS).orderBy("createdAt", "desc").limit(limit)
+            : db.collection(COLLECTIONS.WITHDRAWALS)
+                .where("status", "==", statusFilter)
+                .orderBy("createdAt", "desc")
+                .limit(limit);
 
         if (lastCreatedAt) {
             const cursorDate = typeof lastCreatedAt === 'string' ? new Date(lastCreatedAt) : lastCreatedAt;
@@ -613,7 +616,7 @@ export async function getPendingWithdrawalsAction(
             hasMore: withdrawals.length === limit
         };
     } catch (error: any) {
-        logger.error("Get pending withdrawals error:", error);
+        logger.error("Get withdrawals error:", error);
         return { error: "Failed to fetch withdrawals", success: false };
     }
 }
@@ -1762,7 +1765,7 @@ export async function rejectExportApplicationAction(
 // ============================================
 
 export async function getAcademyApplicationsAction(
-    statusFilter?: "pending" | "approved" | "rejected"
+    statusFilter?: "pending" | "under_review" | "approved" | "rejected"
 ): Promise<{
     error: string | null;
     success: boolean;
@@ -1923,6 +1926,41 @@ export async function rejectAcademyApplicationAction(
     } catch (error: any) {
         logger.error("Reject Academy application error:", error);
         return { error: "Failed to reject application", success: false };
+    }
+}
+
+// ============================================
+// Mark Academy Application Under Review
+// ============================================
+
+export async function markAcademyApplicationUnderReviewAction(
+    applicationId: string
+): Promise<ActionState> {
+    try {
+        const session = await auth();
+        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            return { error: "Unauthorized", success: false };
+        }
+
+        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).update({
+            status: "under_review",
+            reviewedBy: session.user.id,
+            reviewStartedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await logAuditAction("academy_under_review", applicationId, "application", {
+            adminId: session.user.id,
+        });
+
+        return {
+            error: null,
+            success: true,
+            message: "Application marked as under review",
+        };
+    } catch (error: any) {
+        logger.error("Mark Academy application under review error:", error);
+        return { error: "Failed to update application status", success: false };
     }
 }
 

@@ -107,8 +107,8 @@ export async function POST(request: NextRequest) {
                 metadata: {
                     membershipId,
                     userId: session.user.id,
-                    tier,
-                    type: "cooperative_registration",
+                    membershipTier: tier,
+                    type: "cooperative_membership_registration",
                 },
             }),
         });

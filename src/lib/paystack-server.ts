@@ -95,17 +95,26 @@ export function verifyPaystackWebhook(
     signature: string
 ): boolean {
     try {
+        if (!PAYSTACK_SECRET_KEY) {
+            console.error('Webhook verification failed: PAYSTACK_SECRET_KEY is not set');
+            return false;
+        }
+
         const hash = crypto
             .createHmac('sha512', PAYSTACK_SECRET_KEY)
             .update(payload)
             .digest('hex');
 
-        const signatureBuffer = Buffer.from(signature);
-        const hashBuffer = Buffer.from(hash);
+        // Both must be hex strings of equal length for timingSafeEqual
+        const signatureBuffer = Buffer.from(signature, 'hex');
+        const hashBuffer = Buffer.from(hash, 'hex');
+
+        if (signatureBuffer.length === 0 || signatureBuffer.length !== hashBuffer.length) {
+            return false;
+        }
 
         // Prevent timing attacks
-        return signatureBuffer.length === hashBuffer.length &&
-            crypto.timingSafeEqual(signatureBuffer, hashBuffer);
+        return crypto.timingSafeEqual(signatureBuffer, hashBuffer);
     } catch (error) {
         console.error('Webhook signature verification failed:', error);
         return false;

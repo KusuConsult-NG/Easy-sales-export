@@ -536,24 +536,32 @@ export default function CooperativeMembersPage() {
                         </div>
 
                         {/* Actions */}
-                        {selectedApplication.membershipStatus === "pending" && selectedApplication.paymentStatus === "completed" && (
-                            <div className="flex gap-3 pt-4 border-t border-slate-200">
-                                <button
-                                    onClick={() => handleApprove(selectedApplication.id)}
-                                    disabled={isProcessing}
-                                    className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    <CheckCircle className="w-5 h-5" />
-                                    Approve
-                                </button>
-                                <button
-                                    onClick={() => handleReject(selectedApplication.id)}
-                                    disabled={isProcessing}
-                                    className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    <XCircle className="w-5 h-5" />
-                                    Reject
-                                </button>
+                        {selectedApplication.membershipStatus === "pending" && (
+                            <div className="pt-4 border-t border-slate-200 space-y-3">
+                                {selectedApplication.paymentStatus !== "completed" && (
+                                    <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-medium">
+                                        <Clock className="w-4 h-4 shrink-0" />
+                                        Payment not yet confirmed ({selectedApplication.paymentStatus}). Verify payment before approving.
+                                    </div>
+                                )}
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => handleApprove(selectedApplication.id)}
+                                        disabled={isProcessing}
+                                        className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        <CheckCircle className="w-5 h-5" />
+                                        Approve
+                                    </button>
+                                    <button
+                                        onClick={() => handleReject(selectedApplication.id)}
+                                        disabled={isProcessing}
+                                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        <XCircle className="w-5 h-5" />
+                                        Reject
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>

@@ -54,10 +54,12 @@ export default function AdminWaveWithdrawalsPage() {
 
     useEffect(() => { fetchWithdrawals(); }, [statusFilter]);
 
-    const handleAction = async (withdrawalId: string, action: "approve" | "reject") => {
+    const handleAction = async (withdrawalId: string, action: "approve" | "reject" | "complete") => {
         const notes = action === "reject"
             ? prompt("Enter rejection reason:")
-            : prompt("Enter transaction reference (optional):");
+            : action === "approve"
+                ? prompt("Enter transaction reference (optional):")
+                : prompt("Enter bank transfer reference (optional):");
 
         if (action === "reject" && !notes) return;
 
@@ -70,13 +72,13 @@ export default function AdminWaveWithdrawalsPage() {
                     withdrawalId,
                     action,
                     adminNotes: notes || undefined,
-                    transactionReference: action === "approve" ? notes || undefined : undefined,
+                    transactionReference: (action === "approve" || action === "complete") ? notes || undefined : undefined,
                 }),
             });
 
             const data = await res.json();
             if (data.success) {
-                showToast(`Withdrawal ${action}d successfully`, "success");
+                showToast(`Withdrawal ${action === "complete" ? "marked as completed" : action + "d"} successfully`, "success");
                 fetchWithdrawals();
             } else {
                 showToast(data.error || `Failed to ${action} withdrawal`, "error");
@@ -193,6 +195,17 @@ export default function AdminWaveWithdrawalsPage() {
                                             Approve
                                         </button>
                                     </div>
+                                )}
+
+                                {wd.status === "approved_pending_payout" && (
+                                    <button
+                                        onClick={() => handleAction(wd.withdrawalId, "complete")}
+                                        disabled={processingId === wd.withdrawalId}
+                                        className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2 text-sm"
+                                    >
+                                        {processingId === wd.withdrawalId ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                        Mark Completed
+                                    </button>
                                 )}
 
                                 {wd.adminNotes && (
