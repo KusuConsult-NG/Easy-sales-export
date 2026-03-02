@@ -2,6 +2,31 @@ import type { NextConfig } from "next";
 import withBundleAnalyzer from '@next/bundle-analyzer';
 
 const nextConfig: NextConfig = {
+  // Reduce serverless function bundle sizes by excluding packages
+  // that are available natively in the Vercel runtime or unused server-side
+  outputFileTracingExcludes: {
+    '*': [
+      // Firebase admin bundles gRPC native binaries — exclude the ones not needed
+      'node_modules/@grpc/grpc-js/**',
+      'node_modules/google-gax/**',
+      'node_modules/@googleapis/**',
+      // Sharp is not used server-side (Next.js image optimization uses its own)
+      'node_modules/sharp/**',
+      // SWC native binaries are only needed at build time, not runtime
+      'node_modules/@next/swc-*/**',
+      // Prisma (if accidentally installed)
+      'node_modules/.prisma/**',
+      'node_modules/prisma/**',
+      // Test frameworks
+      'node_modules/jest/**',
+      'node_modules/@jest/**',
+    ],
+  },
+
+  // Misc
+  poweredByHeader: false,
+  reactStrictMode: true,
+
   // Experimental
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts'],
