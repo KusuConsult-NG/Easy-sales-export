@@ -799,7 +799,7 @@ export async function getPendingLoanApplications(): Promise<{
             return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
         }
 
-        const snapshot = await db.collection("loan_applications")
+        const snapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where("status", "==", "pending")
             .orderBy("appliedAt", "desc")
             .get();
@@ -897,7 +897,7 @@ export async function approveLoanApplication(
         }
 
         // Get loan data for validation
-        const loanRef = db.collection("loan_applications").doc(applicationId);
+        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
         const loanDoc = await loanRef.get();
 
         if (!loanDoc.exists) {
@@ -1129,7 +1129,7 @@ export async function rejectLoanApplication(
         }
 
         // Get loan data for email
-        const loanRef = db.collection("loan_applications").doc(applicationId);
+        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
         const loanDoc = await loanRef.get();
 
         if (!loanDoc.exists) {
@@ -1573,7 +1573,7 @@ export async function approveExportOnboardingAction(
         }
 
         // 1. Get Application Doc
-        const appRef = db.collection("export_onboarding").where("applicationId", "==", applicationId).limit(1);
+        const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("applicationId", "==", applicationId).limit(1);
         const appSnapshot = await appRef.get();
 
         if (appSnapshot.empty) {
@@ -1650,7 +1650,7 @@ export async function approveExportOnboardingAction(
         }
 
         // Log audit
-        await logAuditAction("export_approve", applicationId, "export_onboarding", {
+        await logAuditAction("export_approve", applicationId, "export_onboarding_applications", {
             adminId: session.user.id,
             userId: userId,
         });
@@ -1685,7 +1685,7 @@ export async function rejectExportApplicationAction(
         }
 
         // 1. Get Application Doc
-        const appRef = db.collection("export_onboarding").where("applicationId", "==", applicationId).limit(1);
+        const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("applicationId", "==", applicationId).limit(1);
         const appSnapshot = await appRef.get();
 
         if (appSnapshot.empty) {
@@ -1760,7 +1760,7 @@ export async function rejectExportApplicationAction(
         }
 
         // Log audit
-        await logAuditAction("export_reject", applicationId, "export_onboarding", {
+        await logAuditAction("export_reject", applicationId, "export_onboarding_applications", {
             adminId: session.user.id,
             userId: userId,
             reason: reason

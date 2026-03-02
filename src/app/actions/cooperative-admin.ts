@@ -515,7 +515,7 @@ export async function approveWithdrawalAction(
         }
 
         const adminId = session.user.id;
-        const withdrawalRef = db.collection("withdrawals").doc(withdrawalId);
+        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);
 
         const adminScope = await getAdminScope(adminId, session.user.roles);
 
@@ -629,7 +629,7 @@ export async function rejectWithdrawalAction(
         }
 
         const adminId = session.user.id;
-        const withdrawalRef = db.collection("withdrawals").doc(withdrawalId);
+        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);
 
         const adminScope = await getAdminScope(adminId, session.user.roles);
 

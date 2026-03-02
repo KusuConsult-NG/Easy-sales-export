@@ -62,7 +62,7 @@ export interface AuditLog {
     adminId: string;
     adminEmail: string;
     targetId: string;
-    targetType: "user" | "application" | "withdrawal" | "export" | "cooperative" | "land_listing" | "seller_verification" | "export_onboarding" | "academy_application";
+    targetType: "user" | "application" | "withdrawal" | "export" | "cooperative" | "land_listing" | "seller_verification" | "export_onboarding" | "export_onboarding_applications" | "academy_application";
     details: Record<string, any>;
     timestamp: Date;
     ipAddress?: string;

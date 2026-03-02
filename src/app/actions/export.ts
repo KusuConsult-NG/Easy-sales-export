@@ -576,7 +576,7 @@ export async function submitExportOnboardingAction(
         };
 
         // Save to Firestore
-        const onboardingRef = db.collection("export_onboarding").doc();
+        const onboardingRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc();
         await onboardingRef.set(fullApplication);
 
         // Update user document to mark export service registration with safe dot notation
