@@ -116,8 +116,8 @@ const waveApplicationSchema = z.object({
 export async function checkWaveStatusAction(): Promise<string | null> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return null;
 
         // Check user document for service registration
@@ -412,8 +412,8 @@ export async function enrollInWaveAction(userId: string): Promise<{
 export async function getWaveResourcesAction(category?: string): Promise<WaveResource[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return [];
 
         // STRICT ENROLLMENT CHECK
@@ -453,8 +453,8 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
 export async function getWaveTrainingEventsAction(): Promise<WaveTrainingEvent[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return [];
 
         // Optional: Check enrollment here too if trainings are exclusive
@@ -506,8 +506,8 @@ export interface ShipmentTracking {
 export async function getShipmentTrackingAction(userId: string): Promise<ShipmentTracking[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return [];
 
         // Users can only see their own shipments
@@ -798,8 +798,8 @@ export async function generateCertificateAction(
 export async function getMemberCertificatesAction(userId: string): Promise<WaveCertificate[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return [];
 
         // Allow reading own certificates
@@ -822,8 +822,8 @@ export async function getMemberCertificatesAction(userId: string): Promise<WaveC
 export async function getCurrentUserCertificatesAction(): Promise<WaveCertificate[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) return [];
 
         return await getMemberCertificatesAction(session.user.id);
@@ -966,8 +966,8 @@ export async function withdrawEarningsAction(
 ): Promise<{ success: boolean; error?: string; withdrawalId?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
         }
@@ -1032,8 +1032,8 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
 } | null> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return null;
         const targetId = userId || session.user.id;
 
@@ -1072,8 +1072,8 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
 export async function getWaveApplicationAction(): Promise<{ success: boolean; data?: any; revisionNote?: string; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -1101,8 +1101,8 @@ export async function requestWaveRevisionAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -1165,8 +1165,8 @@ export async function resubmitWaveApplicationAction(
         const existingStatus = userData?.serviceRegistrations?.wave?.status;
 
         if (!applicationId) return { success: false, error: 'No existing application found to resubmit' };
-        if (existingStatus !== 'revision_required') {
-            return { success: false, error: 'Only applications in revision_required status can be resubmitted' };
+        if (existingStatus !== 'revision_required' && existingStatus !== 'pending') {
+            return { success: false, error: 'Only applications in pending or revision_required status can be resubmitted' };
         }
 
         const validatedData = validation.data;

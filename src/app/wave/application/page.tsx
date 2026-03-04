@@ -181,6 +181,7 @@ export default function WaveApplicationPage() {
     const [restored, setRestored] = useState(false);
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
     const [isRevisionMode, setIsRevisionMode] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
     const { showToast } = useToast();
     const { data: session, status } = useSession();
     const { run: guardRun } = useSessionExpiry();
@@ -231,17 +232,30 @@ export default function WaveApplicationPage() {
     useEffect(() => {
         // Auth is now enforced server-side in middleware.
         if (session?.user?.id) {
-            checkApplicationStatus();
+            // Parse query params (using window.location.search since this is a client component without accessing props directly)
+            const params = new URLSearchParams(window.location.search);
+            const isEditParam = params.get("edit") === "true";
+
+            checkApplicationStatus(isEditParam);
         }
     }, [session, router, showToast]);
 
-    const checkApplicationStatus = async () => {
+    const checkApplicationStatus = async (isEditParam: boolean) => {
         try {
             const { checkWaveStatusAction } = await import("@/app/actions/wave");
             const waveStatus = await checkWaveStatusAction();
 
             if (waveStatus === "pending" || waveStatus === "under_review") {
-                router.replace("/wave/application/review-pending");
+                if (isEditParam) {
+                    // Enter manual edit mode
+                    const result = await getWaveApplicationAction();
+                    if (result.success && result.data) {
+                        setFormData((prev: any) => ({ ...prev, ...result.data }));
+                    }
+                    setIsEditMode(true);
+                } else {
+                    router.replace("/wave/application/review-pending");
+                }
             } else if (waveStatus === "approved") {
                 router.replace("/wave/dashboard");
             } else if (waveStatus === "revision_required") {
@@ -316,7 +330,7 @@ export default function WaveApplicationPage() {
     const handleSubmit = async () => {
         setSubmitting(true);
         try {
-            const result = isRevisionMode
+            const result = (isRevisionMode || isEditMode)
                 ? await guardRun(resubmitWaveApplicationAction(formData))
                 : await guardRun(submitMultiStepWaveApplicationAction(formData));
             if (result.success) {
@@ -360,6 +374,17 @@ export default function WaveApplicationPage() {
                             <p className="font-semibold text-amber-800">Revision Requested</p>
                             <p className="text-sm text-amber-700 mt-1">{revisionNote}</p>
                             <p className="text-xs text-amber-600 mt-2">Please review and update your details below, then resubmit the form.</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Edit Mode Banner */}
+                {isEditMode && !isRevisionMode && (
+                    <div className="mb-8 p-4 bg-blue-50 border border-blue-300 rounded-xl flex gap-3 items-start">
+                        <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-blue-800">Editing Application</p>
+                            <p className="text-sm text-blue-700 mt-1">You are currently editing your submitted application. Changes will be saved upon resubmission.</p>
                         </div>
                     </div>
                 )}

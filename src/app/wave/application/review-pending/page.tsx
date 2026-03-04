@@ -138,14 +138,26 @@ export default function ReviewPendingPage() {
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 px-4 py-12">
             <div className="max-w-3xl mx-auto">
-                {/* Back Link */}
-                <Link
-                    href="/wave"
-                    className="inline-flex items-center gap-2 text-slate-600 hover:text-emerald-700 mb-8 transition-colors"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to WAVE Home
-                </Link>
+                {/* Top Navigation */}
+                <div className="flex items-center justify-between mb-8">
+                    <Link
+                        href="/wave"
+                        className="inline-flex items-center gap-2 text-slate-600 hover:text-emerald-700 transition-colors"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to WAVE Home
+                    </Link>
+
+                    {applicationStatus === "pending" && !isLoading && (
+                        <Link
+                            href="/wave/application?edit=true"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 shadow-sm text-slate-700 hover:text-emerald-700 hover:border-emerald-200 rounded-xl font-medium transition-all"
+                        >
+                            <FileText className="w-4 h-4" />
+                            Edit Application
+                        </Link>
+                    )}
+                </div>
 
                 {/* Header */}
                 <div className="text-center mb-8">
