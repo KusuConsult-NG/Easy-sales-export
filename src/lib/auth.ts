@@ -194,23 +194,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                     const userMessage = firebaseErrorMap[code] || error.message || "Authentication failed.";
 
-                    // ── THE FIX: REDIS TELEMETRY HOOK ─────────────────────────
-                    // Dump the EXACT error to Upstash Redis so we can read it directly 
-                    // from the terminal, bypassing Vercel's hidden log stream.
-                    try {
-                        const { redis } = await import("@/lib/redis");
-                        const debugData = {
-                            time: new Date().toISOString(),
-                            email: credentials?.email || "unknown",
-                            errorCode: code,
-                            errorMessage: error.message,
-                            mappedMessage: userMessage,
-                            stack: error.stack
-                        };
-                        await redis.set(`debug_login_error`, JSON.stringify(debugData), { ex: 3600 });
-                    } catch (redisErr) {
-                        console.error("Telemetry failed", redisErr);
-                    }
 
                     // NOTE: Must throw CredentialsSignin (not plain Error) — NextAuth v5
                     // maps any plain Error from authorize() to the generic 'Configuration' page.
