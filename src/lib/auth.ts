@@ -314,13 +314,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // why a login attempt was silently dropped.
     logger: {
         error(code, ...message) {
-            console.error(`🔴 [NEXTAUTH_FRAMEWORK_ERROR] ${code instanceof Error ? code.name : code}:`, ...message);
+            console.error(`🔴 [NEXTAUTH_FRAMEWORK_ERROR] ${(code as any)?.name || code}:`, ...message);
         },
         warn(code, ...message) {
-            console.warn(`🟠 [NEXTAUTH_FRAMEWORK_WARN] ${code instanceof Error ? code.name : code}:`, ...message);
+            console.warn(`🟠 [NEXTAUTH_FRAMEWORK_WARN] ${(code as any)?.name || code}:`, ...message);
         },
         debug(code, ...message) {
-            console.log(`🔵 [NEXTAUTH_FRAMEWORK_DEBUG] ${code instanceof Error ? code.name : code}:`, ...message);
+            console.log(`🔵 [NEXTAUTH_FRAMEWORK_DEBUG] ${(code as any)?.name || code}:`, ...message);
         }
     }
 });
