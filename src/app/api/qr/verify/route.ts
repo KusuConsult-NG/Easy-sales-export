@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // Use Node.js runtime for crypto operations
 export const runtime = 'nodejs';
 

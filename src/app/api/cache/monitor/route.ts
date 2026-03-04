@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { redis, CACHE_TTL } from '@/lib/redis';
 import { auth } from '@/lib/auth';

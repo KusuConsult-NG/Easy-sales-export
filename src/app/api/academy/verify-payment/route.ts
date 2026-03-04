@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { verifyEnrollmentPaymentAction } from "@/app/actions/academy-payment";

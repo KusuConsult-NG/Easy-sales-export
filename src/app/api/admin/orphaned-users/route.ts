@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * Admin API Route: Orphaned User Detection and Repair
  * 

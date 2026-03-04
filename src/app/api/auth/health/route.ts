@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * Auth Health Diagnostic Endpoint — /api/auth/health
  *
