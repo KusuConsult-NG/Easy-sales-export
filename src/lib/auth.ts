@@ -1,5 +1,17 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+
+/**
+ * Custom error class for NextAuth v5.
+ * NextAuth ONLY surfaces errors that extend CredentialsSignin.
+ * Throwing a plain Error() always shows the generic 'Configuration' page.
+ */
+class AuthError extends CredentialsSignin {
+    constructor(message: string) {
+        super(message);
+        this.code = message;
+    }
+}
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth as firebaseAuth } from "./firebase";
 import { logger } from "@/lib/logger";
@@ -156,7 +168,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     };
 
                     const userMessage = firebaseErrorMap[code] || error.message || "Authentication failed.";
-                    throw new Error(userMessage);
+                    // NOTE: Must throw CredentialsSignin (not plain Error) — NextAuth v5
+                    // maps any plain Error from authorize() to the generic 'Configuration' page.
+                    throw new AuthError(userMessage);
                 }
             },
         }),
