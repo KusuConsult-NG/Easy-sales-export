@@ -87,18 +87,29 @@ export default function AdminDisputesPage() {
         resolved: disputes.filter((d) => d.status === "resolved").length,
     };
 
-    const getStatusColor = (status: DisputeStatus) => {
+    const getStatusStyles = (status: DisputeStatus): { badge: string; icon: string } => {
         switch (status) {
             case "open":
-                return "yellow";
+                return {
+                    badge: "bg-yellow-100 text-yellow-800",
+                    icon: "text-yellow-600",
+                };
             case "under_review":
-                return "blue";
+                return {
+                    badge: "bg-blue-100 text-blue-800",
+                    icon: "text-blue-600",
+                };
             case "resolved":
-                return "green";
+                return {
+                    badge: "bg-green-100 text-green-800",
+                    icon: "text-green-600",
+                };
             case "closed":
-                return "gray";
             default:
-                return "gray";
+                return {
+                    badge: "bg-gray-100 text-gray-800",
+                    icon: "text-gray-500",
+                };
         }
     };
 
@@ -112,6 +123,8 @@ export default function AdminDisputesPage() {
                 return CheckCircle;
             case "closed":
                 return XCircle;
+            default:
+                return AlertTriangle;
         }
     };
 
@@ -218,10 +231,13 @@ export default function AdminDisputesPage() {
                 ) : filteredDisputes.length > 0 ? (
                     <div className="space-y-4">
                         {filteredDisputes.map((dispute) => {
-                            const statusColor = getStatusColor(dispute.status);
+                            const styles = getStatusStyles(dispute.status);
                             const StatusIcon = getStatusIcon(dispute.status);
+                            const disputeDate = (dispute.createdAt as unknown as { toDate?: () => Date })?.toDate
+                                ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate()
+                                : new Date(dispute.createdAt as unknown as string | number | Date);
                             const daysAgo = Math.floor(
-                                (Date.now() - new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate() : dispute.createdAt as unknown as Date | number | string).getTime()) / (1000 * 60 * 60 * 24)
+                                (Date.now() - disputeDate.getTime()) / (1000 * 60 * 60 * 24)
                             );
 
                             return (
@@ -233,13 +249,13 @@ export default function AdminDisputesPage() {
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <StatusIcon
-                                                    className={`w-5 h-5 text-${statusColor}-600${statusColor}-500`}
+                                                    className={`w-5 h-5 ${styles.icon}`}
                                                 />
                                                 <h3 className="text-lg font-bold text-gray-900">
                                                     Dispute #{dispute.id.slice(0, 8).toUpperCase()}
                                                 </h3>
                                                 <span
-                                                    className={`px-3 py-1 bg-${statusColor}-100${statusColor}-900/20 text-${statusColor}-800${statusColor}-200 text-sm font-semibold rounded-full capitalize`}
+                                                    className={`px-3 py-1 text-sm font-semibold rounded-full capitalize ${styles.badge}`}
                                                 >
                                                     {dispute.status.replace("_", " ")}
                                                 </span>

@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -87,10 +88,9 @@ export async function logAuditAction(
     details: Record<string, any> = {}
 ): Promise<LogAuditState> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         await db.collection(COLLECTIONS.AUDIT_LOGS).add({
             action,
@@ -118,7 +118,9 @@ export async function getAuditLogsAction(
     limitCount: number = 50
 ): Promise<GetAuditLogsState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized: Admin access required", success: false, data: null };
         }

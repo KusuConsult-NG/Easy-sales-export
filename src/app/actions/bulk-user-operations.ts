@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -30,7 +31,9 @@ export async function bulkSuspendUsersAction(
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:suspend")) {
             return {
                 success: false,
@@ -153,7 +156,9 @@ export async function bulkActivateUsersAction(
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return {
                 success: false,
@@ -254,7 +259,9 @@ export async function bulkAssignRolesAction(
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) {
             return {
                 success: false,
@@ -367,7 +374,9 @@ export async function bulkDeleteUsersAction(
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) {
             return {
                 success: false,
@@ -495,7 +504,9 @@ export async function createImpersonationTokenAction(
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:impersonate")) {
             return {
                 success: false,
@@ -587,7 +598,9 @@ export async function exportUserDataAction(
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
             return {
                 success: false,

@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db, adminAuth } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
@@ -18,7 +19,9 @@ type ActionState =
  */
 export async function softDeleteUserAction(targetUserId: string): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         // Strict: Only Super Admin or Admin can delete users
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) {
             // Fallback if specific permission doesn't exist

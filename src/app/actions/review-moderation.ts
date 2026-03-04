@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -43,7 +44,9 @@ export async function getFlaggedReviewsAction(options?: {
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) {
             return { success: false, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
         }
@@ -106,7 +109,9 @@ export async function approveReviewAction(
     reviewId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) {
             return { success: false, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
         }
@@ -152,7 +157,9 @@ export async function deleteReviewAction(
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) {
             return { success: false, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
         }
@@ -232,7 +239,9 @@ export async function suspendReviewerAction(
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:suspend")) {
             return { success: false, error: "Unauthorized: Permission required - users:suspend" };
         }
@@ -290,7 +299,9 @@ export async function bulkApproveReviewsAction(
     reviewIds: string[]
 ): Promise<{ success: boolean; approved: number; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) {
             return { success: false, approved: 0, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
         }

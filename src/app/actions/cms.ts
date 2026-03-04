@@ -3,12 +3,15 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { FieldValue } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 
 /** Helper: verify admin session */
 async function requireAdmin(): Promise<{ id: string } | null> {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
     const roles = session?.user?.roles || [];
     if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
         return null;

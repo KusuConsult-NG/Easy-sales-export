@@ -26,35 +26,48 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 password: { label: "Password", type: "password" },
             },
             authorize: async (credentials) => {
+                const authCtx = `[Auth:${Date.now()}]`; // per-request log prefix
                 try {
-                    // Validate credentials with Zod
-                    const { email, password } = loginSchema.parse(credentials);
+                    // ── STEP 1: Env var guard ─────────────────────────────────
+                    const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+                    if (!firebaseApiKey || firebaseApiKey === "mock-api-key-for-build") {
+                        console.error(`${authCtx} FATAL: NEXT_PUBLIC_FIREBASE_API_KEY is missing or mock. Login will fail. Set it in Vercel → Settings → Environment Variables.`);
+                        throw new Error("Service configuration error. Please contact support.");
+                    }
 
-                    // Check rate limiting BEFORE attempting authentication
+                    // ── STEP 2: Validate credentials ─────────────────────────
+                    console.log(`${authCtx} authorize() called`);
+                    const { email, password } = loginSchema.parse(credentials);
+                    console.log(`${authCtx} credentials valid for: ${email}`);
+
+                    // ── STEP 3: Rate limit check ─────────────────────────────
                     const { consumeLoginAttempt, resetLoginAttempts } = await import("@/lib/rate-limit");
                     const rateLimitResult = await consumeLoginAttempt(email);
+                    console.log(`${authCtx} rate limit check: allowed=${rateLimitResult.allowed}`);
 
                     if (!rateLimitResult.allowed) {
                         throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
                     }
 
-                    // Authenticate with Firebase
+                    // ── STEP 4: Firebase authentication ────────────────────── 
+                    console.log(`${authCtx} calling Firebase signInWithEmailAndPassword...`);
                     const userCredential = await signInWithEmailAndPassword(
                         firebaseAuth,
                         email,
                         password
                     );
+                    console.log(`${authCtx} Firebase auth OK — uid: ${userCredential.user.uid}`);
 
-                    // Success: Reset rate limit counter
+                    // ── STEP 5: Reset rate limit on success ─────────────────
                     await resetLoginAttempts(email);
 
-                    // Fetch user profile - CHECK CACHE FIRST
+                    // ── STEP 6: Fetch user profile (cache-first) ─────────────
+                    console.log(`${authCtx} checking profile cache...`);
                     const { getUserProfile } = await import("@/lib/user-cache");
                     const cachedProfile = await getUserProfile(userCredential.user.uid);
 
                     if (cachedProfile) {
-                        // Cache hit - use cached profile
-                        console.log('[Auth] Using cached user profile for:', email);
+                        console.log(`${authCtx} cache HIT — returning cached profile`);
                         return {
                             id: cachedProfile.id,
                             email: cachedProfile.email,
@@ -65,27 +78,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         };
                     }
 
-                    // Cache miss - fetch from Firestore using Admin SDK
-                    console.log('[Auth] Cache miss - fetching from Firestore:', email);
+                    // ── STEP 7: Cache miss → fetch from Firestore ───────────
+                    console.log(`${authCtx} cache MISS — fetching from Firestore...`);
                     const { getAdminDb } = await import("@/lib/firebase-admin");
                     const adminDb = getAdminDb();
 
                     const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(userCredential.user.uid).get();
+                    console.log(`${authCtx} Firestore doc exists: ${userDoc.exists}`);
 
                     if (!userDoc.exists) {
+                        console.error(`${authCtx} No user doc in Firestore for UID: ${userCredential.user.uid}`);
                         throw new Error("User profile not found in database");
                     }
 
                     const userData = userDoc.data() as FirestoreUser;
 
-                    // 🔒 SECURITY FIX: Check for banned status
-                    // 🔒 SECURITY FIX: Check for banned/suspended status
+                    // ── STEP 8: Ban/suspend check ─────────────────────────────
                     if ((userData as any).isBanned === true || (userData as any).status === 'banned' || (userData as any).suspended === true) {
-                        logger.warn(`Blocked login attempt for suspended/banned user: ${email}`);
+                        logger.warn(`${authCtx} blocked — banned/suspended user: ${email}`);
                         throw new Error("Your account has been suspended. Please contact support.");
                     }
 
-                    // Cache the profile for next time
+                    // ── STEP 9: Update profile cache ──────────────────────────
                     const { setCache, CacheKeys, CACHE_TTL } = await import("@/lib/redis");
                     await setCache(
                         CacheKeys.userProfile(userCredential.user.uid),
@@ -102,18 +116,47 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         CACHE_TTL.USER_PROFILE
                     );
 
+                    console.log(`${authCtx} authorize() SUCCESS — returning user object for ${email}`);
                     // Return user object for NextAuth session
                     return {
                         id: userCredential.user.uid,
                         email: userData.email,
                         name: userData.fullName,
-                        image: null, // Placeholder for future profile image support
-                        roles: userData.roles || [], // Multi-role support
-                        verified: userData.verified ?? true, // Email verification status (default true for existing users)
+                        image: null,
+                        roles: userData.roles || [],
+                        verified: userData.verified ?? true,
                     };
                 } catch (error: any) {
-                    console.error("Authorization error:", error.message);
-                    throw new Error(error.message || "Invalid credentials");
+                    // ── CRITICAL: Log the REAL error BEFORE mapping it ────────
+                    // This is the single most important log for debugging production
+                    // auth failures. The mapped message shown to the user is safe,
+                    // but the raw code here tells you exactly what Firebase/Firestore
+                    // actually threw.
+                    const code: string = error?.code || "";
+                    const msg: string = error?.message || "(no message)";
+                    console.error(
+                        `[Auth] authorize() FAILED — ` +
+                        `firebase_code: "${code || '(none)'}" | ` +
+                        `message: "${msg}" | ` +
+                        `env_api_key_set: ${!!process.env.NEXT_PUBLIC_FIREBASE_API_KEY} | ` +
+                        `env_project_id_set: ${!!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID} | ` +
+                        `env_admin_key_set: ${!!process.env.FIREBASE_PRIVATE_KEY}`
+                    );
+
+                    const firebaseErrorMap: Record<string, string> = {
+                        "auth/invalid-api-key": "Service configuration error. Please contact support.",
+                        "auth/app-not-authorized": "Service configuration error. Please contact support.",
+                        "auth/invalid-credential": "Invalid email or password.",
+                        "auth/wrong-password": "Invalid email or password.",
+                        "auth/user-not-found": "Invalid email or password.",
+                        "auth/user-disabled": "Your account has been disabled. Please contact support.",
+                        "auth/too-many-requests": "Too many attempts. Please try again later.",
+                        "auth/network-request-failed": "Network error — please check your connection and try again.",
+                        "auth/operation-not-allowed": "Email/password login is not enabled. Please contact support.",
+                    };
+
+                    const userMessage = firebaseErrorMap[code] || error.message || "Authentication failed.";
+                    throw new Error(userMessage);
                 }
             },
         }),
@@ -206,7 +249,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
     },
     secret: process.env.NEXTAUTH_SECRET,
-    debug: process.env.NODE_ENV === "development", // Enable debug logs in dev
+    debug: process.env.NODE_ENV === "development" || process.env.NEXTAUTH_DEBUG === "true",
 });
 
 /**

@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
-import { Home, TrendingUp, Shield, CheckCircle, ArrowLeft } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Home, TrendingUp, Shield, CheckCircle, ArrowLeft, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
-import { submitFarmNationOnboardingAction, checkFarmNationStatusAction } from "@/app/actions/farm-nation";
+import { submitFarmNationOnboardingAction, checkFarmNationStatusAction, getFarmNationApplicationAction, resubmitFarmNationApplicationAction } from "@/app/actions/farm-nation";
 
 // Step components (to be created)
 import RoleSelectionStep from "./steps/RoleSelectionStep";
@@ -57,11 +58,14 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
 
 export default function FarmNationOnboardingPage() {
     const router = useRouter();
+    const { data: session } = useSession();
     const { showToast } = useToast();
     const [currentStepId, setCurrentStepId] = useState("role");
     const [steps, setSteps] = useState<OnboardingStep[]>(ONBOARDING_STEPS);
     const [formData, setFormData] = useState<any>({});
     const [isLoading, setIsLoading] = useState(true);
+    const [isRevisionMode, setIsRevisionMode] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState<string | null>(null);
 
     // Check existing application status on mount
     useEffect(() => {
@@ -71,9 +75,28 @@ export default function FarmNationOnboardingPage() {
                 if (status === "pending" || status === "under_review") {
                     router.replace("/farm-nation/onboarding/pending");
                 } else if (status === "approved" || status === "active") {
-                    // Redirect based on role if possible, or generic dashboard
                     router.replace("/farm-nation/properties");
+                } else if (status === "rejected" || status === "revision_required") {
+                    const result = await getFarmNationApplicationAction();
+                    if (result.success && result.data) {
+                        setFormData((prev: any) => ({ ...prev, ...result.data }));
+                    }
+                    if (result.rejectionReason) setRejectionReason(result.rejectionReason);
+                    setIsRevisionMode(true);
+                    setIsLoading(false);
                 } else {
+                    // Restore draft from localStorage for fresh applicants
+                    const userId = session?.user?.id;
+                    if (userId) {
+                        try {
+                            const saved = localStorage.getItem(`farmnation_draft_${userId}`);
+                            if (saved) {
+                                const parsed = JSON.parse(saved);
+                                if (parsed.data) setFormData(parsed.data);
+                                if (parsed.step) setCurrentStepId(parsed.step);
+                            }
+                        } catch { /* non-blocking */ }
+                    }
                     setIsLoading(false);
                 }
             } catch (error) {
@@ -82,7 +105,7 @@ export default function FarmNationOnboardingPage() {
             }
         };
         checkStatus();
-    }, [router]);
+    }, [router, session?.user?.id]);
 
     if (isLoading) {
         return (
@@ -103,18 +126,20 @@ export default function FarmNationOnboardingPage() {
     };
 
     const handleNext = (stepData: any) => {
-        // Save step data
-        setFormData((prev: any) => ({ ...prev, ...stepData }));
-
-        // Mark current step as complete
+        const next = { ...formData, ...stepData };
+        setFormData(next);
         markStepComplete(currentStepId);
-
-        // Move to next step
         const nextIndex = currentStepIndex + 1;
         if (nextIndex < steps.length) {
-            setCurrentStepId(steps[nextIndex].id);
+            const nextStepId = steps[nextIndex].id;
+            setCurrentStepId(nextStepId);
+            if (!isRevisionMode) {
+                const userId = session?.user?.id;
+                if (userId) {
+                    try { localStorage.setItem(`farmnation_draft_${userId}`, JSON.stringify({ step: nextStepId, data: next })); } catch { /* non-blocking */ }
+                }
+            }
         } else {
-            // All steps complete - submit onboarding
             handleSubmit({ ...formData, ...stepData });
         }
     };
@@ -128,12 +153,23 @@ export default function FarmNationOnboardingPage() {
 
     const handleSubmit = async (finalData: any) => {
         try {
-            // Submit onboarding data
-            const result = await submitFarmNationOnboardingAction(finalData);
+            if (isRevisionMode) {
+                const result = await resubmitFarmNationApplicationAction(finalData);
+                if (result.success) {
+                    showToast("Application resubmitted for review!", "success");
+                    router.push("/farm-nation/onboarding/pending");
+                } else {
+                    showToast(result.error || "Failed to resubmit", "error");
+                }
+                return;
+            }
 
+            const result = await submitFarmNationOnboardingAction(finalData);
             if (result.success) {
+                // Clear draft on success
+                const userId = session?.user?.id;
+                if (userId) { try { localStorage.removeItem(`farmnation_draft_${userId}`); } catch { /* non-blocking */ } }
                 showToast("Onboarding completed successfully!", "success");
-                // Redirect based on role
                 if (finalData.role === "seller" || finalData.role === "both") {
                     router.push("/farm-nation/list-land");
                 } else {
@@ -258,6 +294,17 @@ export default function FarmNationOnboardingPage() {
 
             {/* Current Step Content */}
             <div className="max-w-4xl mx-auto px-4 md:px-8 py-8">
+                {/* Rejection / Revision Banner */}
+                {isRevisionMode && (
+                    <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-amber-900">Your application requires updates</p>
+                            {rejectionReason && <p className="text-sm text-amber-700 mt-1">{rejectionReason}</p>}
+                            <p className="text-xs text-amber-600 mt-1">Update your details below and resubmit.</p>
+                        </div>
+                    </div>
+                )}
                 <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8">
                     {renderCurrentStep()}
                 </div>

@@ -58,7 +58,13 @@ export default function LoginForm() {
             });
 
             if (result?.error) {
-                setError("Invalid email or password");
+                // NextAuth wraps the thrown error message in result.error for credentials provider.
+                // Show the real message from authorize() — covers suspended accounts,
+                // config errors, rate-limit messages, etc.
+                // Fall back to generic message only if error string is the opaque NextAuth code.
+                const rawError = result.error;
+                const isOpaqueCode = rawError === "CredentialsSignin" || rawError === "CallbackRouteError";
+                setError(isOpaqueCode ? "Invalid email or password." : rawError);
                 setIsLoading(false);
                 return;
             }

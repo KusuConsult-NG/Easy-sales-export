@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CheckCircle, XCircle, PartyPopper, ArrowRight } from "lucide-react";
@@ -12,19 +12,31 @@ function PaymentCallbackContent() {
     const router = useRouter();
     const reference = searchParams.get("reference") || searchParams.get("trxref");
     const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
+    const [errorDetail, setErrorDetail] = useState<string | null>(null);
     const [countdown, setCountdown] = useState(5);
+    // Prevent double-invocation: React Strict Mode fires effects twice in development.
+    // Without this guard, verifyAcademyPaymentAction would run twice per page load.
+    const hasVerified = useRef(false);
 
     const verify = useCallback(async () => {
+        if (hasVerified.current) return;
+        hasVerified.current = true;
+
         if (!reference) {
-            // Delay state update slightly to prevent synchronous render cascade warning
             setTimeout(() => setStatus("failed"), 0);
             return;
         }
 
         try {
             const result = await verifyAcademyPaymentAction(reference);
-            setStatus(result.success ? "success" : "failed");
-        } catch {
+            if (result.success) {
+                setStatus("success");
+            } else {
+                setErrorDetail((result as any).error || null);
+                setStatus("failed");
+            }
+        } catch (err: any) {
+            setErrorDetail(err?.message || "Network error — please try again");
             setStatus("failed");
         }
     }, [reference]);
@@ -68,9 +80,14 @@ function PaymentCallbackContent() {
                         <XCircle className="w-8 h-8 text-red-600" />
                     </div>
                     <h1 className="text-2xl font-bold text-slate-900 mb-2">Payment Verification Failed</h1>
-                    <p className="text-slate-600 mb-6">
+                    <p className="text-slate-600 mb-2">
                         We couldn&apos;t verify your payment. Please try again or contact support.
                     </p>
+                    {errorDetail && (
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4 font-mono break-words">
+                            {errorDetail}
+                        </p>
+                    )}
                     <Link
                         href="/academy/setup"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition"

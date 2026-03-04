@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
@@ -18,7 +19,9 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
  */
 export async function getConversationsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", conversations: [] };
         }
@@ -47,7 +50,9 @@ export async function getConversationsAction() {
  */
 export async function getMessagesAction(conversationId: string, limit = 50) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", messages: [] };
         }
@@ -87,7 +92,9 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
  */
 export async function sendMessageAction(conversationId: string, text: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", success: false };
         }
@@ -145,7 +152,9 @@ export async function sendMessageAction(conversationId: string, text: string) {
  */
 export async function markAsReadAction(conversationId: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", success: false };
         }
@@ -169,7 +178,9 @@ export async function markAsReadAction(conversationId: string) {
  */
 export async function startConversationAction(participantUid: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", conversationId: null };
         }
@@ -234,7 +245,9 @@ export async function startConversationAction(participantUid: string) {
  */
 export async function searchUsersAction(query: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", users: [] };
         }

@@ -40,15 +40,18 @@ test.describe('Authentication', () => {
         await expect(page.locator('text=/required|email|password|invalid/i')).toBeVisible();
     });
 
-    // NOTE: Actual login test requires valid test credentials
-    // Uncomment and configure when test account is available
-    // test('should login successfully with valid credentials', async ({ page }) => {
-    //   await page.fill('input[name="email"]', 'test@example.com');
-    //   await page.fill('input[name="password"]', 'testpassword123');
-    //   await page.click('button[type="submit"]');
-    //   
-    //   // Should redirect to dashboard
-    //   await expect(page).toHaveURL('/dashboard');
-    //   await expect(page.locator('text=Dashboard')).toBeVisible();
-    // });
+    test('rate-limit: shows feedback after multiple failed attempts', async ({ page }) => {
+        // Submit 6 invalid login attempts — the Upstash limiter allows 5 before blocking
+        for (let i = 0; i < 6; i++) {
+            await page.fill('input[name="email"]', 'ratelimit-test@example.com');
+            await page.fill('input[name="password"]', `wrongpassword${i}`);
+            await page.click('button[type="submit"]');
+            // Brief wait between submissions to avoid request fusion
+            await page.waitForTimeout(300);
+        }
+        // Should show rate-limit or attempt-count error message
+        await expect(
+            page.locator('text=/attempts|many|limit|try again/i')
+        ).toBeVisible({ timeout: 15000 });
+    });
 });

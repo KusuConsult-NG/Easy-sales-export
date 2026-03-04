@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -39,7 +40,9 @@ export async function updateFeatureToggle(
     enabled: boolean
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized: Admin access required" };
@@ -100,7 +103,9 @@ export async function getAllFeatureToggles(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized: Admin access required" };

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Download } from "lucide-react";
+import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Download, Pencil, X, Save } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { collection, query, where, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 import {
     approveWaveApplicationAction,
-    rejectWaveApplicationAction
+    rejectWaveApplicationAction,
+    editApplicationAction
 } from "@/app/actions/admin";
 import RejectionModal from "@/components/admin/RejectionModal";
 
@@ -56,6 +57,12 @@ export default function AdminWaveApplicationsPage() {
     const unsubscribeRef = useRef<Unsubscribe | null>(null);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
+
+    // Edit modal state
+    const [editingApp, setEditingApp] = useState<WaveApplication | null>(null);
+    const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+    const [editNote, setEditNote] = useState("");
+    const [editSaving, setEditSaving] = useState(false);
 
     useEffect(() => {
         // Clean up previous listener
@@ -146,6 +153,36 @@ export default function AdminWaveApplicationsPage() {
         }
         setProcessingId(null);
         setRejectingAppId(null);
+    };
+
+    const handleOpenEdit = (app: WaveApplication) => {
+        setEditingApp(app);
+        setEditDraft({
+            surname: app.surname || "",
+            firstName: app.firstName || "",
+            phone: app.phone || "",
+            stateOfResidence: app.stateOfResidence || "",
+            lgaOfResidence: app.lgaOfResidence || "",
+        });
+        setEditNote("");
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingApp) return;
+        setEditSaving(true);
+        const result = await editApplicationAction({
+            collection: "wave_applications",
+            docId: editingApp.id,
+            fields: editDraft as any,
+            editNote: editNote || undefined,
+        });
+        if (result.success) {
+            showToast("Application updated with audit trail.", "success");
+            setEditingApp(null);
+        } else {
+            showToast(result.error || "Failed to update application", "error");
+        }
+        setEditSaving(false);
     };
 
     const handleExportCSV = () => {
@@ -340,6 +377,13 @@ export default function AdminWaveApplicationsPage() {
                                     {app.status === "pending" && (
                                         <div className="flex gap-2">
                                             <button
+                                                onClick={() => handleOpenEdit(app)}
+                                                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition flex items-center gap-2"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                                Edit
+                                            </button>
+                                            <button
                                                 onClick={() => handleReject(app.id)}
                                                 disabled={processingId === app.id}
                                                 className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
@@ -392,6 +436,69 @@ export default function AdminWaveApplicationsPage() {
                 title="Reject WAVE Application"
                 description="This applicant will be notified of the rejection with the reason you provide below."
             />
+
+            {/* Edit Application Modal */}
+            {editingApp && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
+                        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900">Edit Application</h2>
+                                <p className="text-sm text-slate-500 mt-0.5">Changes are logged with a full audit trail</p>
+                            </div>
+                            <button onClick={() => setEditingApp(null)} className="p-2 hover:bg-slate-100 rounded-lg">
+                                <X className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            {([
+                                { key: "surname", label: "Surname" },
+                                { key: "firstName", label: "First Name" },
+                                { key: "phone", label: "Phone" },
+                                { key: "stateOfResidence", label: "State" },
+                                { key: "lgaOfResidence", label: "LGA" },
+                            ] as const).map(({ key, label }) => (
+                                <div key={key}>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+                                    <input
+                                        type="text"
+                                        value={editDraft[key] ?? ""}
+                                        onChange={(e) => setEditDraft(prev => ({ ...prev, [key]: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                            ))}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Edit Note (optional)</label>
+                                <input
+                                    type="text"
+                                    value={editNote}
+                                    onChange={(e) => setEditNote(e.target.value)}
+                                    placeholder="Reason for this edit..."
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-slate-200 flex justify-end gap-3">
+                            <button
+                                onClick={() => setEditingApp(null)}
+                                disabled={editSaving}
+                                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveEdit}
+                                disabled={editSaving}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

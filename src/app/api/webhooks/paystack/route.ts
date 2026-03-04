@@ -63,6 +63,20 @@ export async function POST(req: NextRequest) {
                 } else if (type === "academy_registration") {
                     const plan = metadata.plan;
                     await processAcademyRegistration(reference, amountPaidv, userId, plan);
+                } else if (type === "farm_nation_registration" || type === "farm_nation_subscription") {
+                    await processFarmNationRegistration(reference, amountPaidv, userId);
+                } else if (type === "wave_registration" || type === "wave_application") {
+                    await processWaveRegistration(reference, amountPaidv, userId);
+                } else {
+                    // Log unhandled types so they appear in Vercel logs — never silently drop money.
+                    logger.warn(`[Paystack Webhook] UNHANDLED payment type: "${type}" for reference ${reference}. Amount: ${amountPaidv}. Metadata: ${JSON.stringify(metadata)}`);
+                    // Still mark as processed to avoid infinite retries.
+                    await db.collection("processedPayments").doc(reference).set({
+                        reference, type, userId, amount: amountPaidv,
+                        processedAt: FieldValue.serverTimestamp(),
+                        source: "webhook",
+                        status: "unhandled_type",
+                    });
                 }
             } catch (processingError: any) {
                 logger.error(`[Paystack Webhook] Processing failed for ${reference}:`, processingError);
@@ -179,11 +193,28 @@ async function processMarketplaceOrder(reference: string, amount: number, userId
 async function processExportInvestment(reference: string, amount: number, userId: string, exportId: string) {
     if (!exportId) throw new Error("Missing exportId in metadata");
 
+    // Read the export window to get real ROI — do this BEFORE the transaction
+    // (Firestore reads inside transactions must be done on transaction.get() but
+    //  reading reference data outside is fine and avoids holding a long lock).
+    const exportSnap = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId).get();
+    const exportData = exportSnap.data();
+
+    if (!exportSnap.exists || !exportData) {
+        throw new Error(`Export window ${exportId} not found — cannot process investment`);
+    }
+
+    // Use values from the window doc; fall back to conservative defaults with a warning.
+    const roiLabel: string = exportData.roiPercentage || exportData.roi || "15-20%";
+    const returnMultiplier: number = exportData.returnMultiplier ?? exportData.expectedReturnMultiplier ?? 1.20;
+
+    if (!exportData.roiPercentage && !exportData.roi) {
+        logger.warn(`[Paystack Webhook] Export window ${exportId} has no ROI field — using default '15-20%'. Add 'roiPercentage' to the window doc.`);
+    }
+
+    const expectedReturn = parseFloat((amount * returnMultiplier).toFixed(2));
+
     await db.runTransaction(async (t) => {
-        // 1. Create Investment Record (Slot)
         const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
-        // Check if already exists (idempotency check done at controller level, but double check?)
-        // Since we generate a new ID, we can't check by ID. But controller checked processedPayments.
 
         t.set(slotRef, {
             userId,
@@ -193,8 +224,9 @@ async function processExportInvestment(reference: string, amount: number, userId
             paymentReference: reference,
             purchaseDate: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
-            roi: "15-20%", // Should fetch from window
-            expectedReturn: amount * 1.20, // Simplified logic
+            roi: roiLabel,
+            returnMultiplier,
+            expectedReturn,
             source: "webhook"
         });
 
@@ -350,5 +382,72 @@ async function processAcademyRegistration(reference: string, amount: number, use
         });
     });
 
+
     logger.info(`[Paystack Webhook] Processed Academy Registration for ${userId}`);
+}
+
+/**
+ * Handle Farm Nation Registration Payment
+ * NOTE: Farm Nation sends metadata.type = "farm_nation_registration"
+ */
+async function processFarmNationRegistration(reference: string, amount: number, userId: string) {
+    await db.runTransaction(async (t) => {
+        const userRef = db.collection("users").doc(userId);
+        const processedRef = db.collection("processedPayments").doc(reference);
+
+        t.set(userRef, {
+            serviceRegistrations: {
+                farmNation: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    paymentAmount: amount,
+                    status: "pending_review",
+                    paidAt: FieldValue.serverTimestamp(),
+                }
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        t.set(processedRef, {
+            reference, type: "farm_nation_registration",
+            userId, amount,
+            processedAt: FieldValue.serverTimestamp(),
+            source: "webhook",
+        });
+    });
+
+    logger.info(`[Paystack Webhook] Processed Farm Nation Registration for ${userId}`);
+}
+
+/**
+ * Handle WAVE Registration Payment
+ * NOTE: WAVE sends metadata.type = "wave_registration" or "wave_application"
+ */
+async function processWaveRegistration(reference: string, amount: number, userId: string) {
+    await db.runTransaction(async (t) => {
+        const userRef = db.collection("users").doc(userId);
+        const processedRef = db.collection("processedPayments").doc(reference);
+
+        t.set(userRef, {
+            serviceRegistrations: {
+                wave: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    paymentAmount: amount,
+                    status: "pending_review",
+                    paidAt: FieldValue.serverTimestamp(),
+                }
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        t.set(processedRef, {
+            reference, type: "wave_registration",
+            userId, amount,
+            processedAt: FieldValue.serverTimestamp(),
+            source: "webhook",
+        });
+    });
+
+    logger.info(`[Paystack Webhook] Processed WAVE Registration for ${userId}`);
 }

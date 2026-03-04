@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -153,7 +154,9 @@ export async function getPropertiesAction(filters?: {
 
 export async function approveFarmNationSellerAction(userId: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         // Update user
@@ -173,7 +176,9 @@ export async function approveFarmNationSellerAction(userId: string) {
 
 export async function rejectFarmNationSellerAction(userId: string, reason: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
@@ -231,7 +236,9 @@ export async function getPropertyByIdAction(propertyId: string) {
  */
 export async function listPropertyAction(input: PropertyListingInput) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -318,7 +325,9 @@ export async function listPropertyAction(input: PropertyListingInput) {
  */
 export async function getMyPropertiesAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -358,7 +367,9 @@ export async function initiatePropertyPurchaseAction(
     }
 ) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -437,7 +448,9 @@ export async function initiatePropertyPurchaseAction(
  */
 export async function getMyPurchaseRequestsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -469,7 +482,9 @@ export async function getMyPurchaseRequestsAction() {
  */
 export async function cancelPurchaseRequestAction(requestId: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -524,7 +539,9 @@ export async function cancelPurchaseRequestAction(requestId: string) {
  */
 export async function deletePropertyAction(propertyId: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -578,7 +595,9 @@ export async function deletePropertyAction(propertyId: string) {
  */
 export async function updatePropertyAction(propertyId: string, updates: Partial<PropertyListingInput>) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -675,7 +694,9 @@ export interface FarmNationOnboardingData {
 export async function submitFarmNationOnboardingAction(data: FarmNationOnboardingData) {
     try {
         // Get authenticated session
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return {
@@ -774,8 +795,9 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
 
 export async function checkFarmNationStatusAction(): Promise<string | null> {
     try {
-        const session = await auth();
-        if (!session?.user) return null;
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null;
+    const { session } = sessionResult;
 
         // Check user document for service registration
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -810,7 +832,9 @@ export async function uploadPropertyDocumentsAction(
     }
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
@@ -844,7 +868,9 @@ export async function uploadPropertyDocumentsAction(
  */
 export async function verifyPropertyAction(propertyId: string, verified: boolean): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         // Check admin role
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
@@ -890,5 +916,100 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
     } catch (error: any) {
         logger.error("Verify property error:", error);
         return { success: false, error: error.message };
+    }
+}
+
+// ============================================================================
+// USER REVISION FLOW — Farm Nation Onboarding
+// ============================================================================
+
+/**
+ * Fetch the current user's Farm Nation onboarding data for prefilling the edit form.
+ */
+export async function getFarmNationApplicationAction(): Promise<{
+    success: boolean;
+    data?: any;
+    rejectionReason?: string;
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        const farmNation = userData?.farmNation;
+        const registration = userData?.serviceRegistrations?.farmNation;
+
+        if (!farmNation && !registration) {
+            return { success: false, error: 'No application found' };
+        }
+
+        return {
+            success: true,
+            data: { ...farmNation, ...registration },
+            rejectionReason: registration?.rejectionReason,
+        };
+    } catch (error) {
+        logger.error('getFarmNationApplicationAction error:', error);
+        return { success: false, error: 'Failed to fetch application' };
+    }
+}
+
+/**
+ * Resubmit a rejected Farm Nation onboarding application with corrected data.
+ */
+export async function resubmitFarmNationApplicationAction(
+    data: FarmNationOnboardingData
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+        const userId = session.user.id;
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.farmNation?.status;
+        const allowedStatuses = ['rejected', 'revision_required'];
+
+        if (!allowedStatuses.includes(existingStatus || '')) {
+            return { success: false, error: 'Your application cannot be resubmitted at this time.' };
+        }
+
+        if (!data.terms.termsAccepted || !data.terms.privacyAccepted || !data.terms.feeDisclosureAccepted) {
+            return { success: false, error: 'You must accept all terms to continue' };
+        }
+
+        await db.collection(COLLECTIONS.USERS).doc(userId).set(
+            {
+                farmNation: {
+                    role: data.role,
+                    profile: data.profile,
+                    interests: data.interests,
+                    resubmittedAt: new Date().toISOString(),
+                    termsAcceptedAt: new Date().toISOString(),
+                },
+                updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+        );
+
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            'serviceRegistrations.farmNation.status': 'pending',
+            'serviceRegistrations.farmNation.role': data.role,
+            'serviceRegistrations.farmNation.rejectionReason': null,
+            'serviceRegistrations.farmNation.resubmittedAt': FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error('resubmitFarmNationApplicationAction error:', error);
+        return { success: false, error: 'Failed to resubmit application' };
     }
 }

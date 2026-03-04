@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Check if current user is enrolled in WAVE
@@ -17,7 +18,9 @@ export async function checkWaveMembershipAction(): Promise<{
     memberData?: any;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { enrolled: false };
         }
@@ -87,7 +90,9 @@ export async function getWaveMemberStatsAction(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -140,7 +145,9 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -192,7 +199,9 @@ export async function getUserTrainingRegistrationsAction(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }

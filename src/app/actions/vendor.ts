@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -63,7 +64,9 @@ export async function getVendorOrdersAction(filters?: {
     status?: VendorOrder["status"];
 }): Promise<{ success: boolean; orders?: VendorOrder[]; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -101,7 +104,9 @@ export async function updateVendorOrderStatusAction(
     trackingNumber?: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -142,7 +147,9 @@ export async function getVendorProductsAction(filters?: {
     category?: string;
 }): Promise<{ success: boolean; products?: VendorProduct[]; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -184,7 +191,9 @@ export async function updateVendorProductInventoryAction(
     operation: "add" | "subtract" | "set"
 ): Promise<{ success: boolean; newStock?: number; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -242,7 +251,9 @@ export async function toggleVendorProductStatusAction(
     productId: string
 ): Promise<{ success: boolean; newStatus?: VendorProduct["status"]; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -275,7 +286,9 @@ export async function deleteVendorProductAction(
     productId: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }

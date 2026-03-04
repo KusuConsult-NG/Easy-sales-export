@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log";
@@ -18,7 +19,9 @@ export async function getAuditLogsAction(filters: {
     limit?: number;
 }): Promise<{ success: boolean; logs?: AuditLogEntry[]; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
@@ -87,7 +90,9 @@ export async function exportAuditLogsCSV(filters: {
     endDate?: string;
 }): Promise<{ success: boolean; csv?: string; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
@@ -148,7 +153,9 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };

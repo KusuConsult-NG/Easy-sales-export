@@ -6,6 +6,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
 import { createNotificationAction } from "@/app/actions/notifications";
@@ -19,6 +20,7 @@ import {
     UserKycVerificationSchema
 } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
  * Admin Server Actions
@@ -39,7 +41,13 @@ export async function approveWaveApplicationAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        // Live role re-validation — bypasses stale JWT
+        const adminCheck = await requireAdmin();
+        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
+
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
             return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
         }
@@ -166,7 +174,9 @@ export async function rejectWaveApplicationAction(
     reason: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
             return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
         }
@@ -274,7 +284,13 @@ export async function processWithdrawalAction(
     reasoning?: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        // Live role re-validation — bypasses stale JWT
+        const adminCheck = await requireAdmin();
+        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
+
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
             return { error: "Unauthorized: Permission required - finance:process_withdrawals", success: false };
         }
@@ -394,7 +410,9 @@ export async function toggleUserVerificationAction(
     userId: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
@@ -460,7 +478,9 @@ export async function toggleUserKycVerificationAction(
     currentStatus: boolean
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         // Assuming "users:update" is sufficient for KYC. Could create a stricter role if needed.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
@@ -534,7 +554,9 @@ export async function getWaveApplicationsAction(
     hasMore?: boolean; // simple indicator
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
             return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
         }
@@ -590,7 +612,9 @@ export async function getPendingWithdrawalsAction(
     hasMore?: boolean;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
             return { error: "Unauthorized: Permission required - finance:read", success: false };
         }
@@ -647,7 +671,9 @@ export async function getPendingLandListings(limit = 50): Promise<{
     listings?: any[];
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
         }
@@ -682,7 +708,13 @@ export async function verifyLandListing(
     reason: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        // Live role re-validation — bypasses stale JWT
+        const adminCheck = await requireAdmin();
+        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
+
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
         }
@@ -794,7 +826,9 @@ export async function getPendingLoanApplications(): Promise<{
     applications?: any[];
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
         }
@@ -839,7 +873,9 @@ export async function getAllExportRequestsAction(
     hasMore?: boolean;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
         }
@@ -886,7 +922,9 @@ export async function approveLoanApplication(
     applicationId: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
         }
@@ -1118,7 +1156,9 @@ export async function rejectLoanApplication(
     reason: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
             return { error: "Unauthorized: Permission required - finance:read", success: false };
         }
@@ -1226,7 +1266,9 @@ export async function rejectLoanApplication(
  */
 export async function unlockUserAccount(email: string): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
             return { error: "Unauthorized: Permission required - users:read", success: false };
         }
@@ -1285,7 +1327,9 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
     hasMore?: boolean;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
             return { error: "Unauthorized: Permission required - users:read", success: false };
         }
@@ -1429,7 +1473,9 @@ export async function updateUserRolesAction(
     roles: string[]
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) {
             return { error: "Unauthorized: Permission required - users:assign_roles", success: false };
         }
@@ -1472,7 +1518,9 @@ export async function approveSellerVerificationAction(
     verificationId: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
             // Fallback for super_admin if specific role missing, or strict check
             if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
@@ -1595,7 +1643,9 @@ export async function approveExportOnboardingAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
@@ -1702,7 +1752,9 @@ export async function rejectExportApplicationAction(
     reason: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
@@ -1819,7 +1871,9 @@ export async function getAcademyApplicationsAction(
     data?: any[];
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
             // Fallback for now/testing or add permission
             if ((!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) {
@@ -1859,7 +1913,9 @@ export async function approveAcademyApplicationAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized", success: false };
         }
@@ -1932,7 +1988,9 @@ export async function rejectAcademyApplicationAction(
     reason: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized", success: false };
         }
@@ -1984,7 +2042,9 @@ export async function markAcademyApplicationUnderReviewAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized", success: false };
         }
@@ -2025,7 +2085,9 @@ export async function savePlatformSettingsAction(
     }
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "config:update")) {
             return { error: "Unauthorized: Admin access required", success: false };
         }
@@ -2087,22 +2149,35 @@ export interface EditableApplicationFields {
     firstName?: string;
     lastName?: string;
     middleName?: string;
+    surname?: string;
+    otherNames?: string;
+    fullName?: string;
+    businessName?: string;
     phone?: string;
     email?: string;
     stateOfOrigin?: string;
     lga?: string;
+    stateOfResidence?: string;
+    lgaOfResidence?: string;
     residentialAddress?: string;
     occupation?: string;
     membershipTier?: string;
     "nextOfKin.name"?: string;
     "nextOfKin.phone"?: string;
     "nextOfKin.address"?: string;
+    // Land listing editable fields
+    title?: string;
+    "location.state"?: string;
+    "location.lga"?: string;
 }
 
 const ALLOWED_EDIT_FIELDS: (keyof EditableApplicationFields)[] = [
-    "firstName", "lastName", "middleName", "phone", "email",
-    "stateOfOrigin", "lga", "residentialAddress", "occupation",
+    "firstName", "lastName", "middleName", "surname", "otherNames", "fullName", "businessName",
+    "phone", "email",
+    "stateOfOrigin", "lga", "stateOfResidence", "lgaOfResidence", "residentialAddress", "occupation",
     "membershipTier", "nextOfKin.name", "nextOfKin.phone", "nextOfKin.address",
+    // Land listing fields
+    "title", "location.state", "location.lga",
 ];
 
 export async function editApplicationAction(params: {
@@ -2112,7 +2187,9 @@ export async function editApplicationAction(params: {
     editNote?: string;
 }): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
                 return { error: "Unauthorized: admin or users:update role required", success: false };
@@ -2129,6 +2206,7 @@ export async function editApplicationAction(params: {
             COLLECTIONS.EXPORT_APPLICATIONS,
             COLLECTIONS.ACADEMY_APPLICATIONS,
             COLLECTIONS.USERS,
+            COLLECTIONS.LAND_LISTINGS,
         ];
         if (!ALLOWED_COLLECTIONS.includes(collectionName as any)) {
             return { error: `Collection '${collectionName}' is not editable via this action`, success: false };

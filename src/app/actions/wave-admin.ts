@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -23,7 +24,9 @@ export async function createResourceAction(data: {
     fileSize: number;
 }): Promise<{ success: boolean; error?: string; resourceId?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -68,7 +71,9 @@ export async function updateResourceAction(
     }>
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -102,7 +107,9 @@ export async function deleteResourceAction(
     resourceId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -147,7 +154,9 @@ export async function createTrainingEventAction(data: {
     meetingLink?: string;
 }): Promise<{ success: boolean; error?: string; eventId?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -194,7 +203,9 @@ export async function updateTrainingEventAction(
     }>
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -230,7 +241,9 @@ export async function getEventParticipantsAction(eventId: string): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -261,7 +274,9 @@ export async function getWaveApplicationsAction(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -289,7 +304,9 @@ export async function approveWaveApplicationAction(
     applicationId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -366,7 +383,9 @@ export async function rejectWaveApplicationAction(
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }

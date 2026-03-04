@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { getStorage } from "firebase-admin/storage";
@@ -35,7 +36,9 @@ export async function uploadResourceAction(formData: FormData): Promise<{
     resourceId?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
@@ -173,7 +176,9 @@ export async function downloadResourceAction(resourceId: string): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
@@ -217,7 +222,9 @@ export async function deleteResourceAction(resourceId: string): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
@@ -269,7 +276,9 @@ export async function updateResourceAction(
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };

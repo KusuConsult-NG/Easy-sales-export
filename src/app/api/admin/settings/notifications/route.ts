@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 import { logger } from "@/lib/logger";
 
@@ -10,6 +11,14 @@ const SETTINGS_DOC = "platform_settings/notifications";
  */
 export async function GET() {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+            return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+        }
+
         const doc = await db.doc(SETTINGS_DOC).get();
         const settings = doc.exists ? doc.data() : {
             newUserEmail: true,
@@ -31,6 +40,14 @@ export async function GET() {
  */
 export async function POST(request: Request) {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+            return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
+        }
+
         const body = await request.json();
         const { settings } = body;
 

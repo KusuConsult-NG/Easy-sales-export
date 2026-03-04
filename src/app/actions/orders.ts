@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -41,7 +42,9 @@ export async function createOrderAction(
     }
 ): Promise<CreateOrderState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -153,7 +156,9 @@ export async function createOrderAction(
  */
 export async function getOrderByIdAction(orderId: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -188,7 +193,9 @@ export async function updateOrderPaymentAction(
     paymentStatus: "success" | "failed"
 ) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };

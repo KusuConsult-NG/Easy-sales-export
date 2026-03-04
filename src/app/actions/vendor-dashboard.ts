@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 
@@ -10,7 +11,9 @@ import { Timestamp } from "firebase-admin/firestore";
 
 export async function getVendorSalesStatsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -67,7 +70,9 @@ export async function getVendorSalesStatsAction() {
 
 export async function getVendorRevenueTrendsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -117,7 +122,9 @@ export async function getVendorRevenueTrendsAction() {
 
 export async function getTopSellingProductsAction(limit: number = 5) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -164,7 +171,9 @@ export async function getTopSellingProductsAction(limit: number = 5) {
 
 export async function getVendorInventoryStatsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -209,7 +218,9 @@ export async function getVendorInventoryStatsAction() {
 
 export async function getVendorRevenueInsightsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -262,7 +273,9 @@ export async function getVendorRevenueInsightsAction() {
 
 export async function getVendorActivityFeedAction(limit: number = 20) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;

@@ -7,6 +7,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { db } from "@/lib/firebase-admin"; // Use Admin DB
@@ -22,8 +23,9 @@ import { unstable_cache } from "next/cache";
 
 export async function checkMarketplaceStatusAction(): Promise<{ status: string; accountType?: string } | null> {
     try {
-        const session = await auth();
-        if (!session?.user) return null;
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null;
+    const { session } = sessionResult;
 
         // Check user document for service registration
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -79,7 +81,9 @@ export async function submitSellerVerificationAction(
     formData: FormData
 ): Promise<SellerVerificationState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -160,7 +164,9 @@ export async function submitSellerVerificationAction(
  */
 export async function getSellerVerificationAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -192,7 +198,9 @@ export async function submitMarketplaceOnboardingAction(
     formData: FormData
 ) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -374,7 +382,9 @@ export async function createProductAction(
     formData: FormData
 ): Promise<ProductActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -537,7 +547,9 @@ export async function getSellerProductsAction(options: {
     sortDir?: "asc" | "desc";
 } = {}) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -625,7 +637,9 @@ export async function getSellerOrdersAction(options: {
     status?: string;
 } = {}) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -681,7 +695,9 @@ export async function getSellerOrdersAction(options: {
  */
 export async function getSellerAnalyticsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -754,7 +770,9 @@ export async function getBuyerOrdersAction(options: {
     status?: string;
 } = {}) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -803,7 +821,9 @@ export async function getBuyerOrdersAction(options: {
  */
 export async function getBuyerStatsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -944,7 +964,9 @@ export async function getRecommendedProductsAction(limit: number = 3) {
  */
 export async function deleteProductAction(productId: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
@@ -1165,3 +1187,60 @@ export async function searchProductsAction(params: {
     }
 }
 
+// ============================================================================
+// USER RESUBMIT — Seller Verification
+// ============================================================================
+
+/**
+ * Resubmit a rejected or suspended seller verification with corrected information.
+ */
+export async function resubmitSellerVerificationAction(
+    fields: {
+        businessName?: string;
+        phone?: string;
+        location?: { state: string; lga: string; address: string };
+        bankAccount?: { bankName: string; accountNumber: string; accountName: string; bankCode: string };
+        [key: string]: any;
+    }
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        const userId = session.user.id;
+
+        const snap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+            .where('userId', '==', userId)
+            .limit(1)
+            .get();
+
+        if (snap.empty) return { success: false, error: 'No existing verification found' };
+
+        const existing = snap.docs[0].data();
+        const allowedStatuses = ['rejected', 'suspended'];
+        if (!allowedStatuses.includes(existing.status)) {
+            return { success: false, error: 'Your verification cannot be resubmitted at this time.' };
+        }
+
+        await snap.docs[0].ref.update({
+            ...fields,
+            status: 'pending',
+            rejectionReason: null,
+            resubmittedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            sellerVerificationStatus: 'pending',
+            'serviceRegistrations.marketplace.status': 'pending',
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error('resubmitSellerVerificationAction error:', error);
+        return { success: false, error: 'Failed to resubmit seller verification' };
+    }
+}

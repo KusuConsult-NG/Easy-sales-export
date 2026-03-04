@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase-admin";
@@ -32,7 +33,9 @@ export async function initializeInvestmentPaymentAction(
     expectedROI: number
 ): Promise<PaymentInitState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -137,7 +140,9 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
     investmentId?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };

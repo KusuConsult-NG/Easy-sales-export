@@ -15,6 +15,7 @@ import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { AlertTriangle } from "lucide-react";
 import OnboardingLayout from "@/components/shared/OnboardingLayout";
 import StepIndicator from "@/components/shared/StepIndicator";
 import AccountTypeStep from "./steps/AccountTypeStep";
@@ -76,16 +77,19 @@ export default function MarketplaceOnboarding() {
     const { data: session, status } = useSession();
     const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState<Partial<OnboardingData>>({});
+    const [isRevisionMode, setIsRevisionMode] = useState(false);
+    const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+
+    const userId = session?.user?.id;
+    const DRAFT_KEY = userId ? `marketplace_draft_${userId}` : null;
 
     // AUTH GATE: Auth is now enforced server-side in layout.tsx.
-    // By the time this component renders, the user is guaranteed to be authenticated.
-    // We only need to check if they already have a pending/approved onboarding.
     useEffect(() => {
         if (status === "loading") return;
 
         const checkStatus = async () => {
             try {
-                const { checkMarketplaceStatusAction } = await import("@/app/actions/marketplace");
+                const { checkMarketplaceStatusAction, getSellerVerificationAction } = await import("@/app/actions/marketplace");
                 const result = await checkMarketplaceStatusAction();
 
                 if (result?.status === "pending" || result?.status === "under_review") {
@@ -96,6 +100,33 @@ export default function MarketplaceOnboarding() {
                     } else {
                         router.replace("/marketplace/buyer/dashboard");
                     }
+                } else if (result?.status === "rejected" || result?.status === "suspended") {
+                    // Prefill form from Firestore for rejected / suspended users
+                    const verif = await getSellerVerificationAction();
+                    if (verif.success && verif.verification) {
+                        const v = verif.verification as any;
+                        setFormData(prev => ({
+                            ...prev,
+                            businessName: v.businessName || prev.businessName,
+                            phone: v.phone || prev.phone,
+                            location: v.location || prev.location,
+                            bankAccount: v.bankAccount || prev.bankAccount,
+                        }));
+                        if (v.rejectionReason) setRejectionReason(v.rejectionReason);
+                    }
+                    setIsRevisionMode(true);
+                } else {
+                    // Restore draft from localStorage for fresh applicants
+                    if (DRAFT_KEY) {
+                        try {
+                            const saved = localStorage.getItem(DRAFT_KEY);
+                            if (saved) {
+                                const parsed = JSON.parse(saved);
+                                if (parsed.data) setFormData(parsed.data);
+                                if (parsed.step) setCurrentStep(parsed.step);
+                            }
+                        } catch { /* non-blocking */ }
+                    }
                 }
             } catch (error) {
                 logger.error("Failed to check Marketplace status:", error);
@@ -105,7 +136,7 @@ export default function MarketplaceOnboarding() {
             checkStatus();
         }
 
-    }, [session, status, router]);
+    }, [session, status, router, DRAFT_KEY]);
 
     // Show loading while checking auth
     if (status === "loading") {
@@ -145,7 +176,12 @@ export default function MarketplaceOnboarding() {
 
     const handleNext = () => {
         if (currentStep < totalSteps) {
-            setCurrentStep(prev => prev + 1);
+            const nextStep = currentStep + 1;
+            setCurrentStep(nextStep);
+            // Persist draft after each step (not in revision mode)
+            if (!isRevisionMode && DRAFT_KEY) {
+                try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ step: nextStep, data: formData })); } catch { /* non-blocking */ }
+            }
         } else {
             handleSubmit();
         }
@@ -159,57 +195,52 @@ export default function MarketplaceOnboarding() {
 
     const handleSubmit = async () => {
         try {
+            if (isRevisionMode) {
+                const { resubmitSellerVerificationAction } = await import("@/app/actions/marketplace");
+                const result = await resubmitSellerVerificationAction({
+                    businessName: formData.businessName,
+                    phone: formData.phone,
+                    location: formData.location,
+                    bankAccount: formData.bankAccount as any,
+                });
+                if (result.success) {
+                    if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
+                    router.push("/marketplace/onboarding/pending");
+                } else {
+                    logger.error("Resubmission failed:", result.error);
+                }
+                return;
+            }
+
             const formDataPayload = new FormData();
 
-            // Step 1: Account Type
             formDataPayload.append("accountType", formData.accountType!);
-
-            // Step 2: Business Profile
             formDataPayload.append("businessName", formData.businessName || "");
             formDataPayload.append("businessType", formData.businessType || "individual");
             formDataPayload.append("phone", formData.phone || "");
             formDataPayload.append("location", JSON.stringify(formData.location));
 
-            // Step 3: Product Interests
-            if (formData.sellerCategories) {
-                formDataPayload.append("sellerCategories", JSON.stringify(formData.sellerCategories));
-            }
-            if (formData.productionCapacity) {
-                formDataPayload.append("productionCapacity", formData.productionCapacity);
-            }
-            if (formData.certifications) {
-                formDataPayload.append("certifications", JSON.stringify(formData.certifications));
-            }
-            // Buyer interests (if 'both')
-            if (formData.buyerInterests) {
-                formDataPayload.append("buyerInterests", JSON.stringify(formData.buyerInterests));
-            }
-
-            // Step 5: Documents
-            if (formData.documents?.businessRegistration) {
-                formDataPayload.append("businessRegistration", JSON.stringify(formData.documents.businessRegistration));
-            }
+            if (formData.sellerCategories) formDataPayload.append("sellerCategories", JSON.stringify(formData.sellerCategories));
+            if (formData.productionCapacity) formDataPayload.append("productionCapacity", formData.productionCapacity);
+            if (formData.certifications) formDataPayload.append("certifications", JSON.stringify(formData.certifications));
+            if (formData.buyerInterests) formDataPayload.append("buyerInterests", JSON.stringify(formData.buyerInterests));
+            if (formData.documents?.businessRegistration) formDataPayload.append("businessRegistration", JSON.stringify(formData.documents.businessRegistration));
 
             formData.documents?.farmPhotos?.forEach((file, index) => {
                 formDataPayload.append(`farmPhotos_${index}`, JSON.stringify(file));
             });
-
             formData.documents?.productSamples?.forEach((file, index) => {
                 formDataPayload.append(`productSamples_${index}`, JSON.stringify(file));
             });
 
-            // Step 6: Bank Account
-            if (formData.bankAccount) {
-                formDataPayload.append("bankAccount", JSON.stringify(formData.bankAccount));
-            }
+            if (formData.bankAccount) formDataPayload.append("bankAccount", JSON.stringify(formData.bankAccount));
 
-            // Client-side import to avoid build issues with server action direct usage if not properly typed
             const { submitMarketplaceOnboardingAction } = await import("@/app/actions/marketplace");
-
             const result = await submitMarketplaceOnboardingAction(null, formDataPayload);
 
             if (result.success) {
-                // Redirect based on account type
+                // Clear draft on success
+                if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
                 if (isSeller) {
                     router.push("/marketplace/onboarding/pending");
                 } else {
@@ -217,7 +248,6 @@ export default function MarketplaceOnboarding() {
                 }
             } else {
                 logger.error("Submission failed:", result.error);
-                // Ideally show error toast here
             }
 
         } catch (error) {
@@ -305,6 +335,18 @@ export default function MarketplaceOnboarding() {
             subtitle="Join Nigeria's premier agricultural marketplace"
             serviceName="marketplace"
         >
+            {/* Rejection / Revision Banner */}
+            {isRevisionMode && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-semibold text-amber-900">Your verification requires updates</p>
+                        {rejectionReason && <p className="text-sm text-amber-700 mt-1">{rejectionReason}</p>}
+                        <p className="text-xs text-amber-600 mt-1">Update your details and resubmit for review.</p>
+                    </div>
+                </div>
+            )}
+
             <div className="mb-8">
                 <StepIndicator
                     steps={steps}

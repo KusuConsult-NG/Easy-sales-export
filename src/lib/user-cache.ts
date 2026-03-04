@@ -35,11 +35,15 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             return null;
         }
 
-        const userData = userDoc.data() as CachedUserProfile;
+        const userData = userDoc.data()!;
+        // NOTE: registerAction writes 'fullName' to Firestore, not 'displayName'.
+        // We read both to handle legacy documents that may have used 'displayName'.
+        const resolvedName = userData.fullName || userData.displayName || '';
+        console.log(`[getUserProfile] UID ${userId}: fullName='${userData.fullName}' displayName='${userData.displayName}' → resolved='${resolvedName}'`);
         const profile: CachedUserProfile = {
             id: userId,
             email: userData.email,
-            displayName: userData.displayName,
+            displayName: resolvedName,
             photoURL: userData.photoURL,
             roles: userData.roles || [],
             serviceRegistrations: userData.serviceRegistrations,
@@ -87,7 +91,7 @@ export async function userHasRole(userId: string, role: string): Promise<boolean
  */
 export async function isServiceApproved(
     userId: string,
-    service: 'wave' | 'export' | 'marketplace' | 'academy'
+    service: 'wave' | 'export' | 'marketplace' | 'academy' | 'cooperatives' | 'farmNation'
 ): Promise<boolean> {
     const profile = await getUserProfile(userId);
     return profile?.serviceRegistrations?.[service]?.status === 'approved';

@@ -84,13 +84,18 @@ export default function AdminWithdrawalsPage() {
     };
 
     const handleMarkCompleted = async (withdrawalId: string) => {
-        const ref = prompt("Enter bank transfer reference (optional):");
+        const ref = prompt("Enter bank transfer reference (required to confirm payout):");
+        if (!ref) {
+            showToast("Transfer reference is required to mark as completed", "error");
+            return;
+        }
         setProcessingId(withdrawalId + "_complete");
         try {
-            const res = await fetch("/api/admin/cooperative/mark-withdrawal-completed", {
+            // Calls /api/admin/wave/withdrawals PATCH with action='complete'
+            const res = await fetch("/api/admin/wave/withdrawals", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ withdrawalId, transactionReference: ref || undefined }),
+                body: JSON.stringify({ withdrawalId, action: "complete", transactionReference: ref }),
             });
             const data = await res.json();
             if (data.success) {
@@ -255,7 +260,7 @@ export default function AdminWithdrawalsPage() {
                                                 ) : (
                                                     <CheckCircle className="w-4 h-4" />
                                                 )}
-                                                Approve & Process
+                                                Approve (Queue Payout)
                                             </button>
                                         </>
                                     )}

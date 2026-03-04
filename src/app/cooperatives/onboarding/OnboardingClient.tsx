@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger';
 import { ArrowLeft, CreditCard, CheckCircle, ShieldCheck, Loader2, Home } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { registerCooperativeMemberAction, initiateCooperativePaymentAction, checkCooperativeStatusAction, getCooperativeApplicationAction } from "@/app/actions/cooperative";
+import { registerCooperativeMemberAction, initiateCooperativePaymentAction, checkCooperativeStatusAction, getCooperativeApplicationAction, resubmitCooperativeApplicationAction } from "@/app/actions/cooperative";
 import { CooperativeErrorBoundary } from "@/components/errors/CooperativeErrorBoundary";
 import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
@@ -81,7 +81,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                 router.replace("/cooperatives/onboarding/pending");
                 return;
             }
-            if (coopStatus === "revision_required") {
+            if (coopStatus === "revision_required" || coopStatus === "rejected") {
                 // Pre-populate form with existing data
                 const result = await getCooperativeApplicationAction();
                 if (result.success && result.data) {
@@ -222,7 +222,10 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                 formData.append("bvn", documents.bvn);
             }
 
-            const result = await registerCooperativeMemberAction(formData);
+            // Route to correct action based on mode
+            const result = isRevisionMode
+                ? await resubmitCooperativeApplicationAction(formData)
+                : await registerCooperativeMemberAction(formData);
 
             if (result.success) {
                 // Clear user-scoped local storage upon successful submission
@@ -232,7 +235,10 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     });
                 }
 
-                showToast("Application submitted successfully!", "success");
+                showToast(
+                    isRevisionMode ? "Application resubmitted for review!" : "Application submitted successfully!",
+                    "success"
+                );
                 router.push("/cooperatives/onboarding/pending");
             } else {
                 showToast(result.error || "Registration failed. Please try again.", "error");

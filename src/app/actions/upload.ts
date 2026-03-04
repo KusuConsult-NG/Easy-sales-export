@@ -13,6 +13,7 @@
  */
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { getAdminStorage, getAdminDb } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
@@ -114,7 +115,9 @@ export async function uploadDocumentAction(
 ): Promise<{ success: boolean; url?: string; error?: string; fallback?: boolean }> {
     try {
         // Auth check
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }

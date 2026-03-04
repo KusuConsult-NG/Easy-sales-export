@@ -2,13 +2,19 @@
 
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
-import { auth } from "@/lib/auth";
+import { requireAdmin } from "@/lib/require-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log-admin";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Marketplace Escrow System
  * Buyer → Escrow → Seller workflow with admin release
+ *
+ * All status-changing operations run inside Firestore transactions to prevent
+ * race conditions. A plain .update() call is a last-write-wins operation; a
+ * runTransaction() reads the current state and rejects the write if the
+ * precondition is violated — turning a race condition into a clear error.
  */
 
 export interface EscrowTransaction {
@@ -69,7 +75,11 @@ export async function createEscrowAction(data: {
     productDescription: string;
 }): Promise<{ success: boolean; error?: string; escrowId?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: (sessionResult.error as any)?.error ?? "Session expired" };
+        }
+        const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== data.buyerId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -101,7 +111,10 @@ export async function createEscrowAction(data: {
 }
 
 /**
- * Confirm payment and move to held status
+ * Confirm payment and move to held status.
+ *
+ * Runs inside a transaction to guard the state transition:
+ * only `pending_payment → held` is valid.
  */
 export async function confirmEscrowPaymentAction(
     escrowId: string,
@@ -109,120 +122,161 @@ export async function confirmEscrowPaymentAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const escrowRef = db.collection("escrow_transactions").doc(escrowId);
-        const escrowDoc = await escrowRef.get();
 
-        if (!escrowDoc.exists) {
-            return { success: false, error: "Escrow transaction not found" };
-        }
+        let escrowData: EscrowTransaction | null = null;
 
-        await escrowRef.update({
-            status: "held",
-            paymentReference,
-            paidAt: FieldValue.serverTimestamp(),
+        await db.runTransaction(async (tx) => {
+            const escrowDoc = await tx.get(escrowRef);
+            if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
+
+            const data = escrowDoc.data() as EscrowTransaction;
+            if (data.status !== "pending_payment") {
+                throw new Error(
+                    `Invalid state transition: expected 'pending_payment', got '${data.status}'`
+                );
+            }
+
+            escrowData = data;
+
+            tx.update(escrowRef, {
+                status: "held",
+                paymentReference,
+                paidAt: FieldValue.serverTimestamp(),
+            });
         });
 
-        const escrowData = escrowDoc.data() as EscrowTransaction;
-
-        await logAdminFinancialAction(
-            "payment_completed",
-            escrowData.buyerId,
-            escrowData.amount,
-            escrowId,
-            { paymentReference }
-        );
+        if (escrowData) {
+            await logAdminFinancialAction(
+                "payment_completed",
+                (escrowData as EscrowTransaction).buyerId,
+                (escrowData as EscrowTransaction).amount,
+                escrowId,
+                { paymentReference }
+            );
+        }
 
         return { success: true };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Payment confirmation error:", error);
-        return { success: false, error: "Failed to confirm payment" };
+        return { success: false, error: error.message || "Failed to confirm payment" };
     }
 }
 
 /**
- * Seller requests escrow release
+ * Seller requests escrow release.
+ *
+ * Runs inside a transaction: only a `held` escrow belonging to this seller
+ * can be marked for release.
  */
 export async function requestEscrowReleaseAction(
     escrowId: string,
     sellerId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const escrowRef = db.collection("escrow_transactions").doc(escrowId);
-        const escrowDoc = await escrowRef.get();
-
-        if (!escrowDoc.exists) {
-            return { success: false, error: "Escrow transaction not found" };
+        // Verify the caller is the actual seller
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: (sessionResult.error as any)?.error ?? "Session expired" };
         }
-
-        const escrowData = escrowDoc.data() as EscrowTransaction;
-
-        if (escrowData.sellerId !== sellerId) {
+        if (sessionResult.session.user.id !== sellerId) {
             return { success: false, error: "Unauthorized" };
         }
 
-        if (escrowData.status !== "held") {
-            return { success: false, error: "Escrow must be in held status" };
-        }
+        const escrowRef = db.collection("escrow_transactions").doc(escrowId);
 
-        await escrowRef.update({
-            releaseRequestedAt: FieldValue.serverTimestamp(),
-            releaseRequestedBy: sellerId,
+        await db.runTransaction(async (tx) => {
+            const escrowDoc = await tx.get(escrowRef);
+            if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
+
+            const data = escrowDoc.data() as EscrowTransaction;
+
+            if (data.sellerId !== sellerId) throw new Error("Unauthorized");
+            if (data.status !== "held") {
+                throw new Error(
+                    `Invalid state transition: expected 'held', got '${data.status}'`
+                );
+            }
+
+            tx.update(escrowRef, {
+                releaseRequestedAt: FieldValue.serverTimestamp(),
+                releaseRequestedBy: sellerId,
+            });
         });
 
         return { success: true };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Release request error:", error);
-        return { success: false, error: "Failed to request release" };
+        return { success: false, error: error.message || "Failed to request release" };
     }
 }
 
 /**
- * Admin releases escrow to seller
+ * Admin releases escrow to seller.
+ *
+ * Uses requireAdmin() for live role re-validation (not stale JWT).
+ * Runs inside a transaction: only a `held` escrow can be released.
  */
 export async function releaseEscrowAction(
     escrowId: string,
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
+    // Live role re-validation — bypasses the stale JWT
+    const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) {
+        return { success: false, error: adminCheck.error };
+    }
+
     try {
-        const session = await auth();
-        const roles = session?.user?.roles || [];
-        if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized: Admin access required" };
-        }
         const escrowRef = db.collection("escrow_transactions").doc(escrowId);
-        const escrowDoc = await escrowRef.get();
 
-        if (!escrowDoc.exists) {
-            return { success: false, error: "Escrow transaction not found" };
-        }
+        let escrowData: EscrowTransaction | null = null;
 
-        const escrowData = escrowDoc.data() as EscrowTransaction;
+        await db.runTransaction(async (tx) => {
+            const escrowDoc = await tx.get(escrowRef);
+            if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
 
-        await escrowRef.update({
-            status: "released",
-            releasedAt: FieldValue.serverTimestamp(),
-            releasedBy: adminId,
+            const data = escrowDoc.data() as EscrowTransaction;
+            if (data.status !== "held") {
+                throw new Error(
+                    `Invalid state transition: expected 'held', got '${data.status}'`
+                );
+            }
+
+            escrowData = data;
+
+            tx.update(escrowRef, {
+                status: "released",
+                releasedAt: FieldValue.serverTimestamp(),
+                releasedBy: adminId,
+            });
         });
 
-        await logAdminFinancialAction(
-            "escrow_released",
-            adminId,
-            escrowData.amount,
-            escrowId,
-            {
-                sellerId: escrowData.sellerId,
-                buyerId: escrowData.buyerId,
-            }
-        );
+        if (escrowData) {
+            await logAdminFinancialAction(
+                "escrow_released",
+                adminId,
+                (escrowData as EscrowTransaction).amount,
+                escrowId,
+                {
+                    sellerId: (escrowData as EscrowTransaction).sellerId,
+                    buyerId: (escrowData as EscrowTransaction).buyerId,
+                }
+            );
+        }
 
         return { success: true };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Escrow release error:", error);
-        return { success: false, error: "Failed to release escrow" };
+        return { success: false, error: error.message || "Failed to release escrow" };
     }
 }
 
 /**
- * Create dispute
+ * Create dispute.
+ *
+ * Uses a Firestore transaction to atomically create the dispute document AND
+ * update the escrow status. Previously two separate writes could leave
+ * the escrow in `held` while a dispute existed (or vice versa).
  */
 export async function createDisputeAction(data: {
     escrowId: string;
@@ -232,35 +286,46 @@ export async function createDisputeAction(data: {
     reason: string;
 }): Promise<{ success: boolean; error?: string; disputeId?: string }> {
     try {
-        // Check if dispute already exists
+        // Check if dispute already exists (outside transaction — read-only guard)
         const existingQuery = db.collection("disputes")
             .where("escrowId", "==", data.escrowId)
             .where("status", "in", ["open", "under_review"]);
 
         const existing = await existingQuery.get();
-
         if (!existing.empty) {
             return { success: false, error: "An active dispute already exists for this transaction" };
         }
 
-        const dispute: Omit<Dispute, "id"> = {
-            ...data,
-            evidence: [],
-            status: "open",
-            createdAt: FieldValue.serverTimestamp(),
-        };
+        const escrowRef = db.collection("escrow_transactions").doc(data.escrowId);
+        const disputeRef = db.collection("disputes").doc(); // auto-ID
 
-        const docRef = await db.collection("disputes").add(dispute);
+        await db.runTransaction(async (tx) => {
+            const escrowDoc = await tx.get(escrowRef);
+            if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
 
-        // Update escrow status
-        await db.collection("escrow_transactions").doc(data.escrowId).update({
-            status: "disputed",
+            const escrowData = escrowDoc.data() as EscrowTransaction;
+            if (escrowData.status !== "held") {
+                throw new Error(
+                    `Cannot dispute: escrow must be in 'held' state, currently '${escrowData.status}'`
+                );
+            }
+
+            const dispute: Omit<Dispute, "id"> = {
+                ...data,
+                evidence: [],
+                status: "open",
+                createdAt: FieldValue.serverTimestamp(),
+            };
+
+            // Atomic: create dispute + update escrow status in one commit
+            tx.set(disputeRef, dispute);
+            tx.update(escrowRef, { status: "disputed" });
         });
 
         await createAdminAuditLog({
             action: "dispute_created",
             userId: data.initiatorId,
-            targetId: docRef.id,
+            targetId: disputeRef.id,
             targetType: "dispute",
             metadata: {
                 escrowId: data.escrowId,
@@ -268,15 +333,18 @@ export async function createDisputeAction(data: {
             },
         });
 
-        return { success: true, disputeId: docRef.id };
-    } catch (error) {
+        return { success: true, disputeId: disputeRef.id };
+    } catch (error: any) {
         logger.error("Dispute creation error:", error);
-        return { success: false, error: "Failed to create dispute" };
+        return { success: false, error: error.message || "Failed to create dispute" };
     }
 }
 
 /**
- * Admin resolves dispute
+ * Admin resolves dispute.
+ *
+ * Uses requireAdmin() for live role re-validation.
+ * Uses a transaction to atomically update both dispute and escrow documents.
  */
 export async function resolveDisputeAction(
     disputeId: string,
@@ -284,34 +352,46 @@ export async function resolveDisputeAction(
     resolution: string,
     outcome: "release_to_seller" | "refund_to_buyer"
 ): Promise<{ success: boolean; error?: string }> {
+    // Live role re-validation — bypasses the stale JWT
+    const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) {
+        return { success: false, error: adminCheck.error };
+    }
+
     try {
-        const session = await auth();
-        const roles = session?.user?.roles || [];
-        if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized: Admin access required" };
-        }
         const disputeRef = db.collection("disputes").doc(disputeId);
-        const disputeDoc = await disputeRef.get();
 
-        if (!disputeDoc.exists) {
-            return { success: false, error: "Dispute not found" };
-        }
+        let escrowId: string | null = null;
 
-        const disputeData = disputeDoc.data() as Dispute;
+        await db.runTransaction(async (tx) => {
+            const disputeDoc = await tx.get(disputeRef);
+            if (!disputeDoc.exists) throw new Error("Dispute not found");
 
-        await disputeRef.update({
-            status: "resolved",
-            resolution,
-            resolvedBy: adminId,
-            resolvedAt: FieldValue.serverTimestamp(),
-        });
+            const disputeData = disputeDoc.data() as Dispute;
 
-        // Update escrow based on outcome
-        const escrowRef = db.collection("escrow_transactions").doc(disputeData.escrowId);
-        await escrowRef.update({
-            status: outcome === "release_to_seller" ? "released" : "refunded",
-            releasedBy: adminId,
-            [outcome === "release_to_seller" ? "releasedAt" : "refundedAt"]: FieldValue.serverTimestamp(),
+            if (!["open", "under_review"].includes(disputeData.status)) {
+                throw new Error(
+                    `Cannot resolve: dispute is already '${disputeData.status}'`
+                );
+            }
+
+            escrowId = disputeData.escrowId;
+            const escrowRef = db.collection("escrow_transactions").doc(escrowId);
+
+            // Atomic: resolve dispute + update escrow in one commit
+            tx.update(disputeRef, {
+                status: "resolved",
+                resolution,
+                resolvedBy: adminId,
+                resolvedAt: FieldValue.serverTimestamp(),
+            });
+
+            tx.update(escrowRef, {
+                status: outcome === "release_to_seller" ? "released" : "refunded",
+                releasedBy: adminId,
+                [outcome === "release_to_seller" ? "releasedAt" : "refundedAt"]:
+                    FieldValue.serverTimestamp(),
+            });
         });
 
         await createAdminAuditLog({
@@ -320,20 +400,21 @@ export async function resolveDisputeAction(
             targetId: disputeId,
             targetType: "dispute",
             metadata: {
-                escrowId: disputeData.escrowId,
+                escrowId,
                 outcome,
             },
         });
 
         return { success: true };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Dispute resolution error:", error);
-        return { success: false, error: "Failed to resolve dispute" };
+        return { success: false, error: error.message || "Failed to resolve dispute" };
     }
 }
 
 /**
- * Send message in escrow chat
+ * Send message in escrow chat.
+ * Validates both sender session and that they are a participant of the escrow.
  */
 export async function sendEscrowMessageAction(data: {
     escrowId: string;
@@ -342,6 +423,26 @@ export async function sendEscrowMessageAction(data: {
     message: string;
 }): Promise<{ success: boolean; error?: string }> {
     try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: (sessionResult.error as any)?.error ?? "Session expired" };
+        }
+        const { session } = sessionResult;
+        // Verify the caller is actually the stated sender
+        if (session.user.id !== data.senderId) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Verify they are a participant in this escrow
+        const escrowDoc = await db.collection("escrow_transactions").doc(data.escrowId).get();
+        if (!escrowDoc.exists) {
+            return { success: false, error: "Escrow transaction not found" };
+        }
+        const escrow = escrowDoc.data() as EscrowTransaction;
+        if (escrow.buyerId !== data.senderId && escrow.sellerId !== data.senderId) {
+            return { success: false, error: "Not a participant of this escrow" };
+        }
+
         const messageData: Omit<Message, "id"> = {
             ...data,
             timestamp: FieldValue.serverTimestamp(),
@@ -358,10 +459,24 @@ export async function sendEscrowMessageAction(data: {
 }
 
 /**
- * Get escrow messages
+ * Get escrow messages — only for escrow participants
  */
 export async function getEscrowMessagesAction(escrowId: string): Promise<Message[]> {
     try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return [];
+        const { session } = sessionResult;
+
+        // Verify they are a participant
+        const escrowDoc = await db.collection("escrow_transactions").doc(escrowId).get();
+        if (!escrowDoc.exists) return [];
+        const escrow = escrowDoc.data() as EscrowTransaction;
+        const userId = session.user.id;
+        if (escrow.buyerId !== userId && escrow.sellerId !== userId) {
+            logger.warn(`[getEscrowMessages] Non-participant access attempt by ${userId} on escrow ${escrowId}`);
+            return [];
+        }
+
         const snapshot = await db.collection("escrow_messages")
             .where("escrowId", "==", escrowId)
             .orderBy("timestamp", "asc")
@@ -378,7 +493,7 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<Message
 }
 
 /**
- * Get single escrow transaction by ID
+ * Get single escrow transaction by ID — only for participants or admins
  */
 export async function getEscrowTransactionByIdAction(escrowId: string): Promise<{
     success: boolean;
@@ -386,6 +501,12 @@ export async function getEscrowTransactionByIdAction(escrowId: string): Promise<
     error?: string
 }> {
     try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: (sessionResult.error as any)?.error ?? "Session expired" };
+        }
+        const { session } = sessionResult;
+
         const escrowRef = db.collection("escrow_transactions").doc(escrowId);
         const escrowDoc = await escrowRef.get();
 
@@ -393,11 +514,19 @@ export async function getEscrowTransactionByIdAction(escrowId: string): Promise<
             return { success: false, error: "Escrow transaction not found" };
         }
 
+        const data = escrowDoc.data() as EscrowTransaction;
+        const userId = session.user.id;
+        const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+
+        if (!isAdmin && data.buyerId !== userId && data.sellerId !== userId) {
+            return { success: false, error: "Not authorized to view this escrow" };
+        }
+
         return {
             success: true,
             data: {
                 id: escrowDoc.id,
-                ...escrowDoc.data() as Omit<EscrowTransaction, 'id'>
+                ...data
             }
         };
     } catch (error) {

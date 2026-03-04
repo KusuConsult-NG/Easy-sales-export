@@ -10,6 +10,9 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 export async function GET(request: NextRequest) {
     try {
         const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
 
         // Return non-error response when not authenticated
         if (!session?.user) {

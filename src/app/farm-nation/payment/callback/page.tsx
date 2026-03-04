@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { verifyPropertyPaymentAction } from "@/app/actions/farm-nation-payment";
 import { CheckCircle, XCircle, Loader2, Home, MapPin } from "lucide-react";

@@ -1,18 +1,14 @@
 import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
+import { isSharedDomainPath, isGatedSegment } from "@/lib/route-manifest";
 
-/**
- * Edge Rate Limiter
- * Tracks IPs in-memory. Since Vercel Edge functions are stateless, this resets 
- * on cold boots, but effectively mitigates rapid brute-force bursts.
- */
-const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 100;
-
-// Basic known malicious bot signatures
+// Basic known malicious bot signatures (edge-safe, no state required)
 const BLOCKED_USER_AGENTS = ["curl", "python-requests", "wget", "postman"];
+
+// NOTE: Login brute-force rate limiting is handled server-side in lib/rate-limit.ts
+// using Upstash Redis (survives Vercel cold starts). No in-memory Map is used here.
+// This middleware intentionally has NO in-memory counters.
 
 /**
  * Hub Middleware
@@ -36,39 +32,21 @@ const DOMAIN_MAP: Record<string, string> = {
 export default auth((req: any) => {
     let { pathname } = req.nextUrl;
     const hostname = req.headers.get("host")?.replace(/:\d+$/, "") || "";
-    const ip = req.headers.get("x-forwarded-for") || req.ip || "unknown_ip";
     const userAgent = req.headers.get("user-agent")?.toLowerCase() || "";
 
-    // Security Headers Logic
+    // Security Headers are set by next.config.ts headers() — not here.
+    // Middleware must not duplicate them (last-writer-wins causes conflicts).
     const response = NextResponse.next();
-    addSecurityHeaders(response);
 
-    // 1. Basic Bot Rejection
-    const isBot = BLOCKED_USER_AGENTS.some(bot => userAgent.includes(bot));
+    // 1. Basic Bot Rejection (edge-safe, stateless)
+    // Skip /api routes — Paystack webhooks, health checks, and CI pings use curl legitimately.
+    const isApiPath = pathname.startsWith("/api");
+    const isBot = !isApiPath && BLOCKED_USER_AGENTS.some(bot => userAgent.includes(bot));
     if (isBot) {
         return new NextResponse("Forbidden - Bot Activity Detected", { status: 403 });
     }
 
-    // 2. Edge Rate Limiting Logic
-    const now = Date.now();
-    const clientRecord = rateLimitMap.get(ip) || { count: 0, lastReset: now };
-
-    if (now - clientRecord.lastReset > RATE_LIMIT_WINDOW_MS) {
-        // Reset window
-        clientRecord.count = 1;
-        clientRecord.lastReset = now;
-    } else {
-        clientRecord.count++;
-    }
-
-    rateLimitMap.set(ip, clientRecord);
-
-    if (clientRecord.count > MAX_REQUESTS_PER_WINDOW) {
-        // Enforce 429 Too Many Requests
-        return new NextResponse("Too Many Requests - Rate Limit Exceeded", { status: 429, headers: { 'Retry-After': '60' } });
-    }
-
-    // 3. Multi-Domain Host-Based Routing
+    // 2. Multi-Domain Host-Based Routing
     // Find if the incoming Host explicitly matches one of our dedicated module domains
     let rewritePrefix = DOMAIN_MAP[hostname];
 
@@ -96,33 +74,14 @@ export default auth((req: any) => {
     //            (e.g., /courses → rewrite to /academy/courses).
     // -----------------------------------------------------------------------
     if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
-        const SHARED_ROOT_PATHS = [
-            "/auth", "/dashboard", "/admin", "/profile", "/settings",
-            "/messages", "/escrow", "/verify-id", "/verify-status",
-            "/loans", "/favicon.ico", "/images", "/about", "/contact",
-            "/privacy", "/terms", "/refund-policy", "/get-started", "/api",
-            // Cross-module paths: must pass-through untouched regardless of which dedicated domain the user is on.
-            // e.g. WAVE success page links to /cooperatives/onboarding — must not be rewritten to /wave/cooperatives/onboarding
-            "/cooperatives", "/marketplace", "/academy", "/farm-nation", "/export", "/wave",
-        ];
-
-        const isSharedRoute = SHARED_ROOT_PATHS.some(
-            (p) => pathname === p || pathname.startsWith(p + "/")
-        );
-
+        // Uses isSharedDomainPath from route-manifest.ts — single source of truth.
         // --- Case 1: path already carries the module prefix → no rewrite needed ---
         if (pathname.startsWith(rewritePrefix)) {
-            // Apply admin role guard on the already-prefixed path
-            if (pathname.startsWith("/admin") && req.auth?.user) {
-                const roles = (req.auth.user as any)?.roles || [];
-                const isAdmin = roles.includes("admin") || roles.includes("super_admin");
-                if (!isAdmin) {
-                    return NextResponse.redirect(new URL("/dashboard", req.url));
-                }
-            }
+            // Case 1: path already carries the module prefix — no rewrite needed.
+            // Admin role guard runs below at line ~126 after the domain block.
         }
         // --- Case 3: path is NOT a shared route and NOT already prefixed ---
-        else if (!isSharedRoute) {
+        else if (!isSharedDomainPath(pathname)) {
             const url = req.nextUrl.clone();
             // Prepend the module prefix. Special case: if pathname is just "/", resulting path is rewritePrefix
             url.pathname = pathname === "/" ? rewritePrefix : `${rewritePrefix}${pathname}`;
@@ -145,36 +104,8 @@ export default auth((req: any) => {
     // auth.config.authorized() handles all other session enforcement.
     // -----------------------------------------------------------------------
     if (rewritePrefix && !req.auth?.user) {
-        // Short-form path segments that require registration on any dedicated domain.
-        const GATED_PATH_SEGMENTS = [
-            "/onboarding",
-            "/checkout",
-            "/payment",
-            "/verify-payment",
-            "/briefing",
-            "/application",
-            "/setup",
-            "/buyer",
-            "/seller",
-            "/sell",
-            "/list-land",
-            "/dashboard",
-            "/profile",
-            "/settings",
-            "/messages",
-            "/escrow",
-            "/loans",
-            "/admin",
-            "/verify-id",
-            "/verify-status",
-            "/vendor",
-        ];
-
-        const isGated = GATED_PATH_SEGMENTS.some(
-            (seg) => pathname === seg || pathname.startsWith(seg + "/")
-        );
-
-        if (isGated) {
+        // Uses isGatedSegment from route-manifest.ts — single source of truth.
+        if (isGatedSegment(pathname)) {
             const registerUrl = new URL("/auth/register", req.url);
             registerUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
             return NextResponse.redirect(registerUrl);
@@ -198,21 +129,6 @@ export default auth((req: any) => {
 
     return response;
 });
-
-/**
- * Add security headers to response
- */
-function addSecurityHeaders(response: NextResponse): NextResponse {
-    response.headers.set("X-Frame-Options", "DENY");
-    response.headers.set("X-Content-Type-Options", "nosniff");
-    response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-    response.headers.set("X-XSS-Protection", "1; mode=block");
-    response.headers.set(
-        "Strict-Transport-Security",
-        "max-age=31536000; includeSubDomains"
-    );
-    return response;
-}
 
 export const config = {
     matcher: [

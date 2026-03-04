@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 
@@ -23,7 +24,9 @@ export async function approveAcademyApplicationAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
@@ -145,7 +148,9 @@ export async function rejectAcademyApplicationAction(
     reason: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
@@ -251,7 +256,9 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
     data?: any[];
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }

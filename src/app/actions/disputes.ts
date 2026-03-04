@@ -4,7 +4,7 @@
 
 "use server";
 
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -22,10 +22,9 @@ export async function createDisputeAction(params: {
     evidenceUrls?: string[];
 }) {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         const { orderId, reason, description, evidenceUrls = [] } = params;
@@ -69,26 +68,43 @@ export async function createDisputeAction(params: {
             return { success: false, error: "Active dispute already exists for this order" };
         }
 
-        // Create dispute
-        const disputeData: Partial<Dispute> = {
-            orderId,
-            buyerId: userId,
-            sellerId: order.sellerId,
-            reason,
-            description,
-            evidenceUrls,
-            status: "open",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
+        // Atomically create dispute AND update order status in a single transaction.
+        // Previously two separate writes could leave the order in 'disputed' status
+        // with no corresponding dispute document if the second write failed.
+        const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(); // pre-allocate ID
+        const orderRef = db.collection(COLLECTIONS.ORDERS).doc(orderId);
 
-        const disputeRef = await db.collection(COLLECTIONS.DISPUTES).add(disputeData);
+        await db.runTransaction(async (tx) => {
+            // Re-read order inside transaction to prevent TOCTOU
+            const freshOrderDoc = await tx.get(orderRef);
+            if (!freshOrderDoc.exists) throw new Error("Order not found");
 
-        // Update order status
-        await db.collection(COLLECTIONS.ORDERS).doc(orderId).update({
-            status: "disputed",
-            disputeId: disputeRef.id,
-            updatedAt: new Date(),
+            const freshOrder = freshOrderDoc.data() as Order;
+            if (freshOrder.status === "disputed") {
+                throw new Error("Order already has an active dispute");
+            }
+            if (freshOrder.status === "completed" || freshOrder.status === "cancelled") {
+                throw new Error("Cannot dispute completed or cancelled orders");
+            }
+
+            const disputeData: Partial<Dispute> = {
+                orderId,
+                buyerId: userId,
+                sellerId: freshOrder.sellerId,
+                reason,
+                description,
+                evidenceUrls,
+                status: "open",
+                createdAt: FieldValue.serverTimestamp() as any,
+                updatedAt: FieldValue.serverTimestamp() as any,
+            };
+
+            tx.set(disputeRef, disputeData);
+            tx.update(orderRef, {
+                status: "disputed",
+                disputeId: disputeRef.id,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         return { success: true, disputeId: disputeRef.id };
@@ -103,10 +119,9 @@ export async function createDisputeAction(params: {
  */
 export async function getBuyerDisputesAction() {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         const snapshot = await db.collection(COLLECTIONS.DISPUTES)
@@ -137,10 +152,9 @@ export async function getBuyerDisputesAction() {
  */
 export async function getSellerDisputesAction() {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         const snapshot = await db.collection(COLLECTIONS.DISPUTES)
@@ -173,10 +187,9 @@ export async function getAdminDisputesAction(filters?: {
     status?: "open" | "under_review" | "resolved" | "closed";
 }) {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         // Verify admin role
@@ -218,10 +231,9 @@ export async function getAdminDisputesAction(filters?: {
  */
 export async function getDisputeByIdAction(disputeId: string) {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();
@@ -267,10 +279,9 @@ export async function updateDisputeStatusAction(
     refundAmount?: number
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         // Verify admin role
@@ -288,26 +299,42 @@ export async function updateDisputeStatusAction(
 
         const dispute = disputeDoc.data() as Dispute;
 
-        // Update dispute
-        const updateData: any = {
-            status: "resolved",
-            resolution,
-            adminId: userId,
-            adminNotes,
-            resolvedAt: new Date(),
-            updatedAt: new Date(),
-        };
-
-        if (refundAmount !== undefined) {
-            updateData.refundAmount = refundAmount;
+        if (dispute.status === "resolved" || dispute.status === "closed") {
+            return { success: false, error: `Dispute is already '${dispute.status}'` };
         }
 
-        await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).update(updateData);
+        // Atomically update dispute + order in a single transaction.
+        // Previously two separate writes could leave the dispute as 'resolved'
+        // while the order remained stuck in 'disputed' status.
+        const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
 
-        // Update order status based on resolution if linked to an order
-        if (dispute.orderId) {
-            const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(dispute.orderId).get();
-            if (orderDoc.exists) {
+        await db.runTransaction(async (tx) => {
+            const freshDisputeDoc = await tx.get(disputeRef);
+            if (!freshDisputeDoc.exists) throw new Error("Dispute not found");
+
+            const freshDispute = freshDisputeDoc.data() as Dispute;
+            if (freshDispute.status === "resolved" || freshDispute.status === "closed") {
+                throw new Error(`Dispute is already '${freshDispute.status}'`);
+            }
+
+            const updateData: Record<string, unknown> = {
+                status: "resolved",
+                resolution,
+                adminId: userId,
+                adminNotes,
+                resolvedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            };
+
+            if (refundAmount !== undefined) {
+                updateData.refundAmount = refundAmount;
+            }
+
+            tx.update(disputeRef, updateData);
+
+            // Update linked order status
+            if (freshDispute.orderId) {
+                const orderRef = db.collection(COLLECTIONS.ORDERS).doc(freshDispute.orderId);
                 let newOrderStatus: string;
 
                 if (resolution === "refund_buyer") {
@@ -315,22 +342,15 @@ export async function updateDisputeStatusAction(
                 } else if (resolution === "release_seller") {
                     newOrderStatus = "completed";
                 } else {
-                    newOrderStatus = "completed"; // partial refund still completes order
+                    newOrderStatus = "completed"; // partial_refund still closes the order
                 }
 
-                await db.collection(COLLECTIONS.ORDERS).doc(dispute.orderId).update({
+                tx.update(orderRef, {
                     status: newOrderStatus,
-                    updatedAt: new Date(),
+                    updatedAt: FieldValue.serverTimestamp(),
                 });
             }
-        }
-
-        // In production, trigger escrow freeze/hold when dispute is created
-        // This is already handled by escrow status change to \"disputed\" above
-        // Additional actions: notify both parties, freeze fund release, assign to dispute handler
-        // - refund_buyer: Refund full amount to buyer
-        // - release_seller: Release full amount to seller
-        // - partial_refund: Split based on refundAmount
+        });
 
         return { success: true };
     } catch (error: any) {

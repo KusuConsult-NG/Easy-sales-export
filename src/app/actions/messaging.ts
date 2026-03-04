@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -20,7 +21,9 @@ export async function createConversationAction(params: {
     orderId?: string;
 }) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -83,7 +86,9 @@ export async function sendMessageAction(
     content: string
 ) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -160,7 +165,9 @@ export async function sendMessageAction(
  */
 export async function markMessagesAsReadAction(conversationId: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -216,7 +223,9 @@ export async function markMessagesAsReadAction(conversationId: string) {
  */
 export async function getConversationsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -253,7 +262,9 @@ export async function getConversationMessagesAction(
     limitCount: number = 50
 ) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };

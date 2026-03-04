@@ -13,11 +13,13 @@ export default function SystemLogsPage() {
             try {
                 const { getDashboardStatsAction } = await import("@/app/actions/admin-analytics");
                 const data = await getDashboardStatsAction();
-                setLogs(data.recentTransactions.map(t => ({
-                    ...t,
-                    level: "info",
-                    timestamp: t.date,
-                })));
+                if (data?.recentTransactions) {
+                    setLogs(data.recentTransactions.map(t => ({
+                        ...t,
+                        level: "info",
+                        timestamp: t.date,
+                    })));
+                }
             } catch {
                 // No logs yet
             } finally {

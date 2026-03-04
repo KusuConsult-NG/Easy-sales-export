@@ -5,6 +5,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -23,10 +24,9 @@ export async function createReviewAction(params: {
     images?: string[];
 }) {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         const { productId, orderId, rating, comment, images = [] } = params;
@@ -151,10 +151,9 @@ export async function getProductReviewsAction(
  */
 export async function getUserReviewsAction() {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         const snapshot = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
@@ -187,10 +186,9 @@ export async function updateReviewAction(
     comment: string
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         // Validate
@@ -255,10 +253,9 @@ export async function moderateReviewAction(
     rejectionReason?: string
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         // Verify admin role
@@ -350,10 +347,9 @@ export async function getSellerRatingAction(sellerId: string) {
  */
 export async function getAdminReviewsAction(statusFilter?: "pending" | "approved" | "rejected") {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         // Verify admin role

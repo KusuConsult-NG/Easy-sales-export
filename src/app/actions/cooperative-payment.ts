@@ -5,6 +5,7 @@
 'use server';
 
 import { auth } from '@/lib/auth';
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment } from '@/lib/paystack-server';
 
@@ -24,7 +25,9 @@ export async function initializeContributionPaymentAction(
     amount: number
 ): Promise<ActionState & { data?: { authorizationUrl: string; reference: string } }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: 'Authentication required', success: false };
@@ -75,7 +78,9 @@ export async function verifyContributionPaymentAction(
     reference: string
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: 'Authentication required', success: false };

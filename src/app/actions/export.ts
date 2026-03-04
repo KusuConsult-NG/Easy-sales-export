@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -75,7 +76,9 @@ export async function createExportWindowAction(
     formData: FormData
 ): Promise<CreateExportActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to create an export window", success: false };
         }
@@ -195,7 +198,9 @@ export async function updateExportStatusAction(
     newStatus: "pending" | "in_transit" | "delivered" | "completed"
 ): Promise<UpdateStatusActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -283,7 +288,9 @@ export async function updateExportWindowAction(
     updateData: Partial<ExportWindow>
 ): Promise<{ error: string | null; success: boolean }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -330,7 +337,9 @@ export async function getExportWindowsAction(
     lastId?: string | null;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -431,7 +440,9 @@ export async function getExportWindowDetailsAction(
     exportId: string
 ): Promise<{ error: string | null; success: boolean; data?: ExportWindow; export?: ExportWindow }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -504,7 +515,9 @@ export async function submitExportOnboardingAction(
     formData: FormData
 ): Promise<{ error: string | null; success: boolean; applicationId?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -622,7 +635,9 @@ export async function getUserExportInvestmentsAction(
     lastId?: string | null;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -702,7 +717,9 @@ export async function getUserExportStatsAction(): Promise<{
     };
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -760,8 +777,9 @@ export async function getUserExportStatsAction(): Promise<{
 
 export async function checkExportStatusAction(): Promise<string | null> {
     try {
-        const session = await auth();
-        if (!session?.user) return null;
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null;
+    const { session } = sessionResult;
 
         // Check user document for service registration
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -789,7 +807,9 @@ export async function investInExportAction(
     amount: number
 ): Promise<{ success: boolean; error?: string; data?: { authorizationUrl: string; reference: string } }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
         }
@@ -846,7 +866,9 @@ export async function investInExportAction(
 
 export async function verifyExportInvestmentAction(reference: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const { verifyPaystackPayment } = await import("@/lib/paystack-server");
@@ -934,7 +956,9 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
 
 export async function getMyExportInvestmentsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const snapshot = await db.collection(COLLECTIONS.EXPORT_SLOTS)
@@ -973,7 +997,9 @@ export async function extendEscrowAction(
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         // Check admin role
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
@@ -1026,7 +1052,9 @@ export async function getExportApplicationAction(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
@@ -1052,7 +1080,9 @@ export async function requestExportRevisionAction(
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -1123,7 +1153,9 @@ export async function approveExportApplicationAction(
     applicationId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -1186,3 +1218,56 @@ export async function approveExportApplicationAction(
     }
 }
 
+// ============================================================================
+// USER RESUBMIT — Export Onboarding
+// ============================================================================
+
+/**
+ * Update and resubmit an export onboarding application that was rejected or flagged for revision.
+ */
+export async function resubmitExportApplicationAction(
+    fields: Record<string, any>
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        const userId = session.user.id;
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.export?.status;
+        const allowedStatuses = ['revision_required', 'rejected'];
+        if (!allowedStatuses.includes(existingStatus || '')) {
+            return { success: false, error: 'Your application cannot be resubmitted at this time.' };
+        }
+
+        const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+            .where('userId', '==', userId)
+            .limit(1)
+            .get();
+
+        if (snap.empty) return { success: false, error: 'No existing application found' };
+
+        const appRef = snap.docs[0].ref;
+
+        await appRef.update({
+            ...fields,
+            status: 'pending_review',
+            revisionNote: null,
+            resubmittedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            'serviceRegistrations.export.status': 'pending_approval',
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return { success: true };
+    } catch (error) {
+        logger.error('resubmitExportApplicationAction error:', error);
+        return { success: false, error: 'Failed to resubmit application' };
+    }
+}

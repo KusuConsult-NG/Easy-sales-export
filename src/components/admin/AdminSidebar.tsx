@@ -15,7 +15,8 @@ import {
     Menu,
     X,
     LogOut,
-    GraduationCap
+    GraduationCap,
+    FileText,
 } from "lucide-react";
 import { useState } from "react";
 import { logoutAction } from "@/app/actions/auth";
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
     { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2 },
     { label: "Marketplace", href: "/admin/marketplace", icon: ShoppingBag },
     { label: "Export Windows", href: "/admin/export", icon: Container },
+    { label: "Export Applications", href: "/admin/export/applications", icon: FileText },
     { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor },
     { label: "Academy", href: "/admin/academy", icon: GraduationCap },
     { label: "Finance", href: "/admin/finance", icon: Wallet },

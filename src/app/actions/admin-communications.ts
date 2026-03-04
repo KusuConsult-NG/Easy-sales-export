@@ -1,6 +1,7 @@
 'use server';
 
 import { logger } from '@/lib/logger';
+import { requireSession } from "@/lib/session-guard";
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { auth } from '@/lib/auth';
@@ -84,7 +85,9 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
  */
 export async function sendBulkEmailAction(prevState: SendBulkEmailState, formData: FormData): Promise<SendBulkEmailState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         // Check if user is admin
         const userRef = db.collection('users').doc(session?.user?.id || 'unknown');
         const userDoc = await userRef.get();
@@ -157,7 +160,9 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
  */
 export async function createAnnouncementAction(prevState: CreateAnnouncementState, formData: FormData): Promise<CreateAnnouncementState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin')) {
             return { success: false, error: 'Unauthorized' };
         }
@@ -205,7 +210,9 @@ export interface GetEmailHistoryState {
  */
 export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
         if (!session.user.roles?.includes('admin') && !session.user.roles?.includes('super_admin')) {
             return { success: false, error: 'Unauthorized' };

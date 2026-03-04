@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -16,7 +17,9 @@ export async function getSellerOrdersAction(filters?: {
     status?: OrderStatus;
 }) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -68,7 +71,9 @@ export async function updateOrderStatusAction(
     trackingNumber?: string
 ) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -140,7 +145,9 @@ export async function getBuyerOrdersAction(filters?: {
     status?: OrderStatus;
 }) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -180,7 +187,9 @@ export async function getBuyerOrdersAction(filters?: {
  */
 export async function confirmDeliveryAction(orderId: string) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };

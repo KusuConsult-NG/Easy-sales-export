@@ -14,6 +14,7 @@ import {
 import { AuditActionType, type LandListing } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Create a new land listing
@@ -21,10 +22,9 @@ import { auth } from "@/lib/auth";
 export async function createLandListing(
     data: z.infer<typeof landListingSchema>
 ) {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized" };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const validated = landListingSchema.parse(data);
@@ -191,10 +191,9 @@ export async function getLandListing(listingId: string) {
  * Get user's own land listings
  */
 export async function getMyLandListings() {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized", listings: [] };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const listingsQuery = db.collection('land_listings')
@@ -234,10 +233,9 @@ export async function getMyLandListings() {
 export async function updateLandListing(
     data: z.infer<typeof landListingUpdateSchema>
 ) {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized" };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const validated = landListingUpdateSchema.parse(data);
@@ -300,7 +298,9 @@ export async function updateLandListing(
 export async function verifyLandListing(
     data: z.infer<typeof landVerificationSchema>
 ) {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
     }
@@ -355,10 +355,9 @@ export async function verifyLandListing(
  * Delete a land listing (owner or admin only)
  */
 export async function deleteLandListing(listingId: string) {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized" };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         // Check ownership
@@ -400,7 +399,9 @@ export async function deleteLandListing(listingId: string) {
  * Get land listing statistics (Admin only)
  */
 export async function getLandStatistics() {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return {
             success: false,

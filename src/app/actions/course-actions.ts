@@ -11,6 +11,7 @@ import {
 import { AuditActionType, type CourseProgress } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Update lesson progress (called by video player)
@@ -18,10 +19,9 @@ import { auth } from "@/lib/auth";
 export async function updateLessonProgress(
     data: z.infer<typeof courseProgressSchema>
 ) {
-    const session = await auth();
-    if (!session?.user) {
-        return { success: false, error: "Unauthorized" };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const validated = courseProgressSchema.parse(data);
@@ -70,10 +70,9 @@ export async function updateLessonProgress(
 export async function enrollInCourse(
     data: z.infer<typeof courseEnrollmentSchema>
 ) {
-    const session = await auth();
-    if (!session?.user) {
-        return { success: false, error: "Unauthorized" };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const validated = courseEnrollmentSchema.parse(data);
@@ -142,10 +141,9 @@ export async function enrollInCourse(
  * Get user's course progress
  */
 export async function getCourseProgress(courseId: string) {
-    const session = await auth();
-    if (!session?.user) {
-        return { success: false, error: "Unauthorized", progress: null };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const snapshot = await db.collection('course_progress')
@@ -184,10 +182,9 @@ export async function getCourseProgress(courseId: string) {
  * Get lesson progress (video state)
  */
 export async function getLessonProgress(lessonId: string) {
-    const session = await auth();
-    if (!session?.user) {
-        return { success: false, error: "Unauthorized", progress: null };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const progressId = `${session.user.id}_${lessonId}`;
@@ -215,10 +212,9 @@ export async function getLessonProgress(lessonId: string) {
  * Get all enrolled courses for user
  */
 export async function getUserEnrolledCourses() {
-    const session = await auth();
-    if (!session?.user) {
-        return { success: false, error: "Unauthorized", courses: [] };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const snapshot = await db.collection('course_enrollments')
@@ -245,10 +241,9 @@ export async function getUserEnrolledCourses() {
  * Mark course as complete (manual completion)
  */
 export async function completeCourse(courseId: string) {
-    const session = await auth();
-    if (!session?.user) {
-        return { success: false, error: "Unauthorized" };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const snapshot = await db.collection('course_progress')
@@ -290,10 +285,9 @@ export async function completeCourse(courseId: string) {
  * Called automatically when progress reaches 100%
  */
 export async function generateCourseCertificate(courseId: string, courseTitle: string) {
-    const session = await auth();
-    if (!session?.user) {
-        return { success: false, error: "Unauthorized" };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         // Verify course is completed
@@ -378,10 +372,9 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
  * Get user's course certificate
  */
 export async function getCourseCertificate(courseId: string) {
-    const session = await auth();
-    if (!session?.user) {
-        return { success: false, error: "Unauthorized", certificate: null };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const snapshot = await db.collection('course_certificates')

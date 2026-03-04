@@ -58,7 +58,51 @@ export async function POST(request: NextRequest) {
         // Determine registration fee based on tier
         const registrationFee = tier === "premium" ? 20000 : 10000;
 
-        // Create pending membership record (Admin SDK with server timestamps)
+        // ── STEP 1: Initialize Paystack FIRST ──────────────────────────────────
+        // Bug fix: we previously created the Firestore doc before calling Paystack.
+        // If Paystack failed, the doc was orphaned in 'pending' state and the user
+        // could never re-register ("You already have a membership" on next attempt).
+        // Now we only write to Firestore AFTER Paystack confirms initialisation.
+        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+            },
+            body: JSON.stringify({
+                email: session.user.email,
+                amount: registrationFee * 100,
+                reference: paymentReference,
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment?reference=${paymentReference}&type=registration`,
+                metadata: {
+                    membershipId,
+                    userId: session.user.id,
+                    membershipTier: tier,
+                    type: "cooperative_membership_registration",
+                },
+            }),
+        });
+
+        const paystackData = await paystackResponse.json();
+
+        if (!paystackData.status) {
+            logger.error("[Cooperative Register] Paystack init failed", {
+                userId: session.user.id,
+                reference: paymentReference,
+                paystackStatus: paystackData.status,
+                paystackMessage: paystackData.message,
+            });
+            return NextResponse.json(
+                { success: false, error: paystackData.message || "Payment initialization failed" },
+                { status: 500 }
+            );
+        }
+
+        const authorizationUrl: string = paystackData.data.authorization_url;
+
+        // ── STEP 2: Write Firestore doc AFTER Paystack confirms ────────────────
+        // If this write fails after a successful Paystack init, log a CRITICAL
+        // alert so ops can manually create the record and link it to the payment.
         const memberData = {
             id: membershipId,
             userId: session.user.id,
@@ -89,42 +133,27 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         };
 
-        // Save to Firestore (Admin SDK)
-        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(membershipId).set(memberData);
-
-        // Initialize Paystack payment
-        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-            },
-            body: JSON.stringify({
-                email: session.user.email,
-                amount: registrationFee * 100,
-                reference: paymentReference,
-                callback_url: `${process.env.NEXTAUTH_URL}/cooperatives/verify-payment?reference=${paymentReference}&type=registration`,
-                metadata: {
-                    membershipId,
-                    userId: session.user.id,
-                    membershipTier: tier,
-                    type: "cooperative_membership_registration",
-                },
-            }),
-        });
-
-        const paystackData = await paystackResponse.json();
-
-        if (!paystackData.status) {
-            return NextResponse.json(
-                { success: false, error: "Payment initialization failed" },
-                { status: 500 }
-            );
+        try {
+            await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(membershipId).set(memberData);
+        } catch (firestoreErr: any) {
+            // CRITICAL: Paystack was initialized but we couldn't save the membership record.
+            // The user's browser will be redirected to Paystack. If they pay, the webhook
+            // will try to find this doc via userId fallback. Log everything for manual recovery.
+            logger.error("[Cooperative Register] CRITICAL: Paystack initialized but Firestore write failed", {
+                userId: session.user.id,
+                membershipId,
+                paymentReference,
+                tier,
+                authorizationUrl,
+                error: firestoreErr.message,
+            });
+            // Return the payment URL anyway — the webhook's userId fallback will handle the doc.
+            // Do NOT block the user from paying.
         }
 
         return NextResponse.json({
             success: true,
-            paymentUrl: paystackData.data.authorization_url,
+            paymentUrl: authorizationUrl,
             membershipId,
             reference: paymentReference,
         });

@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase-admin";
@@ -31,7 +32,9 @@ export async function initializePropertyPaymentAction(
     sellerId: string
 ): Promise<PaymentInitState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -118,7 +121,9 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
     propertyId?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -155,42 +160,67 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
             return { error: "Payment verification failed: User mismatch", success: false };
         }
 
-        // Update property ownership
+        // RACE CONDITION FIX: Wrap ownership transfer in a Firestore transaction.
+        // Without this, two simultaneous buyers could both pass the processedPayments
+        // check (both arrive before either writes it), and both call propertyRef.update()
+        // with status="sold". Last write wins, causing a double-sale.
         const propertyRef = db.collection("farmNationProperties").doc(propertyId);
-        const propertyDoc = await propertyRef.get();
+        let amountInNaira = 0;
 
-        if (!propertyDoc.exists) {
-            return { error: "Property not found", success: false };
-        }
+        await db.runTransaction(async (tx) => {
+            // Re-read property *inside* the transaction for strong consistency
+            const freshPropertyDoc = await tx.get(propertyRef);
+            if (!freshPropertyDoc.exists) {
+                throw new Error("Property not found");
+            }
 
-        const propertyData = propertyDoc.data()!;
-        const amountInNaira = paymentData.data.amount / 100;
+            const freshData = freshPropertyDoc.data()!;
+            amountInNaira = paymentData.data.amount / 100;
 
-        // Transfer ownership
-        await propertyRef.update({
-            ownerId: session.user.id,
-            ownerEmail: session.user.email,
-            previousOwnerId: propertyData.ownerId,
-            status: "sold",
-            soldAt: FieldValue.serverTimestamp(),
-            salePrice: amountInNaira,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            // Re-check status inside the transaction — this is the critical gate.
+            // Firestore transactions are serialised: only one will see status="available".
+            if (freshData.status !== "available") {
+                throw new Error(`Property is no longer available (status: ${freshData.status}). It may have just been purchased.`);
+            }
 
-        // Update purchase record
-        const purchaseQuery = await db.collection("propertyPurchases")
-            .where("paymentReference", "==", reference)
-            .limit(1)
-            .get();
-
-        if (!purchaseQuery.empty) {
-            const purchaseDoc = purchaseQuery.docs[0];
-            await db.collection("propertyPurchases").doc(purchaseDoc.id).update({
-                status: "completed",
-                paymentVerifiedAt: FieldValue.serverTimestamp(),
+            // Transfer ownership atomically
+            tx.update(propertyRef, {
+                ownerId: session.user.id,
+                ownerEmail: session.user.email,
+                previousOwnerId: freshData.ownerId,
+                status: "sold",
+                soldAt: FieldValue.serverTimestamp(),
+                salePrice: amountInNaira,
                 updatedAt: FieldValue.serverTimestamp(),
             });
-        }
+
+            // Mark payment as processed inside the transaction for full atomicity
+            const processedRef = db.collection("processedPayments").doc(reference);
+            tx.set(processedRef, {
+                processedAt: FieldValue.serverTimestamp(),
+                userId: session.user.id,
+                amount: amountInNaira,
+                type: "property_purchase",
+                reference,
+            });
+
+            // Update purchase record if it exists
+            const purchaseQuery = await db.collection("propertyPurchases")
+                .where("paymentReference", "==", reference)
+                .limit(1)
+                .get();
+
+            if (!purchaseQuery.empty) {
+                tx.update(
+                    db.collection("propertyPurchases").doc(purchaseQuery.docs[0].id),
+                    {
+                        status: "completed",
+                        paymentVerifiedAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    }
+                );
+            }
+        });
 
         return {
             success: true,

@@ -7,6 +7,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { AuditActionType } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Zod schema for AI chat message
@@ -39,10 +40,9 @@ export interface AIChatMessage {
 export async function sendAIMessage(
     data: z.infer<typeof aiChatMessageSchema>
 ) {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized", response: null };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const validated = aiChatMessageSchema.parse(data);
@@ -129,10 +129,9 @@ export async function sendAIMessage(
  * Get chat history for current user
  */
 export async function getAIChatHistory(maxMessages: number = 20) {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized", messages: [] };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const chatQuery = db.collection('ai_chat_history').where('userId', '==', session.user.id).orderBy('createdAt', 'desc').limit(maxMessages);
@@ -164,10 +163,9 @@ export async function getAIChatHistory(maxMessages: number = 20) {
  * Get context-aware suggestions based on current page
  */
 export async function getAISuggestions(context: { currentPage: string; userRole: string }) {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized", suggestions: [] };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     // Generate contextual suggestions based on page
     const suggestions = generateSuggestions(context.currentPage, context.userRole);

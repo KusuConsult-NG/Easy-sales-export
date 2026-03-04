@@ -1,4 +1,5 @@
 "use server";
+import { requireSession } from "@/lib/session-guard";
 
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
@@ -145,7 +146,9 @@ export async function getProductsByCategoryAction(category: string) {
 export async function getBuyerOrdersAction() {
     try {
         const { auth } = await import("@/lib/auth");
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Authentication required" };
@@ -178,7 +181,9 @@ export async function confirmOrderReceiptAction(orderId: string) {
     try {
         const { auth } = await import("@/lib/auth");
         const { FieldValue } = await import("firebase-admin/firestore");
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Authentication required" };

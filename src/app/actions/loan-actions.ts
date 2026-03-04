@@ -12,6 +12,7 @@ import {
 import { AuditActionType, LoanStatus, type LoanApplication } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Submit a new loan application
@@ -19,10 +20,9 @@ import { auth } from "@/lib/auth";
 export async function submitLoanApplication(
     data: z.infer<typeof loanApplicationSchema>
 ) {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized" };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const validated = loanApplicationSchema.parse(data);
@@ -73,10 +73,9 @@ export async function submitLoanApplication(
  * Get all loan applications for current user
  */
 export async function getUserLoanApplications() {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized", loans: [] };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const loansQuery = db.collection('loan_applications').where('userId', '==', session.user.id).orderBy('createdAt', 'desc');
@@ -107,10 +106,9 @@ export async function getUserLoanApplications() {
  * Get a specific loan application by ID
  */
 export async function getLoanApplication(loanId: string) {
-    const session = await auth();
-    if (!session) {
-        return { success: false, error: "Unauthorized", loan: null };
-    }
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
     try {
         const loanRef = db.collection('loan_applications').doc(loanId);
@@ -148,7 +146,9 @@ export async function getLoanApplication(loanId: string) {
  * Get all pending loan applications (Admin only)
  */
 export async function getPendingLoanApplications() {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only", loans: [] };
     }
@@ -184,7 +184,9 @@ export async function getPendingLoanApplications() {
 export async function approveLoanApplication(
     data: z.infer<typeof loanApprovalSchema>
 ) {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
     }
@@ -239,7 +241,9 @@ export async function approveLoanApplication(
  * Update loan status to DISBURSED (Admin only)
  */
 export async function disburseLoan(loanId: string, disbursementNotes?: string) {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
     }
@@ -275,7 +279,9 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
  * Get loan statistics (Admin only)
  */
 export async function getLoanStatistics() {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return {
             success: false,

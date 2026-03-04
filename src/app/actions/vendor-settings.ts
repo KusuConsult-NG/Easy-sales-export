@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -18,7 +19,9 @@ export async function updateVendorProfileAction(profileData: {
     banner?: string;
 }) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -55,7 +58,9 @@ export async function updateVendorPaymentConfigAction(paymentData: {
     taxId?: string;
 }) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -89,7 +94,9 @@ export async function updateVendorNotificationPrefsAction(prefs: {
     marketing: boolean;
 }) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -116,7 +123,9 @@ export async function updateVendorShippingConfigAction(shippingData: {
     rates?: Record<string, number>;
 }) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -142,7 +151,9 @@ export async function updateVendorShippingConfigAction(shippingData: {
 
 export async function getVendorSettingsAction() {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }

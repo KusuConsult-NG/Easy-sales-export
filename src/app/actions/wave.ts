@@ -115,7 +115,9 @@ const waveApplicationSchema = z.object({
  */
 export async function checkWaveStatusAction(): Promise<string | null> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user) return null;
 
         // Check user document for service registration
@@ -143,10 +145,9 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
     reason?: string;
 }> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { eligible: false, reason: "Unauthorized" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         // Allow checking own eligibility or admin checking others
         if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
@@ -191,7 +192,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{
 export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ success: boolean; code?: string; error?: string; applicationId?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
 
         // Validate with Zod
@@ -371,10 +372,9 @@ export async function enrollInWaveAction(userId: string): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Unauthorized" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         if (session.user.id !== userId) {
             return { success: false, error: "Cannot enroll on behalf of another user" };
@@ -411,7 +411,9 @@ export async function enrollInWaveAction(userId: string): Promise<{
  */
 export async function getWaveResourcesAction(category?: string): Promise<WaveResource[]> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user) return [];
 
         // STRICT ENROLLMENT CHECK
@@ -450,7 +452,9 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
  */
 export async function getWaveTrainingEventsAction(): Promise<WaveTrainingEvent[]> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user) return [];
 
         // Optional: Check enrollment here too if trainings are exclusive
@@ -501,7 +505,9 @@ export interface ShipmentTracking {
  */
 export async function getShipmentTrackingAction(userId: string): Promise<ShipmentTracking[]> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user) return [];
 
         // Users can only see their own shipments
@@ -535,10 +541,9 @@ export async function updateShipmentStatusAction(
     note?: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Unauthorized" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         // Check admin role
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
@@ -647,10 +652,9 @@ export interface MemberEarnings {
  */
 export async function calculateEarningsAction(userId: string): Promise<MemberEarnings> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            throw new Error("Unauthorized");
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             throw new Error("Unauthorized");
@@ -739,10 +743,9 @@ export async function generateCertificateAction(
     certificateType: WaveCertificate["certificateType"]
 ): Promise<{ success: boolean; certificate?: WaveCertificate; error?: string }> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Unauthorized" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         // Check admin role
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
@@ -794,7 +797,9 @@ export async function generateCertificateAction(
  */
 export async function getMemberCertificatesAction(userId: string): Promise<WaveCertificate[]> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user) return [];
 
         // Allow reading own certificates
@@ -816,7 +821,9 @@ export async function getMemberCertificatesAction(userId: string): Promise<WaveC
  */
 export async function getCurrentUserCertificatesAction(): Promise<WaveCertificate[]> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.id) return [];
 
         return await getMemberCertificatesAction(session.user.id);
@@ -837,10 +844,9 @@ export async function uploadWaveResourceAction(
     resource: Omit<WaveResource, "id" | "uploadedAt" | "downloads">
 ): Promise<{ success: boolean; resourceId?: string; error?: string }> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Unauthorized" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         // Check admin role
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
@@ -871,10 +877,9 @@ export async function incrementResourceDownloadAction(
     resourceId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Unauthorized" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         const resourceRef = db.collection("wave_resources").doc(resourceId);
 
@@ -897,10 +902,9 @@ export async function registerForTrainingAction(
     eventId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { success: false, error: "Unauthorized" };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         if (session.user.id !== userId) {
             return { success: false, error: "Cannot register for another user" };
@@ -961,7 +965,9 @@ export async function withdrawEarningsAction(
     amount: number
 ): Promise<{ success: boolean; error?: string; withdrawalId?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
         }
@@ -1025,7 +1031,9 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
     submittedAt?: Date | any;
 } | null> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user) return null;
         const targetId = userId || session.user.id;
 
@@ -1063,7 +1071,9 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
  */
 export async function getWaveApplicationAction(): Promise<{ success: boolean; data?: any; revisionNote?: string; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -1090,7 +1100,9 @@ export async function requestWaveRevisionAction(
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -1139,7 +1151,7 @@ export async function resubmitWaveApplicationAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
 
         const validation = waveApplicationSchema.safeParse(applicationData);

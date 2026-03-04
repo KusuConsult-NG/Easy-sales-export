@@ -9,13 +9,14 @@
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
-import { Package, TrendingUp, Shield, CheckCircle } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Package, TrendingUp, Shield, CheckCircle, AlertTriangle } from "lucide-react";
 import { OnboardingLayout } from "@/components/onboarding/OnboardingLayout";
 import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { useToast } from "@/contexts/ToastContext";
 import { OnboardingStep } from "@/types/service-registration";
 
-import { submitExportOnboardingAction, checkExportStatusAction, getExportApplicationAction } from "@/app/actions/export";
+import { submitExportOnboardingAction, checkExportStatusAction, getExportApplicationAction, resubmitExportApplicationAction } from "@/app/actions/export";
 
 // Import step components
 import { InvestmentProfileStep } from "./steps/InvestmentProfileStep";
@@ -56,6 +57,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
 
 export default function ExportOnboardingPage() {
     const router = useRouter();
+    const { data: session } = useSession();
     const { showToast } = useToast();
     const [currentStepId, setCurrentStepId] = useState("profile");
     const [steps, setSteps] = useState<OnboardingStep[]>(ONBOARDING_STEPS);
@@ -73,16 +75,27 @@ export default function ExportOnboardingPage() {
                     router.replace("/export/onboarding/pending");
                 } else if (status === "approved" || status === "active") {
                     router.replace("/export/dashboard");
-                } else if (status === "revision_required") {
+                } else if (status === "revision_required" || status === "rejected") {
                     const result = await getExportApplicationAction();
                     if (result.success && result.data) {
-                        const d = result.data;
-                        setFormData((prev: any) => ({ ...prev, ...d }));
+                        setFormData((prev: any) => ({ ...prev, ...result.data }));
                     }
                     if (result.revisionNote) setRevisionNote(result.revisionNote);
                     setIsRevisionMode(true);
                     setIsLoading(false);
                 } else {
+                    // Restore draft from localStorage for fresh applicants
+                    const userId = session?.user?.id;
+                    if (userId) {
+                        try {
+                            const saved = localStorage.getItem(`export_draft_${userId}`);
+                            if (saved) {
+                                const parsed = JSON.parse(saved);
+                                if (parsed.data) setFormData(parsed.data);
+                                if (parsed.step) setCurrentStepId(parsed.step);
+                            }
+                        } catch { /* non-blocking */ }
+                    }
                     setIsLoading(false);
                 }
             } catch (error) {
@@ -92,7 +105,7 @@ export default function ExportOnboardingPage() {
         };
 
         checkStatus();
-    }, [router]);
+    }, [router, session?.user?.id]);
 
     if (isLoading) {
         return (
@@ -113,18 +126,22 @@ export default function ExportOnboardingPage() {
     };
 
     const handleNext = (stepData: any) => {
-        // Save step data
-        setFormData((prev: any) => ({ ...prev, ...stepData }));
-
-        // Mark current step as complete
+        const next = { ...formData, ...stepData };
+        setFormData(next);
         markStepComplete(currentStepId);
 
-        // Move to next step
         const nextIndex = currentStepIndex + 1;
         if (nextIndex < steps.length) {
-            setCurrentStepId(steps[nextIndex].id);
+            const nextStepId = steps[nextIndex].id;
+            setCurrentStepId(nextStepId);
+            // Persist draft after every step (user-scoped key)
+            if (!isRevisionMode) {
+                const userId = session?.user?.id;
+                if (userId) {
+                    try { localStorage.setItem(`export_draft_${userId}`, JSON.stringify({ step: nextStepId, data: next })); } catch { /* non-blocking */ }
+                }
+            }
         } else {
-            // All steps complete - submit onboarding
             handleSubmit({ ...formData, ...stepData });
         }
     };
@@ -138,40 +155,37 @@ export default function ExportOnboardingPage() {
 
     const handleSubmit = async (finalData: any) => {
         try {
-            const formData = new FormData();
-
-            // 1. Append Profile Data
-            if (finalData.profile) {
-                formData.append("profile", JSON.stringify(finalData.profile));
+            if (isRevisionMode) {
+                // Resubmit — send text fields only (no file re-upload required)
+                const result = await resubmitExportApplicationAction({
+                    profile: finalData.profile,
+                    kyc: finalData.kyc,
+                    bank: finalData.bank,
+                    terms: finalData.terms,
+                });
+                if (result.success) {
+                    showToast("Application resubmitted for review!", "success");
+                    router.push("/export/onboarding/pending");
+                } else {
+                    showToast(`Failed to resubmit: ${result.error}`, "error");
+                }
+                return;
             }
 
-            // 2. Append KYC Data (Text)
-            if (finalData.kyc?.kycData) {
-                formData.append("kycData", JSON.stringify(finalData.kyc.kycData));
-            }
+            const fd = new FormData();
+            if (finalData.profile) fd.append("profile", JSON.stringify(finalData.profile));
+            if (finalData.kyc?.kycData) fd.append("kycData", JSON.stringify(finalData.kyc.kycData));
+            if (finalData.kyc?.documents?.idDocument) fd.append("idDocument", finalData.kyc.documents.idDocument);
+            if (finalData.kyc?.documents?.proofOfAddress) fd.append("proofOfAddress", finalData.kyc.documents.proofOfAddress);
+            if (finalData.bank) fd.append("bank", JSON.stringify(finalData.bank));
+            if (finalData.terms) fd.append("terms", JSON.stringify(finalData.terms));
 
-            // 3. Append KYC Documents (Files)
-            if (finalData.kyc?.documents?.idDocument) {
-                formData.append("idDocument", finalData.kyc.documents.idDocument);
-            }
-            if (finalData.kyc?.documents?.proofOfAddress) {
-                formData.append("proofOfAddress", finalData.kyc.documents.proofOfAddress);
-            }
-
-            // 4. Append Bank Data
-            if (finalData.bank) {
-                formData.append("bank", JSON.stringify(finalData.bank));
-            }
-
-            // 5. Append Terms
-            if (finalData.terms) {
-                formData.append("terms", JSON.stringify(finalData.terms));
-            }
-
-            // Submit using FormData
-            const result = await submitExportOnboardingAction(null, formData);
+            const result = await submitExportOnboardingAction(null, fd);
 
             if (result.success) {
+                // Clear draft on success
+                const userId = session?.user?.id;
+                if (userId) { try { localStorage.removeItem(`export_draft_${userId}`); } catch { /* non-blocking */ } }
                 showToast("Onboarding submitted successfully!", "success");
                 router.push("/export/onboarding/pending");
             } else {
@@ -230,6 +244,18 @@ export default function ExportOnboardingPage() {
             totalSteps={steps.length}
             backUrl="/export"
         >
+            {/* Rejection / Revision Banner */}
+            {isRevisionMode && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-semibold text-amber-900">Your application requires updates</p>
+                        {revisionNote && <p className="text-sm text-amber-700 mt-1">{revisionNote}</p>}
+                        <p className="text-xs text-amber-600 mt-1">Review and update your details, then resubmit.</p>
+                    </div>
+                </div>
+            )}
+
             {/* Step Indicator */}
             <StepIndicator steps={steps} currentStepId={currentStepId} />
 

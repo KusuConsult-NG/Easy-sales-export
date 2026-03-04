@@ -3,6 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -70,10 +71,9 @@ type EscrowActionState = {
 
 export async function getDashboardStatsAction(): Promise<DashboardActionState> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         const userId = session.user.id;
 
@@ -182,10 +182,9 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
 
 export async function getRecentActivityAction(): Promise<ActivityActionState> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         const userId = session.user.id;
         const activities: RecentActivity = [];
@@ -249,10 +248,9 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
 
 export async function getEscrowStatusAction(): Promise<EscrowActionState> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         const userId = session.user.id;
 

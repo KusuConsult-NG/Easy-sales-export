@@ -1,4 +1,5 @@
 "use server";
+import { requireSession } from "@/lib/session-guard";
 
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -15,7 +16,9 @@ export const deleteUserAccountAction = withSafeAction(
     "deleteUserAccountAction",
     async (): Promise<ActionResponse<void>> => {
         try {
-            const session = await auth();
+            const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
             if (!session?.user?.id) {
                 return { success: false, error: "Unauthorized. You must be logged in." };
             }

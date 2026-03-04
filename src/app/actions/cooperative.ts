@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import {
     contributionSchema,
@@ -57,7 +58,9 @@ export async function initiateCooperativePaymentAction(
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false };
         }
@@ -143,7 +146,9 @@ export async function registerCooperativeMemberAction(
     formData: FormData
 ): Promise<MembershipRegistrationState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to register", success: false };
         }
@@ -283,7 +288,9 @@ export async function joinCooperativeAction(
     initialContribution: number = 0
 ): Promise<JoinCooperativeState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to join a cooperative", success: false };
         }
@@ -366,7 +373,9 @@ export async function makeContributionAction(
     formData: FormData
 ): Promise<MakeContributionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to make a contribution", success: false };
         }
@@ -459,7 +468,9 @@ export async function makeContributionAction(
 
 export async function getMembershipAction(): Promise<GetMembershipState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false };
         }
@@ -504,7 +515,9 @@ export async function getMembershipAction(): Promise<GetMembershipState> {
 
 export async function getTransactionsAction(): Promise<GetTransactionsState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false };
         }
@@ -541,11 +554,9 @@ export async function getUserTierAction(): Promise<{
     totalContributions: number;
 }> {
     try {
-        const session = await auth();
-
-        if (!session?.user) {
-            return { tier: null, totalContributions: 0 };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { tier: null, totalContributions: 0 };
+        const { session } = sessionResult;
 
         const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
         const membershipDoc = await membershipRef.get();
@@ -576,8 +587,9 @@ export async function getUserTierAction(): Promise<{
 
 export async function checkCooperativeStatusAction(): Promise<string | null> {
     try {
-        const session = await auth();
-        if (!session?.user) return null;
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return null;
+        const { session } = sessionResult;
 
         // Check user document for service registration
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -605,7 +617,9 @@ export async function applyForLoanAction(
     formData: FormData
 ): Promise<LoanApplicationState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to apply for a loan", success: false };
         }
@@ -717,7 +731,9 @@ export async function createFixedSavingsAction(
     formData: FormData
 ): Promise<FixedSavingsState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false };
         }
@@ -806,7 +822,9 @@ export async function submitWithdrawalAction(
     formData: FormData
 ): Promise<WithdrawalActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) return { error: "Unauthorized", success: false };
 
         const amount = Number(formData.get("amount"));
@@ -865,7 +883,9 @@ export async function getDirectoryMembersAction(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         // Allow any logged in user? Or just admin? Assuming members can view directory.
         if (!session?.user) {
             return { error: "Unauthorized", success: false, data: [] };
@@ -909,7 +929,9 @@ export async function getCooperativeApplicationAction(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         // Find the member doc by userId
@@ -935,7 +957,9 @@ export async function resubmitCooperativeApplicationAction(
     formData: FormData
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();

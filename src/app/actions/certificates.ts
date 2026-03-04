@@ -3,6 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -40,7 +41,9 @@ export async function uploadCertificateAction(
     }
 ): Promise<{ success: boolean; error?: string; certificateId?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -122,7 +125,9 @@ export async function deleteCertificateAction(
     userId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -168,7 +173,9 @@ export async function deleteCertificateAction(
  */
 export async function completeOnboardingAction(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
         }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { verifyInvestmentPaymentAction } from "@/app/actions/export-payment";
 import { CheckCircle, XCircle, Loader2, Home, TrendingUp } from "lucide-react";

@@ -3,6 +3,7 @@
 import { db, adminAuth } from "@/lib/firebase-admin";
 import { logger } from "@/lib/logger";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 interface ScanResult {
@@ -15,7 +16,9 @@ interface ScanResult {
 
 export async function runForensicScanAction(): Promise<{ success: boolean; results: ScanResult[]; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         // Strict Admin Check
         if (!session?.user?.roles?.includes("super_admin") && (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) {
             return { success: false, results: [], error: "Unauthorized: Admin access required" };

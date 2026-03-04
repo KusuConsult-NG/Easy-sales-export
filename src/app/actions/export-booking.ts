@@ -1,6 +1,7 @@
 'use server';
 
 import { logger } from '@/lib/logger';
+import { requireSession } from "@/lib/session-guard";
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -20,7 +21,9 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: 'Not authenticated' };
         }
@@ -87,7 +90,9 @@ export async function getUserBookingsAction(): Promise<{
     error?: string;
 }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: 'Not authenticated' };
         }

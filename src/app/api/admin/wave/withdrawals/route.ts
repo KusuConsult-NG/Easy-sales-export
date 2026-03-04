@@ -97,14 +97,24 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Withdrawal is no longer pending" }, { status: 409 });
         }
 
-        const newStatus = action === "approve" ? "completed" : "rejected";
+        // CRITICAL BUG FIX: 'approve' must set status to 'approved_pending_payout'
+        // (queued for bank transfer), NOT 'completed'.
+        // 'completed' is only set by the 'complete' action after the transfer is done.
+        // Previously: approve → 'completed' (bypassed the payout step entirely)
+        const newStatus = action === "approve" ? "approved_pending_payout" : "rejected";
 
-        await ref.update({
-            status: newStatus,
-            processedBy: session.user.id,
-            processedAt: FieldValue.serverTimestamp(),
-            ...(adminNotes ? { adminNotes } : {}),
-            ...(transactionReference ? { transactionReference } : {}),
+        await db.runTransaction(async (tx) => {
+            const freshDoc = await tx.get(ref);
+            if (freshDoc.data()?.status !== "pending") {
+                throw new Error("Withdrawal is no longer pending — may have been processed by another admin");
+            }
+            tx.update(ref, {
+                status: newStatus,
+                processedBy: session.user.id,
+                processedAt: FieldValue.serverTimestamp(),
+                ...(adminNotes ? { adminNotes } : {}),
+                ...(transactionReference ? { transactionReference } : {}),
+            });
         });
 
         logger.info(`WAVE withdrawal ${withdrawalId} ${newStatus} by admin ${session.user.id}`);

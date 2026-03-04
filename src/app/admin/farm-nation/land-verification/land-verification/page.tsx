@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, FileText, CheckCircle, XCircle, Eye, Download, Loader2 } from "lucide-react";
-import { getPendingLandListings, verifyLandListing } from "@/app/actions/admin";
+import { MapPin, FileText, CheckCircle, XCircle, Eye, Download, Loader2, Pencil, X, Save } from "lucide-react";
+import { getPendingLandListings, verifyLandListing, editApplicationAction } from "@/app/actions/admin";
 import { useToast } from "@/contexts/ToastContext";
 import type { LandListing } from "@/types";
 
@@ -13,6 +13,12 @@ export default function LandVerificationPage() {
     const [actionLoading, setActionLoading] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
     const { showToast } = useToast();
+
+    // Edit modal state
+    const [editingListing, setEditingListing] = useState<LandListing | null>(null);
+    const [editDraft, setEditDraft] = useState<Record<string, string>>({});
+    const [editNote, setEditNote] = useState("");
+    const [editSaving, setEditSaving] = useState(false);
 
     useEffect(() => {
         let mounted = true;
@@ -62,12 +68,39 @@ export default function LandVerificationPage() {
             showToast("Land listing rejected. Owner has been notified.", "success");
             setSelectedListing(null);
             setRejectionReason("");
-            // Manually update state to remove the rejected listing
             setListings(prev => prev.filter(l => l.id !== listingId));
         } else {
             showToast(result.error || "Failed to reject listing", "error");
         }
         setActionLoading(false);
+    }
+
+    function handleOpenEdit(listing: LandListing) {
+        setEditingListing(listing);
+        setEditDraft({
+            title: listing.title || "",
+            "location.state": listing.location?.state || "",
+            "location.lga": listing.location?.lga || "",
+        });
+        setEditNote("");
+    }
+
+    async function handleSaveEdit() {
+        if (!editingListing) return;
+        setEditSaving(true);
+        const result = await editApplicationAction({
+            collection: "land_listings",
+            docId: editingListing.id || "",
+            fields: editDraft as any,
+            editNote: editNote || undefined,
+        });
+        if (result.success) {
+            showToast("Listing updated with audit trail.", "success");
+            setEditingListing(null);
+        } else {
+            showToast(result.error || "Failed to update listing", "error");
+        }
+        setEditSaving(false);
     }
 
     if (loading) {
@@ -227,6 +260,13 @@ export default function LandVerificationPage() {
                                 {/* Actions */}
                                 <div className="flex items-center space-x-3">
                                     <button
+                                        onClick={() => handleOpenEdit(listing)}
+                                        className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                        <span>Edit</span>
+                                    </button>
+                                    <button
                                         onClick={() => setSelectedListing(listing)}
                                         className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-slate-100 text-slate-900 rounded-lg hover:bg-slate-200 transition"
                                     >
@@ -342,6 +382,57 @@ export default function LandVerificationPage() {
                                     <span>Approve</span>
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Listing Modal */}
+            {editingListing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full">
+                        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900">Edit Listing</h2>
+                                <p className="text-sm text-slate-500 mt-0.5">Changes are logged with a full audit trail</p>
+                            </div>
+                            <button onClick={() => setEditingListing(null)} className="p-2 hover:bg-slate-100 rounded-lg">
+                                <X className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            {([
+                                { key: "title", label: "Listing Title" },
+                                { key: "location.state", label: "State" },
+                                { key: "location.lga", label: "LGA" },
+                            ] as const).map(({ key, label }) => (
+                                <div key={key}>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+                                    <input
+                                        type="text"
+                                        value={editDraft[key] ?? ""}
+                                        onChange={(e) => setEditDraft(prev => ({ ...prev, [key]: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                </div>
+                            ))}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Edit Note (optional)</label>
+                                <input
+                                    type="text"
+                                    value={editNote}
+                                    onChange={(e) => setEditNote(e.target.value)}
+                                    placeholder="Reason for this edit..."
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-slate-200 flex justify-end gap-3">
+                            <button onClick={() => setEditingListing(null)} disabled={editSaving} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50">Cancel</button>
+                            <button onClick={handleSaveEdit} disabled={editSaving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2">
+                                {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Save Changes
+                            </button>
                         </div>
                     </div>
                 </div>

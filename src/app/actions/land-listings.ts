@@ -3,6 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 import { createNotificationAction } from "@/app/actions/notifications";
@@ -125,7 +126,9 @@ export async function verifyLandListingAction(
     adminId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         const roles = session?.user?.roles || [];
         if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
             return { success: false, error: "Unauthorized: Admin access required" };
@@ -170,7 +173,9 @@ export async function rejectLandListingAction(
     reason: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         const roles = session?.user?.roles || [];
         if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
             return { success: false, error: "Unauthorized: Admin access required" };

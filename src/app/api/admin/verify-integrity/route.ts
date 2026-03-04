@@ -6,6 +6,9 @@ import { auth } from "@/lib/auth";
 export async function GET() {
     try {
         const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
         // strict admin check could be added here, currently just checking if auth works
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

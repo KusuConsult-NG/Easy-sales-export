@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -24,10 +24,12 @@ export interface AnalyticsData {
     }>;
 }
 
-export async function getDashboardStatsAction(): Promise<AnalyticsData> {
-    const session = await auth();
+export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return null;
+    const { session } = sessionResult;
     if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
-        throw new Error("Unauthorized");
+        return null;
     }
 
     // Get total users
@@ -116,21 +118,30 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData> {
 }
 
 export interface FinancialOverview {
+    success: boolean;
+    error?: string;
     totalRevenue: number;
     totalEscrowVolume: number;
     totalLoansDisbursed: number;
+    /** Sum of all withdrawals with status='approved_pending_payout' — real money awaiting bank transfer */
+    pendingPayoutAmount: number;
     recentTransactions: Array<{
         id: string;
         type: string;
         amount: number;
-        timestamp: string | null; // Always an ISO string — Firestore Timestamps can't cross the Server Action boundary
+        status?: string;
+        timestamp: string | null;
     }>;
 }
 
 export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) {
+        return { success: false, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
+    }
+    const { session } = sessionResult;
     if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
-        throw new Error("Unauthorized");
+        return { success: false, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
     }
 
     let totalRevenue = 0;
@@ -188,10 +199,34 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         // Collection may not exist
     }
 
+    // Sum pending payouts (approved_pending_payout withdrawals across both cooperative and wave)
+    let pendingPayoutAmount = 0;
+    try {
+        const pendingPayoutsSnap = await db.collection("withdrawalRequests")
+            .where("status", "==", "approved_pending_payout")
+            .limit(1000)
+            .get();
+        pendingPayoutsSnap.docs.forEach(doc => {
+            pendingPayoutAmount += Number(doc.data().amount) || 0;
+        });
+        // Also check wave_withdrawals collection
+        const wavePayoutsSnap = await db.collection("wave_withdrawals")
+            .where("status", "==", "approved_pending_payout")
+            .limit(1000)
+            .get();
+        wavePayoutsSnap.docs.forEach(doc => {
+            pendingPayoutAmount += Number(doc.data().amount) || 0;
+        });
+    } catch {
+        // Collections may not exist
+    }
+
     return {
+        success: true,
         totalRevenue,
         totalEscrowVolume,
         totalLoansDisbursed,
+        pendingPayoutAmount,
         recentTransactions,
     };
 }
@@ -286,7 +321,9 @@ const fetchModuleRegistrationStats = unstable_cache(
 );
 
 export async function getModuleRegistrationStatsAction(): Promise<ModuleRegistrationStats> {
-    const session = await auth();
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return null as any;
+    const { session } = sessionResult;
     if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
         throw new Error("Unauthorized");
     }

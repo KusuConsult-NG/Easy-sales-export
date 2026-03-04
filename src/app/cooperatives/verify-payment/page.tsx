@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2, TrendingUp, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
@@ -18,38 +18,39 @@ function VerifyPaymentContent() {
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>(reference ? 'loading' : 'error');
     const [message, setMessage] = useState<string>(reference ? '' : 'Missing payment reference');
 
-    useEffect(() => {
-        if (!reference) {
-            return;
-        }
+    // Guard: prevents double-invocation in React Strict Mode
+    const hasVerified = useRef(false);
 
-        const verifyPayment = async () => {
-            try {
-                setStatus('loading');
-                const result = await verifyContributionPaymentAction(reference!);
+    const verifyPayment = useCallback(async () => {
+        if (hasVerified.current || !reference) return;
+        hasVerified.current = true;
 
-                if (result.success) {
-                    setStatus('success');
-                    setMessage(result.message || 'Payment verified successfully!');
+        try {
+            setStatus('loading');
+            const result = await verifyContributionPaymentAction(reference!);
 
-                    // Redirect after 3 seconds if cooperativeId is provided
-                    if (cooperativeId) {
-                        setTimeout(() => {
-                            router.push(`/cooperatives/${cooperativeId}`);
-                        }, 3000);
-                    }
-                } else {
-                    setStatus('error');
-                    setMessage(result.error || 'Payment verification failed');
+            if (result.success) {
+                setStatus('success');
+                setMessage(result.message || 'Payment verified successfully!');
+
+                if (cooperativeId) {
+                    setTimeout(() => {
+                        router.push(`/cooperatives/${cooperativeId}`);
+                    }, 3000);
                 }
-            } catch (error: any) {
+            } else {
                 setStatus('error');
-                setMessage(error.message || 'An error occurred');
+                setMessage(result.error || 'Payment verification failed');
             }
-        };
-
-        verifyPayment();
+        } catch (error: any) {
+            setStatus('error');
+            setMessage(error.message || 'An error occurred');
+        }
     }, [reference, cooperativeId, router]);
+
+    useEffect(() => {
+        verifyPayment();
+    }, [verifyPayment]);
 
     if (status === 'loading') {
         return (

@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import {
     waveApplicationSchema,
     academyEnrollmentSchema,
@@ -62,10 +63,9 @@ export async function submitWaveApplicationAction(
 ): Promise<WaveApplicationState> {
     try {
         // Get authenticated user
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "You must be logged in to apply", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         // Extract and validate form data
         const applicationData = {
@@ -135,10 +135,9 @@ export async function enrollInCourseAction(
 ): Promise<EnrollmentActionState> {
     try {
         // Get authenticated user
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "You must be logged in to enroll", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         // Extract and validate form data
         const enrollmentData = {
@@ -210,10 +209,9 @@ export async function submitWithdrawalAction(
 ): Promise<WithdrawalActionState> {
     try {
         // Get authenticated user
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "You must be logged in to request withdrawal", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         const idempotencyKey = formData.get("idempotencyKey") as string;
         if (!idempotencyKey) {

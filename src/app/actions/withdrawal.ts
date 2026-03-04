@@ -5,6 +5,7 @@
 'use server';
 
 import { auth } from '@/lib/auth';
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/types/firestore';
@@ -30,7 +31,9 @@ export async function submitWithdrawalRequestAction(
     data: WithdrawalRequestData
 ): Promise<ActionState> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: 'Authentication required', success: false };

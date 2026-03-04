@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/firebase-admin";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { BriefingRegistrationData, BriefingStatus } from "./briefing";
 
@@ -19,7 +20,9 @@ export interface BriefingRegistration extends BriefingRegistrationData {
  */
 export async function getBriefingRegistrationsAction(): Promise<{ success: boolean; data?: BriefingRegistration[]; error?: string }> {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
+    if (!sessionResult.session) return sessionResult.error;
+    const { session } = sessionResult;
         // Check admin role
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };

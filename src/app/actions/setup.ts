@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
@@ -11,10 +12,9 @@ import { COLLECTIONS } from "@/lib/types/firestore";
  */
 export async function setupTestCooperativeAction() {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "You must be logged in", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         const userId = session.user.id;
         const cooperativeId = "coop-ezichi-farmers";

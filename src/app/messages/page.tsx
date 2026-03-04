@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { isSessionExpired } from '@/lib/session-guard';
 import { MessageSquare, Search, Plus, Send, Loader2 } from "lucide-react";
 import { getConversationsAction, getMessagesAction, sendMessageAction, startConversationAction, searchUsersAction, markAsReadAction } from "@/app/actions/messages";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
@@ -27,7 +28,7 @@ export default function MessagesPage() {
         async function loadConversations() {
             setLoading(true);
             const result = await getConversationsAction();
-            if (result.conversations) {
+            if (!isSessionExpired(result) && result.conversations) {
                 setConversations(result.conversations);
             }
             setLoading(false);
@@ -47,7 +48,7 @@ export default function MessagesPage() {
 
         async function loadMessages() {
             const result = await getMessagesAction(selectedConv!);
-            if (result.messages) {
+            if (!isSessionExpired(result) && result.messages) {
                 setMessages(result.messages);
             }
 
@@ -94,7 +95,7 @@ export default function MessagesPage() {
 
         setSearching(true);
         const result = await searchUsersAction(query);
-        if (result.users) {
+        if (!isSessionExpired(result) && result.users) {
             setSearchResults(result.users);
         }
         setSearching(false);
@@ -103,7 +104,7 @@ export default function MessagesPage() {
     // Start new conversation
     const handleStartConversation = async (userUid: string) => {
         const result = await startConversationAction(userUid);
-        if (result.conversationId) {
+        if (!isSessionExpired(result) && result.conversationId) {
             setSelectedConv(result.conversationId);
             setShowNewChat(false);
             setSearchQuery("");
@@ -111,7 +112,7 @@ export default function MessagesPage() {
 
             // Reload conversations
             const convResult = await getConversationsAction();
-            if (convResult.conversations) {
+            if (!isSessionExpired(convResult) && convResult.conversations) {
                 setConversations(convResult.conversations);
             }
         }

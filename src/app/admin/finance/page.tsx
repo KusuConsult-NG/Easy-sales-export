@@ -46,17 +46,20 @@ export default function AdminFinancePage() {
         setErrorMsg(null);
         try {
             const data = await getFinancialOverviewAction();
-            if (data) {
-                setFinancial({
-                    totalRevenue: data.totalRevenue,
-                    totalEscrowVolume: data.totalEscrowVolume,
-                    totalLoansDisbursed: data.totalLoansDisbursed,
-                    recentTransactions: data.recentTransactions.map((tx: any) => ({
-                        ...tx,
-                        date: tx.timestamp ? new Date(tx.timestamp).toISOString() : new Date().toISOString()
-                    }))
-                });
+            if (!data || data.success === false) {
+                setErrorMsg(data?.error || "Failed to load financial data.");
+                return;
             }
+            setFinancial({
+                totalRevenue: data.totalRevenue,
+                totalEscrowVolume: data.totalEscrowVolume,
+                totalLoansDisbursed: data.totalLoansDisbursed,
+                pendingPayoutAmount: data.pendingPayoutAmount,
+                recentTransactions: data.recentTransactions.map((tx: any) => ({
+                    ...tx,
+                    date: tx.timestamp ? new Date(tx.timestamp).toISOString() : new Date().toISOString()
+                }))
+            });
         } catch (error: any) {
             logger.error("Finance dashboard error:", error);
             setErrorMsg(error?.message || "Failed to load financial data. Check admin permissions.");
@@ -166,10 +169,12 @@ export default function AdminFinancePage() {
                             Avg Commission
                         </p>
                         <p className="text-2xl font-bold text-slate-900">
-                            2.5%
+                            {financial.totalEscrowVolume > 0
+                                ? `${((financial.totalRevenue / financial.totalEscrowVolume) * 100).toFixed(1)}%`
+                                : "—"}
                         </p>
                         <p className="text-xs text-slate-500 mt-1">
-                            Platform fee
+                            Earned / Escrow volume
                         </p>
                     </div>
 
@@ -178,10 +183,10 @@ export default function AdminFinancePage() {
                             Pending Payouts
                         </p>
                         <p className="text-2xl font-bold text-yellow-600">
-                            {formatCurrency(financial.totalEscrowVolume * 0.1)}
+                            {formatCurrency(financial.pendingPayoutAmount ?? 0)}
                         </p>
                         <p className="text-xs text-slate-500 mt-1">
-                            Awaiting release
+                            Approved, awaiting transfer
                         </p>
                     </div>
 
@@ -303,8 +308,17 @@ export default function AdminFinancePage() {
                                             </p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                                                Completed
+                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${transaction.status === "completed" || transaction.status === undefined
+                                                ? "bg-green-100 text-green-700"
+                                                : transaction.status === "pending"
+                                                    ? "bg-yellow-100 text-yellow-700"
+                                                    : transaction.status === "failed"
+                                                        ? "bg-red-100 text-red-700"
+                                                        : "bg-slate-100 text-slate-700"
+                                                }`}>
+                                                {transaction.status
+                                                    ? transaction.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+                                                    : "Completed"}
                                             </span>
                                         </td>
                                     </tr>

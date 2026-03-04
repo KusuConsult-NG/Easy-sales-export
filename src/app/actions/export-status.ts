@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -21,10 +22,9 @@ export async function updateExportStatusAction(
     formData: FormData
 ): Promise<UpdateExportStatusState> {
     try {
-        const session = await auth();
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         const exportId = formData.get("exportId") as string;
         const newStatus = formData.get("status") as ExportStatus;
