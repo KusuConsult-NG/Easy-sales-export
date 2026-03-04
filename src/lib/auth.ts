@@ -250,18 +250,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         maxAge: 8 * 60 * 60, // 8 hours — financial platform security standard
         updateAge: 60 * 60, // Refresh session token every 1 hour of activity
     },
-    // CRITICAL: Allow login on localhost even in production mode (if using http)
-    cookies: {
-        sessionToken: {
-            name: `next-auth.session-token`,
-            options: {
-                httpOnly: true,
-                sameSite: "lax",
-                path: "/",
-                secure: process.env.NODE_ENV === "production" && process.env.NEXTAUTH_URL?.startsWith("https"),
-            },
-        },
-    },
+    // NextAuth v5 automatically handles secure cookies in production with '__Secure-'
+    // prefix and correct SameSite settings. Custom overrides prevent session
+    // persistence on Vercel deployments.
     secret: process.env.NEXTAUTH_SECRET,
     debug: process.env.NODE_ENV === "development" || process.env.NEXTAUTH_DEBUG === "true",
 });
