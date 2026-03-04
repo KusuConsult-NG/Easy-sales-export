@@ -54,7 +54,8 @@ export type AuditAction =
     | "academy_reject"
     | "academy_under_review"
     | "farm_nation_reject"
-    | "export_investment";
+    | "export_investment"
+    | "admin_edit_application";
 
 export interface AuditLog {
     id: string;
@@ -62,7 +63,7 @@ export interface AuditLog {
     adminId: string;
     adminEmail: string;
     targetId: string;
-    targetType: "user" | "application" | "withdrawal" | "export" | "cooperative" | "land_listing" | "seller_verification" | "export_onboarding" | "export_onboarding_applications" | "academy_application";
+    targetType: "user" | "application" | "withdrawal" | "export" | "cooperative" | "cooperative_member" | "land_listing" | "seller_verification" | "export_onboarding" | "export_onboarding_applications" | "academy_application" | string;
     details: Record<string, any>;
     timestamp: Date;
     ipAddress?: string;

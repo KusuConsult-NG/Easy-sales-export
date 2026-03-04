@@ -1,15 +1,50 @@
 /**
  * Academy Application - Pending Status
- * 
- * Shown after submitting Academy application
+ *
+ * Shown after submitting Academy application.
+ * Real-time listener auto-redirects on revision_required or approval.
  */
 
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import { Clock, CheckCircle2, ArrowLeft, GraduationCap } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { db } from "@/lib/firebase";
+import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
 
 export default function AcademyPendingPage() {
+    const { data: session } = useSession();
+    const router = useRouter();
+    const unsubRef = useRef<() => void>(undefined as any);
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        const q = query(
+            collection(db, "academy_applications"),
+            where("userId", "==", session.user.id),
+            limit(1)
+        );
+
+        const unsub = onSnapshot(q, (snap) => {
+            if (snap.empty) return;
+            const status = snap.docs[0].data().status;
+
+            if (status === "approved") {
+                router.replace("/academy/dashboard");
+            } else if (status === "revision_required") {
+                // Redirect back to the application form — it will pre-populate
+                router.replace("/academy/application");
+            }
+        }, () => { /* silently ignore listener errors */ });
+
+        unsubRef.current = unsub;
+        return () => { unsubRef.current?.(); };
+    }, [session?.user?.id, router]);
+
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
             <div className="max-w-xl w-full">

@@ -39,7 +39,7 @@ if [ -n "$BUCKET" ]; then
 fi
 
 # Set production NEXTAUTH_URL to the Vercel deployment URL
-PROD_URL="https://easy-sales-export.vercel.app"
+PROD_URL="https://easysalesexport.com"
 echo "Setting NEXTAUTH_URL=$PROD_URL for production..."
 vercel env rm "NEXTAUTH_URL" "production" --yes 2>/dev/null || true
 printf '%s' "$PROD_URL" | vercel env add "NEXTAUTH_URL" "production" 2>/dev/null

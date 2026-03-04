@@ -8,9 +8,10 @@ import PersonalInfoStep from "./steps/PersonalInfoStep";
 import EducationStep from "./steps/EducationStep";
 import InterestsStep from "./steps/InterestsStep";
 import ReviewStep from "./ReviewStep";
-import { checkAcademyStatusAction, checkAcademyPaymentStatusAction, initiateAcademyPaymentAction, submitAcademyApplicationAction } from "@/app/actions/academy";
+import { checkAcademyStatusAction, checkAcademyPaymentStatusAction, initiateAcademyPaymentAction, submitAcademyApplicationAction, getAcademyApplicationAction, resubmitAcademyApplicationAction } from "@/app/actions/academy";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
+import { AlertTriangle } from "lucide-react";
 
 interface PersonalInfoData {
     fullName: string;
@@ -52,6 +53,8 @@ export default function AcademyApplicationPage() {
     const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">("unpaid");
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [acceptTerms, setAcceptTerms] = useState(false);
+    const [revisionNote, setRevisionNote] = useState<string | null>(null);
+    const [isRevisionMode, setIsRevisionMode] = useState(false);
     const { data: session } = useSession();
     const { showToast } = useToast();
 
@@ -63,6 +66,21 @@ export default function AcademyApplicationPage() {
                     router.replace("/academy/application/pending");
                 } else if (status === "approved" || status === "active") {
                     router.replace("/academy/dashboard");
+                } else if (status === "revision_required") {
+                    // Pre-populate form with existing data
+                    const result = await getAcademyApplicationAction();
+                    if (result.success && result.data) {
+                        const d = result.data;
+                        if (d.personalInfo) setPersonalInfo((prev: any) => ({ ...prev, ...d.personalInfo }));
+                        if (d.education) setEducation((prev: any) => ({ ...prev, ...d.education }));
+                        if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
+                    }
+                    if (result.revisionNote) setRevisionNote(result.revisionNote);
+                    setIsRevisionMode(true);
+                    // Check payment status — user already paid previously
+                    const payStatus = await checkAcademyPaymentStatusAction();
+                    setPaymentStatus(payStatus);
+                    setIsLoading(false);
                 } else {
                     // Check payment status
                     const payStatus = await checkAcademyPaymentStatusAction();

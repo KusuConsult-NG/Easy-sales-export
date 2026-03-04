@@ -19,13 +19,7 @@ import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
 export default function AdminFinancePage() {
     const [loading, setLoading] = useState(true);
     const [financial, setFinancial] = useState<any>(null);
-
-    async function loadFinancial() {
-        setLoading(true);
-        const result = await getFinancialOverviewAction();
-        setFinancial(result);
-        setLoading(false);
-    }
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     function exportCsv() {
         if (!financial?.recentTransactions?.length) return;
@@ -47,32 +41,32 @@ export default function AdminFinancePage() {
         URL.revokeObjectURL(url);
     }
 
-    useEffect(() => {
-        let mounted = true;
-        async function fetchFinancial() {
-            setLoading(true);
-            try {
-                const data = await getFinancialOverviewAction();
-                if (mounted && data) {
-                    setFinancial({
-                        totalRevenue: data.totalRevenue,
-                        totalEscrowVolume: data.totalEscrowVolume,
-                        totalLoansDisbursed: data.totalLoansDisbursed,
-                        recentTransactions: data.recentTransactions.map((tx: any) => ({
-                            ...tx,
-                            date: tx.timestamp ? new Date(tx.timestamp.seconds * 1000).toISOString() : new Date().toISOString()
-                        }))
-                    });
-                }
-            } catch (error) {
-                logger.error("Error:", error);
-            } finally {
-                if (mounted) setLoading(false);
+    const loadFinancial = async () => {
+        setLoading(true);
+        setErrorMsg(null);
+        try {
+            const data = await getFinancialOverviewAction();
+            if (data) {
+                setFinancial({
+                    totalRevenue: data.totalRevenue,
+                    totalEscrowVolume: data.totalEscrowVolume,
+                    totalLoansDisbursed: data.totalLoansDisbursed,
+                    recentTransactions: data.recentTransactions.map((tx: any) => ({
+                        ...tx,
+                        date: tx.timestamp ? new Date(tx.timestamp).toISOString() : new Date().toISOString()
+                    }))
+                });
             }
+        } catch (error: any) {
+            logger.error("Finance dashboard error:", error);
+            setErrorMsg(error?.message || "Failed to load financial data. Check admin permissions.");
+        } finally {
+            setLoading(false);
         }
+    };
 
-        fetchFinancial();
-        return () => { mounted = false; };
+    useEffect(() => {
+        loadFinancial();
     }, []);
 
     if (loading) {
@@ -88,9 +82,16 @@ export default function AdminFinancePage() {
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                    <p className="text-slate-600">
-                        Failed to load financial data
-                    </p>
+                    <p className="text-slate-700 font-semibold mb-2">Failed to load financial data</p>
+                    {errorMsg && (
+                        <p className="text-sm text-slate-500 mb-4 max-w-xs mx-auto">{errorMsg}</p>
+                    )}
+                    <button
+                        onClick={loadFinancial}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition"
+                    >
+                        Retry
+                    </button>
                 </div>
             </div>
         );
@@ -293,7 +294,7 @@ export default function AdminFinancePage() {
                                         <td className="px-6 py-4">
                                             <p className="text-sm text-slate-600">
                                                 {transaction.timestamp
-                                                    ? new Date(transaction.timestamp.toDate()).toLocaleDateString("en-NG", {
+                                                    ? new Date(transaction.timestamp).toLocaleDateString("en-NG", {
                                                         year: "numeric",
                                                         month: "short",
                                                         day: "numeric",

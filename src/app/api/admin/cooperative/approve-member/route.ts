@@ -53,13 +53,23 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // Log audit entry
+        try {
+            const { logAuditAction } = await import('@/app/actions/audit');
+            await logAuditAction("wave_approve", memberId, "cooperative_member", {
+                adminId: session.user.id,
+                action: "cooperative_membership_approved",
+            });
+        } catch { /* non-blocking */ }
+
         // Send approval email notification
         const memberData = memberDoc.data();
+        const memberName = `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || 'Member';
         try {
             const { sendMembershipApprovalEmail } = await import('@/lib/email-notifications');
             await sendMembershipApprovalEmail(
                 memberData?.email || '',
-                memberData?.name || 'Member'
+                memberName
             );
         } catch (emailError) {
             logger.error("Failed to send approval email (non-blocking):", emailError);

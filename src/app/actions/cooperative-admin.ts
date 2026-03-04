@@ -15,6 +15,7 @@ import {
     sendWithdrawalRejectedEmail
 } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { Resend } from "resend";
 
 // ============================================================================
 // ============================================================================
@@ -83,7 +84,9 @@ export async function getCooperativeStatsAction(): Promise<{
             membersQuery = membersQuery.where("cooperativeId", "==", adminScope);
         }
         const membersSnap = await membersQuery.get();
-        const members = membersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        // 🐛 FIX: Exclude abandoned/unpaid registrations
+        const allMembers = membersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const members = allMembers.filter((m: any) => m.paymentStatus === "completed");
 
         const totalMembers = members.length;
         const activeMembers = members.filter((m: any) => m.membershipStatus === "active").length;
@@ -218,10 +221,13 @@ export async function getAllMembersAction(options?: {
         }
 
         const snapshot = await q.get();
-        const members = snapshot.docs.map((doc) => ({
+        const allMembers = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
         }));
+
+        // 🐛 FIX: Only return paid members in the list
+        const members = allMembers.filter((m: any) => m.paymentStatus === "completed");
 
         return { success: true, data: members };
     } catch (error) {
@@ -252,7 +258,10 @@ export async function updateMemberStatusAction(
 
         // Verify user and assign role if activating
         if (status === "active") {
-            // Assuming memberId is userId, which meets the pattern of other modules
+            // Fetch user data so we can send an approval email
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(memberId).get();
+            const userData = userDoc.data();
+
             await db.collection("users").doc(memberId).set({
                 isVerified: true,
                 roles: FieldValue.arrayUnion("cooperative_member"),
@@ -263,6 +272,34 @@ export async function updateMemberStatusAction(
                 "serviceRegistrations.cooperatives.status": "active",
                 "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
             });
+
+            // 📧 Send approval notification email (non-blocking)
+            try {
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                if (userData?.email) {
+                    await resend.emails.send({
+                        from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                        to: userData.email,
+                        subject: '✅ Your Cooperative Membership Has Been Approved!',
+                        html: `
+                            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                                <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
+                                    <h1 style="color:white;margin:0;">Welcome to the Cooperative!</h1>
+                                </div>
+                                <h2 style="color:#7c3aed;">Membership Approved ✅</h2>
+                                <p>Dear <strong>${userData.fullName || 'Member'}</strong>,</p>
+                                <p>Congratulations! Your cooperative membership application has been <strong>approved</strong>. You now have full access to cooperative benefits including loans, fixed savings, and member forums.</p>
+                                <div style="text-align:center;margin:24px 0;">
+                                    <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/cooperatives/dashboard" style="background:#7c3aed;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Go to Your Dashboard</a>
+                                </div>
+                                <p style="color:#6b7280;font-size:14px;">Easy Sales Export Cooperative Team</p>
+                            </div>
+                        `,
+                    });
+                }
+            } catch (emailError) {
+                logger.error('Cooperative approval email failed (non-blocking):', emailError);
+            }
         }
 
         return { success: true };
@@ -727,5 +764,82 @@ export async function rejectWithdrawalAction(
     } catch (error: any) {
         logger.error("Reject withdrawal error:", error);
         return { success: false, error: error.message || "Failed to reject withdrawal" };
+    }
+}
+
+// ============================================================================
+// REVISION FLOW
+// ============================================================================
+
+/**
+ * Admin: Request revision on a cooperative membership application
+ */
+export async function requestCooperativeRevisionAction(
+    memberId: string,
+    reason: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+            return { success: false, error: 'Admin access required' };
+        }
+
+        // Fetch member doc to get userId and email
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
+        const memberDoc = await memberRef.get();
+        if (!memberDoc.exists) return { success: false, error: 'Member not found' };
+
+        const memberData = memberDoc.data();
+        const userId = memberData?.userId;
+
+        await memberRef.update({
+            membershipStatus: 'revision_required',
+            revisionNote: reason,
+            revisionRequestedAt: FieldValue.serverTimestamp(),
+            revisionRequestedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        if (userId) {
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                'serviceRegistrations.cooperatives.status': 'revision_required',
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        // Send revision requested email (non-blocking)
+        try {
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            const email = memberData?.email;
+            const name = memberData?.firstName ? `${memberData.firstName} ${memberData.lastName || ''}`.trim() : 'Member';
+            if (email) {
+                await resend.emails.send({
+                    from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                    to: email,
+                    subject: '⚠️ Action Required: Update Your Cooperative Application',
+                    html: `
+                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                            <h2 style="color:#d97706;">Application Update Requested</h2>
+                            <p>Dear <strong>${name}</strong>,</p>
+                            <p>Our team has reviewed your cooperative membership application and requires some updates before it can be approved.</p>
+                            <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
+                                <p style="margin:0;color:#92400e;"><strong>Note from Admin:</strong><br/>${reason}</p>
+                            </div>
+                            <p>Please log in to update and resubmit your application.</p>
+                            <div style="text-align:center;margin:24px 0;">
+                                <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/cooperatives/onboarding" style="background:#7c3aed;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Update Application</a>
+                            </div>
+                        </div>
+                    `,
+                });
+            }
+        } catch (emailError) {
+            logger.error('Cooperative revision email failed (non-blocking):', emailError);
+        }
+
+        return { success: true };
+    } catch (error) {
+        logger.error('requestCooperativeRevisionAction error:', error);
+        return { success: false, error: 'Failed to request revision' };
     }
 }

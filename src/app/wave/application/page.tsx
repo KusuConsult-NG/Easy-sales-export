@@ -21,9 +21,10 @@ import {
     CheckCircle,
     Loader2,
 } from "lucide-react";
-import { submitMultiStepWaveApplicationAction } from "@/app/actions/wave";
+import { submitMultiStepWaveApplicationAction, getWaveApplicationAction, resubmitWaveApplicationAction } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 import { useSessionExpiry } from "@/hooks/useSessionExpiry";
+import { AlertTriangle } from "lucide-react";
 
 // Step imports
 import PersonalDetailsStep from "./steps/PersonalDetailsStep";
@@ -178,6 +179,8 @@ export default function WaveApplicationPage() {
     const [formData, setFormData] = useState<WaveApplicationData>(INITIAL_DATA);
     const [submitting, setSubmitting] = useState(false);
     const [restored, setRestored] = useState(false);
+    const [revisionNote, setRevisionNote] = useState<string | null>(null);
+    const [isRevisionMode, setIsRevisionMode] = useState(false);
     const { showToast } = useToast();
     const { data: session, status } = useSession();
     const { run: guardRun } = useSessionExpiry();
@@ -234,17 +237,26 @@ export default function WaveApplicationPage() {
 
     const checkApplicationStatus = async () => {
         try {
-            // Import dynamically or use a server action helper
             const { checkWaveStatusAction } = await import("@/app/actions/wave");
-            const status = await checkWaveStatusAction();
+            const waveStatus = await checkWaveStatusAction();
 
-            if (status === "pending" || status === "under_review") {
+            if (waveStatus === "pending" || waveStatus === "under_review") {
                 router.replace("/wave/application/review-pending");
-            } else if (status === "approved") {
+            } else if (waveStatus === "approved") {
                 router.replace("/wave/dashboard");
-            } else if (status === "rejected") {
-                // Stay on form, but maybe show a message?
-                // For now, allow re-application logic to handle it (form is visible)
+            } else if (waveStatus === "revision_required") {
+                // Pre-populate form with existing data for editing
+                const result = await getWaveApplicationAction();
+                if (result.success && result.data) {
+                    setFormData((prev: any) => ({ ...prev, ...result.data }));
+                    setCurrentStep(0); // Start from beginning so user can review all steps
+                }
+                if (result.revisionNote) {
+                    setRevisionNote(result.revisionNote);
+                }
+                setIsRevisionMode(true);
+            } else if (waveStatus === "rejected") {
+                // Stay on form, allow re-application
             }
         } catch (error) {
             console.error("Failed to check status", error);
@@ -304,8 +316,9 @@ export default function WaveApplicationPage() {
     const handleSubmit = async () => {
         setSubmitting(true);
         try {
-            const result = await guardRun(submitMultiStepWaveApplicationAction(formData));
-            // If session expired, guardRun will sign the user out — result below won't be reached
+            const result = isRevisionMode
+                ? await guardRun(resubmitWaveApplicationAction(formData))
+                : await guardRun(submitMultiStepWaveApplicationAction(formData));
             if (result.success) {
                 const userId = session?.user?.id;
                 if (userId) {
@@ -338,6 +351,18 @@ export default function WaveApplicationPage() {
                         Implemented by Easy Sales Export
                     </p>
                 </div>
+
+                {/* Revision Banner — shown when admin has requested changes */}
+                {isRevisionMode && revisionNote && (
+                    <div className="mb-8 p-4 bg-amber-50 border border-amber-300 rounded-xl flex gap-3 items-start">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-amber-800">Revision Requested</p>
+                            <p className="text-sm text-amber-700 mt-1">{revisionNote}</p>
+                            <p className="text-xs text-amber-600 mt-2">Please review and update your details below, then resubmit the form.</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Progress Bar */}
                 <div className="mb-12">

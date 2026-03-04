@@ -2,48 +2,66 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * API Route: Get All Cooperative Membership Applications (Admin)
+ * Supports: status, state, lga, fromDate, toDate filters + cursor pagination
  */
 export async function GET(request: NextRequest) {
     try {
         const session = await auth();
         if (!session?.user) {
-            return NextResponse.json(
-                { success: false, message: "Unauthorized" },
-                { status: 401 }
-            );
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
         }
 
-        // Check if user is admin or super_admin
         const roles = session.user.roles || [];
         if (!roles.includes("admin") && !roles.includes("super_admin")) {
-            return NextResponse.json(
-                { success: false, message: "Admin access required" },
-                { status: 403 }
-            );
+            return NextResponse.json({ success: false, message: "Admin access required" }, { status: 403 });
         }
 
         const { searchParams } = new URL(request.url);
         const limitParam = parseInt(searchParams.get("limit") || "50");
         const lastCreatedAt = searchParams.get("lastCreatedAt");
         const status = searchParams.get("status");
+        const stateFilter = searchParams.get("state") || "";
+        const lgaFilter = searchParams.get("lga") || "";
+        const fromDate = searchParams.get("fromDate") || "";
+        const toDate = searchParams.get("toDate") || "";
 
-        // Build query using Admin SDK
-        let query: FirebaseFirestore.Query = db.collection("cooperative_members")
-            .orderBy("createdAt", "desc");
+        // Build query — start from collection
+        let query: FirebaseFirestore.Query = db.collection("cooperative_members");
 
+        // Status filter
         if (status && status !== "all") {
-            query = db.collection("cooperative_members")
-                .where("membershipStatus", "==", status)
-                .orderBy("createdAt", "desc");
+            query = query.where("membershipStatus", "==", status);
         }
 
+        // State filter (server-side)
+        if (stateFilter) {
+            query = query.where("stateOfOrigin", "==", stateFilter);
+        }
+
+        // LGA filter (server-side)
+        if (lgaFilter) {
+            query = query.where("lga", "==", lgaFilter);
+        }
+
+        // Date range filters
+        if (fromDate) {
+            query = query.where("createdAt", ">=", new Date(fromDate));
+        }
+        if (toDate) {
+            const end = new Date(toDate);
+            end.setHours(23, 59, 59, 999);
+            query = query.where("createdAt", "<=", end);
+        }
+
+        // Always order by createdAt desc (must come after all inequality filters)
+        query = query.orderBy("createdAt", "desc");
+
+        // Cursor-based pagination
         if (lastCreatedAt) {
-            const cursorDate = new Date(lastCreatedAt);
-            query = query.startAfter(cursorDate);
+            query = query.startAfter(new Date(lastCreatedAt));
         }
 
         query = query.limit(limitParam);
@@ -85,17 +103,9 @@ export async function GET(request: NextRequest) {
         const hasMore = members.length === limitParam;
         const newLastCreatedAt = members.length > 0 ? members[members.length - 1].createdAt : undefined;
 
-        return NextResponse.json({
-            success: true,
-            members,
-            hasMore,
-            lastCreatedAt: newLastCreatedAt
-        });
+        return NextResponse.json({ success: true, members, hasMore, lastCreatedAt: newLastCreatedAt });
     } catch (error) {
         logger.error("Failed to fetch members:", error);
-        return NextResponse.json(
-            { success: false, message: "Internal server error" },
-            { status: 500 }
-        );
+        return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
     }
 }

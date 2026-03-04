@@ -15,7 +15,7 @@ import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { useToast } from "@/contexts/ToastContext";
 import { OnboardingStep } from "@/types/service-registration";
 
-import { submitExportOnboardingAction, checkExportStatusAction } from "@/app/actions/export";
+import { submitExportOnboardingAction, checkExportStatusAction, getExportApplicationAction } from "@/app/actions/export";
 
 // Import step components
 import { InvestmentProfileStep } from "./steps/InvestmentProfileStep";
@@ -61,6 +61,8 @@ export default function ExportOnboardingPage() {
     const [steps, setSteps] = useState<OnboardingStep[]>(ONBOARDING_STEPS);
     const [formData, setFormData] = useState<any>({});
     const [isLoading, setIsLoading] = useState(true);
+    const [revisionNote, setRevisionNote] = useState<string | null>(null);
+    const [isRevisionMode, setIsRevisionMode] = useState(false);
 
     // Check existing application status on mount
     useEffect(() => {
@@ -71,6 +73,15 @@ export default function ExportOnboardingPage() {
                     router.replace("/export/onboarding/pending");
                 } else if (status === "approved" || status === "active") {
                     router.replace("/export/dashboard");
+                } else if (status === "revision_required") {
+                    const result = await getExportApplicationAction();
+                    if (result.success && result.data) {
+                        const d = result.data;
+                        setFormData((prev: any) => ({ ...prev, ...d }));
+                    }
+                    if (result.revisionNote) setRevisionNote(result.revisionNote);
+                    setIsRevisionMode(true);
+                    setIsLoading(false);
                 } else {
                     setIsLoading(false);
                 }

@@ -1271,6 +1271,10 @@ interface GetUsersOptions {
     status?: "verified" | "unverified" | "all";
     search?: string;
     lastDocId?: string;
+    state?: string;     // filter by address.state
+    lga?: string;       // filter by address.lga
+    fromDate?: string;  // ISO date string – createdAt >= fromDate
+    toDate?: string;    // ISO date string – createdAt <= toDate
 }
 
 export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
@@ -1307,9 +1311,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             // NOTE: This limits 'Name' search to the first pageSize results if we don't have an external search engine.
         }
 
-        // Basic filtering (Role/Status) - Only apply if NOT doing a direct search (to avoid index issues)
-        // OR apply them if possible. verifying indexes might be tricky.
-        // Let's keep it simple: unique search wins.
+        // Basic filtering (Role/Status/State/LGA) - Only apply if NOT doing a direct search
         if (!options.search) {
             if (options.role && options.role !== "all") {
                 query = query.where("roles", "array-contains", options.role);
@@ -1321,9 +1323,16 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 query = query.where("verified", "==", false);
             }
 
-            // Sorting only if not searching (Firestore limitation on mixing inequality/sort with different fields sometimes)
-            // Fix: Only apply orderBy if there are no equality filters to prevent missing composite index errors.
-            if (!options.role && !options.status) {
+            // Location filters (stored under address.state / address.lga)
+            if (options.state && options.state !== "all") {
+                query = query.where("address.state", "==", options.state);
+            }
+            if (options.lga && options.lga !== "all") {
+                query = query.where("address.lga", "==", options.lga);
+            }
+
+            // Sort by createdAt descending — only safe when no equality filters conflict
+            if (!options.role && !options.status && !options.state && !options.lga) {
                 query = query.orderBy("createdAt", "desc");
             }
         }
@@ -1352,29 +1361,51 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 name: data.fullName || "Unknown",
                 email: data.email,
                 phone: data.phone,
-                role: data.roles?.[0] || "general_user", // Basic display of primary role
-                roles: data.roles || [], // Full roles array
+                role: data.roles?.[0] || "general_user",
+                roles: data.roles || [],
                 isVerified: data.verified ?? false,
                 createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
                 verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate() : undefined,
-                // Add extra fields for detail view
-                bankDetails: data.bankDetails,
+                // Location
                 address: data.address,
+                state: data.address?.state || "",
+                lga: data.address?.lga || "",
+                // KYC fields
+                bvn: data.bvn,
+                bvnVerified: data.bvnVerified,
+                taxId: data.taxId,
+                tinVerified: data.tinVerified,
+                cacNumber: data.cacNumber,
+                cacVerified: data.cacVerified,
+                idType: data.idType,
+                // Other
+                bankDetails: data.bankDetails,
                 metadata: data.metadata,
                 accountType: data.accountType
             };
         });
 
-        // Simple client-side search filter on the fetched page (not ideal but works for small pages)
-        // Or if the user really wants search, we should note the limitation.
+        // Client-side filters for search + date range
         let filteredUsers = users;
         if (options.search) {
             const searchLower = options.search.toLowerCase();
-            filteredUsers = users.filter(user =>
+            filteredUsers = filteredUsers.filter(user =>
                 user.name.toLowerCase().includes(searchLower) ||
                 user.email.toLowerCase().includes(searchLower) ||
-                (user.phone && user.phone.includes(searchLower))
+                (user.phone && user.phone.includes(searchLower)) ||
+                (user.state && user.state.toLowerCase().includes(searchLower)) ||
+                (user.lga && user.lga.toLowerCase().includes(searchLower))
             );
+        }
+        if (options.fromDate) {
+            const from = new Date(options.fromDate);
+            from.setHours(0, 0, 0, 0);
+            filteredUsers = filteredUsers.filter(u => new Date(u.createdAt) >= from);
+        }
+        if (options.toDate) {
+            const to = new Date(options.toDate);
+            to.setHours(23, 59, 59, 999);
+            filteredUsers = filteredUsers.filter(u => new Date(u.createdAt) <= to);
         }
 
         const lastVisible = snapshot.docs[snapshot.docs.length - 1];
@@ -2045,5 +2076,124 @@ export async function getPlatformSettingsAction(): Promise<{
             defaultCurrency: "NGN",
             maintenanceMode: false,
         };
+    }
+}
+
+// ============================================
+// Admin Edit Application with Audit Trail
+// ============================================
+
+export interface EditableApplicationFields {
+    firstName?: string;
+    lastName?: string;
+    middleName?: string;
+    phone?: string;
+    email?: string;
+    stateOfOrigin?: string;
+    lga?: string;
+    residentialAddress?: string;
+    occupation?: string;
+    membershipTier?: string;
+    "nextOfKin.name"?: string;
+    "nextOfKin.phone"?: string;
+    "nextOfKin.address"?: string;
+}
+
+const ALLOWED_EDIT_FIELDS: (keyof EditableApplicationFields)[] = [
+    "firstName", "lastName", "middleName", "phone", "email",
+    "stateOfOrigin", "lga", "residentialAddress", "occupation",
+    "membershipTier", "nextOfKin.name", "nextOfKin.phone", "nextOfKin.address",
+];
+
+export async function editApplicationAction(params: {
+    collection: string;
+    docId: string;
+    fields: Partial<EditableApplicationFields>;
+    editNote?: string;
+}): Promise<ActionState> {
+    try {
+        const session = await auth();
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
+                return { error: "Unauthorized: admin or users:update role required", success: false };
+            }
+        }
+
+        const { collection: collectionName, docId, fields, editNote } = params;
+
+        // Validate the collection is one we allow editing
+        const ALLOWED_COLLECTIONS = [
+            COLLECTIONS.COOPERATIVE_MEMBERS,
+            COLLECTIONS.WAVE_APPLICATIONS,
+            COLLECTIONS.SELLER_VERIFICATIONS,
+            COLLECTIONS.EXPORT_APPLICATIONS,
+            COLLECTIONS.ACADEMY_APPLICATIONS,
+            COLLECTIONS.USERS,
+        ];
+        if (!ALLOWED_COLLECTIONS.includes(collectionName as any)) {
+            return { error: `Collection '${collectionName}' is not editable via this action`, success: false };
+        }
+
+        // Sanitize fields: only allow whitelisted keys
+        const sanitized: Record<string, any> = {};
+        for (const key of Object.keys(fields) as (keyof EditableApplicationFields)[]) {
+            if (ALLOWED_EDIT_FIELDS.includes(key) && fields[key] !== undefined) {
+                sanitized[key] = (fields[key] as string).trim();
+            }
+        }
+
+        if (Object.keys(sanitized).length === 0) {
+            return { error: "No valid fields to update", success: false };
+        }
+
+        // Fetch current doc to capture "before" snapshot for audit
+        const docRef = db.collection(collectionName).doc(docId);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+            return { error: `Document ${docId} not found in ${collectionName}`, success: false };
+        }
+
+        const before: Record<string, any> = {};
+        const docData = docSnap.data()!;
+        for (const key of Object.keys(sanitized)) {
+            // Handle dot-notation keys like "nextOfKin.name"
+            if (key.includes(".")) {
+                const [parent, child] = key.split(".");
+                before[key] = docData[parent]?.[child] ?? null;
+            } else {
+                before[key] = docData[key] ?? null;
+            }
+        }
+
+        // Apply update
+        await docRef.update({
+            ...sanitized,
+            lastEditedBy: session.user.id,
+            lastEditedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Write full audit trail
+        await logAuditAction(
+            "admin_edit_application",
+            docId,
+            collectionName,
+            {
+                adminId: session.user.id,
+                adminName: session.user.name || session.user.email,
+                before,
+                after: sanitized,
+                editNote: editNote || null,
+            }
+        );
+
+        return {
+            success: true,
+            error: null,
+            message: "Application updated successfully",
+        };
+    } catch (error: any) {
+        logger.error("Edit application error:", error);
+        return { error: "Failed to update application: " + error.message, success: false };
     }
 }

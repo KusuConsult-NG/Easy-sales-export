@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
   // Misc
   poweredByHeader: false,
   reactStrictMode: true,
+  output: "standalone",
 
   // Experimental
   experimental: {

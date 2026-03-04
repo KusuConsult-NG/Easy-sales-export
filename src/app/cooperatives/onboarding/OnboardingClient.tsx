@@ -11,10 +11,11 @@ import { logger } from '@/lib/logger';
 import { ArrowLeft, CreditCard, CheckCircle, ShieldCheck, Loader2, Home } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { registerCooperativeMemberAction, initiateCooperativePaymentAction, checkCooperativeStatusAction } from "@/app/actions/cooperative";
+import { registerCooperativeMemberAction, initiateCooperativePaymentAction, checkCooperativeStatusAction, getCooperativeApplicationAction } from "@/app/actions/cooperative";
 import { CooperativeErrorBoundary } from "@/components/errors/CooperativeErrorBoundary";
 import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
+import { AlertTriangle } from "lucide-react";
 
 // Steps
 import PersonalInfoStep from "./steps/PersonalInfoStep";
@@ -36,6 +37,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
+    const [revisionNote, setRevisionNote] = useState<string | null>(null);
+    const [isRevisionMode, setIsRevisionMode] = useState(false);
 
     const [tier] = useState<"basic" | "premium">(initialTier);
 
@@ -69,16 +72,46 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
     // ── Status check on mount — replaces server-side Firestore read ────────────
     useEffect(() => {
-        checkCooperativeStatusAction().then((status) => {
-            if (status === "active" || status === "approved") {
+        checkCooperativeStatusAction().then(async (coopStatus) => {
+            if (coopStatus === "active" || coopStatus === "approved") {
                 router.replace("/cooperatives/dashboard");
                 return;
             }
-            if (status === "pending" || status === "under_review") {
+            if (coopStatus === "pending" || coopStatus === "under_review") {
                 router.replace("/cooperatives/onboarding/pending");
                 return;
             }
-            // null = no application yet, or error — show the form
+            if (coopStatus === "revision_required") {
+                // Pre-populate form with existing data
+                const result = await getCooperativeApplicationAction();
+                if (result.success && result.data) {
+                    const d = result.data;
+                    if (d.firstName || d.fullName) {
+                        setPersonalInfo((prev: any) => ({
+                            ...prev,
+                            fullName: d.fullName || `${d.firstName || ''} ${d.lastName || ''}`.trim(),
+                            phone: d.phone || prev.phone,
+                            email: d.email || prev.email,
+                            dateOfBirth: d.dateOfBirth || prev.dateOfBirth,
+                            gender: d.gender || prev.gender,
+                            occupation: d.occupation || prev.occupation,
+                        }));
+                    }
+                    if (d.nextOfKinName) {
+                        setNextOfKin((prev: any) => ({
+                            ...prev,
+                            fullName: d.nextOfKinName || prev.fullName,
+                            phone: d.nextOfKinPhone || prev.phone,
+                            address: d.nextOfKinAddress || prev.address,
+                        }));
+                    }
+                }
+                if (result.revisionNote) setRevisionNote(result.revisionNote);
+                setIsRevisionMode(true);
+                setIsCheckingStatus(false);
+                return;
+            }
+            // null = no application yet — show the form
             setIsCheckingStatus(false);
         }).catch(() => {
             setIsCheckingStatus(false);
@@ -251,6 +284,20 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     </div>
                 </div>
             </div>
+
+            {/* Revision Banner */}
+            {isRevisionMode && revisionNote && (
+                <div className="max-w-4xl mx-auto px-8 pt-6">
+                    <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex gap-3 items-start">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-amber-800">Revision Requested by Admin</p>
+                            <p className="text-sm text-amber-700 mt-1">{revisionNote}</p>
+                            <p className="text-xs text-amber-600 mt-2">Please update your details below and resubmit.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Progress Indicator */}
             <div className="bg-white border-b border-slate-200">

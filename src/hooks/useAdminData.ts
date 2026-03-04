@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface UseAdminDataOptions<T> {
-    fetchAction: (params: any) => Promise<{ success: boolean; data?: any; error?: string | null; loans?: any[]; properties?: any[]; users?: any[] }>;
+    fetchAction: (params: any) => Promise<{ success: boolean; data?: any; error?: string | null; loans?: any[]; properties?: any[]; users?: any[]; lastDocId?: string; hasMore?: boolean }>;
     limit?: number;
 }
 
@@ -10,54 +10,60 @@ export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Pagination & Search
     const [pageIndex, setPageIndex] = useState(0);
-    const [search, setSearch] = useState("");
+    const [search, setSearch] = useState('');
     const [filters, setFilters] = useState<Record<string, any>>({});
     const [hasMore, setHasMore] = useState(false);
-    const [lastDoc, setLastDoc] = useState<any>(null); // For cursor-based pagination if needed, or just offset
 
-    const fetchData = useCallback(async (reset = false) => {
+    // Cursor stack: index 0 = page 1 cursor, index 1 = page 2 cursor, etc.
+    // cursors[i] is the lastDocId to use when fetching page i+1
+    const cursorStack = useRef<(string | undefined)[]>([undefined]);
+
+    const fetchData = useCallback(async (page: number, resetCursors = false) => {
         setLoading(true);
         setError(null);
 
         try {
+            const cursor = resetCursors ? undefined : cursorStack.current[page] ?? undefined;
+
             const params = {
                 limit,
                 search,
                 ...filters,
-                // Add pagination params here if fetchAction supports it
-                // offset: pageIndex * limit 
+                lastDocId: cursor,
             };
 
             const result = await fetchAction(params);
 
             if (result.success) {
-                // Handle different response structures
                 const items = result.data || result.loans || result.properties || result.users || [];
+                setData(items);
 
-                if (reset) {
-                    setData(items);
-                } else {
-                    setData(prev => [...prev, ...items]);
+                // Store the cursor for the NEXT page
+                if (result.lastDocId) {
+                    const newStack = resetCursors ? [undefined] : [...cursorStack.current];
+                    newStack[page + 1] = result.lastDocId;
+                    cursorStack.current = newStack;
                 }
 
-                setHasMore(items.length === limit);
+                const more = result.hasMore ?? (items.length === limit);
+                setHasMore(more);
             } else {
-                setError(result.error || "Failed to fetch data");
+                setError(result.error || 'Failed to fetch data');
             }
         } catch (err: any) {
-            setError(err.message || "An error occurred");
+            setError(err.message || 'An error occurred');
         } finally {
             setLoading(false);
         }
     }, [fetchAction, limit, search, filters]);
 
-    // Initial load and search/filter changes
+    // Reset to page 0 whenever search or filters change
     useEffect(() => {
+        cursorStack.current = [undefined];
         setPageIndex(0);
-        fetchData(true);
-    }, [search, filters, fetchData]);
+        fetchData(0, true);
+    }, [search, filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const updateFilter = (key: string, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));
@@ -65,19 +71,25 @@ export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions
 
     const onNextPage = () => {
         if (hasMore) {
-            setPageIndex(prev => prev + 1);
-            // In a real implementation with cursor pagination, we'd trigger a fetch here with the next cursor
-            // For now, simple state update
+            const nextPage = pageIndex + 1;
+            setPageIndex(nextPage);
+            fetchData(nextPage);
         }
     };
 
     const onPrevPage = () => {
         if (pageIndex > 0) {
-            setPageIndex(prev => prev - 1);
+            const prevPage = pageIndex - 1;
+            setPageIndex(prevPage);
+            fetchData(prevPage);
         }
     };
 
-    const refresh = () => fetchData(true);
+    const refresh = () => {
+        cursorStack.current = [undefined];
+        setPageIndex(0);
+        fetchData(0, true);
+    };
 
     return {
         data,
@@ -91,7 +103,7 @@ export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions
         onNextPage,
         onPrevPage,
         pageIndex,
-        setData, // Allow manual updates (e.g. deletion)
-        refresh
+        setData,
+        refresh,
     };
 }

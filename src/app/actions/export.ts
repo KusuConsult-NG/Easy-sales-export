@@ -1011,3 +1011,178 @@ export async function extendEscrowAction(
         return { success: false, error: error.message };
     }
 }
+
+// ============================================================================
+// REVISION FLOW
+// ============================================================================
+
+/**
+ * Get current user's existing export onboarding application (for pre-populating edit form)
+ */
+export async function getExportApplicationAction(): Promise<{
+    success: boolean;
+    data?: any;
+    revisionNote?: string;
+    error?: string;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        if (snap.empty) return { success: false, error: 'No application found' };
+
+        const data = snap.docs[0].data();
+        return { success: true, data, revisionNote: data?.revisionNote };
+    } catch (error) {
+        logger.error('getExportApplicationAction error:', error);
+        return { success: false, error: 'Failed to fetch application' };
+    }
+}
+
+/**
+ * Admin: Request revision on an export onboarding application
+ */
+export async function requestExportRevisionAction(
+    applicationId: string,
+    reason: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+            return { success: false, error: 'Admin access required' };
+        }
+
+        const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId);
+        const appDoc = await appRef.get();
+        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+
+        const appData = appDoc.data();
+        const userId = appData?.userId;
+
+        await appRef.update({
+            status: 'revision_required',
+            revisionNote: reason,
+            revisionRequestedAt: FieldValue.serverTimestamp(),
+            revisionRequestedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        if (userId) {
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                'serviceRegistrations.export.status': 'revision_required',
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        // Send revision email (non-blocking)
+        try {
+            const { Resend } = await import('resend');
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            const email = userDoc.data()?.email;
+            const name = userDoc.data()?.fullName || userDoc.data()?.displayName || 'Applicant';
+            if (email) {
+                await resend.emails.send({
+                    from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                    to: email,
+                    subject: '⚠️ Action Required: Update Your Export Application',
+                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                        <h2 style="color:#ea580c;">Export Application — Update Required</h2>
+                        <p>Dear <strong>${name}</strong>,</p>
+                        <p>Our team has reviewed your Export Windows onboarding application and requires some additional information.</p>
+                        <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:16px;margin:16px 0;">
+                            <p style="margin:0;color:#9a3412;"><strong>Note from Admin:</strong><br/>${reason}</p>
+                        </div>
+                        <p>Please log in to update and resubmit your application.</p>
+                        <div style="text-align:center;margin:24px 0;">
+                            <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/export/onboarding" style="background:#ea580c;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Update Application</a>
+                        </div>
+                    </div>`,
+                });
+            }
+        } catch (emailError) {
+            logger.error('Export revision email failed (non-blocking):', emailError);
+        }
+
+        return { success: true };
+    } catch (error) {
+        logger.error('requestExportRevisionAction error:', error);
+        return { success: false, error: 'Failed to request revision' };
+    }
+}
+
+/**
+ * Admin: Approve an export onboarding application — sets status + sends approval email
+ */
+export async function approveExportApplicationAction(
+    applicationId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+            return { success: false, error: 'Admin access required' };
+        }
+
+        const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId);
+        const appDoc = await appRef.get();
+        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+
+        const appData = appDoc.data();
+        const userId = appData?.userId;
+
+        await appRef.update({
+            status: 'approved',
+            approvedAt: FieldValue.serverTimestamp(),
+            approvedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        if (userId) {
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                'serviceRegistrations.export.status': 'approved',
+                roles: FieldValue.arrayUnion('export_investor'),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        // Send approval email (non-blocking)
+        try {
+            const { Resend } = await import('resend');
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            const email = userDoc.data()?.email;
+            const name = userDoc.data()?.fullName || userDoc.data()?.displayName || 'Investor';
+            if (email) {
+                await resend.emails.send({
+                    from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                    to: email,
+                    subject: '✅ Your Export Application Has Been Approved!',
+                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                        <div style="background:linear-gradient(135deg,#ea580c,#f97316);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
+                            <h1 style="color:white;margin:0;">You're Verified! 🚀</h1>
+                        </div>
+                        <p>Dear <strong>${name}</strong>,</p>
+                        <p>Congratulations! Your <strong>Export Windows</strong> onboarding application has been approved. You now have full access to invest in export opportunities.</p>
+                        <div style="text-align:center;margin:24px 0;">
+                            <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/export/dashboard" style="background:#ea580c;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">View Export Dashboard</a>
+                        </div>
+                        <p style="color:#6b7280;font-size:14px;">Easy Sales Export Team</p>
+                    </div>`,
+                });
+            }
+        } catch (emailError) {
+            logger.error('Export approval email failed (non-blocking):', emailError);
+        }
+
+        return { success: true };
+    } catch (error) {
+        logger.error('approveExportApplicationAction error:', error);
+        return { success: false, error: 'Failed to approve application' };
+    }
+}
+

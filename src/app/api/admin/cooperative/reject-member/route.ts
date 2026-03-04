@@ -47,20 +47,31 @@ export async function POST(request: NextRequest) {
         }
 
         await memberRef.update({
-            membershipStatus: "suspended",
+            membershipStatus: "rejected",
             rejectionReason: reason,
             rejectedBy: session.user.id,
             rejectedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // Log audit entry
+        try {
+            const { logAuditAction } = await import('@/app/actions/audit');
+            await logAuditAction("wave_reject", memberId, "cooperative_member", {
+                adminId: session.user.id,
+                action: "cooperative_membership_rejected",
+                reason,
+            });
+        } catch { /* non-blocking */ }
+
         // Send rejection email notification
         const memberData = memberDoc.data();
+        const memberName = `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || 'Member';
         try {
             const { sendMembershipRejectionEmail } = await import('@/lib/email-notifications');
             await sendMembershipRejectionEmail(
                 memberData?.email || '',
-                memberData?.name || 'Member',
+                memberName,
                 reason
             );
         } catch (emailError) {

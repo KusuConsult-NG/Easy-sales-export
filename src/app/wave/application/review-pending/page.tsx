@@ -68,6 +68,11 @@ export default function ReviewPendingPage() {
                     router.push("/wave/dashboard");
                 }, 3000);
             }
+
+            // Auto-redirect when revision is requested
+            if (status === "revision_required") {
+                router.replace("/wave/application");
+            }
         }, () => {
             // Fallback if listener fails (e.g., permissions)
             setApplicationDate(new Date());

@@ -868,6 +868,7 @@ export const COLLECTIONS = {
     WAVE_SHIPMENTS: "wave_shipments",
     WAVE_MEMBERS: "wave_members",
     WAVE_EARNINGS: "wave_earnings",
+    WAVE_BRIEFING_REGISTRATIONS: "wave_briefing_registrations",
 
     // Cooperative onboarding applications
     COOPERATIVE_ONBOARDING: "cooperative_onboarding_applications",

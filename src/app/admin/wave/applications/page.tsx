@@ -9,6 +9,7 @@ import {
     approveWaveApplicationAction,
     rejectWaveApplicationAction
 } from "@/app/actions/admin";
+import RejectionModal from "@/components/admin/RejectionModal";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
@@ -53,6 +54,8 @@ export default function AdminWaveApplicationsPage() {
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const unsubscribeRef = useRef<Unsubscribe | null>(null);
+    const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+    const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
 
     useEffect(() => {
         // Clean up previous listener
@@ -125,21 +128,24 @@ export default function AdminWaveApplicationsPage() {
         setProcessingId(null);
     };
 
-    const handleReject = async (applicationId: string) => {
-        const reason = prompt("Enter rejection reason:");
-        if (!reason) return;
+    const handleReject = (applicationId: string) => {
+        setRejectingAppId(applicationId);
+        setRejectionModalOpen(true);
+    };
 
-        setProcessingId(applicationId);
-        const result = await rejectWaveApplicationAction(applicationId, reason);
+    const handleConfirmReject = async (reason: string) => {
+        if (!rejectingAppId) return;
+        setProcessingId(rejectingAppId);
+        setRejectionModalOpen(false);
 
+        const result = await rejectWaveApplicationAction(rejectingAppId, reason);
         if (result.success) {
             showToast("Application rejected successfully", "success");
-            // onSnapshot will update automatically
         } else {
             showToast(result.error || "Failed to reject application", "error");
         }
-
         setProcessingId(null);
+        setRejectingAppId(null);
     };
 
     const handleExportCSV = () => {
@@ -377,6 +383,15 @@ export default function AdminWaveApplicationsPage() {
                     )}
                 </div>
             )}
+
+            {/* Rejection Modal */}
+            <RejectionModal
+                isOpen={rejectionModalOpen}
+                onClose={() => { setRejectionModalOpen(false); setRejectingAppId(null); }}
+                onConfirm={handleConfirmReject}
+                title="Reject WAVE Application"
+                description="This applicant will be notified of the rejection with the reason you provide below."
+            />
         </div>
     );
 }

@@ -1220,3 +1220,200 @@ export async function calculateStreakAction(userId: string): Promise<{ streak: n
     }
 }
 
+
+// ============================================================================
+// REVISION FLOW
+// ============================================================================
+
+/**
+ * Get the current user's existing academy application data (for pre-populating edit form)
+ */
+export async function getAcademyApplicationAction(): Promise<{
+    success: boolean;
+    data?: any;
+    revisionNote?: string;
+    error?: string;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        if (snap.empty) return { success: false, error: 'No application found' };
+
+        const data = snap.docs[0].data();
+        return { success: true, data, revisionNote: data?.revisionNote };
+    } catch (error) {
+        logger.error('getAcademyApplicationAction error:', error);
+        return { success: false, error: 'Failed to fetch application' };
+    }
+}
+
+/**
+ * Admin: Request revision on an academy application
+ */
+export async function requestAcademyRevisionAction(
+    applicationId: string,
+    reason: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+            return { success: false, error: 'Admin access required' };
+        }
+
+        const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
+        const appDoc = await appRef.get();
+        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+
+        const appData = appDoc.data();
+        const userId = appData?.userId;
+
+        await appRef.update({
+            status: 'revision_required',
+            revisionNote: reason,
+            revisionRequestedAt: FieldValue.serverTimestamp(),
+            revisionRequestedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        if (userId) {
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                'serviceRegistrations.academy.status': 'revision_required',
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        try {
+            const { Resend } = await import('resend');
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            const email = userDoc.data()?.email;
+            const name = appData?.personalInfo?.fullName || 'Applicant';
+            if (email) {
+                await resend.emails.send({
+                    from: 'Easy Sales Export Academy <noreply@easysalesexport.com>',
+                    to: email,
+                    subject: 'Action Required: Update Your Academy Application',
+                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;"><h2 style="color:#2563eb;">Academy Application Update Required</h2><p>Dear <strong>${name}</strong>,</p><p>Our team requires some updates before your application can be approved.</p><div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:0;color:#1d4ed8;"><strong>Note:</strong><br/>${reason}</p></div><p>Please <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/application">log in to update your application</a>.</p></div>`,
+                });
+            }
+        } catch (emailError) {
+            logger.error('Academy revision email failed (non-blocking):', emailError);
+        }
+
+        return { success: true };
+    } catch (error) {
+        logger.error('requestAcademyRevisionAction error:', error);
+        return { success: false, error: 'Failed to request revision' };
+    }
+}
+
+/**
+ * Admin: Approve an academy application — sets status + sends approval email
+ */
+export async function approveAcademyApplicationAction(
+    applicationId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+            return { success: false, error: 'Admin access required' };
+        }
+
+        const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
+        const appDoc = await appRef.get();
+        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+
+        const appData = appDoc.data();
+        const userId = appData?.userId;
+
+        await appRef.update({
+            status: 'approved',
+            approvedAt: FieldValue.serverTimestamp(),
+            approvedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        if (userId) {
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                'serviceRegistrations.academy.status': 'approved',
+                roles: FieldValue.arrayUnion('academy_learner'),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        try {
+            const { Resend } = await import('resend');
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            const email = userDoc.data()?.email;
+            const name = appData?.personalInfo?.fullName || 'Learner';
+            if (email) {
+                await resend.emails.send({
+                    from: 'Easy Sales Export Academy <noreply@easysalesexport.com>',
+                    to: email,
+                    subject: 'Congratulations! Your Academy Application is Approved',
+                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;"><div style="background:linear-gradient(135deg,#2563eb,#4f46e5);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;"><h1 style="color:white;margin:0;">You are Accepted!</h1></div><p>Dear <strong>${name}</strong>,</p><p>Your <strong>Easy Sales Export Academy</strong> application has been <strong>approved</strong>!</p><div style="text-align:center;margin:24px 0;"><a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/dashboard" style="background:#2563eb;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Go to Academy Dashboard</a></div></div>`,
+                });
+            }
+        } catch (emailError) {
+            logger.error('Academy approval email failed (non-blocking):', emailError);
+        }
+
+        return { success: true };
+    } catch (error) {
+        logger.error('approveAcademyApplicationAction error:', error);
+        return { success: false, error: 'Failed to approve application' };
+    }
+}
+
+/**
+ * Resubmit academy application after revision request
+ */
+export async function resubmitAcademyApplicationAction(data: {
+    personalInfo: any;
+    education: any;
+    interests: any;
+}): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.academy?.status;
+
+        if (existingStatus !== 'revision_required') {
+            return { success: false, error: 'Only applications in revision_required status can be resubmitted' };
+        }
+
+        const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        if (snap.empty) return { success: false, error: 'No existing application found' };
+
+        await snap.docs[0].ref.update({
+            ...data,
+            status: 'pending',
+            revisionNote: null,
+            resubmittedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+            'serviceRegistrations.academy.status': 'pending',
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return { success: true };
+    } catch (error) {
+        logger.error('resubmitAcademyApplicationAction error:', error);
+        return { success: false, error: 'Failed to resubmit application' };
+    }
+}

@@ -27,35 +27,48 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
 
         // Simple segmentation based on roles or status
         // Note: In a real app, you might want to paginate this or use a dedicated email service for large lists
-        switch (segment) {
-            case 'active':
-                snapshot = await query.where('status', '==', 'active').get();
-                break;
-            case 'verified':
-                snapshot = await query.where('verified', '==', true).get();
-                break;
-            case 'sellers':
-                snapshot = await query.where('roles', 'array-contains', 'seller').get();
-                break;
-            case 'cooperative':
-                snapshot = await query.where('roles', 'array-contains', 'cooperative_member').get();
-                break;
-            case 'wave':
-                snapshot = await query.where('roles', 'array-contains', 'wave_student').get();
-                break;
-            case 'all':
-            default:
-                snapshot = await query.get();
-                break;
-        }
+        let emails: string[] = [];
 
-        const emails: string[] = [];
-        snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            if (data.email) {
-                emails.push(data.email);
+        if (segment === 'cooperative') {
+            // 🐛 FIX: Fetch all members from cooperative_members collection directly
+            // This ensures we get members who have completed onboarding and paid, even if they aren't approved yet.
+            const coopQuery = db.collection('cooperative_members').where('paymentStatus', '==', 'completed');
+            const coopSnap = await coopQuery.get();
+            coopSnap.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.email) {
+                    emails.push(data.email);
+                }
+            });
+        } else {
+            // Handle standard segment logic against 'users' collection
+            let snapshot;
+            switch (segment) {
+                case 'active':
+                    snapshot = await query.where('status', '==', 'active').get();
+                    break;
+                case 'verified':
+                    snapshot = await query.where('verified', '==', true).get();
+                    break;
+                case 'sellers':
+                    snapshot = await query.where('roles', 'array-contains', 'seller').get();
+                    break;
+                case 'wave':
+                    snapshot = await query.where('roles', 'array-contains', 'wave_student').get();
+                    break;
+                case 'all':
+                default:
+                    snapshot = await query.get();
+                    break;
             }
-        });
+
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.email) {
+                    emails.push(data.email);
+                }
+            });
+        }
 
         // Remove duplicates
         return [...new Set(emails)];

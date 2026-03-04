@@ -894,3 +894,110 @@ export async function getDirectoryMembersAction(): Promise<{
         return { error: "Failed to load directory", success: false };
     }
 }
+
+// ============================================================================
+// REVISION FLOW — Fetch existing application data & resubmit
+// ============================================================================
+
+/**
+ * Get the current user's existing cooperative onboarding data (for pre-populating edit form)
+ */
+export async function getCooperativeApplicationAction(): Promise<{
+    success: boolean;
+    data?: any;
+    revisionNote?: string;
+    error?: string;
+}> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        // Find the member doc by userId
+        const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        if (snap.empty) return { success: false, error: 'No application found' };
+
+        const data = snap.docs[0].data();
+        return { success: true, data, revisionNote: data?.revisionNote };
+    } catch (error) {
+        logger.error('getCooperativeApplicationAction error:', error);
+        return { success: false, error: 'Failed to fetch application' };
+    }
+}
+
+/**
+ * Resubmit cooperative application after a revision request
+ */
+export async function resubmitCooperativeApplicationAction(
+    formData: FormData
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const existingStatus = userDoc.data()?.serviceRegistrations?.cooperatives?.status;
+
+        if (existingStatus !== 'revision_required') {
+            return { success: false, error: 'Only applications in revision_required status can be resubmitted' };
+        }
+
+        // Find the existing member doc
+        const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        if (snap.empty) return { success: false, error: 'No existing application found' };
+
+        const memberRef = snap.docs[0].ref;
+
+        const nameParts = (formData.get('firstName') as string || '').trim().split(' ');
+        const updatePayload: Record<string, any> = {
+            firstName: formData.get('firstName') || '',
+            lastName: formData.get('lastName') || '',
+            dateOfBirth: formData.get('dateOfBirth') || '',
+            gender: formData.get('gender') || '',
+            email: formData.get('email') || '',
+            phone: formData.get('phone') || '',
+            occupation: formData.get('occupation') || '',
+            stateOfOrigin: formData.get('stateOfOrigin') || '',
+            lga: formData.get('lga') || '',
+            residentialAddress: formData.get('residentialAddress') || '',
+            nextOfKinName: formData.get('nextOfKinName') || '',
+            nextOfKinPhone: formData.get('nextOfKinPhone') || '',
+            nextOfKinAddress: formData.get('nextOfKinAddress') || '',
+            membershipStatus: 'pending',
+            revisionNote: null,
+            resubmittedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        };
+
+        if (formData.get('validIdUrl')) {
+            updatePayload['documents.validIdUrl'] = formData.get('validIdUrl');
+            updatePayload['documents.validIdName'] = formData.get('validIdName') || '';
+        }
+        if (formData.get('passportPhotoUrl')) {
+            updatePayload['documents.passportPhotoUrl'] = formData.get('passportPhotoUrl');
+        }
+        if (formData.get('proofOfAddressUrl')) {
+            updatePayload['documents.proofOfAddressUrl'] = formData.get('proofOfAddressUrl');
+        }
+
+        await memberRef.update(updatePayload);
+
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+            'serviceRegistrations.cooperatives.status': 'pending',
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return { success: true };
+    } catch (error) {
+        logger.error('resubmitCooperativeApplicationAction error:', error);
+        return { success: false, error: 'Failed to resubmit application' };
+    }
+}
+

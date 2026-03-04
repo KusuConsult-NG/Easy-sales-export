@@ -123,7 +123,7 @@ export interface FinancialOverview {
         id: string;
         type: string;
         amount: number;
-        timestamp: any;
+        timestamp: string | null; // Always an ISO string — Firestore Timestamps can't cross the Server Action boundary
     }>;
 }
 
@@ -178,7 +178,10 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
                 id: doc.id,
                 type: data.action || "unknown",
                 amount: Number(data.amount) || 0,
-                timestamp: data.timestamp || null,
+                // 🐛 FIX: Convert Firestore Timestamp to ISO string here on the server.
+                // Firestore Timestamp objects can't be serialized across the Server Action
+                // boundary — they arrive as plain {seconds, nanoseconds} with no .toDate() method.
+                timestamp: data.timestamp?.toDate?.()?.toISOString() ?? null,
             });
         });
     } catch {
@@ -251,13 +254,15 @@ const fetchModuleRegistrationStats = unstable_cache(
             safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS).where("status", "in", ["pending", "submitted", "under_review", "approved", "rejected"])),
 
             // WAVE Briefings: all walk-in event registrations
-            safeCount(db.collection("wave_briefing_registrations")), // no COLLECTIONS key — raw string matches action files
+            safeCount(db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)),
 
             // Academy applicants — COLLECTIONS.ACADEMY_APPLICATIONS = "ACADEMY_APPLICATIONS" (verified)
             safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
 
-            // Cooperatives: enrolled members excluding rejected
-            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "!=", "rejected")),
+            // Cooperatives: paid & enrolled members only (exclude pending payment and rejected)
+            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("paymentStatus", "==", "completed")
+                .where("membershipStatus", "!=", "rejected")),
 
             // Cooperative onboarding pipeline (pending only)
             safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING).where("status", "==", "pending")),

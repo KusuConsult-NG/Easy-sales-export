@@ -9,6 +9,7 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
+import RejectionModal from "@/components/admin/RejectionModal";
 
 type SellerVerification = {
     id: string;
@@ -45,6 +46,9 @@ export default function AdminSellersPage() {
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const unsubscribeRef = useRef<Unsubscribe | null>(null);
+    const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+    const [rejectionMode, setRejectionMode] = useState<"reject" | "suspend">("reject");
+    const [rejectionTargetId, setRejectionTargetId] = useState<string | null>(null);
 
     // Real-time listener
     useEffect(() => {
@@ -146,51 +150,43 @@ export default function AdminSellersPage() {
         }
     };
 
-    const handleReject = async (verificationId: string) => {
-        const reason = prompt("Enter rejection reason:");
-        if (!reason) return;
-        setIsProcessing(true);
-        try {
-            const response = await fetch("/api/admin/marketplace/reject-seller", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ verificationId, reason }),
-            });
-            const data = await response.json();
-            if (data.success) {
-                showToast("Seller verification rejected", "success");
-                setIsDetailsModalOpen(false);
-            } else {
-                showToast(data.message || "Failed to reject seller", "error");
-            }
-        } catch (error) {
-            showToast("An error occurred", "error");
-        } finally {
-            setIsProcessing(false);
-        }
+    const handleReject = (verificationId: string) => {
+        setRejectionTargetId(verificationId);
+        setRejectionMode("reject");
+        setRejectionModalOpen(true);
     };
 
-    const handleSuspend = async (verificationId: string) => {
-        const reason = prompt("Enter suspension reason:");
-        if (!reason) return;
+    const handleSuspend = (verificationId: string) => {
+        setRejectionTargetId(verificationId);
+        setRejectionMode("suspend");
+        setRejectionModalOpen(true);
+    };
+
+    const handleConfirmRejection = async (reason: string) => {
+        if (!rejectionTargetId) return;
+        setRejectionModalOpen(false);
         setIsProcessing(true);
         try {
-            const response = await fetch("/api/admin/marketplace/suspend-seller", {
+            const endpoint = rejectionMode === "reject"
+                ? "/api/admin/marketplace/reject-seller"
+                : "/api/admin/marketplace/suspend-seller";
+            const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ verificationId, reason }),
+                body: JSON.stringify({ verificationId: rejectionTargetId, reason }),
             });
             const data = await response.json();
             if (data.success) {
-                showToast("Seller suspended", "success");
+                showToast(rejectionMode === "reject" ? "Seller verification rejected" : "Seller suspended", "success");
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(data.message || "Failed to suspend seller", "error");
+                showToast(data.message || "Operation failed", "error");
             }
         } catch (error) {
             showToast("An error occurred", "error");
         } finally {
             setIsProcessing(false);
+            setRejectionTargetId(null);
         }
     };
 
@@ -417,6 +413,19 @@ export default function AdminSellersPage() {
                     </div>
                 </div>
             )}
+
+            {/* Rejection / Suspension Modal */}
+            <RejectionModal
+                isOpen={rejectionModalOpen}
+                onClose={() => { setRejectionModalOpen(false); setRejectionTargetId(null); }}
+                onConfirm={handleConfirmRejection}
+                title={rejectionMode === "reject" ? "Reject Seller Verification" : "Suspend Seller"}
+                description={rejectionMode === "reject"
+                    ? "The seller will be notified of this rejection with the reason below."
+                    : "The seller's account will be suspended. Please provide a reason."
+                }
+                isProcessing={isProcessing}
+            />
         </div>
     );
 }

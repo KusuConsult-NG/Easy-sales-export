@@ -248,6 +248,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
                 error: "You are already enrolled in the WAVE program."
             };
         }
+        // Allow users with revision_required status to resubmit — handled below
 
         // Generate application ID
         const applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
@@ -1050,5 +1051,138 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
     } catch (error) {
         logger.error("getWaveApplicationStatusAction error:", error);
         return null;
+    }
+}
+
+// ============================================================================
+// REVISION FLOW
+// ============================================================================
+
+/**
+ * Get the current user's existing WAVE application data (for pre-populating edit form)
+ */
+export async function getWaveApplicationAction(): Promise<{ success: boolean; data?: any; revisionNote?: string; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user) return { success: false, error: 'Unauthorized' };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const applicationId = userDoc.data()?.serviceRegistrations?.wave?.applicationId;
+
+        if (!applicationId) return { success: false, error: 'No application found' };
+
+        const appDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).get();
+        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+
+        const data = appDoc.data();
+        return { success: true, data, revisionNote: data?.revisionNote };
+    } catch (error) {
+        logger.error('getWaveApplicationAction error:', error);
+        return { success: false, error: 'Failed to fetch application' };
+    }
+}
+
+/**
+ * Admin: Request revision from an applicant — sets status to revision_required
+ */
+export async function requestWaveRevisionAction(
+    applicationId: string,
+    reason: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+            return { success: false, error: 'Admin access required' };
+        }
+
+        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
+        const appDoc = await appRef.get();
+        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+
+        const userId = appDoc.data()?.userId;
+
+        await appRef.update({
+            status: 'revision_required',
+            revisionNote: reason,
+            revisionRequestedAt: FieldValue.serverTimestamp(),
+            revisionRequestedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        if (userId) {
+            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+                'serviceRegistrations.wave.status': 'revision_required',
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        await createAdminAuditLog({
+            action: 'user_update',
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: 'wave_application',
+            metadata: { action: 'revision_requested', reason },
+        });
+
+        return { success: true };
+    } catch (error) {
+        logger.error('requestWaveRevisionAction error:', error);
+        return { success: false, error: 'Failed to request revision' };
+    }
+}
+
+/**
+ * Resubmit (update) an existing WAVE application after revision request
+ */
+export async function resubmitWaveApplicationAction(
+    applicationData: z.infer<typeof waveApplicationSchema>
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+
+        const validation = waveApplicationSchema.safeParse(applicationData);
+        if (!validation.success) {
+            return { success: false, error: validation.error.issues[0]?.message || 'Validation failed' };
+        }
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+        const applicationId = userData?.serviceRegistrations?.wave?.applicationId;
+        const existingStatus = userData?.serviceRegistrations?.wave?.status;
+
+        if (!applicationId) return { success: false, error: 'No existing application found to resubmit' };
+        if (existingStatus !== 'revision_required') {
+            return { success: false, error: 'Only applications in revision_required status can be resubmitted' };
+        }
+
+        const validatedData = validation.data;
+
+        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).update({
+            ...validatedData,
+            status: 'pending',
+            revisionNote: null,
+            resubmittedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+            'serviceRegistrations.wave.status': 'pending',
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        await createAdminAuditLog({
+            action: 'user_update',
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: 'wave_application',
+            metadata: { action: 'application_resubmitted' },
+        });
+
+        return { success: true };
+    } catch (error) {
+        logger.error('resubmitWaveApplicationAction error:', error);
+        return { success: false, error: 'Failed to resubmit application' };
     }
 }

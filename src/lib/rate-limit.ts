@@ -136,18 +136,28 @@ export async function consumeLoginAttempt(
 
 /**
  * Reset login attempts (call on successful login)
+ *
+ * FIX: Upstash Ratelimit (sliding window) appends timestamp bucket suffixes to
+ * keys, e.g. `@upstash/login_limit:login_email@gmail.com:1969580`.
+ * A single redis.del() on the bare key never matched anything.
+ * We now use KEYS with a wildcard to find and delete ALL window buckets.
  */
 export async function resetLoginAttempts(email: string): Promise<void> {
     try {
-        const key = `@upstash/login_limit:login_${email.toLowerCase()}`;
+        const pattern = `@upstash/login_limit:login_${email.toLowerCase()}*`;
 
-        // 🗑️ HARD RESET: Delete the sliding window key directly
-        // This effectively resets the counter to 0 for this user
-        await redis.del(key);
+        // Scan for all sliding-window bucket keys for this email
+        const matchingKeys = await redis.keys(pattern);
 
-        console.log(`[Auth] Login attempt counter reset for ${email}`);
+        if (matchingKeys && matchingKeys.length > 0) {
+            // Delete all matching keys in one call
+            await redis.del(...matchingKeys);
+            console.log(`[Auth] Cleared ${matchingKeys.length} rate-limit key(s) for ${email}`);
+        } else {
+            console.log(`[Auth] No rate-limit keys found for ${email} (already clean)`);
+        }
     } catch (error) {
         console.error("Failed to reset login attempts:", error);
-        // Non-blocking error
+        // Non-blocking: do not throw — a reset failure must never block login
     }
 }

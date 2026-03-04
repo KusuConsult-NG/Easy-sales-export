@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX } from "lucide-react";
+import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download } from "lucide-react";
 import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
@@ -26,12 +26,24 @@ interface User {
     tinVerified?: boolean;
     cacNumber?: string;
     cacVerified?: boolean;
+    state?: string;
+    lga?: string;
+    address?: any;
 }
 
 const ROLES_LIST = [
     "general_user", "buyer", "seller", "farmer", "land_owner", "investor",
     "export_participant", "cooperative_member", "wave_participant", "academy_participant",
     "field_officer", "admin", "super_admin"
+];
+
+// Major Nigerian states
+const NIGERIAN_STATES = [
+    "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
+    "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu",
+    "FCT", "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi",
+    "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun",
+    "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"
 ];
 
 export default function AdminUsersPage() {
@@ -43,6 +55,7 @@ export default function AdminUsersPage() {
     const [kycProcessingId, setKycProcessingId] = useState<string | null>(null);
     const [bulkProcessing, setBulkProcessing] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
 
     // Use standardized hook
     const {
@@ -63,6 +76,18 @@ export default function AdminUsersPage() {
         fetchAction: getUsersAction,
         limit: 20
     });
+
+    const hasActiveFilters = !!(filters.state || filters.lga || filters.fromDate || filters.toDate ||
+        (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all"));
+
+    const clearFilters = () => {
+        updateFilter("state", "all");
+        updateFilter("lga", "");
+        updateFilter("fromDate", "");
+        updateFilter("toDate", "");
+        updateFilter("role", "all");
+        updateFilter("status", "all");
+    };
 
     const handleToggleVerification = async (userId: string) => {
         setProcessingId(userId);
@@ -120,6 +145,42 @@ export default function AdminUsersPage() {
             month: "short",
             day: "numeric"
         }).format(new Date(date));
+    };
+
+    const handleExportCSV = () => {
+        if (users.length === 0) return;
+        const headers = [
+            "Name", "Email", "Phone", "Role", "Verified",
+            "BVN", "BVN Verified", "TIN", "TIN Verified",
+            "CAC", "CAC Verified", "State", "LGA", "Date Joined"
+        ];
+        const rows = users.map(u => [
+            u.name || "",
+            u.email || "",
+            u.phone || "",
+            u.role || "",
+            u.isVerified ? "Yes" : "No",
+            u.bvn ? "Provided" : "No",
+            u.bvnVerified ? "Yes" : "No",
+            u.taxId ? "Provided" : "No",
+            u.tinVerified ? "Yes" : "No",
+            u.cacNumber ? "Provided" : "No",
+            u.cacVerified ? "Yes" : "No",
+            u.state || "",
+            u.lga || "",
+            formatDate(u.createdAt),
+        ]);
+        const csv = [
+            headers.join(","),
+            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        ].join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `users_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
     };
 
     const getRoleBadge = (role: string) => {
@@ -185,6 +246,20 @@ export default function AdminUsersPage() {
         {
             header: "Joined",
             accessor: (user: User) => formatDate(user.createdAt),
+            hideOnMobile: true
+        },
+        {
+            header: "Location",
+            accessor: (user: User) => (
+                <div className="text-xs text-slate-600">
+                    {user.state ? (
+                        <div className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-400" />
+                            <span>{user.state}{user.lga ? `, ${user.lga}` : ""}</span>
+                        </div>
+                    ) : <span className="text-slate-400 italic">—</span>}
+                </div>
+            ),
             hideOnMobile: true
         },
         {
@@ -262,39 +337,136 @@ export default function AdminUsersPage() {
                 onSelectAll={toggleSelectAll}
                 onSelectRow={toggleSelectRow}
                 actionButtons={
-                    selectedIds.size > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {selectedIds.size > 0 && (
+                            <button
+                                onClick={handleBulkVerify}
+                                disabled={bulkProcessing}
+                                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 flex items-center gap-2"
+                            >
+                                {bulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                Bulk Verify ({selectedIds.size})
+                            </button>
+                        )}
                         <button
-                            onClick={handleBulkVerify}
-                            disabled={bulkProcessing}
-                            className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 flex items-center gap-2"
+                            onClick={handleExportCSV}
+                            disabled={users.length === 0}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50"
                         >
-                            {bulkProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                            Bulk Verify ({selectedIds.size})
+                            <Download className="w-4 h-4" />
+                            Export CSV ({users.length})
                         </button>
-                    )
+                    </div>
                 }
                 filters={
-                    <>
-                        <select
-                            value={filters.role || "all"}
-                            onChange={(e) => updateFilter("role", e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
-                        >
-                            <option value="all">All Roles</option>
-                            <option value="farmer">Farmers</option>
-                            <option value="buyer">Buyers</option>
-                            <option value="admin">Admins</option>
-                        </select>
-                        <select
-                            value={filters.status || "all"}
-                            onChange={(e) => updateFilter("status", e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
-                        >
-                            <option value="all">All Status</option>
-                            <option value="verified">Verified</option>
-                            <option value="unverified">Unverified</option>
-                        </select>
-                    </>
+                    <div className="flex flex-col gap-3 w-full">
+                        {/* Filter toggle bar */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                onClick={() => setIsFilterOpen(v => !v)}
+                                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition ${isFilterOpen || hasActiveFilters
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                                    }`}
+                            >
+                                <SlidersHorizontal className="w-4 h-4" />
+                                Filters
+                                {hasActiveFilters && (
+                                    <span className="bg-white text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">ON</span>
+                                )}
+                            </button>
+
+                            {/* Quick: Role */}
+                            <select
+                                value={filters.role || "all"}
+                                onChange={(e) => updateFilter("role", e.target.value)}
+                                className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                            >
+                                <option value="all">All Roles</option>
+                                {ROLES_LIST.map(r => (
+                                    <option key={r} value={r}>{r.replace(/_/g, " ")}</option>
+                                ))}
+                            </select>
+
+                            {/* Quick: Verification */}
+                            <select
+                                value={filters.status || "all"}
+                                onChange={(e) => updateFilter("status", e.target.value)}
+                                className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                            >
+                                <option value="all">All Status</option>
+                                <option value="verified">Verified</option>
+                                <option value="unverified">Unverified</option>
+                            </select>
+
+                            {hasActiveFilters && (
+                                <button
+                                    onClick={clearFilters}
+                                    className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm hover:bg-red-100 transition"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                    Clear filters
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Expanded filter panel: State / LGA / Date range */}
+                        {isFilterOpen && (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                                {/* State */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">State</label>
+                                    <select
+                                        value={filters.state || "all"}
+                                        onChange={(e) => {
+                                            updateFilter("state", e.target.value);
+                                            updateFilter("lga", "all"); // Reset LGA when state changes
+                                        }}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                                    >
+                                        <option value="all">All States</option>
+                                        {NIGERIAN_STATES.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* LGA — free-text because LGAs vary widely */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">LGA</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Ikeja"
+                                        value={filters.lga || ""}
+                                        onChange={(e) => updateFilter("lga", e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                                    />
+                                </div>
+
+                                {/* From date */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Joined from</label>
+                                    <input
+                                        type="date"
+                                        value={filters.fromDate || ""}
+                                        onChange={(e) => updateFilter("fromDate", e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                                    />
+                                </div>
+
+                                {/* To date */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Joined to</label>
+                                    <input
+                                        type="date"
+                                        value={filters.toDate || ""}
+                                        onChange={(e) => updateFilter("toDate", e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 }
             />
 

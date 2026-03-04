@@ -2,9 +2,12 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { logger } from '@/lib/logger';
-import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter } from "lucide-react";
+import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import Modal from "@/components/ui/Modal";
+import RejectionModal from "@/components/admin/RejectionModal";
+import { editApplicationAction } from "@/app/actions/admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 type MembershipApplication = {
     id: string;
@@ -44,6 +47,29 @@ export default function CooperativeMembersPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "under_review" | "suspended">("all");
     const [searchQuery, setSearchQuery] = useState("");
+    const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
+    const [rejectingId, setRejectingId] = useState<string | null>(null);
+
+    // Edit mode
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editFields, setEditFields] = useState<Record<string, string>>({});
+    const [editNote, setEditNote] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Advanced filters
+    const [stateFilter, setStateFilter] = useState("");
+    const [lgaFilter, setLgaFilter] = useState("");
+    const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+    const NIGERIAN_STATES = [
+        "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
+        "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu",
+        "FCT", "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi",
+        "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun",
+        "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"
+    ];
 
     // Pagination State
     const [lastCreatedAt, setLastCreatedAt] = useState<string | undefined>(undefined);
@@ -59,7 +85,11 @@ export default function CooperativeMembersPage() {
         try {
             const params = new URLSearchParams({
                 limit: "20",
-                status: statusFilter
+                status: statusFilter,
+                ...(stateFilter && { state: stateFilter }),
+                ...(lgaFilter && { lga: lgaFilter }),
+                ...(fromDate && { fromDate }),
+                ...(toDate && { toDate }),
             });
 
             if (loadMore && lastCreatedAt) {
@@ -86,14 +116,13 @@ export default function CooperativeMembersPage() {
             setIsLoading(false);
             setIsLoadingMore(false);
         }
-    }, [statusFilter, lastCreatedAt]);
+    }, [statusFilter, lastCreatedAt, stateFilter, lgaFilter, fromDate, toDate]);
 
     // Initial Load & Filter Change
     useEffect(() => {
-        // Reset pagination when filter changes
         setLastCreatedAt(undefined);
         fetchApplications(false);
-    }, [statusFilter]);
+    }, [statusFilter, stateFilter, lgaFilter, fromDate, toDate]);
 
     // Client-side search (still useful for the current batch)
     // For true scalability, search should also be server-side, but that requires full text search service (e.g. Algolia)
@@ -138,25 +167,23 @@ export default function CooperativeMembersPage() {
         }
     };
 
-    const handleReject = async (applicationId: string) => {
-        const reason = prompt("Enter rejection reason:");
-        if (!reason) return;
+    const handleReject = (applicationId: string) => {
+        setRejectingId(applicationId);
+        setRejectionModalOpen(true);
+    };
 
+    const handleConfirmReject = async (reason: string) => {
+        if (!rejectingId) return;
+        setRejectionModalOpen(false);
+        const targetId = rejectingId;
         setIsProcessing(true);
         try {
-            if (!selectedApplication) {
-                showToast("No application selected", "error");
-                return;
-            }
-
             const response = await fetch("/api/admin/cooperative/reject-member", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ memberId: selectedApplication.id, reason }),
+                body: JSON.stringify({ memberId: targetId, reason }),
             });
-
             const data = await response.json();
-
             if (data.success) {
                 showToast("Membership rejected successfully", "success");
                 fetchApplications();
@@ -168,12 +195,105 @@ export default function CooperativeMembersPage() {
             showToast("An error occurred while rejecting the membership", "error");
         } finally {
             setIsProcessing(false);
+            setRejectingId(null);
         }
+    };
+
+    const handleExportCSV = () => {
+        if (filteredApplications.length === 0) return;
+        const headers = [
+            "Name", "Email", "Phone", "Tier", "Registration Fee (NGN)",
+            "Payment Status", "Membership Status", "State", "LGA",
+            "Occupation", "Date Applied"
+        ];
+        const rows = filteredApplications.map(app => [
+            `${app.firstName || ""} ${app.lastName || ""}`.trim(),
+            app.email || "",
+            app.phone || "",
+            app.membershipTier || "",
+            (app.registrationFee || 0).toString(),
+            app.paymentStatus || "",
+            app.membershipStatus || "",
+            app.stateOfOrigin || "",
+            app.lga || "",
+            app.occupation || "",
+            new Date(app.createdAt).toLocaleDateString("en-NG"),
+        ]);
+        const csv = [
+            headers.join(","),
+            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        ].join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `cooperative_members_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
     };
 
     const viewDetails = (application: MembershipApplication) => {
         setSelectedApplication(application);
+        setIsEditMode(false);
+        setEditFields({});
+        setEditNote("");
         setIsDetailsModalOpen(true);
+    };
+
+    const handleStartEdit = () => {
+        if (!selectedApplication) return;
+        setEditFields({
+            firstName: selectedApplication.firstName || "",
+            lastName: selectedApplication.lastName || "",
+            middleName: selectedApplication.middleName || "",
+            phone: selectedApplication.phone || "",
+            email: selectedApplication.email || "",
+            stateOfOrigin: selectedApplication.stateOfOrigin || "",
+            lga: selectedApplication.lga || "",
+            residentialAddress: selectedApplication.residentialAddress || "",
+            occupation: selectedApplication.occupation || "",
+            "nextOfKin.name": selectedApplication.nextOfKin?.name || "",
+            "nextOfKin.phone": selectedApplication.nextOfKin?.phone || "",
+            "nextOfKin.address": selectedApplication.nextOfKin?.address || "",
+        });
+        setIsEditMode(true);
+    };
+
+    const handleSaveEdit = async () => {
+        if (!selectedApplication) return;
+        setIsSaving(true);
+        const result = await editApplicationAction({
+            collection: COLLECTIONS.COOPERATIVE_MEMBERS,
+            docId: selectedApplication.id,
+            fields: editFields as any,
+            editNote,
+        });
+        if (result.success) {
+            showToast("Application updated successfully", "success");
+            setIsEditMode(false);
+            setEditNote("");
+            setSelectedApplication(prev => prev ? {
+                ...prev,
+                firstName: editFields.firstName ?? prev.firstName,
+                lastName: editFields.lastName ?? prev.lastName,
+                middleName: editFields.middleName ?? prev.middleName,
+                phone: editFields.phone ?? prev.phone,
+                email: editFields.email ?? prev.email,
+                stateOfOrigin: editFields.stateOfOrigin ?? prev.stateOfOrigin,
+                lga: editFields.lga ?? prev.lga,
+                residentialAddress: editFields.residentialAddress ?? prev.residentialAddress,
+                occupation: editFields.occupation ?? prev.occupation,
+                nextOfKin: {
+                    name: editFields["nextOfKin.name"] ?? prev.nextOfKin?.name ?? "",
+                    phone: editFields["nextOfKin.phone"] ?? prev.nextOfKin?.phone ?? "",
+                    address: editFields["nextOfKin.address"] ?? prev.nextOfKin?.address ?? "",
+                },
+            } : null);
+            fetchApplications(false);
+        } else {
+            showToast(result.error || "Failed to update", "error");
+        }
+        setIsSaving(false);
     };
 
     const getStatusBadge = (status: string) => {
@@ -188,18 +308,28 @@ export default function CooperativeMembersPage() {
     return (
         <div className="p-8">
             {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                    Cooperative Membership Applications
-                </h1>
-                <p className="text-slate-600">
-                    Review and approve member registrations
-                </p>
+            <div className="mb-8 flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
+                        Cooperative Membership Applications
+                    </h1>
+                    <p className="text-slate-600">
+                        Review and approve member registrations
+                    </p>
+                </div>
+                <button
+                    onClick={handleExportCSV}
+                    disabled={filteredApplications.length === 0}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+                >
+                    <Download className="w-4 h-4" />
+                    Export CSV ({filteredApplications.length})
+                </button>
             </div>
 
             {/* Filters and Search */}
             <div className="bg-white rounded-2xl p-6 shadow-xl mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     {/* Search */}
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -228,6 +358,77 @@ export default function CooperativeMembersPage() {
                         </select>
                     </div>
                 </div>
+
+                {/* Advanced Filter Toggle */}
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowAdvancedFilters(v => !v)}
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition ${showAdvancedFilters || stateFilter || lgaFilter || fromDate || toDate
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                            }`}
+                    >
+                        <SlidersHorizontal className="w-4 h-4" />
+                        Advanced Filters
+                        {(stateFilter || lgaFilter || fromDate || toDate) && (
+                            <span className="bg-white text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">ON</span>
+                        )}
+                    </button>
+                    {(stateFilter || lgaFilter || fromDate || toDate) && (
+                        <button
+                            onClick={() => { setStateFilter(""); setLgaFilter(""); setFromDate(""); setToDate(""); }}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm hover:bg-red-100 transition"
+                        >
+                            <X className="w-3.5 h-3.5" /> Clear
+                        </button>
+                    )}
+                </div>
+
+                {showAdvancedFilters && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">State</label>
+                            <select
+                                value={stateFilter}
+                                onChange={(e) => setStateFilter(e.target.value)}
+                                className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                            >
+                                <option value="">All States</option>
+                                {NIGERIAN_STATES.map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">LGA</label>
+                            <input
+                                type="text"
+                                placeholder="e.g. Ikeja"
+                                value={lgaFilter}
+                                onChange={(e) => setLgaFilter(e.target.value)}
+                                className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">From Date</label>
+                            <input
+                                type="date"
+                                value={fromDate}
+                                onChange={(e) => setFromDate(e.target.value)}
+                                className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">To Date</label>
+                            <input
+                                type="date"
+                                value={toDate}
+                                onChange={(e) => setToDate(e.target.value)}
+                                className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Stats Cards */}
@@ -432,61 +633,130 @@ export default function CooperativeMembersPage() {
             {/* Details Modal */}
             <Modal
                 isOpen={isDetailsModalOpen}
-                onClose={() => setIsDetailsModalOpen(false)}
-                title="Membership Application Details"
+                onClose={() => { setIsDetailsModalOpen(false); setIsEditMode(false); }}
+                title={
+                    <div className="flex items-center justify-between w-full">
+                        <span>Membership Application Details</span>
+                        {!isEditMode ? (
+                            <button
+                                onClick={handleStartEdit}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                            >
+                                <Edit2 className="w-3.5 h-3.5" /> Edit
+                            </button>
+                        ) : (
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => { setIsEditMode(false); setEditNote(""); }}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition"
+                                >
+                                    <X className="w-3.5 h-3.5" /> Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveEdit}
+                                    disabled={isSaving}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-green-600 hover:bg-green-700 text-white rounded-lg transition disabled:opacity-50"
+                                >
+                                    <Save className="w-3.5 h-3.5" /> {isSaving ? "Saving…" : "Save"}
+                                </button>
+                            </div>
+                        )}
+                    </div> as any
+                }
             >
                 {selectedApplication && (
                     <div className="space-y-6">
                         {/* Personal Information */}
                         <div>
                             <h3 className="font-bold text-slate-900 mb-3">Personal Information</h3>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <p className="text-slate-500">Full Name</p>
-                                    <p className="font-semibold text-slate-900">
-                                        {selectedApplication.firstName} {selectedApplication.middleName} {selectedApplication.lastName}
-                                    </p>
+                            {isEditMode ? (
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    {(["firstName", "lastName", "middleName", "occupation"] as const).map((key) => (
+                                        <div key={key}>
+                                            <label className="text-xs font-semibold text-slate-500 mb-1 block capitalize">{key.replace(/([A-Z])/g, " $1")}</label>
+                                            <input
+                                                type="text"
+                                                value={editFields[key] ?? ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, [key]: e.target.value }))}
+                                                className="w-full px-2.5 py-1.5 border border-blue-300 rounded-lg text-sm bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
-                                <div>
-                                    <p className="text-slate-500">Date of Birth</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.dateOfBirth}</p>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-slate-500">Full Name</p>
+                                        <p className="font-semibold text-slate-900">
+                                            {selectedApplication.firstName} {selectedApplication.middleName} {selectedApplication.lastName}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Date of Birth</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.dateOfBirth}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Gender</p>
+                                        <p className="font-semibold text-slate-900 capitalize">{selectedApplication.gender}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Occupation</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.occupation}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-slate-500">Gender</p>
-                                    <p className="font-semibold text-slate-900 capitalize">{selectedApplication.gender}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500">Occupation</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.occupation}</p>
-                                </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* Contact Information */}
                         <div>
                             <h3 className="font-bold text-slate-900 mb-3">Contact Information</h3>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <p className="text-slate-500">Email</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.email}</p>
+                            {isEditMode ? (
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    {(["email", "phone", "stateOfOrigin", "lga"] as const).map((key) => (
+                                        <div key={key}>
+                                            <label className="text-xs font-semibold text-slate-500 mb-1 block capitalize">{key.replace(/([A-Z])/g, " $1")}</label>
+                                            <input
+                                                type="text"
+                                                value={editFields[key] ?? ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, [key]: e.target.value }))}
+                                                className="w-full px-2.5 py-1.5 border border-blue-300 rounded-lg text-sm bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            />
+                                        </div>
+                                    ))}
+                                    <div className="col-span-2">
+                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Residential Address</label>
+                                        <input
+                                            type="text"
+                                            value={editFields["residentialAddress"] ?? ""}
+                                            onChange={(e) => setEditFields(prev => ({ ...prev, residentialAddress: e.target.value }))}
+                                            className="w-full px-2.5 py-1.5 border border-blue-300 rounded-lg text-sm bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                        />
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-slate-500">Phone</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.phone}</p>
+                            ) : (
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <p className="text-slate-500">Email</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.email}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">Phone</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.phone}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <p className="text-slate-500">Address</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.residentialAddress}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">State of Origin</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.stateOfOrigin}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500">LGA</p>
+                                        <p className="font-semibold text-slate-900">{selectedApplication.lga}</p>
+                                    </div>
                                 </div>
-                                <div className="col-span-2">
-                                    <p className="text-slate-500">Address</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.residentialAddress}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500">State of Origin</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.stateOfOrigin}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500">LGA</p>
-                                    <p className="font-semibold text-slate-900">{selectedApplication.lga}</p>
-                                </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* Next of Kin */}
@@ -536,7 +806,23 @@ export default function CooperativeMembersPage() {
                         </div>
 
                         {/* Actions */}
-                        {selectedApplication.membershipStatus === "pending" && (
+                        {/* Audit Note when in Edit mode */}
+                        {isEditMode && (
+                            <div className="pt-3 border-t border-slate-200">
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                                    Edit Note <span className="text-slate-400 font-normal text-xs">(optional — saved to audit log)</span>
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    value={editNote}
+                                    onChange={(e) => setEditNote(e.target.value)}
+                                    placeholder="e.g. Corrected typo in applicant name per phone verification"
+                                    className="w-full text-sm px-3 py-2 border border-blue-300 rounded-lg bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                />
+                            </div>
+                        )}
+
+                        {!isEditMode && selectedApplication.membershipStatus === "pending" && (
                             <div className="pt-4 border-t border-slate-200 space-y-3">
                                 {selectedApplication.paymentStatus !== "completed" && (
                                     <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-medium">
@@ -567,6 +853,16 @@ export default function CooperativeMembersPage() {
                     </div>
                 )}
             </Modal>
+
+            {/* Rejection Modal */}
+            <RejectionModal
+                isOpen={rejectionModalOpen}
+                onClose={() => { setRejectionModalOpen(false); setRejectingId(null); }}
+                onConfirm={handleConfirmReject}
+                title="Reject Membership Application"
+                description="This member will receive an email notification with the reason you provide."
+                isProcessing={isProcessing}
+            />
         </div>
     );
 }
