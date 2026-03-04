@@ -6,8 +6,6 @@ const nextConfig: NextConfig = {
   // that are available natively in the Vercel runtime or unused server-side
   outputFileTracingExcludes: {
     '*': [
-      // @grpc/grpc-js is the native gRPC transport — Firebase Admin uses HTTP/REST on Vercel
-      'node_modules/@grpc/grpc-js/**',
       // Sharp is not used server-side (Next.js image optimization uses its own)
       'node_modules/sharp/**',
       // SWC native binaries are only needed at build time, not runtime
