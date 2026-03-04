@@ -39,42 +39,47 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             },
             authorize: async (credentials) => {
                 const authCtx = `[Auth:${Date.now()}]`; // per-request log prefix
+                console.log(`${authCtx} --- AUTHORIZE START ---`);
                 try {
                     // ── STEP 1: Env var guard ─────────────────────────────────
+                    console.log(`${authCtx} STEP 1: Check env vars`);
                     const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
                     if (!firebaseApiKey || firebaseApiKey === "mock-api-key-for-build") {
-                        console.error(`${authCtx} FATAL: NEXT_PUBLIC_FIREBASE_API_KEY is missing or mock. Login will fail. Set it in Vercel → Settings → Environment Variables.`);
+                        console.error(`${authCtx} FATAL: NEXT_PUBLIC_FIREBASE_API_KEY is missing or mock.`);
                         throw new Error("Service configuration error. Please contact support.");
                     }
 
                     // ── STEP 2: Validate credentials ─────────────────────────
-                    console.log(`${authCtx} authorize() called`);
+                    console.log(`${authCtx} STEP 2: Validate credentials shape`);
                     const { email, password } = loginSchema.parse(credentials);
-                    console.log(`${authCtx} credentials valid for: ${email}`);
+                    console.log(`${authCtx} STEP 2 DONE: Email parsed: ${email}`);
 
                     // ── STEP 3: Rate limit check ─────────────────────────────
+                    console.log(`${authCtx} STEP 3: Check rate limit for ${email}`);
                     const { consumeLoginAttempt, resetLoginAttempts } = await import("@/lib/rate-limit");
                     const rateLimitResult = await consumeLoginAttempt(email);
-                    console.log(`${authCtx} rate limit check: allowed=${rateLimitResult.allowed}`);
+                    console.log(`${authCtx} STEP 3 DONE: Rate limit allowed=${rateLimitResult.allowed}`);
 
                     if (!rateLimitResult.allowed) {
                         throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
                     }
 
                     // ── STEP 4: Firebase authentication ────────────────────── 
-                    console.log(`${authCtx} calling Firebase signInWithEmailAndPassword...`);
+                    console.log(`${authCtx} STEP 4: Calling Firebase signInWithEmailAndPassword...`);
                     const userCredential = await signInWithEmailAndPassword(
                         firebaseAuth,
                         email,
                         password
                     );
-                    console.log(`${authCtx} Firebase auth OK — uid: ${userCredential.user.uid}`);
+                    console.log(`${authCtx} STEP 4 DONE: Firebase auth OK — uid: ${userCredential.user.uid}`);
 
                     // ── STEP 5: Reset rate limit on success ─────────────────
+                    console.log(`${authCtx} STEP 5: Resetting rate limits...`);
                     await resetLoginAttempts(email);
+                    console.log(`${authCtx} STEP 5 DONE: Rate limits reset.`);
 
                     // ── STEP 6: Fetch user profile (cache-first) ─────────────
-                    console.log(`${authCtx} checking profile cache...`);
+                    console.log(`${authCtx} STEP 6: Checking profile cache...`);
                     const { getUserProfile } = await import("@/lib/user-cache");
                     const cachedProfile = await getUserProfile(userCredential.user.uid);
 
@@ -128,7 +133,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         CACHE_TTL.USER_PROFILE
                     );
 
-                    console.log(`${authCtx} authorize() SUCCESS — returning user object for ${email}`);
+                    console.log(`${authCtx} --- AUTHORIZE SUCCESS --- Returning user object for ${email}`);
                     // Return user object for NextAuth session
                     return {
                         id: userCredential.user.uid,
@@ -140,6 +145,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     };
                 } catch (error: any) {
                     // ── CRITICAL: Log the REAL error BEFORE mapping it ────────
+                    console.error(`${authCtx} --- AUTHORIZE CATCH BLOCK ---`);
                     // This is the single most important log for debugging production
                     // auth failures. The mapped message shown to the user is safe,
                     // but the raw code here tells you exactly what Firebase/Firestore
