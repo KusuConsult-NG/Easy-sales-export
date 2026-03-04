@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { isSessionExpired } from '@/lib/session-guard';
+import { isSessionExpired } from '@/lib/session-expiry-code';
 import { MessageSquare, Search, Plus, Send, Loader2 } from "lucide-react";
 import { getConversationsAction, getMessagesAction, sendMessageAction, startConversationAction, searchUsersAction, markAsReadAction } from "@/app/actions/messages";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
@@ -266,8 +266,8 @@ export default function MessagesPage() {
                                         className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
                                     >
                                         <div className={`max-w-md px-4 py-2 rounded-2xl ${isOwnMessage
-                                                ? "bg-blue-600 text-white"
-                                                : "bg-white text-slate-900"
+                                            ? "bg-blue-600 text-white"
+                                            : "bg-white text-slate-900"
                                             }`}>
                                             {!isOwnMessage && (
                                                 <div className="text-xs font-medium mb-1 opacity-70">
