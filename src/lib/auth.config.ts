@@ -13,6 +13,33 @@ export const authConfig = {
     pages: {
         signIn: "/auth/login",
     },
+    // ── THE FIX: Explicit Cookie Configuration for Edge Rewrites ─────────────
+    // Vercel Middleware rewrites domains (e.g. /marketplace) internally. NextAuth's
+    // default CSRF logic strictly validates the path and host of the cookie against
+    // the rewritten URL. By forcing the `path: "/"` and `sameSite: "lax"`, we 
+    // prevent NextAuth from rejecting cookies on dedicated domains.
+    // Moved from auth.ts so Middleware can read cookies identical to the Server Actions.
+    useSecureCookies: process.env.NODE_ENV === "production",
+    cookies: {
+        sessionToken: {
+            name: process.env.NODE_ENV === "production" ? '__Secure-authjs.session-token' : 'authjs.session-token',
+            options: {
+                httpOnly: true,
+                sameSite: "lax",
+                path: "/",
+                secure: process.env.NODE_ENV === "production",
+            }
+        },
+        csrfToken: {
+            name: process.env.NODE_ENV === "production" ? '__Host-authjs.csrf-token' : 'authjs.csrf-token',
+            options: {
+                httpOnly: true, // Prevents XSS theft
+                sameSite: "lax",
+                path: "/",      // CRITICAL: Must be root so edge routes don't isolate the cookie
+                secure: process.env.NODE_ENV === "production",
+            }
+        }
+    },
     callbacks: {
         authorized({ auth, request: { nextUrl } }: { auth: any; request: { nextUrl: URL } }) {
             const isLoggedIn = !!auth?.user;

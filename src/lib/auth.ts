@@ -283,33 +283,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.NEXTAUTH_SECRET,
     debug: process.env.NODE_ENV === "development" || process.env.NEXTAUTH_DEBUG === "true",
 
-    // ── THE FIX: Explicit Cookie Configuration for Edge Rewrites ─────────────
-    // Vercel Middleware rewrites domains (e.g. /marketplace) internally. NextAuth's
-    // default CSRF logic strictly validates the path and host of the cookie against
-    // the rewritten URL. By forcing the `path: "/"` and `sameSite: "lax"`, we 
-    // prevent NextAuth from rejecting cookies on dedicated domains.
-    useSecureCookies: process.env.NODE_ENV === "production",
-    cookies: {
-        sessionToken: {
-            name: process.env.NODE_ENV === "production" ? '__Secure-authjs.session-token' : 'authjs.session-token',
-            options: {
-                httpOnly: true,
-                sameSite: "lax",
-                path: "/",
-                secure: process.env.NODE_ENV === "production",
-            }
-        },
-        csrfToken: {
-            name: process.env.NODE_ENV === "production" ? '__Host-authjs.csrf-token' : 'authjs.csrf-token',
-            options: {
-                httpOnly: true, // Prevents XSS theft
-                sameSite: "lax",
-                path: "/",      // CRITICAL: Must be root so edge routes don't isolate the cookie
-                secure: process.env.NODE_ENV === "production",
-            }
-        }
-    },
-
     // ── THE FIX: Verbose Internal Logging ────────────────────────────────────
     // NextAuth actively swallows CSRF errors and internal router crashes for security.
     // This explicitly surfaces them in the Vercel logs so a developer can see exactly
