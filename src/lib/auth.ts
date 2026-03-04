@@ -12,8 +12,8 @@ class AuthError extends CredentialsSignin {
         this.code = message;
     }
 }
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth as firebaseAuth } from "./firebase";
+// Using Firebase REST API for backend auth to avoid Vercel Node environment crashes
+// instead of importing the browser-targeted "firebase/auth" client SDK.
 import { logger } from "@/lib/logger";
 import { loginSchema } from "./schemas";
 import { COLLECTIONS, type UserRole } from "./types/firestore";
@@ -64,14 +64,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
                     }
 
-                    // ── STEP 4: Firebase authentication ────────────────────── 
-                    console.log(`${authCtx} STEP 4: Calling Firebase signInWithEmailAndPassword...`);
-                    const userCredential = await signInWithEmailAndPassword(
-                        firebaseAuth,
-                        email,
-                        password
+                    // ── STEP 4: Firebase authentication (REST API) ─────────── 
+                    console.log(`${authCtx} STEP 4: Calling Firebase REST API...`);
+                    const response = await fetch(
+                        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                email,
+                                password,
+                                returnSecureToken: true
+                            })
+                        }
                     );
-                    console.log(`${authCtx} STEP 4 DONE: Firebase auth OK — uid: ${userCredential.user.uid}`);
+
+                    const responseData = await response.json();
+
+                    if (!response.ok) {
+                        const errorCode = responseData.error?.message || "auth/internal-error";
+                        console.error(`${authCtx} STEP 4 FAILED: Firebase REST API error: ${errorCode}`);
+                        const error = new Error(errorCode);
+                        (error as any).code = errorCode; // Match catch block structure
+                        throw error;
+                    }
+
+                    const uid = responseData.localId;
+                    console.log(`${authCtx} STEP 4 DONE: Firebase auth OK — uid: ${uid}`);
 
                     // ── STEP 5: Reset rate limit on success ─────────────────
                     console.log(`${authCtx} STEP 5: Resetting rate limits...`);
@@ -81,7 +100,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     // ── STEP 6: Fetch user profile (cache-first) ─────────────
                     console.log(`${authCtx} STEP 6: Checking profile cache...`);
                     const { getUserProfile } = await import("@/lib/user-cache");
-                    const cachedProfile = await getUserProfile(userCredential.user.uid);
+                    const cachedProfile = await getUserProfile(uid);
 
                     if (cachedProfile) {
                         console.log(`${authCtx} cache HIT — returning cached profile`);
@@ -100,11 +119,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const { getAdminDb } = await import("@/lib/firebase-admin");
                     const adminDb = getAdminDb();
 
-                    const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(userCredential.user.uid).get();
+                    const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(uid).get();
                     console.log(`${authCtx} Firestore doc exists: ${userDoc.exists}`);
 
                     if (!userDoc.exists) {
-                        console.error(`${authCtx} No user doc in Firestore for UID: ${userCredential.user.uid}`);
+                        console.error(`${authCtx} No user doc in Firestore for UID: ${uid}`);
                         throw new Error("User profile not found in database");
                     }
 
@@ -119,9 +138,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     // ── STEP 9: Update profile cache ──────────────────────────
                     const { setCache, CacheKeys, CACHE_TTL } = await import("@/lib/redis");
                     await setCache(
-                        CacheKeys.userProfile(userCredential.user.uid),
+                        CacheKeys.userProfile(uid),
                         {
-                            id: userCredential.user.uid,
+                            id: uid,
                             email: userData.email,
                             displayName: userData.fullName,
                             photoURL: null,
@@ -136,7 +155,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     console.log(`${authCtx} --- AUTHORIZE SUCCESS --- Returning user object for ${email}`);
                     // Return user object for NextAuth session
                     return {
-                        id: userCredential.user.uid,
+                        id: uid,
                         email: userData.email,
                         name: userData.fullName,
                         image: null,
