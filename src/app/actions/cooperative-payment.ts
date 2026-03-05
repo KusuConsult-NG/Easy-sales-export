@@ -14,11 +14,11 @@ function nairaToKobo(naira: number): number {
     return Math.round(naira * 100);
 }
 
-// Action state type
-interface ActionState {
+export interface ActionState {
     success: boolean;
     error?: string | null;
     message?: string;
+    data?: any;
 }
 
 export async function initializeContributionPaymentAction(
@@ -26,8 +26,8 @@ export async function initializeContributionPaymentAction(
 ): Promise<ActionState & { data?: { authorizationUrl: string; reference: string } }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: 'Authentication required', success: false };
@@ -79,8 +79,8 @@ export async function verifyContributionPaymentAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: 'Authentication required', success: false };
@@ -199,6 +199,11 @@ export async function verifyContributionPaymentAction(
             error: null,
             success: true,
             message: `Payment successful! Your contribution of ₦${amountInNaira.toLocaleString()} has been recorded.`,
+            data: {
+                currentTotal: result.currentTotal,
+                newTotal: result.newTotal,
+                newTier: result.newTier,
+            }
         };
     } catch (error: any) {
         // 🔒 SECURITY FIX #2: Sanitized error logging

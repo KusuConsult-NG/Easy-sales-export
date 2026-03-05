@@ -7,6 +7,8 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { sendSellerApprovalEmail } from "@/lib/email-notifications";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 // Rate limiter for admin actions (moderate - legitimate admin workload)
 const adminLimiter = rateLimit(rateLimitConfig.admin);
@@ -79,6 +81,20 @@ export async function POST(request: NextRequest) {
             approvedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // Fetch user document to get the correct email/name and send email (non-blocking)
+        try {
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(verificationData.userId).get();
+            const userData = userDoc.data();
+            const email = userData?.email || verificationData.email || verificationData.userEmail;
+            const name = userData?.fullName || verificationData.userName || "Seller";
+
+            if (email) {
+                await sendSellerApprovalEmail(email, name);
+            }
+        } catch (emailError) {
+            logger.error("Failed to send seller approval email:", emailError);
+        }
 
         return NextResponse.json({
             success: true,

@@ -55,6 +55,7 @@ export default function AcademyApplicationPage() {
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
     const [isRevisionMode, setIsRevisionMode] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
     const { data: session } = useSession();
     const { showToast } = useToast();
 
@@ -63,7 +64,24 @@ export default function AcademyApplicationPage() {
             try {
                 const status = await checkAcademyStatusAction();
                 if (status === "pending" || status === "under_review") {
-                    router.replace("/academy/application/pending");
+                    const params = new URLSearchParams(window.location.search);
+                    const isEditParam = params.get("edit") === "true";
+
+                    if (isEditParam) {
+                        const result = await getAcademyApplicationAction();
+                        if (result.success && result.data) {
+                            const d = result.data;
+                            if (d.personalInfo) setPersonalInfo((prev: any) => ({ ...prev, ...d.personalInfo }));
+                            if (d.education) setEducation((prev: any) => ({ ...prev, ...d.education }));
+                            if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
+                        }
+                        setIsEditMode(true);
+                        const payStatus = await checkAcademyPaymentStatusAction();
+                        setPaymentStatus(payStatus);
+                        setIsLoading(false);
+                    } else {
+                        router.replace("/academy/application/pending");
+                    }
                 } else if (status === "approved" || status === "active") {
                     router.replace("/academy/dashboard");
                 } else if (status === "revision_required") {
@@ -249,14 +267,12 @@ export default function AcademyApplicationPage() {
         setIsSubmitting(true);
 
         try {
-            const response = await submitAcademyApplicationAction({
-                personalInfo,
-                education,
-                interests
-            });
+            const response = (isRevisionMode || isEditMode)
+                ? await resubmitAcademyApplicationAction({ personalInfo, education, interests })
+                : await submitAcademyApplicationAction({ personalInfo, education, interests });
 
             if (response.success) {
-                router.push("/academy/application/success");
+                router.push("/academy/application/pending");
             } else {
                 setErrors({ submit: response.error || "Failed to submit application" });
             }
@@ -361,8 +377,34 @@ export default function AcademyApplicationPage() {
                 </div>
             </div>
 
+            {/* Revision / Edit Banner */}
+            {isRevisionMode && revisionNote && (
+                <div className="max-w-4xl mx-auto px-6 mt-6">
+                    <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex gap-3 items-start shadow-md">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-amber-800">Revision Requested by Admin</p>
+                            <p className="text-sm text-amber-700 mt-1">{revisionNote}</p>
+                            <p className="text-xs text-amber-600 mt-2">Please update your details below and resubmit.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isEditMode && !isRevisionMode && (
+                <div className="max-w-4xl mx-auto px-6 mt-6">
+                    <div className="p-4 bg-blue-50 border border-blue-300 rounded-xl flex gap-3 items-start shadow-md">
+                        <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-blue-900">Editing Application</p>
+                            <p className="text-sm text-blue-700 mt-1">You are modifying a submitted application. Your changes will be saved when you complete the form.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Progress Steps */}
-            <div className="max-w-4xl mx-auto px-6 -mt-8">
+            <div className={`max-w-4xl mx-auto px-6 ${(isRevisionMode || isEditMode) ? "mt-6" : "-mt-8"}`}>
                 <div className="bg-white rounded-2xl p-6 shadow-lg">
                     <div className="flex items-center justify-between">
                         {STEPS.map((step, index) => (

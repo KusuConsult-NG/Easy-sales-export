@@ -531,3 +531,91 @@ export async function sendCooperativeWhatsAppInviteEmail(
         metadata: { type: "cooperative_whatsapp_invite" },
     });
 }
+
+/**
+ * Send Marketplace Seller Approval Email
+ */
+export async function sendSellerApprovalEmail(
+    userEmail: string,
+    userName: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: "🎉 Marketplace Seller Verification Approved!",
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <div style="background: gradient(linear, left top, right bottom, from(#3b82f6), to(#2563eb)); background-color: #2563eb; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Seller Verification Approved!</h1>
+                </div>
+                <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName}</strong>,</p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
+                        Congratulations! Your Easy Sales Export Marketplace seller application has been <strong>approved</strong>.
+                    </p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
+                        You can now start setting up your storefront, adding products, and reaching global buyers.
+                    </p>
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/marketplace/dashboard"
+                           style="background-color: #2563eb; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+                            Go to Seller Dashboard &rarr;
+                        </a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">
+                        Easy Sales Export &mdash; Nigeria's Premier Agricultural Export Platform
+                    </p>
+                </div>
+            </div>
+        `,
+        metadata: { type: "seller_approval" },
+    });
+}
+
+/**
+ * Send Marketplace Seller Rejection / Revision Email
+ */
+export async function sendSellerRejectionEmail(
+    userEmail: string,
+    userName: string,
+    reason: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: "Action Required: Update Your Marketplace Seller Application",
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <div style="background-color: #ef4444; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Application Update Required</h1>
+                </div>
+                <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName}</strong>,</p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
+                        Thank you for applying to become a seller on the Easy Sales Export Marketplace.
+                    </p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
+                        We reviewed your application but we need a few adjustments before we can approve it.
+                    </p>
+                    <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0;">
+                        <p style="margin: 0; font-size: 14px; font-weight: bold; color: #991b1b; mb-2">Admin Feedback:</p>
+                        <p style="margin: 4px 0 0; font-size: 14px; color: #7f1d1d;">${reason}</p>
+                    </div>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
+                        Please log in to your dashboard to edit and resubmit your application.
+                    </p>
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/marketplace/onboarding?edit=true"
+                           style="background-color: #1f2937; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+                            Edit My Application &rarr;
+                        </a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">
+                        Easy Sales Export &mdash; Nigeria's Premier Agricultural Export Platform
+                    </p>
+                </div>
+            </div>
+        `,
+        metadata: { type: "seller_rejection", reason },
+    });
+}

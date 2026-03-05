@@ -20,6 +20,8 @@ export default function ExportOnboardingPendingPage() {
     const router = useRouter();
     const unsubRef = useRef<() => void>(undefined as any);
 
+    const [applicationStatus, setApplicationStatus] = useState<string>("pending_approval");
+
     useEffect(() => {
         if (!session?.user?.id) return;
 
@@ -33,6 +35,7 @@ export default function ExportOnboardingPendingPage() {
         const unsub = onSnapshot(q, (snap) => {
             if (snap.empty) return;
             const status = snap.docs[0].data().status;
+            setApplicationStatus(status);
 
             if (status === "approved") {
                 router.replace("/export/dashboard");
@@ -56,10 +59,21 @@ export default function ExportOnboardingPendingPage() {
                         <Clock className="w-10 h-10 text-orange-600" />
                     </div>
 
-                    {/* Title */}
-                    <h1 className="text-3xl font-bold text-slate-900 mb-4">
-                        Application Under Review
-                    </h1>
+                    {/* Title & Edit Button */}
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
+                        <h1 className="text-3xl font-bold text-slate-900">
+                            Application Under Review
+                        </h1>
+                        {applicationStatus === "pending_approval" && (
+                            <Link
+                                href="/export/onboarding?edit=true"
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-full text-sm font-semibold transition-all"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" x2="8" y1="13" y2="13" /><line x1="16" x2="8" y1="17" y2="17" /><line x1="10" x2="8" y1="9" y2="9" /></svg>
+                                Edit Application
+                            </Link>
+                        )}
+                    </div>
 
                     {/* Description */}
                     <p className="text-lg text-slate-600 mb-8">

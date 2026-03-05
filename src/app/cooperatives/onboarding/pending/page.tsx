@@ -5,10 +5,50 @@
  * Displays congratulations + under-review notice.
  */
 
-import { CheckCircle2, Clock, Mail, ShieldCheck, PartyPopper } from "lucide-react";
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { CheckCircle2, Clock, Mail, ShieldCheck, PartyPopper, FileText } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { db } from "@/lib/firebase";
+import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
 
 export default function CooperativePendingPage() {
+    const { data: session } = useSession();
+    const router = useRouter();
+    const unsubRef = useRef<() => void>(undefined as any);
+
+    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        // Listen on the user doc for cooperative status changes
+        const q = query(
+            collection(db, "cooperative_members"),
+            where("userId", "==", session.user.id),
+            limit(1)
+        );
+
+        const unsub = onSnapshot(q, (snap) => {
+            if (snap.empty) return;
+            const status = snap.docs[0].data().membershipStatus;
+            setApplicationStatus(status);
+
+            if (status === "approved") {
+                router.replace("/dashboard/cooperatives");
+            } else if (status === "rejected" || status === "revision_required") {
+                router.replace("/cooperatives/onboarding");
+            }
+        }, () => { /* silently ignore listener errors */ });
+
+        unsubRef.current = unsub;
+        return () => { unsubRef.current?.(); };
+    }, [session?.user?.id, router]);
+
+
     return (
         <div
             className="min-h-screen flex items-center justify-center p-4"
@@ -23,14 +63,28 @@ export default function CooperativePendingPage() {
                         <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full" />
                         <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-white/10 rounded-full" />
 
-                        <div className="relative">
+                        <div className="relative flex flex-col items-center">
                             <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-5">
                                 <PartyPopper className="w-12 h-12 text-white" />
                             </div>
-                            <h1 className="text-3xl font-extrabold mb-2">
-                                Application Submitted! 🎉
-                            </h1>
-                            <p className="text-purple-100 text-lg">
+
+                            <div className="flex flex-col sm:flex-row items-center gap-4 mb-2">
+                                <h1 className="text-3xl font-extrabold">
+                                    Application Submitted! 🎉
+                                </h1>
+                            </div>
+
+                            {applicationStatus === "pending" && (
+                                <Link
+                                    href="/cooperatives/onboarding?edit=true"
+                                    className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 border border-white/40 rounded-full text-sm font-semibold text-white backdrop-blur-sm transition-all shadow-md"
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    Edit Application
+                                </Link>
+                            )}
+
+                            <p className="text-purple-100 text-lg mt-4">
                                 Welcome to the Easy Sales Export Cooperative
                             </p>
                         </div>

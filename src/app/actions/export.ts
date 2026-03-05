@@ -77,8 +77,8 @@ export async function createExportWindowAction(
 ): Promise<CreateExportActionState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to create an export window", success: false };
         }
@@ -199,8 +199,8 @@ export async function updateExportStatusAction(
 ): Promise<UpdateStatusActionState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -289,8 +289,8 @@ export async function updateExportWindowAction(
 ): Promise<{ error: string | null; success: boolean }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -338,8 +338,8 @@ export async function getExportWindowsAction(
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -441,8 +441,8 @@ export async function getExportWindowDetailsAction(
 ): Promise<{ error: string | null; success: boolean; data?: ExportWindow; export?: ExportWindow }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -516,8 +516,8 @@ export async function submitExportOnboardingAction(
 ): Promise<{ error: string | null; success: boolean; applicationId?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -636,8 +636,8 @@ export async function getUserExportInvestmentsAction(
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -718,8 +718,8 @@ export async function getUserExportStatsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
         }
@@ -778,8 +778,8 @@ export async function getUserExportStatsAction(): Promise<{
 export async function checkExportStatusAction(): Promise<string | null> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null;
+        const { session } = sessionResult;
 
         // Check user document for service registration
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -808,8 +808,8 @@ export async function investInExportAction(
 ): Promise<{ success: boolean; error?: string; data?: { authorizationUrl: string; reference: string } }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
         }
@@ -867,8 +867,8 @@ export async function investInExportAction(
 export async function verifyExportInvestmentAction(reference: string): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const { verifyPaystackPayment } = await import("@/lib/paystack-server");
@@ -957,8 +957,8 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
 export async function getMyExportInvestmentsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const snapshot = await db.collection(COLLECTIONS.EXPORT_SLOTS)
@@ -998,8 +998,8 @@ export async function extendEscrowAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         // Check admin role
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
@@ -1053,8 +1053,8 @@ export async function getExportApplicationAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
@@ -1081,8 +1081,8 @@ export async function requestExportRevisionAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -1154,8 +1154,8 @@ export async function approveExportApplicationAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -1230,15 +1230,15 @@ export async function resubmitExportApplicationAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const userId = session.user.id;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.export?.status;
-        const allowedStatuses = ['revision_required', 'rejected'];
+        const allowedStatuses = ['pending_approval', 'revision_required', 'rejected'];
         if (!allowedStatuses.includes(existingStatus || '')) {
             return { success: false, error: 'Your application cannot be resubmitted at this time.' };
         }

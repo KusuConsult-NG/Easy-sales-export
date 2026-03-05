@@ -39,6 +39,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     const [isCheckingStatus, setIsCheckingStatus] = useState(true);
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
     const [isRevisionMode, setIsRevisionMode] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     const [tier] = useState<"basic" | "premium">(initialTier);
 
@@ -78,8 +79,40 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                 return;
             }
             if (coopStatus === "pending" || coopStatus === "under_review") {
-                router.replace("/cooperatives/onboarding/pending");
-                return;
+                const params = new URLSearchParams(window.location.search);
+                const isEditParam = params.get("edit") === "true";
+
+                if (isEditParam) {
+                    const result = await getCooperativeApplicationAction();
+                    if (result.success && result.data) {
+                        const d = result.data;
+                        if (d.firstName || d.fullName) {
+                            setPersonalInfo((prev: any) => ({
+                                ...prev,
+                                fullName: d.fullName || `${d.firstName || ''} ${d.lastName || ''}`.trim(),
+                                phone: d.phone || prev.phone,
+                                email: d.email || prev.email,
+                                dateOfBirth: d.dateOfBirth || prev.dateOfBirth,
+                                gender: d.gender || prev.gender,
+                                occupation: d.occupation || prev.occupation,
+                            }));
+                        }
+                        if (d.nextOfKinName) {
+                            setNextOfKin((prev: any) => ({
+                                ...prev,
+                                fullName: d.nextOfKinName || prev.fullName,
+                                phone: d.nextOfKinPhone || prev.phone,
+                                address: d.nextOfKinAddress || prev.address,
+                            }));
+                        }
+                    }
+                    setIsEditMode(true);
+                    setIsCheckingStatus(false);
+                    return;
+                } else {
+                    router.replace("/cooperatives/onboarding/pending");
+                    return;
+                }
             }
             if (coopStatus === "revision_required" || coopStatus === "rejected") {
                 // Pre-populate form with existing data
@@ -223,7 +256,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             }
 
             // Route to correct action based on mode
-            const result = isRevisionMode
+            const result = (isRevisionMode || isEditMode)
                 ? await resubmitCooperativeApplicationAction(formData)
                 : await registerCooperativeMemberAction(formData);
 
@@ -236,7 +269,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                 }
 
                 showToast(
-                    isRevisionMode ? "Application resubmitted for review!" : "Application submitted successfully!",
+                    (isRevisionMode || isEditMode) ? "Application resubmitted for review!" : "Application submitted successfully!",
                     "success"
                 );
                 router.push("/cooperatives/onboarding/pending");
@@ -300,6 +333,19 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             <p className="font-semibold text-amber-800">Revision Requested by Admin</p>
                             <p className="text-sm text-amber-700 mt-1">{revisionNote}</p>
                             <p className="text-xs text-amber-600 mt-2">Please update your details below and resubmit.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Banner for purely 'pending' edits */}
+            {isEditMode && !isRevisionMode && (
+                <div className="max-w-4xl mx-auto px-8 pt-6">
+                    <div className="p-4 bg-blue-50 border border-blue-300 rounded-xl flex gap-3 items-start">
+                        <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold text-blue-900">Editing Application</p>
+                            <p className="text-sm text-blue-700 mt-1">You are modifying a submitted application. Your changes will be saved when you complete the form.</p>
                         </div>
                     </div>
                 </div>

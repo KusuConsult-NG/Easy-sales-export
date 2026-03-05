@@ -4,10 +4,49 @@
  * Shown when seller application is under review
  */
 
+"use client";
+
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Clock, CheckCircle, Mail, Home } from "lucide-react";
+import { Clock, CheckCircle, Mail, Home, FileText } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { db } from "@/lib/firebase";
+import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
 
 export default function MarketplacePendingPage() {
+    const { data: session } = useSession();
+    const router = useRouter();
+    const unsubRef = useRef<() => void>(undefined as any);
+
+    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        // Listen on the user doc for seller status changes
+        const q = query(
+            collection(db, "seller_verifications"),
+            where("userId", "==", session.user.id),
+            limit(1)
+        );
+
+        const unsub = onSnapshot(q, (snap) => {
+            if (snap.empty) return;
+            const status = snap.docs[0].data().status;
+            setApplicationStatus(status);
+
+            if (status === "approved") {
+                router.replace("/marketplace/dashboard");
+            } else if (status === "rejected" || status === "suspended") {
+                router.replace("/marketplace/onboarding");
+            }
+        }, () => { /* silently ignore listener errors */ });
+
+        unsubRef.current = unsub;
+        return () => { unsubRef.current?.(); };
+    }, [session?.user?.id, router]);
+
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
             <div className="max-w-2xl w-full">
@@ -18,10 +57,21 @@ export default function MarketplacePendingPage() {
                         <Clock className="w-10 h-10 text-orange-600" />
                     </div>
 
-                    {/* Title */}
-                    <h1 className="text-3xl font-bold text-slate-900 mb-4">
-                        Application Under Review
-                    </h1>
+                    {/* Title & Edit Button */}
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
+                        <h1 className="text-3xl font-bold text-slate-900">
+                            Application Under Review
+                        </h1>
+                        {applicationStatus === "pending" && (
+                            <Link
+                                href="/marketplace/onboarding?edit=true"
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 rounded-full text-sm font-semibold transition-all"
+                            >
+                                <FileText className="w-4 h-4" />
+                                Edit Application
+                            </Link>
+                        )}
+                    </div>
 
                     {/* Message */}
                     <p className="text-lg text-slate-600 mb-8">
@@ -35,7 +85,7 @@ export default function MarketplacePendingPage() {
                         </h3>
                         <div className="space-y-4">
                             <div className="flex items-start gap-4">
-                                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shrink-0">
                                     <CheckCircle className="w-5 h-5 text-white" />
                                 </div>
                                 <div className="text-left flex-1">
@@ -44,7 +94,7 @@ export default function MarketplacePendingPage() {
                                 </div>
                             </div>
                             <div className="flex items-start gap-4">
-                                <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">
+                                <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shrink-0 animate-pulse">
                                     <Clock className="w-5 h-5 text-white" />
                                 </div>
                                 <div className="text-left flex-1">
@@ -53,7 +103,7 @@ export default function MarketplacePendingPage() {
                                 </div>
                             </div>
                             <div className="flex items-start gap-4 opacity-50">
-                                <div className="w-8 h-8 bg-slate-300 rounded-full flex items-center justify-center flex-shrink-0">
+                                <div className="w-8 h-8 bg-slate-300 rounded-full flex items-center justify-center shrink-0">
                                     <Mail className="w-5 h-5 text-slate-500" />
                                 </div>
                                 <div className="text-left flex-1">

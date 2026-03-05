@@ -78,6 +78,7 @@ export default function MarketplaceOnboarding() {
     const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState<Partial<OnboardingData>>({});
     const [isRevisionMode, setIsRevisionMode] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
     const [rejectionReason, setRejectionReason] = useState<string | null>(null);
 
     const userId = session?.user?.id;
@@ -93,7 +94,25 @@ export default function MarketplaceOnboarding() {
                 const result = await checkMarketplaceStatusAction();
 
                 if (result?.status === "pending" || result?.status === "under_review") {
-                    router.replace("/marketplace/onboarding/pending");
+                    const params = new URLSearchParams(window.location.search);
+                    const isEditParam = params.get("edit") === "true";
+
+                    if (isEditParam) {
+                        const verif = await getSellerVerificationAction();
+                        if (verif.success && verif.verification) {
+                            const v = verif.verification as any;
+                            setFormData(prev => ({
+                                ...prev,
+                                businessName: v.businessName || prev.businessName,
+                                phone: v.phone || prev.phone,
+                                location: v.location || prev.location,
+                                bankAccount: v.bankAccount || prev.bankAccount,
+                            }));
+                        }
+                        setIsEditMode(true);
+                    } else {
+                        router.replace("/marketplace/onboarding/pending");
+                    }
                 } else if (result?.status === "approved" || result?.status === "active") {
                     if (result.accountType === "seller" || result.accountType === "both") {
                         router.replace("/marketplace/seller/dashboard");
@@ -195,7 +214,7 @@ export default function MarketplaceOnboarding() {
 
     const handleSubmit = async () => {
         try {
-            if (isRevisionMode) {
+            if (isRevisionMode || isEditMode) {
                 const { resubmitSellerVerificationAction } = await import("@/app/actions/marketplace");
                 const result = await resubmitSellerVerificationAction({
                     businessName: formData.businessName,
@@ -343,6 +362,17 @@ export default function MarketplaceOnboarding() {
                         <p className="font-semibold text-amber-900">Your verification requires updates</p>
                         {rejectionReason && <p className="text-sm text-amber-700 mt-1">{rejectionReason}</p>}
                         <p className="text-xs text-amber-600 mt-1">Update your details and resubmit for review.</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Mode Banner */}
+            {isEditMode && !isRevisionMode && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-300 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-semibold text-blue-900">Editing Application</p>
+                        <p className="text-sm text-blue-700 mt-1">You are currently editing your submitted seller verification. Changes will be saved upon resubmission.</p>
                     </div>
                 </div>
             )}

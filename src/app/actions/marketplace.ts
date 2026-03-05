@@ -24,8 +24,8 @@ import { unstable_cache } from "next/cache";
 export async function checkMarketplaceStatusAction(): Promise<{ status: string; accountType?: string } | null> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null;
+        const { session } = sessionResult;
 
         // Check user document for service registration
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -82,8 +82,8 @@ export async function submitSellerVerificationAction(
 ): Promise<SellerVerificationState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -165,8 +165,8 @@ export async function submitSellerVerificationAction(
 export async function getSellerVerificationAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -199,8 +199,8 @@ export async function submitMarketplaceOnboardingAction(
 ) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -383,8 +383,8 @@ export async function createProductAction(
 ): Promise<ProductActionState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -548,8 +548,8 @@ export async function getSellerProductsAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -638,8 +638,8 @@ export async function getSellerOrdersAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -696,8 +696,8 @@ export async function getSellerOrdersAction(options: {
 export async function getSellerAnalyticsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -771,8 +771,8 @@ export async function getBuyerOrdersAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -822,8 +822,8 @@ export async function getBuyerOrdersAction(options: {
 export async function getBuyerStatsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { success: false, error: "Not authenticated" };
@@ -965,8 +965,8 @@ export async function getRecommendedProductsAction(limit: number = 3) {
 export async function deleteProductAction(productId: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
@@ -1205,8 +1205,8 @@ export async function resubmitSellerVerificationAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const userId = session.user.id;
@@ -1219,7 +1219,7 @@ export async function resubmitSellerVerificationAction(
         if (snap.empty) return { success: false, error: 'No existing verification found' };
 
         const existing = snap.docs[0].data();
-        const allowedStatuses = ['rejected', 'suspended'];
+        const allowedStatuses = ['pending', 'rejected', 'suspended'];
         if (!allowedStatuses.includes(existing.status)) {
             return { success: false, error: 'Your verification cannot be resubmitted at this time.' };
         }

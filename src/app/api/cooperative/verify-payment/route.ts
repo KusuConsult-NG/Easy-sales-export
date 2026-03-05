@@ -94,9 +94,21 @@ export async function POST(request: NextRequest) {
 
         const verifyData = await verifyResponse.json();
 
-        if (!verifyData.status || verifyData.data.status !== "success") {
+        if (!verifyData.status) {
             return NextResponse.json(
-                { success: false, message: "Payment not successful" },
+                { success: false, message: "Payment verification request failed" },
+                { status: 400 }
+            );
+        }
+
+        // 🔒 CRITICAL FIX: Strictly enforce "success" status. Do not allow "abandoned" or "failed".
+        if (verifyData.data.status !== "success") {
+            logger.warn(`[Cooperative Payment] User ${userId} attempted verification with status: ${verifyData.data.status}`);
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: `Payment is ${verifyData.data.status}. Please try again or use a different payment method.`
+                },
                 { status: 400 }
             );
         }

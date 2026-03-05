@@ -102,10 +102,14 @@ export async function GET(request: NextRequest) {
             };
         });
 
-        const hasMore = members.length === limitParam;
-        const newLastCreatedAt = members.length > 0 ? members[members.length - 1].createdAt : undefined;
+        // 🐛 FIX: Only return paid members in the list to match dashboard counts
+        // Exclude abandoned/unpaid registrations
+        const paidMembers = members.filter(m => m.paymentStatus === "completed");
 
-        return NextResponse.json({ success: true, members, hasMore, lastCreatedAt: newLastCreatedAt });
+        const hasMore = snapshot.docs.length === limitParam;
+        const newLastCreatedAt = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].data().createdAt?.toDate() : undefined;
+
+        return NextResponse.json({ success: true, members: paidMembers, hasMore, lastCreatedAt: newLastCreatedAt });
     } catch (error) {
         logger.error("Failed to fetch members:", error);
         return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

@@ -65,14 +65,28 @@ export default function ExportOnboardingPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
     const [isRevisionMode, setIsRevisionMode] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     // Check existing application status on mount
     useEffect(() => {
         const checkStatus = async () => {
             try {
+                // Read ?edit=true parameter
+                const params = new URLSearchParams(window.location.search);
+                const isEditParam = params.get("edit") === "true";
+
                 const status = await checkExportStatusAction();
                 if (status === "pending_approval" || status === "pending" || status === "under_review") {
-                    router.replace("/export/onboarding/pending");
+                    if (isEditParam) {
+                        const result = await getExportApplicationAction();
+                        if (result.success && result.data) {
+                            setFormData((prev: any) => ({ ...prev, ...result.data }));
+                        }
+                        setIsEditMode(true);
+                        setIsLoading(false);
+                    } else {
+                        router.replace("/export/onboarding/pending");
+                    }
                 } else if (status === "approved" || status === "active") {
                     router.replace("/export/dashboard");
                 } else if (status === "revision_required" || status === "rejected") {
@@ -155,7 +169,7 @@ export default function ExportOnboardingPage() {
 
     const handleSubmit = async (finalData: any) => {
         try {
-            if (isRevisionMode) {
+            if (isRevisionMode || isEditMode) {
                 // Resubmit — send text fields only (no file re-upload required)
                 const result = await resubmitExportApplicationAction({
                     profile: finalData.profile,
@@ -252,6 +266,17 @@ export default function ExportOnboardingPage() {
                         <p className="font-semibold text-amber-900">Your application requires updates</p>
                         {revisionNote && <p className="text-sm text-amber-700 mt-1">{revisionNote}</p>}
                         <p className="text-xs text-amber-600 mt-1">Review and update your details, then resubmit.</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Mode Banner */}
+            {isEditMode && !isRevisionMode && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-300 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="font-semibold text-blue-900">Editing Application</p>
+                        <p className="text-sm text-blue-700 mt-1">You are currently editing your submitted application. Changes will be saved upon resubmission.</p>
                     </div>
                 </div>
             )}

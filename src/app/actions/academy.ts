@@ -17,8 +17,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 export async function checkAcademyStatusAction(): Promise<string | null> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return null;
 
         // Check user document for service registration
@@ -193,8 +193,8 @@ export async function initializeCoursePaymentAction(courseId: string): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Authentication required" };
 
         const courseDoc = await db.collection("academy_courses").doc(courseId).get();
@@ -231,8 +231,8 @@ export async function initializeCoursePaymentAction(courseId: string): Promise<{
 export async function verifyCoursePaymentAction(reference: string): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Authentication required" };
 
         // Verify with Paystack
@@ -327,8 +327,8 @@ export async function enrollInCourseAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -391,8 +391,8 @@ export async function completeLessonAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -482,8 +482,8 @@ export async function submitQuizScoreAction(
 ): Promise<{ success: boolean; error?: string; passed?: boolean }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
         }
@@ -559,8 +559,8 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return {
                 totalCourses: 0,
@@ -763,8 +763,8 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Authentication required" };
 
         const verify = await verifyPaystackPayment(reference);
@@ -801,8 +801,8 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
 export async function checkAcademyPaymentStatusAction(): Promise<"paid" | "unpaid"> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) return "unpaid";
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -827,8 +827,8 @@ export async function submitAcademyApplicationAction(
 ): Promise<{ success: boolean; error?: string; applicationId?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
         }
@@ -897,8 +897,8 @@ export async function submitAcademyApplicationAction(
 export async function createCourseAction(data: any): Promise<{ success: boolean; id?: string; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -942,8 +942,8 @@ export async function createCourseAction(data: any): Promise<{ success: boolean;
 export async function updateCourseAction(courseId: string, data: Partial<Course>): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
@@ -971,8 +971,8 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
 export async function updateCourseModulesAction(courseId: string, modules: CourseModule[]): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
@@ -1020,8 +1020,8 @@ export async function getEnrolledCoursesWithDetailsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, courses: [], error: "Authentication required" };
 
         const userId = session.user.id;
@@ -1097,8 +1097,8 @@ export async function saveQuizAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized: Admin access required" };
         }
@@ -1176,8 +1176,8 @@ export async function getQuizAction(
 export async function logLessonActivityAction(): Promise<{ success: boolean }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false };
 
         const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
@@ -1267,8 +1267,8 @@ export async function getAcademyApplicationAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
@@ -1295,8 +1295,8 @@ export async function requestAcademyRevisionAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -1356,8 +1356,8 @@ export async function approveAcademyApplicationAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -1419,15 +1419,16 @@ export async function resubmitAcademyApplicationAction(data: {
 }): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.academy?.status;
 
-        if (existingStatus !== 'revision_required') {
-            return { success: false, error: 'Only applications in revision_required status can be resubmitted' };
+        const allowedStatuses = ['pending', 'revision_required'];
+        if (!allowedStatuses.includes(existingStatus)) {
+            return { success: false, error: 'Your application cannot be resubmitted at this time.' };
         }
 
         const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)

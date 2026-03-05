@@ -155,8 +155,8 @@ export async function getPropertiesAction(filters?: {
 export async function approveFarmNationSellerAction(userId: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         // Update user
@@ -177,8 +177,8 @@ export async function approveFarmNationSellerAction(userId: string) {
 export async function rejectFarmNationSellerAction(userId: string, reason: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
@@ -237,8 +237,8 @@ export async function getPropertyByIdAction(propertyId: string) {
 export async function listPropertyAction(input: PropertyListingInput) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -326,8 +326,8 @@ export async function listPropertyAction(input: PropertyListingInput) {
 export async function getMyPropertiesAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -368,8 +368,8 @@ export async function initiatePropertyPurchaseAction(
 ) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -449,8 +449,8 @@ export async function initiatePropertyPurchaseAction(
 export async function getMyPurchaseRequestsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -483,8 +483,8 @@ export async function getMyPurchaseRequestsAction() {
 export async function cancelPurchaseRequestAction(requestId: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -540,8 +540,8 @@ export async function cancelPurchaseRequestAction(requestId: string) {
 export async function deletePropertyAction(propertyId: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -596,8 +596,8 @@ export async function deletePropertyAction(propertyId: string) {
 export async function updatePropertyAction(propertyId: string, updates: Partial<PropertyListingInput>) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -695,8 +695,8 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
     try {
         // Get authenticated session
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return {
@@ -796,8 +796,8 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
 export async function checkFarmNationStatusAction(): Promise<string | null> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null;
+        const { session } = sessionResult;
 
         // Check user document for service registration
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -833,8 +833,8 @@ export async function uploadPropertyDocumentsAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
@@ -869,8 +869,8 @@ export async function uploadPropertyDocumentsAction(
 export async function verifyPropertyAction(propertyId: string, verified: boolean): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         // Check admin role
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
             return { success: false, error: "Unauthorized" };
@@ -934,8 +934,8 @@ export async function getFarmNationApplicationAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -967,15 +967,15 @@ export async function resubmitFarmNationApplicationAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
 
         const userId = session.user.id;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.farmNation?.status;
-        const allowedStatuses = ['rejected', 'revision_required'];
+        const allowedStatuses = ['pending', 'rejected', 'revision_required'];
 
         if (!allowedStatuses.includes(existingStatus || '')) {
             return { success: false, error: 'Your application cannot be resubmitted at this time.' };

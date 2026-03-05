@@ -965,8 +965,9 @@ export async function resubmitCooperativeApplicationAction(
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.cooperatives?.status;
 
-        if (existingStatus !== 'revision_required') {
-            return { success: false, error: 'Only applications in revision_required status can be resubmitted' };
+        const allowedStatuses = ['pending', 'revision_required'];
+        if (!allowedStatuses.includes(existingStatus)) {
+            return { success: false, error: 'Your application cannot be resubmitted at this time.' };
         }
 
         // Find the existing member doc

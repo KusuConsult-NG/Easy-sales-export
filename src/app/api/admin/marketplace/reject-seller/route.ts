@@ -5,6 +5,8 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { sendSellerRejectionEmail } from "@/lib/email-notifications";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Reject Seller Verification (Admin Only)
@@ -63,6 +65,20 @@ export async function POST(request: NextRequest) {
             verificationStatus: "rejected",
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // Fetch user document to get the correct email/name and send email (non-blocking)
+        try {
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(verificationData.userId).get();
+            const userData = userDoc.data();
+            const email = userData?.email || verificationData.email || verificationData.userEmail;
+            const name = userData?.fullName || verificationData.userName || "Seller";
+
+            if (email) {
+                await sendSellerRejectionEmail(email, name, reason);
+            }
+        } catch (emailError) {
+            logger.error("Failed to send seller rejection email:", emailError);
+        }
 
         return NextResponse.json({
             success: true,

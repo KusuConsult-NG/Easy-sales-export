@@ -33,8 +33,8 @@ export async function initializePropertyPaymentAction(
 ): Promise<PaymentInitState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -122,8 +122,8 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -184,7 +184,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
             }
 
             // Transfer ownership atomically
-            tx.update(propertyRef, {
+            const updatedData = {
                 ownerId: session.user.id,
                 ownerEmail: session.user.email,
                 previousOwnerId: freshData.ownerId,
@@ -192,7 +192,8 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
                 soldAt: FieldValue.serverTimestamp(),
                 salePrice: amountInNaira,
                 updatedAt: FieldValue.serverTimestamp(),
-            });
+            };
+            tx.update(propertyRef, updatedData);
 
             // Mark payment as processed inside the transaction for full atomicity
             const processedRef = db.collection("processedPayments").doc(reference);
@@ -211,15 +212,15 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
                 .get();
 
             if (!purchaseQuery.empty) {
-                tx.update(
-                    db.collection("propertyPurchases").doc(purchaseQuery.docs[0].id),
-                    {
-                        status: "completed",
-                        paymentVerifiedAt: FieldValue.serverTimestamp(),
-                        updatedAt: FieldValue.serverTimestamp(),
-                    }
-                );
+                const purchaseRef = db.collection("propertyPurchases").doc(purchaseQuery.docs[0].id);
+                tx.update(purchaseRef, {
+                    status: "completed",
+                    paymentVerifiedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
             }
+
+            return updatedData;
         });
 
         return {

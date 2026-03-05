@@ -11,9 +11,11 @@ export async function GET() {
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
-        // strict admin check could be added here, currently just checking if auth works
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        // Strict admin check to prevent information disclosure
+        const roles = session?.user?.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+            logger.warn(`Unauthorized integrity check attempt by user: ${session?.user?.id}`);
+            return NextResponse.json({ success: false, error: "Forbidden: Admin access required" }, { status: 403 });
         }
 
         const adminDb = getAdminDb();

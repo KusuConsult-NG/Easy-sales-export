@@ -8,7 +8,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Clock, CheckCircle2, ArrowLeft, GraduationCap } from "lucide-react";
+import { Clock, CheckCircle2, ArrowLeft, GraduationCap, FileText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -19,6 +19,8 @@ export default function AcademyPendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
     const unsubRef = useRef<() => void>(undefined as any);
+
+    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
 
     useEffect(() => {
         if (!session?.user?.id) return;
@@ -32,6 +34,7 @@ export default function AcademyPendingPage() {
         const unsub = onSnapshot(q, (snap) => {
             if (snap.empty) return;
             const status = snap.docs[0].data().status;
+            setApplicationStatus(status);
 
             if (status === "approved") {
                 router.replace("/academy/dashboard");
@@ -56,6 +59,19 @@ export default function AcademyPendingPage() {
                     <h1 className="text-2xl font-bold text-slate-900 mb-2">
                         Application Under Review
                     </h1>
+
+                    {applicationStatus === "pending" && (
+                        <div className="my-4">
+                            <Link
+                                href="/academy/application?edit=true"
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full text-sm font-semibold text-blue-700 transition-all shadow-sm mx-auto"
+                            >
+                                <FileText className="w-4 h-4" />
+                                Edit Application
+                            </Link>
+                        </div>
+                    )}
+
                     <p className="text-slate-600 mb-8">
                         Your Academy learner application has been received. We are verifying your profile.
                     </p>

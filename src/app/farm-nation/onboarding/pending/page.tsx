@@ -6,10 +6,46 @@
 
 "use client";
 
-import { Clock, CheckCircle2, ArrowLeft, Home } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Clock, CheckCircle2, ArrowLeft, Home, FileText } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { db } from "@/lib/firebase";
+import { collection, query, where, onSnapshot, limit, doc } from "firebase/firestore";
 
 export default function FarmNationPendingPage() {
+    const { data: session } = useSession();
+    const router = useRouter();
+    const unsubRef = useRef<() => void>(undefined as any);
+
+    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
+
+    useEffect(() => {
+        if (!session?.user?.id) return;
+
+        // Listen on the user doc for farmNation status changes
+        const docRef = doc(db, "users", session.user.id);
+        const unsub = onSnapshot(docRef, (snap) => {
+            if (!snap.exists()) return;
+            const userData = snap.data();
+            const status = userData?.serviceRegistrations?.farmNation?.status;
+
+            if (status) {
+                setApplicationStatus(status);
+
+                if (status === "approved" || status === "active") {
+                    router.replace("/farm-nation"); // Or dashboard
+                } else if (status === "rejected" || status === "revision_required") {
+                    router.replace("/farm-nation/onboarding");
+                }
+            }
+        }, () => { /* silently ignore listener errors */ });
+
+        unsubRef.current = unsub;
+        return () => { unsubRef.current?.(); };
+    }, [session?.user?.id, router]);
+
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
             <div className="max-w-xl w-full">
@@ -21,6 +57,19 @@ export default function FarmNationPendingPage() {
                     <h1 className="text-2xl font-bold text-slate-900 mb-2">
                         Application Under Review
                     </h1>
+
+                    {applicationStatus === "pending" && (
+                        <div className="my-4">
+                            <Link
+                                href="/farm-nation/onboarding?edit=true"
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-full text-sm font-semibold text-teal-700 transition-all shadow-sm mx-auto"
+                            >
+                                <FileText className="w-4 h-4" />
+                                Edit Application
+                            </Link>
+                        </div>
+                    )}
+
                     <p className="text-slate-600 mb-8">
                         Your Farm Nation onboarding application has been received. Our team is verifying your profile details.
                     </p>
