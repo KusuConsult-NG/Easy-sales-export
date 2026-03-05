@@ -14,6 +14,10 @@ export const authConfig = {
     pages: {
         signIn: "/auth/login",
     },
+    // Prevent Session Drops: Guarantee Edge and Node runtime use the EXACT same secret
+    // Vercel sometimes injects AUTH_SECRET automatically, which conflicts if Node uses NEXTAUTH_SECRET.
+    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+
     // ── THE FIX: Explicit Cookie Configuration for Edge Rewrites ─────────────
     // Vercel Middleware rewrites domains (e.g. /marketplace) internally. NextAuth's
     // default CSRF logic strictly validates the path and host of the cookie against
