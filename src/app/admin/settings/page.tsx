@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, Shield, Globe, Bell, Database } from "lucide-react";
+import { Settings, Shield, Globe, Bell, Database, Wrench, KeyRound } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminSettingsPage() {
@@ -48,11 +48,19 @@ export default function AdminSettingsPage() {
         {
             title: "System Maintenance",
             description: "Cleanup abandoned data and optimize DB",
-            icon: Settings, // Reusing settings icon or importa valid one like Trash2/Wrench if available
+            icon: Wrench,
             href: "/admin/settings/maintenance",
             color: "text-orange-600",
             bg: "bg-orange-100"
-        }
+        },
+        {
+            title: "Password Resets",
+            description: "View and manage admin-initiated password reset requests",
+            icon: KeyRound,
+            href: "/admin/settings/password-resets",
+            color: "text-rose-600",
+            bg: "bg-rose-100"
+        },
     ];
 
     return (

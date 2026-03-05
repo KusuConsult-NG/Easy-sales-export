@@ -39,10 +39,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             },
             authorize: async (credentials) => {
                 const authCtx = `[Auth:${Date.now()}]`; // per-request log prefix
-                console.log(`${authCtx} --- AUTHORIZE START ---`);
+                logger.info(`${authCtx} authorize start`);
                 try {
                     // ── STEP 1: Env var guard ─────────────────────────────────
-                    console.log(`${authCtx} STEP 1: Check env vars`);
+
                     const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
                     if (!firebaseApiKey || firebaseApiKey === "mock-api-key-for-build") {
                         console.error(`${authCtx} FATAL: NEXT_PUBLIC_FIREBASE_API_KEY is missing or mock.`);
@@ -50,22 +50,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     }
 
                     // ── STEP 2: Validate credentials ─────────────────────────
-                    console.log(`${authCtx} STEP 2: Validate credentials shape`);
                     const { email, password } = loginSchema.parse(credentials);
-                    console.log(`${authCtx} STEP 2 DONE: Email parsed: ${email}`);
 
                     // ── STEP 3: Rate limit check ─────────────────────────────
-                    console.log(`${authCtx} STEP 3: Check rate limit for ${email}`);
                     const { consumeLoginAttempt, resetLoginAttempts } = await import("@/lib/rate-limit");
                     const rateLimitResult = await consumeLoginAttempt(email);
-                    console.log(`${authCtx} STEP 3 DONE: Rate limit allowed=${rateLimitResult.allowed}`);
 
                     if (!rateLimitResult.allowed) {
                         throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
                     }
 
-                    // ── STEP 4: Firebase authentication (REST API) ─────────── 
-                    console.log(`${authCtx} STEP 4: Calling Firebase REST API...`);
+                    // ── STEP 4: Firebase authentication (REST API) ───────────
                     const response = await fetch(
                         `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
                         {
@@ -90,20 +85,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     }
 
                     const uid = responseData.localId;
-                    console.log(`${authCtx} STEP 4 DONE: Firebase auth OK — uid: ${uid}`);
 
                     // ── STEP 5: Reset rate limit on success ─────────────────
-                    console.log(`${authCtx} STEP 5: Resetting rate limits...`);
                     await resetLoginAttempts(email);
-                    console.log(`${authCtx} STEP 5 DONE: Rate limits reset.`);
 
                     // ── STEP 6: Fetch user profile (cache-first) ─────────────
-                    console.log(`${authCtx} STEP 6: Checking profile cache...`);
                     const { getUserProfile } = await import("@/lib/user-cache");
                     const cachedProfile = await getUserProfile(uid);
 
                     if (cachedProfile) {
-                        console.log(`${authCtx} cache HIT — returning cached profile`);
                         return {
                             id: cachedProfile.id,
                             email: cachedProfile.email,
@@ -115,12 +105,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     }
 
                     // ── STEP 7: Cache miss → fetch from Firestore ───────────
-                    console.log(`${authCtx} cache MISS — fetching from Firestore...`);
                     const { getAdminDb } = await import("@/lib/firebase-admin");
                     const adminDb = getAdminDb();
 
                     const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(uid).get();
-                    console.log(`${authCtx} Firestore doc exists: ${userDoc.exists}`);
 
                     if (!userDoc.exists) {
                         console.error(`${authCtx} No user doc in Firestore for UID: ${uid}`);
@@ -152,7 +140,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         CACHE_TTL.USER_PROFILE
                     );
 
-                    console.log(`${authCtx} --- AUTHORIZE SUCCESS --- Returning user object for ${email}`);
+                    logger.info(`${authCtx} authorize success for ${email}`);
                     // Return user object for NextAuth session
                     return {
                         id: uid,

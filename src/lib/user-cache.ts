@@ -22,12 +22,10 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
         const cached = await getCached<CachedUserProfile>(cacheKey);
 
         if (cached) {
-            console.log('[Cache HIT] User profile:', userId);
             return cached;
         }
 
-        // Cache miss - fetch from Firestore
-        console.log('[Cache MISS] Fetching user profile from Firestore:', userId);
+        // Cache miss — fetch from Firestore
         const db = getAdminDb();
         const userDoc = await db.collection('users').doc(userId).get();
 
@@ -39,7 +37,6 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
         // NOTE: registerAction writes 'fullName' to Firestore, not 'displayName'.
         // We read both to handle legacy documents that may have used 'displayName'.
         const resolvedName = userData.fullName || userData.displayName || '';
-        console.log(`[getUserProfile] UID ${userId}: fullName='${userData.fullName}' displayName='${userData.displayName}' → resolved='${resolvedName}'`);
         const profile: CachedUserProfile = {
             id: userId,
             email: userData.email,
@@ -72,7 +69,6 @@ export async function invalidateUserCache(userId: string): Promise<void> {
             deleteCache(CacheKeys.userSession(userId)),
             deleteCache(CacheKeys.userStats(userId)),
         ]);
-        console.log('[Cache] Invalidated cache for user:', userId);
     } catch (error) {
         console.error('[invalidateUserCache] Error:', error);
     }

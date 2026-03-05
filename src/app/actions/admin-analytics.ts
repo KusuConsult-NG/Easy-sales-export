@@ -136,15 +136,13 @@ export interface FinancialOverview {
 }
 
 export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
-    console.log("[FINANCE] getFinancialOverviewAction called");
+
     const sessionResult = await requireSession();
     if (!sessionResult.session) {
-        console.log("[FINANCE] Session failed");
         return { success: false, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
     }
     const { session } = sessionResult;
     if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
-        console.log("[FINANCE] Permission denied");
         return { success: false, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
     }
 
@@ -153,7 +151,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     let totalLoansDisbursed = 0;
     const recentTransactions: FinancialOverview["recentTransactions"] = [];
 
-    console.log("[FINANCE] Fetching escrows...");
+
     try {
         const [allEscrows, completedEscrows] = await Promise.all([
             db.collection("escrows").aggregate({ total: AggregateField.sum("amount") }).get(),
@@ -163,12 +161,12 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         totalEscrowVolume = allEscrows.data().total || 0;
         totalRevenue = (completedEscrows.data().total || 0) * 0.025; // 2.5% commission
 
-        console.log(`[FINANCE] Processed escrows via aggregate`);
+
     } catch (e: any) {
         console.error("[FINANCE] Escrow fetch error:", e.message);
     }
 
-    console.log("[FINANCE] Fetching loans...");
+
     // Sum loans disbursed
     try {
         const loanSnap = await db.collection("loan_applications")
@@ -177,12 +175,12 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
             .get();
 
         totalLoansDisbursed = loanSnap.data().total || 0;
-        console.log(`[FINANCE] Processed loans via aggregate`);
+
     } catch (e: any) {
         console.error("[FINANCE] Loan fetch error:", e.message);
     }
 
-    console.log("[FINANCE] Fetching audit logs...");
+
     // Get recent financial transactions from audit logs
     try {
         const logsSnap = await db.collection("audit_logs")
@@ -201,12 +199,12 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
                 timestamp: data.timestamp?.toDate?.()?.toISOString() ?? null,
             });
         });
-        console.log(`[FINANCE] Processed ${logsSnap.size} audit logs`);
+
     } catch (e: any) {
         console.error("[FINANCE] Audit logs fetch error:", e.message);
     }
 
-    console.log("[FINANCE] Fetching pending payouts...");
+
     // Sum pending payouts (approved_pending_payout withdrawals across both cooperative and wave)
     let pendingPayoutAmount = 0;
     try {
@@ -222,12 +220,12 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         ]);
 
         pendingPayoutAmount = (coopPayouts.data().total || 0) + (wavePayouts.data().total || 0);
-        console.log(`[FINANCE] Processed payouts via aggregate`);
+
     } catch (e: any) {
         console.error("[FINANCE] Payouts fetch error:", e.message);
     }
 
-    console.log("[FINANCE] Returning complete financial data");
+
     return {
         success: true,
         totalRevenue,
