@@ -17,23 +17,42 @@ import {
     LogOut,
     GraduationCap,
     FileText,
+    TrendingUp,
+    ClipboardCheck,
+    MessageSquare,
+    ShieldAlert,
+    ScrollText,
+    UserX,
+    BadgeCheck,
+    ToggleLeft,
 } from "lucide-react";
 import { useState } from "react";
 import { logoutAction } from "@/app/actions/auth";
 
 
 const NAV_ITEMS = [
-    { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-    { label: "User Management", href: "/admin/users", icon: Users },
-    { label: "WAVE Program", href: "/admin/wave", icon: Waves },
-    { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2 },
-    { label: "Marketplace", href: "/admin/marketplace", icon: ShoppingBag },
-    { label: "Export Windows", href: "/admin/export", icon: Container },
-    { label: "Export Applications", href: "/admin/export/applications", icon: FileText },
-    { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor },
-    { label: "Academy", href: "/admin/academy", icon: GraduationCap },
-    { label: "Finance", href: "/admin/finance", icon: Wallet },
-    { label: "Settings", href: "/admin/settings", icon: Settings },
+    // ── Core Platform ───────────────────────────────────────────────────────
+    { label: "Dashboard", href: "/admin", icon: LayoutDashboard, section: "platform" },
+    { label: "Analytics", href: "/admin/analytics", icon: TrendingUp, section: "platform" },
+    { label: "User Management", href: "/admin/users", icon: Users, section: "platform" },
+    { label: "Content Approval", href: "/admin/content-approval", icon: ClipboardCheck, section: "platform" },
+    { label: "Communications", href: "/admin/communications", icon: MessageSquare, section: "platform" },
+    { label: "Disputes", href: "/admin/disputes", icon: ShieldAlert, section: "platform" },
+    { label: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText, section: "platform" },
+    { label: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX, section: "platform" },
+    { label: "ID Verification", href: "/admin/verify-id", icon: BadgeCheck, section: "platform" },
+    { label: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft, section: "platform" },
+    // ── Modules ─────────────────────────────────────────────────────────────
+    { label: "WAVE Program", href: "/admin/wave", icon: Waves, section: "modules" },
+    { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2, section: "modules" },
+    { label: "Marketplace", href: "/admin/marketplace", icon: ShoppingBag, section: "modules" },
+    { label: "Export Windows", href: "/admin/export", icon: Container, section: "modules" },
+    { label: "Export Applications", href: "/admin/export/applications", icon: FileText, section: "modules" },
+    { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, section: "modules" },
+    { label: "Academy", href: "/admin/academy", icon: GraduationCap, section: "modules" },
+    // ── Finance & Settings ───────────────────────────────────────────────────
+    { label: "Finance", href: "/admin/finance", icon: Wallet, section: "finance" },
+    { label: "Settings", href: "/admin/settings", icon: Settings, section: "finance" },
 ];
 
 export default function AdminSidebar() {
@@ -68,29 +87,45 @@ export default function AdminSidebar() {
                     </div>
 
                     {/* Navigation */}
-                    <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-                        {NAV_ITEMS.map((item) => {
-                            const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
-                            const Icon = item.icon;
-
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    onClick={() => setIsMobileOpen(false)}
-                                    className={`
-                                        flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200
-                                        ${isActive
-                                            ? "bg-blue-600/10 text-blue-400 font-medium border border-blue-600/20"
-                                            : "hover:bg-slate-800 hover:text-white"
-                                        }
-                                    `}
-                                >
-                                    <Icon size={20} className={isActive ? "text-blue-400" : "text-slate-500"} />
-                                    <span>{item.label}</span>
-                                </Link>
-                            );
-                        })}
+                    <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+                        {(() => {
+                            const sections = [
+                                { key: "platform", label: "Platform" },
+                                { key: "modules", label: "Modules" },
+                                { key: "finance", label: "Finance & Settings" },
+                            ];
+                            return sections.map(({ key, label }) => {
+                                const items = NAV_ITEMS.filter(i => i.section === key);
+                                return (
+                                    <div key={key} className="mb-4">
+                                        <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                            {label}
+                                        </p>
+                                        {items.map((item) => {
+                                            const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
+                                            const Icon = item.icon;
+                                            return (
+                                                <Link
+                                                    key={item.href}
+                                                    href={item.href}
+                                                    onClick={() => setIsMobileOpen(false)}
+                                                    className={`
+                                                        flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 text-sm
+                                                        ${isActive
+                                                            ? "bg-blue-600/15 text-blue-400 font-medium border border-blue-600/20"
+                                                            : "hover:bg-slate-800 hover:text-white text-slate-400"
+                                                        }
+                                                    `}
+                                                >
+                                                    <Icon size={16} className={isActive ? "text-blue-400" : "text-slate-500"} />
+                                                    <span>{item.label}</span>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            });
+                        })()}
                     </nav>
 
                     {/* Footer / User */}
