@@ -203,31 +203,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }),
     ],
     callbacks: {
-        async jwt({ token, user }) {
-            // On sign in, store user info in JWT
+        async jwt(params) {
+            // 1. Run base Edge mapping
+            let token = params.token;
+            if (authConfig.callbacks?.jwt) {
+                // @ts-ignore
+                token = (await authConfig.callbacks.jwt(params)) || token;
+            }
+
+            // 2. Node-specific logic
+            const { user } = params;
             if (user) {
-                token.id = user.id;
-                token.email = user.email;
-                token.name = user.name;
-                token.image = user.image;
-                token.roles = user.roles;
-                token.verified = user.verified ?? true;
                 // Clear any stale cached Firebase token on fresh sign-in
                 token.firebaseToken = undefined;
                 token.firebaseTokenMintedAt = undefined;
             }
             return token;
         },
-        async session({ session, token }) {
-            // Add user info to session
-            if (session.user) {
-                session.user.id = token.id as string;
-                session.user.email = token.email as string;
-                session.user.name = token.name as string;
-                session.user.image = token.image as string | null;
-                session.user.roles = (token.roles as UserRole[]) || [];
-                session.user.verified = token.verified as boolean;
+        async session(params) {
+            // 1. Run base Edge mapping
+            let session = params.session;
+            const { token } = params;
 
+            if (authConfig.callbacks?.session) {
+                // @ts-ignore
+                session = (await authConfig.callbacks.session(params)) || session;
+            }
+
+            // 2. Node-specific Firebase logic
+            if (session.user) {
                 // Firebase custom token caching strategy:
                 // Tokens expire after 60 minutes. We cache in the JWT and only
                 // re-mint when the cached token is older than 50 minutes.

@@ -27,12 +27,20 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        // Do not log internal Next.js redirect errors
+        if (error.message.startsWith('NEXT_REDIRECT')) return;
+
         // Log to error tracking service (Sentry, LogRocket, etc.)
         console.error('Error Boundary caught:', error, errorInfo);
     }
 
     render() {
-        if (this.state.hasError) {
+        if (this.state.hasError && this.state.error) {
+            // Re-throw Next.js redirect errors so the router can handle them
+            if (this.state.error.message.startsWith('NEXT_REDIRECT') || (this.state.error as any).digest?.startsWith('NEXT_REDIRECT')) {
+                throw this.state.error;
+            }
+
             return (
                 <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
                     <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">

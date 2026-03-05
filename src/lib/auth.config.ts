@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import { isPublicPath, isProtectedPath } from "@/lib/route-manifest";
+import type { UserRole } from "@/lib/types/roles";
 
 /**
  * Edge-compatible authentication configuration.
@@ -41,6 +42,30 @@ export const authConfig = {
         }
     },
     callbacks: {
+        async jwt({ token, user }) {
+            // Edge-compatible user info mapping (critical for Edge Middleware role detection)
+            if (user) {
+                token.id = user.id;
+                token.email = user.email;
+                token.name = user.name;
+                token.image = user.image;
+                token.roles = user.roles;
+                token.verified = user.verified ?? true;
+            }
+            return token;
+        },
+        async session({ session, token }) {
+            // Edge-compatible session mapping
+            if (session?.user && token) {
+                session.user.id = token.id as string;
+                session.user.email = token.email as string;
+                session.user.name = token.name as string;
+                session.user.image = token.image as string | null;
+                session.user.roles = (token.roles as UserRole[]) || [];
+                session.user.verified = token.verified as boolean;
+            }
+            return session;
+        },
         authorized({ auth, request: { nextUrl } }: { auth: any; request: { nextUrl: URL } }) {
             const isLoggedIn = !!auth?.user;
             const { pathname } = nextUrl;
