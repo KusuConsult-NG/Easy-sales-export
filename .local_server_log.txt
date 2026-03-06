@@ -1,0 +1,171 @@
+
+> easy-sales-export-nextjs@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.44.242.79:3000
+- Environments: .env.local
+- Experiments (use with caution):
+  · optimizePackageImports
+
+✓ Starting...
+✓ Ready in 1261ms
+
+⚠️  SECURITY WARNING:
+
+  - OpenAI API key detected  - ensure .env.local is in .gitignore
+  - Firebase private key detected - ensure .env.local is in .gitignore
+
+  Run: git check-ignore .env.local
+  Expected output: .env.local
+
+ HEAD /auth/login 200 in 885ms (compile: 626ms, proxy.ts: 86ms, render: 173ms)
+ GET /auth/login 200 in 30ms (compile: 4ms, proxy.ts: 5ms, render: 22ms)
+🟠 [NEXTAUTH_FRAMEWORK_WARN] debug-enabled: 0 [ 'debug-enabled' ]
+🔴 [NEXTAUTH_FRAMEWORK_ERROR] MissingCSRF:
+ POST /api/auth/callback/credentials 302 in 776ms (compile: 764ms, proxy.ts: 4ms, render: 9ms)
+ GET /auth/login?callbackUrl=/admin 200 in 39ms (compile: 4ms, proxy.ts: 4ms, render: 32ms)
+ GET /api/auth/session 200 in 45ms (compile: 26ms, proxy.ts: 12ms, render: 8ms)
+ GET /api/auth/session 200 in 10ms (compile: 3ms, proxy.ts: 5ms, render: 2ms)
+ GET /api/auth/providers 200 in 11ms (compile: 5ms, proxy.ts: 3ms, render: 4ms)
+ GET /api/auth/csrf 200 in 7ms (compile: 2ms, proxy.ts: 2ms, render: 3ms)
+[Auth:1772728454680] --- AUTHORIZE START ---
+[Auth:1772728454680] STEP 1: Check env vars
+[Auth:1772728454680] STEP 2: Validate credentials shape
+[Auth:1772728454680] STEP 2 DONE: Email parsed: easysalesexport4@gmail.com
+[Auth:1772728454680] STEP 3: Check rate limit for easysalesexport4@gmail.com
+[Auth:1772728454680] STEP 3 DONE: Rate limit allowed=true
+[Auth:1772728454680] STEP 4: Calling Firebase REST API...
+[Auth:1772728454680] STEP 4 FAILED: Firebase REST API error: INVALID_LOGIN_CREDENTIALS
+[Auth:1772728454680] --- AUTHORIZE CATCH BLOCK ---
+[Auth] authorize() FAILED — firebase_code: "INVALID_LOGIN_CREDENTIALS" | message: "INVALID_LOGIN_CREDENTIALS" | env_api_key_set: true | env_project_id_set: true | env_admin_key_set: true
+🔴 [NEXTAUTH_FRAMEWORK_ERROR] AuthError:
+ POST /api/auth/callback/credentials? 200 in 3.1s (compile: 1848µs, proxy.ts: 2ms, render: 3.1s)
+ GET /api/auth/session 200 in 12ms (compile: 5ms, proxy.ts: 4ms, render: 4ms)
+ GET /auth/login?callbackUrl=/admin 200 in 36ms (compile: 3ms, proxy.ts: 2ms, render: 30ms)
+ GET /api/auth/session 200 in 13ms (compile: 6ms, proxy.ts: 2ms, render: 4ms)
+ GET /api/auth/session 200 in 11ms (compile: 3ms, proxy.ts: 5ms, render: 3ms)
+ GET /api/auth/providers 200 in 9ms (compile: 4ms, proxy.ts: 3ms, render: 2ms)
+ GET /api/auth/csrf 200 in 7ms (compile: 2ms, proxy.ts: 3ms, render: 2ms)
+[Auth:1772728483795] --- AUTHORIZE START ---
+[Auth:1772728483795] STEP 1: Check env vars
+[Auth:1772728483795] STEP 2: Validate credentials shape
+[Auth:1772728483795] STEP 2 DONE: Email parsed: easysalesexport4@gmail.com
+[Auth:1772728483795] STEP 3: Check rate limit for easysalesexport4@gmail.com
+[Auth:1772728483795] STEP 3 DONE: Rate limit allowed=true
+[Auth:1772728483795] STEP 4: Calling Firebase REST API...
+[Auth:1772728483795] STEP 4 FAILED: Firebase REST API error: INVALID_LOGIN_CREDENTIALS
+[Auth:1772728483795] --- AUTHORIZE CATCH BLOCK ---
+[Auth] authorize() FAILED — firebase_code: "INVALID_LOGIN_CREDENTIALS" | message: "INVALID_LOGIN_CREDENTIALS" | env_api_key_set: true | env_project_id_set: true | env_admin_key_set: true
+🔴 [NEXTAUTH_FRAMEWORK_ERROR] AuthError:
+ POST /api/auth/callback/credentials? 200 in 2.9s (compile: 1638µs, proxy.ts: 1631µs, render: 2.9s)
+ GET /api/auth/session 200 in 9ms (compile: 4ms, proxy.ts: 3ms, render: 2ms)
+ GET /auth/login?callbackUrl=/admin 200 in 26ms (compile: 3ms, proxy.ts: 1867µs, render: 22ms)
+ GET /api/auth/session 200 in 10ms (compile: 5ms, proxy.ts: 2ms, render: 3ms)
+ GET /api/auth/session 200 in 9ms (compile: 3ms, proxy.ts: 3ms, render: 2ms)
+ GET /api/auth/providers 200 in 37ms (compile: 15ms, proxy.ts: 17ms, render: 6ms)
+ GET /api/auth/csrf 200 in 16ms (compile: 11ms, proxy.ts: 3ms, render: 2ms)
+[Auth:1772728568454] --- AUTHORIZE START ---
+[Auth:1772728568454] STEP 1: Check env vars
+[Auth:1772728568454] STEP 2: Validate credentials shape
+[Auth:1772728568454] STEP 2 DONE: Email parsed: steviekusu@gmail.com
+[Auth:1772728568454] STEP 3: Check rate limit for steviekusu@gmail.com
+[Auth:1772728568454] STEP 3 DONE: Rate limit allowed=true
+[Auth:1772728568454] STEP 4: Calling Firebase REST API...
+[Auth:1772728568454] STEP 4 FAILED: Firebase REST API error: INVALID_LOGIN_CREDENTIALS
+[Auth:1772728568454] --- AUTHORIZE CATCH BLOCK ---
+[Auth] authorize() FAILED — firebase_code: "INVALID_LOGIN_CREDENTIALS" | message: "INVALID_LOGIN_CREDENTIALS" | env_api_key_set: true | env_project_id_set: true | env_admin_key_set: true
+🔴 [NEXTAUTH_FRAMEWORK_ERROR] AuthError:
+ POST /api/auth/callback/credentials? 200 in 1747ms (compile: 1649µs, proxy.ts: 1723µs, render: 1744ms)
+ GET /api/auth/session 200 in 10ms (compile: 4ms, proxy.ts: 3ms, render: 2ms)
+ GET /auth/login?callbackUrl=/admin 200 in 31ms (compile: 4ms, proxy.ts: 3ms, render: 24ms)
+ GET /api/auth/session 200 in 11ms (compile: 6ms, proxy.ts: 3ms, render: 2ms)
+ GET /api/auth/session 200 in 11ms (compile: 6ms, proxy.ts: 2ms, render: 3ms)
+ GET /api/auth/providers 200 in 6ms (compile: 2ms, proxy.ts: 1864µs, render: 2ms)
+ GET /api/auth/csrf 200 in 6ms (compile: 3ms, proxy.ts: 1860µs, render: 1686µs)
+[Auth:1772728657308] --- AUTHORIZE START ---
+[Auth:1772728657308] STEP 1: Check env vars
+[Auth:1772728657308] STEP 2: Validate credentials shape
+[Auth:1772728657308] STEP 2 DONE: Email parsed: steviekusu@gmail.com
+[Auth:1772728657308] STEP 3: Check rate limit for steviekusu@gmail.com
+[Auth:1772728657308] STEP 3 DONE: Rate limit allowed=true
+[Auth:1772728657308] STEP 4: Calling Firebase REST API...
+[Auth:1772728657308] STEP 4 FAILED: Firebase REST API error: INVALID_LOGIN_CREDENTIALS
+[Auth:1772728657308] --- AUTHORIZE CATCH BLOCK ---
+[Auth] authorize() FAILED — firebase_code: "INVALID_LOGIN_CREDENTIALS" | message: "INVALID_LOGIN_CREDENTIALS" | env_api_key_set: true | env_project_id_set: true | env_admin_key_set: true
+🔴 [NEXTAUTH_FRAMEWORK_ERROR] AuthError:
+ POST /api/auth/callback/credentials? 200 in 1579ms (compile: 1728µs, proxy.ts: 1689µs, render: 1576ms)
+ GET /api/auth/session 200 in 12ms (compile: 5ms, proxy.ts: 3ms, render: 5ms)
+ GET /auth/login?callbackUrl=/admin 200 in 27ms (compile: 2ms, proxy.ts: 2ms, render: 22ms)
+ GET /api/auth/session 200 in 11ms (compile: 5ms, proxy.ts: 3ms, render: 3ms)
+ GET /api/auth/session 200 in 8ms (compile: 3ms, proxy.ts: 1989µs, render: 3ms)
+ GET /api/auth/providers 200 in 8ms (compile: 2ms, proxy.ts: 3ms, render: 4ms)
+ GET /api/auth/csrf 200 in 5ms (compile: 1729µs, proxy.ts: 1595µs, render: 1471µs)
+[Auth:1772728697044] --- AUTHORIZE START ---
+[Auth:1772728697044] STEP 1: Check env vars
+[Auth:1772728697044] STEP 2: Validate credentials shape
+[Auth:1772728697044] STEP 2 DONE: Email parsed: steviekusu@gmail.com
+[Auth:1772728697044] STEP 3: Check rate limit for steviekusu@gmail.com
+[Auth:1772728697044] STEP 3 DONE: Rate limit allowed=true
+[Auth:1772728697044] STEP 4: Calling Firebase REST API...
+[Auth:1772728697044] STEP 4 FAILED: Firebase REST API error: INVALID_LOGIN_CREDENTIALS
+[Auth:1772728697044] --- AUTHORIZE CATCH BLOCK ---
+[Auth] authorize() FAILED — firebase_code: "INVALID_LOGIN_CREDENTIALS" | message: "INVALID_LOGIN_CREDENTIALS" | env_api_key_set: true | env_project_id_set: true | env_admin_key_set: true
+🔴 [NEXTAUTH_FRAMEWORK_ERROR] AuthError:
+ POST /api/auth/callback/credentials? 200 in 1881ms (compile: 1611µs, proxy.ts: 1719µs, render: 1878ms)
+ GET /api/auth/session 200 in 11ms (compile: 4ms, proxy.ts: 2ms, render: 4ms)
+ GET /auth/login?callbackUrl=/admin 200 in 27ms (compile: 3ms, proxy.ts: 1984µs, render: 23ms)
+ GET /api/auth/session 200 in 9ms (compile: 4ms, proxy.ts: 2ms, render: 2ms)
+ GET /api/auth/session 200 in 9ms (compile: 2ms, proxy.ts: 2ms, render: 5ms)
+ GET /api/auth/providers 200 in 8ms (compile: 4ms, proxy.ts: 1993µs, render: 2ms)
+ GET /api/auth/csrf 200 in 9ms (compile: 3ms, proxy.ts: 4ms, render: 3ms)
+[Auth:1772728771339] --- AUTHORIZE START ---
+[Auth:1772728771339] STEP 1: Check env vars
+[Auth:1772728771339] STEP 2: Validate credentials shape
+[Auth:1772728771339] STEP 2 DONE: Email parsed: steviekusu@gmail.com
+[Auth:1772728771339] STEP 3: Check rate limit for steviekusu@gmail.com
+[Auth:1772728771339] STEP 3 DONE: Rate limit allowed=true
+[Auth:1772728771339] STEP 4: Calling Firebase REST API...
+[Auth:1772728771339] STEP 4 FAILED: Firebase REST API error: INVALID_LOGIN_CREDENTIALS
+[Auth:1772728771339] --- AUTHORIZE CATCH BLOCK ---
+[Auth] authorize() FAILED — firebase_code: "INVALID_LOGIN_CREDENTIALS" | message: "INVALID_LOGIN_CREDENTIALS" | env_api_key_set: true | env_project_id_set: true | env_admin_key_set: true
+🔴 [NEXTAUTH_FRAMEWORK_ERROR] AuthError:
+ POST /api/auth/callback/credentials? 200 in 1916ms (compile: 5ms, proxy.ts: 3ms, render: 1909ms)
+ GET /api/auth/session 200 in 8ms (compile: 4ms, proxy.ts: 1983µs, render: 2ms)
+ GET /auth/login?callbackUrl=/admin 200 in 34ms (compile: 3ms, proxy.ts: 6ms, render: 25ms)
+ GET /api/auth/session 200 in 14ms (compile: 10ms, proxy.ts: 2ms, render: 2ms)
+ GET /api/auth/session 200 in 17ms (compile: 3ms, proxy.ts: 2ms, render: 12ms)
+ GET /api/auth/providers 200 in 6ms (compile: 2ms, proxy.ts: 1773µs, render: 2ms)
+ GET /api/auth/csrf 200 in 6ms (compile: 1881µs, proxy.ts: 1814µs, render: 2ms)
+[Auth:1772729109441] --- AUTHORIZE START ---
+[Auth:1772729109441] STEP 1: Check env vars
+[Auth:1772729109441] STEP 2: Validate credentials shape
+[Auth:1772729109441] STEP 2 DONE: Email parsed: steviekusu@gmail.com
+[Auth:1772729109441] STEP 3: Check rate limit for steviekusu@gmail.com
+[Auth:1772729109441] STEP 3 DONE: Rate limit allowed=true
+[Auth:1772729109441] STEP 4: Calling Firebase REST API...
+[Auth:1772729109441] STEP 4 DONE: Firebase auth OK — uid: G7tQGmdl1ThZPsybhjcpnKrIlwB2
+[Auth:1772729109441] STEP 5: Resetting rate limits...
+[Auth] Cleared 2 rate-limit key(s) for steviekusu@gmail.com
+[Auth:1772729109441] STEP 5 DONE: Rate limits reset.
+[Auth:1772729109441] STEP 6: Checking profile cache...
+[Cache MISS] Fetching user profile from Firestore: G7tQGmdl1ThZPsybhjcpnKrIlwB2
+[getUserProfile] UID G7tQGmdl1ThZPsybhjcpnKrIlwB2: fullName='steviekusu' displayName='undefined' → resolved='steviekusu'
+[Auth:1772729109441] cache HIT — returning cached profile
+ POST /api/auth/callback/credentials? 200 in 6.1s (compile: 1769µs, proxy.ts: 2ms, render: 6.1s)
+ GET /api/auth/session 200 in 29ms (compile: 6ms, proxy.ts: 9ms, render: 14ms)
+🟠 [NEXTAUTH_FRAMEWORK_WARN] debug-enabled: 0 [ 'debug-enabled' ]
+ GET /admin 200 in 816ms (compile: 753ms, proxy.ts: 5ms, render: 58ms)
+ POST /admin 200 in 1721ms (compile: 1675µs, proxy.ts: 5ms, render: 1715ms)
+ POST /admin 200 in 400ms (compile: 3ms, proxy.ts: 7ms, render: 391ms)
+ POST /admin 200 in 1446ms (compile: 2ms, proxy.ts: 7ms, render: 1437ms)
+ POST /admin 200 in 21ms (compile: 3ms, proxy.ts: 9ms, render: 9ms)
+✓ Compiled in 101ms
+✓ Compiled in 54ms
+✓ Compiled in 46ms
+✓ Compiled in 59ms
+✓ Compiled in 50ms
+✓ Compiled in 94ms
+✓ Compiled in 84ms
+✓ Compiled in 56ms

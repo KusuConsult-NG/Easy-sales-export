@@ -22,7 +22,17 @@ import {
     Tractor,
     Map,
     Award,
-    Briefcase
+    Briefcase,
+    TrendingUp,
+    ClipboardCheck,
+    ShieldAlert,
+    ScrollText,
+    UserX,
+    BadgeCheck,
+    ToggleLeft,
+    Waves,
+    Building2,
+    Container,
 } from "lucide-react";
 import type { AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
@@ -125,11 +135,26 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
     // ADMIN (Module: /admin)
     // ------------------------------------------------------------------
     "admin": [
-        { name: "Overview", href: "/admin", icon: LayoutDashboard, exact: true },
-        { name: "Users", href: "/admin/users", icon: Users },
-        { name: "Approvals", href: "/admin/content-approval", icon: CheckCircle },
-        { name: "Exports", href: "/admin/export", icon: Truck },
+        // ── Core Platform ────────────────────────────────────────────────
+        { name: "Dashboard", href: "/admin", icon: LayoutDashboard, exact: true },
+        { name: "Analytics", href: "/admin/analytics", icon: TrendingUp },
+        { name: "User Management", href: "/admin/users", icon: Users },
+        { name: "Content Approval", href: "/admin/content-approval", icon: ClipboardCheck },
+        { name: "Communications", href: "/admin/communications", icon: MessageSquare },
+        { name: "Disputes", href: "/admin/disputes", icon: ShieldAlert },
+        { name: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText },
+        { name: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX },
+        { name: "ID Verification", href: "/admin/verify-id", icon: BadgeCheck },
+        { name: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft },
+        // ── Modules ──────────────────────────────────────────────────────
+        { name: "WAVE Program", href: "/admin/wave", icon: Waves },
+        { name: "Cooperatives", href: "/admin/cooperatives", icon: Building2 },
+        { name: "Marketplace", href: "/admin/marketplace", icon: Store },
+        { name: "Export Windows", href: "/admin/export", icon: Container },
+        { name: "Export Applications", href: "/admin/export/applications", icon: FileText },
+        { name: "Farm Nation", href: "/admin/farm-nation", icon: Tractor },
         { name: "Academy", href: "/admin/academy", icon: GraduationCap },
+        // ── Finance & Settings ────────────────────────────────────────────
         { name: "Finance", href: "/admin/finance", icon: Wallet },
         { name: "Settings", href: "/admin/settings", icon: Settings },
     ],
