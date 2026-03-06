@@ -137,11 +137,13 @@ class QoreIdService {
     }
 
     // ── NIN ─────────────────────────────────────────────────────────────────
-    // Endpoint: POST /v1/ng/identities/nin/{nin}
+    // Endpoint: POST /v1/ng/identities/nin-premium/{nin}
     // Body: { firstname, lastname }  (lowercase — QoreID spec)
+    // Note: /nin-premium/ is the accessible endpoint on this account plan;
+    //       /nin/ returns 403 Forbidden.
     async verifyNIN(nin: string, firstName: string, lastName: string) {
         try {
-            const result = await this.qoreIdFetch(`/v1/ng/identities/nin/${nin}`, {
+            const result = await this.qoreIdFetch(`/v1/ng/identities/nin-premium/${nin}`, {
                 firstname: firstName,
                 lastname: lastName,
             });
