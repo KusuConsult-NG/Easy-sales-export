@@ -311,8 +311,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 <div>
                     <div className="flex items-center justify-between mb-2">
                         <label className="block text-sm font-medium text-slate-900">
-                            BVN (Bank Verification Number){' '}
-                            <span className="text-slate-400 text-xs">(Optional)</span>
+                            BVN (Bank Verification Number) <span className="text-red-500">*</span>
                         </label>
                         <VerifyBadge state={bvnState} />
                     </div>

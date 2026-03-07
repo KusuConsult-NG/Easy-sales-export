@@ -213,8 +213,8 @@ async function updateOverallKYCStatus(userId: string) {
         const bvnVerified = kyc.bvnVerified === true;
         const ninVerified = kyc.ninVerified === true;
 
-        // KYC is considered complete when at least one primary ID is verified
-        const kycComplete = bvnVerified || ninVerified;
+        // KYC is considered complete when BOTH primary IDs are verified
+        const kycComplete = bvnVerified && ninVerified;
 
         await userRef.update({
             'kyc.status': kycComplete ? 'verified' : 'pending',

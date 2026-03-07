@@ -46,9 +46,17 @@ export function KYCVerificationStep({
             return;
         }
 
-        // Require at least one verified ID (NIN is primary)
+        // Require both NIN and BVN to be verified
         if (!kycData.ninVerified && !kycData.bvnVerified) {
-            showToast('Please verify your NIN (or BVN) before continuing', 'error');
+            showToast('Please verify both your NIN and BVN before continuing', 'error');
+            return;
+        }
+        if (!kycData.ninVerified) {
+            showToast('Please verify your NIN before continuing', 'error');
+            return;
+        }
+        if (!kycData.bvnVerified) {
+            showToast('Please verify your BVN before continuing', 'error');
             return;
         }
 
