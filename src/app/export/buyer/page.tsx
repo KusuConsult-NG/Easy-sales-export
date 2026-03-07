@@ -386,6 +386,7 @@ export default function ExportBuyerPage() {
     // Live catalog from Firestore (shows error banner if API unavailable)
     const [liveProducts, setLiveProducts] = useState<ExportProduct[]>(PRODUCTS);
     const [catalogLoading, setCatalogLoading] = useState(true);
+    const [catalogError, setCatalogError] = useState<string | null>(null);
 
     useEffect(() => {
         fetch("/api/export/catalog")
@@ -393,9 +394,13 @@ export default function ExportBuyerPage() {
             .then(data => {
                 if (data.success && data.products?.length) {
                     setLiveProducts(data.products as ExportProduct[]);
+                } else {
+                    setCatalogError("Using cached product list — live catalog unavailable.");
                 }
             })
-            .catch(() => { /* keep PRODUCTS fallback */ })
+            .catch(() => {
+                setCatalogError("Could not load the live product catalog. Showing standard products below.");
+            })
             .finally(() => setCatalogLoading(false));
     }, []);
 
@@ -456,6 +461,14 @@ export default function ExportBuyerPage() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
+                {/* Catalog error banner */}
+                {catalogError && (
+                    <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3 text-sm text-amber-800">
+                        <span className="shrink-0 text-amber-500">⚠️</span>
+                        <span>{catalogError} Pricing shown is indicative — our team will confirm current rates in your quotation.</span>
+                    </div>
+                )}
+
                 {/* Search and Filters */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 mb-8">
                     <div className="flex flex-col md:flex-row gap-4">

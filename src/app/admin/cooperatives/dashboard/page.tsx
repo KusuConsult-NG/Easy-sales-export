@@ -248,7 +248,20 @@ export default function AdminCooperativeDashboardPage() {
                                 </LineChart>
                             </ResponsiveContainer>
                         ) : (
-                            <p className="text-center text-gray-500 py-8">No data available</p>
+                            <div className="flex flex-col items-center justify-center py-10 text-center">
+                                <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mb-3">
+                                    <TrendingUp className="w-6 h-6 text-emerald-400" />
+                                </div>
+                                <p className="text-gray-700 font-medium text-sm">No contribution data yet</p>
+                                <p className="text-gray-400 text-xs mt-1 max-w-[220px]">
+                                    The monthly trend chart will populate once members start making contributions.
+                                </p>
+                                {stats?.totalMembers > 0 && (
+                                    <p className="text-xs text-emerald-600 font-semibold mt-3">
+                                        {stats.totalMembers} member{stats.totalMembers !== 1 ? 's' : ''} registered
+                                    </p>
+                                )}
+                            </div>
                         )}
                     </div>
 
