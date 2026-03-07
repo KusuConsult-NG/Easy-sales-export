@@ -19,24 +19,16 @@ export default function LocalizationSettingsPage() {
                         {[
                             { code: "en", name: "English", status: "Primary" },
                             { code: "ha", name: "Hausa", status: "Available" },
-                            { code: "yo", name: "Yoruba", status: "Planned" },
-                            { code: "ig", name: "Igbo", status: "Planned" },
                         ].map(lang => (
                             <div key={lang.code} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
                                 <div className="flex items-center gap-3">
                                     <span className="w-8 h-8 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center text-xs font-bold uppercase">{lang.code}</span>
                                     <span className="font-medium text-slate-900">{lang.name}</span>
                                 </div>
-                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${lang.status === "Primary" ? "bg-green-100 text-green-700"
-                                    : lang.status === "Available" ? "bg-blue-100 text-blue-700"
-                                        : "bg-amber-100 text-amber-700"
-                                    }`}>{lang.status}</span>
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${lang.status === "Primary" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>{lang.status}</span>
                             </div>
                         ))}
                     </div>
-                    <p className="text-xs text-slate-400 mt-3">
-                        * Planned languages are in the roadmap. Contact support to prioritize a language.
-                    </p>
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-sm p-6">
