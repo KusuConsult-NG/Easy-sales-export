@@ -1026,3 +1026,103 @@ export async function resubmitCooperativeApplicationAction(
     }
 }
 
+// ============================================
+// MEMBER ID CARD
+// ============================================
+
+export type MemberIdCardData = {
+    fullName: string;
+    memberNumber: string;
+    membershipTier: "basic" | "premium";
+    gender: string;
+    stateOfOrigin: string;
+    passportPhotoUrl: string | null;
+    joinedAt: string;
+    validUntil: string;
+    membershipStatus: string;
+    paymentStatus: string;
+};
+
+/**
+ * Get member data for ID card rendering.
+ * Gate 1: paymentStatus === 'completed' (Paystack verified)
+ * Gate 2: membershipStatus === 'active' (admin approved)
+ */
+export async function getCooperativeMemberIdCardAction(): Promise<{
+    success: boolean;
+    data?: MemberIdCardData;
+    error?: string;
+    reason?: "payment_required" | "pending_approval" | "not_member";
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Not authenticated", reason: "not_member" };
+        const { session } = sessionResult;
+
+        const userId = session.user.id;
+        const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+
+        if (!memberDoc.exists) {
+            return { success: false, error: "No cooperative membership found.", reason: "not_member" };
+        }
+
+        const d = memberDoc.data()!;
+
+        // Gate 1: Paystack payment must be verified
+        if (d.paymentStatus !== "completed") {
+            return {
+                success: false,
+                error: "Your membership fee payment has not been verified. Please complete payment to access your ID card.",
+                reason: "payment_required",
+            };
+        }
+
+        // Gate 2: Admin must have approved
+        if (d.membershipStatus !== "active") {
+            return {
+                success: false,
+                error: "Your membership is pending admin approval. Your ID card will be available once approved.",
+                reason: "pending_approval",
+                data: {
+                    fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
+                    memberNumber: "",
+                    membershipTier: d.membershipTier || "basic",
+                    gender: d.gender || "",
+                    stateOfOrigin: d.stateOfOrigin || "",
+                    passportPhotoUrl: d.documents?.passportPhoto?.url || null,
+                    joinedAt: "",
+                    validUntil: "",
+                    membershipStatus: d.membershipStatus || "pending",
+                    paymentStatus: d.paymentStatus || "completed",
+                },
+            };
+        }
+
+        // Deterministic member number — no extra write needed
+        const joinedAt: Date = d.createdAt?.toDate ? d.createdAt.toDate() : new Date();
+        const joinYear = joinedAt.getFullYear();
+        const memberNumber = `ESE-COOP-${joinYear}-${userId.slice(0, 6).toUpperCase()}`;
+
+        const validUntil = new Date(joinedAt);
+        validUntil.setFullYear(validUntil.getFullYear() + 1);
+
+        return {
+            success: true,
+            data: {
+                fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
+                memberNumber,
+                membershipTier: d.membershipTier || "basic",
+                gender: d.gender || "",
+                stateOfOrigin: d.stateOfOrigin || "",
+                passportPhotoUrl: d.documents?.passportPhoto?.url || null,
+                joinedAt: joinedAt.toISOString(),
+                validUntil: validUntil.toISOString(),
+                membershipStatus: d.membershipStatus,
+                paymentStatus: d.paymentStatus,
+            },
+        };
+    } catch (error) {
+        logger.error("getCooperativeMemberIdCardAction error:", error);
+        return { success: false, error: "Failed to load ID card data. Please try again." };
+    }
+}

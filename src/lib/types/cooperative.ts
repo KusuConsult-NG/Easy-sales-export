@@ -62,7 +62,7 @@ export type CooperativeMembershipRecord = {
     // Membership details
     membershipTier: "basic" | "premium";
     registrationFee: number; // ₦10,000 or ₦20,000
-    membershipStatus: "pending" | "approved" | "suspended";
+    membershipStatus: "pending" | "approved" | "active" | "rejected" | "suspended";
     paymentReference?: string;
     paymentStatus: "pending" | "completed" | "failed";
     // Approval tracking
@@ -187,7 +187,7 @@ export type CooperativeMembership = {
     memberSince: Date;
     monthlyTarget: number;
     membershipTier: "basic" | "premium";
-    membershipStatus: "pending" | "approved" | "suspended";
+    membershipStatus: "pending" | "approved" | "active" | "rejected" | "suspended";
     paymentStatus: "pending" | "completed" | "failed";
 };
 
