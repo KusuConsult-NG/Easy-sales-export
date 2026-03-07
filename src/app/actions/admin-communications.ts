@@ -86,8 +86,8 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
 export async function sendBulkEmailAction(prevState: SendBulkEmailState, formData: FormData): Promise<SendBulkEmailState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         // Check if user is admin
         const userRef = db.collection('users').doc(session?.user?.id || 'unknown');
         const userDoc = await userRef.get();
@@ -122,8 +122,9 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
 
         // Batch sending to avoid hitting limits if possible, or send as bcc
         // For privacy, we should ALWAYS use Bcc for bulk emails
+        const fromAddress = process.env.RESEND_FROM_EMAIL || 'noreply@easysalesexport.com';
         await resend.emails.send({
-            from: 'Easy Sales Export <onboarding@resend.dev>',
+            from: `Easy Sales Export <${fromAddress}>`,
             to: 'admin@easysalesexport.com', // Send to admin, bcc everyone else
             bcc: emails,
             subject: subject,
@@ -161,8 +162,8 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
 export async function createAnnouncementAction(prevState: CreateAnnouncementState, formData: FormData): Promise<CreateAnnouncementState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin')) {
             return { success: false, error: 'Unauthorized' };
         }
@@ -211,8 +212,8 @@ export interface GetEmailHistoryState {
 export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
         if (!session.user.roles?.includes('admin') && !session.user.roles?.includes('super_admin')) {
             return { success: false, error: 'Unauthorized' };

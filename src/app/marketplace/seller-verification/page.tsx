@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     Store, MapPin, FileText, CreditCard,
-    ArrowLeft, ArrowRight, Check, Upload, X
+    ArrowLeft, ArrowRight, Check, Upload, X, CheckCircle2, AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 
@@ -14,6 +14,7 @@ export default function SellerVerificationPage() {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState<VerificationStep>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     const [formData, setFormData] = useState({
         businessName: "",
@@ -83,13 +84,13 @@ export default function SellerVerificationPage() {
             const data = await response.json();
 
             if (data.success) {
-                alert("Verification submitted successfully! Our team will review your application.");
-                router.push("/marketplace/sell");
+                setToast({ type: "success", message: "Verification submitted successfully! Our team will review your application." });
+                setTimeout(() => router.push("/marketplace/sell"), 2000);
             } else {
-                alert(data.message || "Failed to submit verification");
+                setToast({ type: "error", message: data.message || "Failed to submit verification" });
             }
         } catch (error) {
-            alert("An error occurred while submitting your verification");
+            setToast({ type: "error", message: "An error occurred while submitting your verification. Please try again." });
         } finally {
             setIsSubmitting(false);
         }
@@ -105,6 +106,21 @@ export default function SellerVerificationPage() {
     return (
         <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-4xl mx-auto px-4">
+                {/* Toast Banner */}
+                {toast && (
+                    <div className={`flex items-center gap-3 p-4 rounded-xl mb-4 ${toast.type === "success"
+                            ? "bg-green-50 border border-green-200 text-green-800"
+                            : "bg-red-50 border border-red-200 text-red-800"
+                        }`}>
+                        {toast.type === "success"
+                            ? <CheckCircle2 className="w-5 h-5 shrink-0 text-green-600" />
+                            : <AlertCircle className="w-5 h-5 shrink-0 text-red-600" />}
+                        <p className="flex-1 text-sm font-medium">{toast.message}</p>
+                        <button onClick={() => setToast(null)} className="p-1 hover:bg-black/5 rounded-lg transition">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
                 <Link
                     href="/marketplace/sell"
                     className="inline-flex items-center gap-2 text-primary hover:underline mb-6"

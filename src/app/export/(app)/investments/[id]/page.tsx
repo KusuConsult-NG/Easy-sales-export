@@ -166,22 +166,22 @@ export default function InvestmentDetailPage() {
                         {/* Documents */}
                         <div className="bg-white rounded-2xl p-6 shadow-lg">
                             <h2 className="text-2xl font-bold text-slate-900 mb-4">Investment Documents</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {["Investment Agreement", "Payment Receipt", "Export Certificate", "Insurance Policy"].map((doc) => (
-                                    <div
-                                        key={doc}
-                                        className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-not-allowed opacity-60"
-                                        title="Documents will be available once processed"
-                                    >
-                                        <FileText className="w-5 h-5 text-purple-600 shrink-0" />
-                                        <span className="text-sm font-medium text-slate-900">{doc}</span>
-                                        <span className="ml-auto text-xs text-slate-400">Pending</span>
-                                    </div>
-                                ))}
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start gap-4">
+                                <FileText className="w-8 h-8 text-amber-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-semibold text-amber-900 mb-1">Documents prepared after processing</p>
+                                    <p className="text-sm text-amber-800">
+                                        Your Investment Agreement, Payment Receipt, Export Certificate and Insurance Policy
+                                        will be generated and made available for download once our team completes the export window
+                                        processing. You will receive a notification when they are ready.
+                                    </p>
+                                    {investment.status === "completed" && (
+                                        <p className="text-sm font-semibold text-amber-900 mt-2">
+                                            📬 Your export window is complete — documents should be in your email or available via support.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
-                            <p className="text-xs text-slate-400 mt-3">
-                                * Documents will be made available for download once the export window is processed by our team.
-                            </p>
                         </div>
                     </div>
 

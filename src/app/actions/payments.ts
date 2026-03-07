@@ -151,12 +151,51 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
                 break;
 
             case "loan_repayment":
-                // Track loan repayment installment
-                // This would update loan repayment records
+                if (payment.relatedId) {
+                    // Record the installment
+                    await db.collection("loan_repayments").add({
+                        loanId: payment.relatedId,
+                        userId: payment.userId,
+                        amount: payment.amount,
+                        paymentReference: payment.paymentReference,
+                        paymentId,
+                        paidAt: FieldValue.serverTimestamp(),
+                    });
+                    // Update the parent loan's amountRepaid and status
+                    const loanRef = db.collection("cooperative_loans").doc(payment.relatedId);
+                    const loanSnap = await loanRef.get();
+                    if (loanSnap.exists) {
+                        const loanData = loanSnap.data()!;
+                        const newRepaid = (loanData.amountRepaid || 0) + payment.amount;
+                        const isFullyRepaid = newRepaid >= (loanData.amount || 0);
+                        await loanRef.update({
+                            amountRepaid: newRepaid,
+                            status: isFullyRepaid ? "repaid" : "active",
+                            lastRepaymentAt: FieldValue.serverTimestamp(),
+                        });
+                    }
+                }
                 break;
 
             case "cooperative_contribution":
-                // Update user's cooperative contribution
+                if (payment.relatedId) {
+                    // Log the contribution record
+                    await db.collection("cooperative_contributions").add({
+                        memberId: payment.relatedId,
+                        userId: payment.userId,
+                        amount: payment.amount,
+                        paymentReference: payment.paymentReference,
+                        paymentId,
+                        contributedAt: FieldValue.serverTimestamp(),
+                        type: "monthly",
+                    });
+                    // Increment member's totalContributions in cooperative_members
+                    const memberRef = db.collection("cooperative_members").doc(payment.relatedId);
+                    await memberRef.update({
+                        totalContributions: FieldValue.increment(payment.amount),
+                        lastContributionAt: FieldValue.serverTimestamp(),
+                    });
+                }
                 break;
 
             default:

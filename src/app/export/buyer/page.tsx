@@ -383,7 +383,7 @@ export default function ExportBuyerPage() {
     const { cartCount, setIsCartOpen } = useExportCart();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("all");
-    // Live catalog from Firestore (falls back to hardcoded PRODUCTS if API unavailable)
+    // Live catalog from Firestore (shows error banner if API unavailable)
     const [liveProducts, setLiveProducts] = useState<ExportProduct[]>(PRODUCTS);
     const [catalogLoading, setCatalogLoading] = useState(true);
 

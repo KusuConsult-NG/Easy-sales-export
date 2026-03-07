@@ -1,14 +1,16 @@
-export enum EscrowStatus {
-    PENDING = 'pending',
-    FUNDED = 'funded',
-    IN_TRANSIT = 'in_transit',
-    DELIVERED = 'delivered',
-    COMPLETED = 'completed',
-    DISPUTED = 'disputed',
-    CANCELLED = 'cancelled'
-}
+/**
+ * Re-export canonical escrow types from the marketplace module.
+ * This is the single source of truth — do NOT define EscrowStatus or
+ * EscrowTransaction here. Import from this file throughout the app.
+ */
+export type { EscrowStatus, EscrowTransaction } from "@/lib/types/marketplace";
 
-export interface EscrowTransaction {
+/**
+ * Extended EscrowTransaction shape used by escrow-actions.ts queries.
+ * Adds the `participants` array (written at creation time for array-contains queries)
+ * and the full lifecycle timestamps as plain Dates (after Timestamp conversion).
+ */
+export interface EscrowTransactionDoc {
     id: string;
     buyerId: string;
     buyerEmail?: string;
@@ -17,15 +19,17 @@ export interface EscrowTransaction {
     amount: number;
     productName: string;
     productDescription?: string;
-    status: EscrowStatus;
+    status: import("@/lib/types/marketplace").EscrowStatus;
     paymentReference?: string;
 
-    // Dispute & Release logic
+    // participants array — required for array-contains Firestore queries
+    participants: string[];
+
+    // Dispute & Release
     releaseRequestedBy?: string;
     releaseRequestedAt?: Date;
     releasedBy?: string;
     releasedAt?: Date;
-
     disputeId?: string;
     refundedAt?: Date;
     refundedBy?: string;
@@ -33,6 +37,4 @@ export interface EscrowTransaction {
     createdAt: Date;
     updatedAt: Date;
     paidAt?: Date;
-
-    participants: string[];
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { logger } from '@/lib/logger';
 import dynamic from "next/dynamic";
 import { Filter, Grid, MapIcon, Search } from "lucide-react";
@@ -39,6 +40,7 @@ type LandListing = {
 type ViewMode = "map" | "grid";
 
 export default function FarmNationMapPage() {
+    const router = useRouter();
     const [listings, setListings] = useState<LandListing[]>([]);
     const [filteredListings, setFilteredListings] = useState<LandListing[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -262,8 +264,8 @@ export default function FarmNationMapPage() {
                     <button
                         onClick={() => setViewMode("map")}
                         className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${viewMode === "map"
-                                ? "bg-primary text-white"
-                                : "bg-white text-slate-900 hover:bg-slate-100"
+                            ? "bg-primary text-white"
+                            : "bg-white text-slate-900 hover:bg-slate-100"
                             }`}
                     >
                         <MapIcon className="w-4 h-4" />
@@ -272,8 +274,8 @@ export default function FarmNationMapPage() {
                     <button
                         onClick={() => setViewMode("grid")}
                         className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${viewMode === "grid"
-                                ? "bg-primary text-white"
-                                : "bg-white text-slate-900 hover:bg-slate-100"
+                            ? "bg-primary text-white"
+                            : "bg-white text-slate-900 hover:bg-slate-100"
                             }`}
                     >
                         <Grid className="w-4 h-4" />
@@ -295,7 +297,7 @@ export default function FarmNationMapPage() {
                             <div
                                 key={listing.id}
                                 className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
-                                onClick={() => window.location.href = `/farm-nation/${listing.id}`}
+                                onClick={() => router.push(`/farm-nation/property/${listing.id}`)}
                             >
                                 <div className="h-48 bg-slate-200">
                                     {listing.images[0] && (

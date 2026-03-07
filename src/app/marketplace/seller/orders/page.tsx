@@ -41,29 +41,9 @@ export default function SellerOrdersPage() {
             const result = await getSellerOrdersAction({
                 limit: 20,
                 lastId: currentLastId,
-                status: filterStatus
+                status: filterStatus,
+                search: debouncedSearch || undefined,
             });
-            // Note: Search is not yet supported in getSellerOrdersAction, 
-            // so we still might need to filter client side if backend doesn't support it.
-            // But wait, getSellerOrdersAction DOES NOT support search param yet!
-            // I should have added search param to getSellerOrdersAction if I wanted server-side search.
-            // For now, I will use client-side search filtering on the fetched page? 
-            // No, that breaks pagination. 
-            // The previous implementation used client-side filtering on *all* orders.
-            // If I paginate, I can't client-side filter easily.
-            // However, getSellerOrdersAction implementation only supports status filter. 
-            // It does NOT support text search.
-            // So for now, I will NOT pass search query to backend, and I will filter the *current page* results?
-            // No, that's bad UX. 
-            // I should update getSellerOrdersAction to support search?
-            // Or just accept limitations for now (search only searches loaded orders?).
-            // Given the task is scalability, server-side search is better. 
-            // But I didn't verify if I added 'search' to getSellerOrdersAction in marketplace.ts.
-            // Quick check: I did NOT add `search` to `getSellerOrdersAction` options in Step 8349.
-            // So I can't do server-side search for orders yet.
-            // I will implement client-side filtering on the *fetched* orders, which is suboptimal but keeps existing functionality (mostly).
-            // Actually, if I filter client-side on paginated results, the user might see empty pages.
-            // I will remove search functionality or keep it as client-side filtering of loaded results.
 
             if (result.success && result.orders) {
                 setOrders(prev => isReset ? result.orders : [...prev, ...result.orders]);
@@ -78,13 +58,13 @@ export default function SellerOrdersPage() {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [filterStatus, lastId]); // Removed debouncedSearch from dependencies as backend doesn't support it
+    }, [filterStatus, lastId, debouncedSearch]);
 
-    // Initial load and filter changes
+    // Initial load and filter/search changes
     useEffect(() => {
         fetchOrders(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filterStatus]);
+    }, [filterStatus, debouncedSearch]);
 
     const handleLoadMore = () => {
         if (!loadingMore && hasMore) {

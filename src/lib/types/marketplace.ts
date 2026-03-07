@@ -240,9 +240,13 @@ export interface Order {
 export type EscrowStatus =
     | "pending"
     | "funded"
+    | "in_transit"
+    | "delivered"
     | "released"
     | "refunded"
-    | "disputed";
+    | "disputed"
+    | "cancelled"
+    | "completed";
 
 export interface EscrowTransaction {
     id: string;

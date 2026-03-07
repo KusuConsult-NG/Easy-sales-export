@@ -119,7 +119,7 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
                                         : isCompleted
                                             ? 'bg-green-600'
                                             : isActive
-                                                ? 'bg-[#1358ec]#1358ec]'
+                                                ? 'bg-[#1358ec]'
                                                 : 'bg-slate-200'
                                     }
                 `}
@@ -143,7 +143,7 @@ function EscrowStepper({ currentStatus, transactionId, onStatusChange }: EscrowS
                             {/* Step Label */}
                             <div className="mt-3 text-center">
                                 <p className={`text-sm font-semibold ${isActive
-                                    ? 'text-[#1358ec]#1358ec]'
+                                    ? 'text-[#1358ec]'
                                     : isCompleted
                                         ? 'text-green-600'
                                         : 'text-slate-400'

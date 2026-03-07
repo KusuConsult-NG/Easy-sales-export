@@ -25,6 +25,7 @@ import {
     UserX,
     BadgeCheck,
     ToggleLeft,
+    ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { logoutAction } from "@/app/actions/auth";
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
     { label: "WAVE Program", href: "/admin/wave", icon: Waves, section: "modules" },
     { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2, section: "modules" },
     { label: "Marketplace", href: "/admin/marketplace", icon: ShoppingBag, section: "modules" },
+    { label: "Escrow Management", href: "/admin/marketplace/escrow", icon: ShieldCheck, section: "modules" },
     { label: "Export Windows", href: "/admin/export", icon: Container, section: "modules" },
     { label: "Export Applications", href: "/admin/export/applications", icon: FileText, section: "modules" },
     { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, section: "modules" },

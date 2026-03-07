@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EscrowStatus } from '@/types/escrow';
+// EscrowStatus is a union type — use the values directly with z.enum()
 
 // Escrow Transaction Creation Schema
 export const escrowTransactionSchema = z.object({
@@ -16,7 +16,17 @@ export type EscrowTransactionInput = z.infer<typeof escrowTransactionSchema>;
 // Escrow Status Update Schema
 export const escrowStatusUpdateSchema = z.object({
     transactionId: z.string().min(1),
-    status: z.nativeEnum(EscrowStatus),
+    status: z.enum([
+        "pending",
+        "funded",
+        "in_transit",
+        "delivered",
+        "released",
+        "refunded",
+        "disputed",
+        "cancelled",
+        "completed",
+    ]),
     notes: z.string().optional(),
 });
 

@@ -635,6 +635,7 @@ export async function getSellerOrdersAction(options: {
     limit?: number;
     lastId?: string;
     status?: string;
+    search?: string;
 } = {}) {
     try {
         const sessionResult = await requireSession();
@@ -646,39 +647,50 @@ export async function getSellerOrdersAction(options: {
         }
 
         const userId = session.user.id;
-        const { limit = 20, lastId, status } = options;
+        const { limit = 20, lastId, status, search } = options;
 
-        // Query 'marketplaceOrders' collection using sellerIds array
+        // When searching, fetch a broader page so we can filter client-side
+        // (Firestore does not support full-text search natively)
+        const fetchLimit = search ? Math.min(limit * 5, 100) : limit;
+
         let query = db.collection("marketplaceOrders")
             .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
 
         if (status && status !== "all") {
-            // Note: 'status' in marketplaceOrders is 'orderStatus' or 'paymentStatus'?
-            // marketplace-payment.ts saves 'orderStatus' ("pending_payment") 
-            // and 'paymentStatus' ("pending").
-            // Seller usually cares about "orderStatus" (processing, shipped, etc).
-            // But existing code checked "status". 
-            // I should map "status" query to "orderStatus".
             query = query.where("orderStatus", "==", status);
         }
 
-        if (lastId) {
+        if (lastId && !search) {
             const lastDoc = await db.collection("marketplaceOrders").doc(lastId).get();
             if (lastDoc.exists) {
                 query = query.startAfter(lastDoc);
             }
         }
 
-        query = query.limit(limit);
+        query = query.limit(fetchLimit);
 
         const snapshot = await query.get();
-        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
+        let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
+
+        // Server-assisted search: filter by order ID, buyer name, or product references
+        if (search) {
+            const q = search.toLowerCase();
+            orders = orders.filter(o => {
+                const anyOrderData = o as any;
+                return (
+                    o.id?.toLowerCase().includes(q) ||
+                    anyOrderData.buyerName?.toLowerCase().includes(q) ||
+                    anyOrderData.buyerEmail?.toLowerCase().includes(q) ||
+                    anyOrderData.items?.some((item: any) => item.title?.toLowerCase().includes(q))
+                );
+            }).slice(0, limit);
+        }
 
         let newLastId = undefined;
         let hasMore = false;
 
-        if (snapshot.docs.length === limit) {
+        if (!search && snapshot.docs.length === fetchLimit) {
             hasMore = true;
             newLastId = snapshot.docs[snapshot.docs.length - 1].id;
         }
@@ -743,6 +755,28 @@ export async function getSellerAnalyticsAction() {
             ? products.reduce((sum, p) => sum + (p.rating || 0), 0) / products.length
             : 0;
 
+        // Calculate prev-month revenue for trend badges
+        const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        const prevYear = currentMonth === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear();
+        const prevMonthRevenue = orders
+            .filter(o => {
+                const date = o.createdAt instanceof Date ? o.createdAt : (o.createdAt as unknown as import('firebase-admin/firestore').Timestamp).toDate();
+                return date.getMonth() === prevMonth && date.getFullYear() === prevYear && o.status !== "cancelled";
+            })
+            .reduce((sum, o) => sum + o.totalAmount, 0);
+
+        // Prev total sales = all orders before the current month
+        const prevTotalSales = orders
+            .filter(o => {
+                const date = o.createdAt instanceof Date ? o.createdAt : (o.createdAt as unknown as import('firebase-admin/firestore').Timestamp).toDate();
+                return date.getMonth() !== currentMonth && o.status !== "cancelled" && o.status !== "disputed";
+            })
+            .reduce((sum, o) => sum + o.totalAmount, 0);
+
+        // For active listings trend, compare current to 30 days ago snapshot is not feasible without history;
+        // we return 0 so badge is hidden rather than fabricated.
+        const prevActiveListings = 0;
+
         return {
             success: true,
             analytics: {
@@ -751,7 +785,10 @@ export async function getSellerAnalyticsAction() {
                 pendingOrders,
                 monthlyRevenue,
                 conversionRate,
-                averageRating
+                averageRating,
+                prevMonthRevenue,
+                prevTotalSales,
+                prevActiveListings,
             }
         };
     } catch (error: any) {

@@ -32,7 +32,10 @@ export default function SellerAnalyticsPage() {
         pendingOrders: 0,
         monthlyRevenue: 0,
         conversionRate: 0,
-        averageRating: 0
+        averageRating: 0,
+        prevMonthRevenue: 0,
+        prevTotalSales: 0,
+        prevActiveListings: 0,
     });
 
     useEffect(() => {
@@ -40,7 +43,8 @@ export default function SellerAnalyticsPage() {
             try {
                 const result = await getSellerAnalyticsAction();
                 if (result.success && result.analytics) {
-                    setStats(result.analytics);
+                    const defaults = { prevMonthRevenue: 0, prevTotalSales: 0, prevActiveListings: 0 };
+                    setStats({ ...defaults, ...result.analytics });
                 }
             } catch (error) {
                 logger.error("Failed to load analytics:", error);
@@ -82,10 +86,17 @@ export default function SellerAnalyticsPage() {
                             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                                 <DollarSign className="w-6 h-6 text-green-600" />
                             </div>
-                            <span className="flex items-center text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-lg">
-                                <ArrowUpRight className="w-4 h-4 mr-1" />
-                                +12.5%
-                            </span>
+                            {stats.prevTotalSales > 0 && (() => {
+                                const pct = ((stats.totalSales - stats.prevTotalSales) / stats.prevTotalSales * 100).toFixed(1);
+                                const isUp = stats.totalSales >= stats.prevTotalSales;
+                                return (
+                                    <span className={`flex items-center text-sm font-semibold px-2 py-1 rounded-lg ${isUp ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
+                                        }`}>
+                                        {isUp ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
+                                        {isUp ? "+" : ""}{pct}%
+                                    </span>
+                                );
+                            })()}
                         </div>
                         <p className="text-sm text-slate-500 mb-1">Total Sales</p>
                         <h3 className="text-2xl font-bold text-slate-900">
@@ -99,10 +110,17 @@ export default function SellerAnalyticsPage() {
                             <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                                 <Calendar className="w-6 h-6 text-blue-600" />
                             </div>
-                            <span className="flex items-center text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-lg">
-                                <ArrowUpRight className="w-4 h-4 mr-1" />
-                                +8.2%
-                            </span>
+                            {stats.prevMonthRevenue > 0 && (() => {
+                                const pct = ((stats.monthlyRevenue - stats.prevMonthRevenue) / stats.prevMonthRevenue * 100).toFixed(1);
+                                const isUp = stats.monthlyRevenue >= stats.prevMonthRevenue;
+                                return (
+                                    <span className={`flex items-center text-sm font-semibold px-2 py-1 rounded-lg ${isUp ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
+                                        }`}>
+                                        {isUp ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
+                                        {isUp ? "+" : ""}{pct}%
+                                    </span>
+                                );
+                            })()}
                         </div>
                         <p className="text-sm text-slate-500 mb-1">This Month</p>
                         <h3 className="text-2xl font-bold text-slate-900">
@@ -132,10 +150,17 @@ export default function SellerAnalyticsPage() {
                             <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
                                 <BarChart3 className="w-6 h-6 text-orange-600" />
                             </div>
-                            <span className="flex items-center text-sm font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-lg">
-                                <ArrowUpRight className="w-4 h-4 mr-1" />
-                                +2
-                            </span>
+                            {stats.prevActiveListings > 0 && (() => {
+                                const diff = stats.activeListings - stats.prevActiveListings;
+                                const isUp = diff >= 0;
+                                return (
+                                    <span className={`flex items-center text-sm font-semibold px-2 py-1 rounded-lg ${isUp ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"
+                                        }`}>
+                                        {isUp ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
+                                        {isUp ? "+" : ""}{diff}
+                                    </span>
+                                );
+                            })()}
                         </div>
                         <p className="text-sm text-slate-500 mb-1">Active Listings</p>
                         <h3 className="text-2xl font-bold text-slate-900">

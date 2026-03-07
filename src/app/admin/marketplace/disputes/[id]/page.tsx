@@ -7,16 +7,17 @@ import {
     Package,
     AlertTriangle,
     User,
-    Calendar,
     FileText,
     CheckCircle,
     Loader2,
+    ShieldCheck,
 } from "lucide-react";
 import {
     getDisputeByIdAction,
     updateDisputeStatusAction,
 } from "@/app/actions/disputes";
 import { getOrderByIdAction } from "@/app/actions/orders";
+import { getEscrowTransactionByIdAction } from "@/app/actions/escrow";
 import type { Dispute, Order, DisputeResolution } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
@@ -40,7 +41,10 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     const { showToast } = useToast();
 
     const [dispute, setDispute] = useState<Dispute | null>(null);
+    /** Order linked to this dispute — null for escrow-origin disputes */
     const [order, setOrder] = useState<Order | null>(null);
+    /** Escrow transaction data — set when orderId is absent */
+    const [escrowData, setEscrowData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [resolving, setResolving] = useState(false);
     const [showResolutionModal, setShowResolutionModal] = useState(false);
@@ -65,13 +69,21 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
             }
 
             setDispute(disputeResult.dispute);
+            const d = disputeResult.dispute;
 
-            // Load order
-            if (disputeResult.dispute.orderId) {
-                const orderResult = await getOrderByIdAction(disputeResult.dispute.orderId);
+            if (d.orderId) {
+                // ── Marketplace order-origin dispute ──────────────────────
+                const orderResult = await getOrderByIdAction(d.orderId);
                 if (orderResult.success && orderResult.order) {
                     setOrder(orderResult.order);
                     setRefundAmount(orderResult.order.totalAmount.toString());
+                }
+            } else if (d.escrowId) {
+                // ── Escrow-origin dispute (standalone escrow) ─────────────
+                const escrowResult = await getEscrowTransactionByIdAction(d.escrowId);
+                if (escrowResult.success && escrowResult.data) {
+                    setEscrowData(escrowResult.data);
+                    setRefundAmount(String(escrowResult.data.amount ?? 0));
                 }
             }
         } catch (error) {
@@ -118,10 +130,16 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
         );
     }
 
-    if (!dispute || !order) return null;
+    // Guard: dispute must exist; order OR escrowData must be set (but not necessarily both)
+    if (!dispute) return null;
+
+    const contextAmount = order?.totalAmount ?? escrowData?.amount ?? 0;
+    const isEscrowDispute = !dispute.orderId && !!dispute.escrowId;
 
     const daysAgo = Math.floor(
-        (Date.now() - new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate() : dispute.createdAt as unknown as Date | number | string).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate
+            ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate()
+            : dispute.createdAt as unknown as Date | number | string).getTime()) / (1000 * 60 * 60 * 24)
     );
 
     return (
@@ -153,56 +171,87 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                         >
                             {dispute.status.replace("_", " ").toUpperCase()}
                         </span>
+                        {isEscrowDispute && (
+                            <span className="px-3 py-1 rounded-xl font-semibold text-xs bg-purple-100 text-purple-800 flex items-center gap-1">
+                                <ShieldCheck className="w-3 h-3" /> Escrow Dispute
+                            </span>
+                        )}
                     </div>
                     <p className="text-gray-600">
                         Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago •{" "}
-                        {new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate() : dispute.createdAt as unknown as Date | number | string).toLocaleString()}
+                        {new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate
+                            ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate()
+                            : dispute.createdAt as unknown as Date | number | string).toLocaleString()}
                     </p>
                 </div>
 
-                {/* Order Information */}
+                {/* Context Card: Order or Escrow */}
                 <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                        <Package className="w-6 h-6 text-primary" />
-                        Order Information
+                        {isEscrowDispute
+                            ? <><ShieldCheck className="w-6 h-6 text-primary" /> Escrow Transaction</>
+                            : <><Package className="w-6 h-6 text-primary" /> Order Information</>
+                        }
                     </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <p className="text-sm text-gray-600 mb-1">Order Number</p>
-                            <p className="font-semibold text-gray-900">{order.orderNumber}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-600 mb-1">Order Date</p>
-                            <p className="text-gray-900">
-                                {new Date(order.createdAt).toLocaleDateString()}
-                            </p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-600 mb-1">Total Amount</p>
-                            <p className="font-bold text-primary text-lg">{formatCurrency(order.totalAmount)}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-600 mb-1">Order Status</p>
-                            <p className="capitalize text-gray-900">{order.status.replace("_", " ")}</p>
-                        </div>
-                    </div>
 
-                    {/* Order Items */}
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                        <p className="text-sm font-semibold text-gray-700 mb-2">Order Items</p>
-                        <div className="space-y-2">
-                            {order.items.map((item, idx) => (
-                                <div key={idx} className="flex justify-between text-sm">
-                                    <span className="text-gray-900">
-                                        {item.productTitle} × {item.quantity}
-                                    </span>
-                                    <span className="font-semibold text-gray-900">
-                                        {formatCurrency(item.totalPrice)}
-                                    </span>
+                    {order && (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">Order Number</p>
+                                    <p className="font-semibold text-gray-900">{order.orderNumber}</p>
                                 </div>
-                            ))}
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">Order Date</p>
+                                    <p className="text-gray-900">{new Date(order.createdAt).toLocaleDateString()}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">Total Amount</p>
+                                    <p className="font-bold text-primary text-lg">{formatCurrency(order.totalAmount)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">Order Status</p>
+                                    <p className="capitalize text-gray-900">{order.status.replace("_", " ")}</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                                <p className="text-sm font-semibold text-gray-700 mb-2">Order Items</p>
+                                <div className="space-y-2">
+                                    {order.items.map((item, idx) => (
+                                        <div key={idx} className="flex justify-between text-sm">
+                                            <span className="text-gray-900">{item.productTitle} × {item.quantity}</span>
+                                            <span className="font-semibold text-gray-900">{formatCurrency(item.totalPrice)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {isEscrowDispute && escrowData && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <p className="text-sm text-gray-600 mb-1">Product</p>
+                                <p className="font-semibold text-gray-900">{escrowData.productName ?? "—"}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600 mb-1">Escrow Amount</p>
+                                <p className="font-bold text-primary text-lg">{formatCurrency(escrowData.amount ?? 0)}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600 mb-1">Escrow Status</p>
+                                <p className="capitalize text-gray-900">{escrowData.status?.replace(/_/g, " ")}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600 mb-1">Payment Reference</p>
+                                <p className="font-mono text-gray-900 text-sm">{escrowData.paymentReference ?? "—"}</p>
+                            </div>
                         </div>
-                    </div>
+                    )}
+
+                    {isEscrowDispute && !escrowData && (
+                        <p className="text-sm text-gray-400 italic">Escrow transaction data unavailable.</p>
+                    )}
                 </div>
 
                 {/* Dispute Details */}
@@ -251,17 +300,17 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                     <div className="bg-white rounded-2xl shadow-lg p-6">
                         <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
                             <User className="w-5 h-5 text-primary" />
-                            Buyer
+                            {isEscrowDispute ? "Initiator" : "Buyer"}
                         </h3>
-                        <p className="text-sm text-gray-600">ID: {dispute.buyerId}</p>
+                        <p className="text-sm text-gray-600">ID: {dispute.buyerId ?? dispute.initiatorId ?? "—"}</p>
                     </div>
 
                     <div className="bg-white rounded-2xl shadow-lg p-6">
                         <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
                             <User className="w-5 h-5 text-primary" />
-                            Seller
+                            {isEscrowDispute ? "Respondent" : "Seller"}
                         </h3>
-                        <p className="text-sm text-gray-600">ID: {dispute.sellerId}</p>
+                        <p className="text-sm text-gray-600">ID: {dispute.sellerId ?? dispute.respondentId ?? "—"}</p>
                     </div>
                 </div>
 
@@ -280,7 +329,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                     <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
                         <h3 className="font-bold text-green-900 mb-2">Dispute Resolved</h3>
                         <p className="text-sm text-green-800 mb-2">
-                            Resolution: {dispute.resolution?.replace("_", " ").toUpperCase()}
+                            Resolution: {dispute.resolution?.replace(/_/g, " ").toUpperCase()}
                         </p>
                         {dispute.adminNotes && (
                             <>
@@ -343,7 +392,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                                         placeholder="Enter refund amount"
                                     />
                                     <p className="text-sm text-gray-500 mt-1">
-                                        Order total: {formatCurrency(order.totalAmount)}
+                                        {isEscrowDispute ? "Escrow" : "Order"} total: {formatCurrency(contextAmount)}
                                     </p>
                                 </div>
                             )}

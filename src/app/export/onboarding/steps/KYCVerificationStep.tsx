@@ -1,15 +1,19 @@
 /**
  * KYC Verification Step
- * 
- * Second step - identity verification with document upload
+ *
+ * Second step — identity verification with document upload.
+ * Personal info is saved to Firestore via saveKYCProfileAction.
+ * BVN / NIN are verified inline in KYCForm, results persist automatically.
  */
 
-"use client";
+'use client';
 
-import { useState } from "react";
-import { KYCForm, KYCData } from "@/components/onboarding/KYCForm";
-import { DocumentUpload } from "@/components/onboarding/DocumentUpload";
-import { useToast } from "@/contexts/ToastContext";
+import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { KYCForm, KYCData } from '@/components/onboarding/KYCForm';
+import { DocumentUpload } from '@/components/onboarding/DocumentUpload';
+import { useToast } from '@/contexts/ToastContext';
+import { saveKYCProfileAction } from '@/app/actions/kyc';
 
 interface KYCVerificationStepProps {
     onNext: (data: any) => void;
@@ -25,10 +29,11 @@ export function KYCVerificationStep({
     const [kycData, setKycData] = useState<Partial<KYCData>>(initialData?.kycData || {});
     const [idDocument, setIdDocument] = useState<File | null>(null);
     const [proofOfAddress, setProofOfAddress] = useState<File | null>(null);
+    const [saving, setSaving] = useState(false);
     const { showToast } = useToast();
 
-    const handleSubmit = () => {
-        // Validate KYC data (BVN and ID number are now optional — admin-reviewed)
+    const handleSubmit = async () => {
+        // Validate required personal info fields
         if (
             !kycData.fullName ||
             !kycData.dateOfBirth ||
@@ -37,18 +42,45 @@ export function KYCVerificationStep({
             !kycData.city ||
             !kycData.state
         ) {
-            showToast("Please fill in all required fields", "error");
+            showToast('Please fill in all required fields', 'error');
+            return;
+        }
+
+        // Require at least one verified ID (NIN is primary)
+        if (!kycData.ninVerified && !kycData.bvnVerified) {
+            showToast('Please verify your NIN (or BVN) before continuing', 'error');
             return;
         }
 
         // Validate documents
         if (!idDocument) {
-            showToast("Please upload your government-issued ID", "error");
+            showToast('Please upload your government-issued ID', 'error');
             return;
         }
 
         if (!proofOfAddress) {
-            showToast("Please upload proof of address", "error");
+            showToast('Please upload proof of address', 'error');
+            return;
+        }
+
+        setSaving(true);
+
+        // Persist KYC profile fields to Firestore
+        const saveResult = await saveKYCProfileAction({
+            fullName: kycData.fullName!,
+            dateOfBirth: kycData.dateOfBirth!,
+            phoneNumber: kycData.phoneNumber!,
+            address: kycData.address!,
+            city: kycData.city!,
+            state: kycData.state!,
+            idType: kycData.idType,
+            idNumber: kycData.idNumber,
+        });
+
+        setSaving(false);
+
+        if (!saveResult.success) {
+            showToast(saveResult.error || 'Failed to save KYC data. Please try again.', 'error');
             return;
         }
 
@@ -56,8 +88,8 @@ export function KYCVerificationStep({
             kyc: {
                 kycData,
                 documents: {
-                    idDocument: idDocument,
-                    proofOfAddress: proofOfAddress,
+                    idDocument,
+                    proofOfAddress,
                 },
             },
         });
@@ -75,7 +107,7 @@ export function KYCVerificationStep({
             </div>
 
             <div className="space-y-8">
-                {/* KYC Form */}
+                {/* KYC Form with live BVN/NIN verification */}
                 <div>
                     <h3 className="text-lg font-semibold text-slate-900 mb-4">
                         Personal Information
@@ -95,7 +127,7 @@ export function KYCVerificationStep({
                     <div className="space-y-6">
                         <DocumentUpload
                             label="Government-Issued ID"
-                            description="Upload a clear photo of your NIN, Driver's License, or International Passport"
+                            description="Upload a clear photo of your NIN slip, Driver's License, or International Passport"
                             accept="image/*,.pdf"
                             required
                             onChange={(file) => setIdDocument(file)}
@@ -113,28 +145,25 @@ export function KYCVerificationStep({
                     </div>
                 </div>
 
-                {/* Info Banner */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <p className="text-sm text-blue-900">
-                        <strong>Why do we need this?</strong> Your information is used to comply with
-                        financial regulations and protect you from fraud. All data is encrypted and
-                        stored securely.
-                    </p>
-                </div>
-
                 {/* Navigation Buttons */}
                 <div className="flex justify-between pt-4">
                     <button
                         onClick={onBack}
-                        className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-lg hover:bg-slate-100 transition-colors font-semibold"
+                        disabled={saving}
+                        className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-lg hover:bg-slate-100 transition-colors font-semibold disabled:opacity-50"
                     >
                         Back
                     </button>
                     <button
                         onClick={handleSubmit}
-                        className="px-8 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+                        disabled={saving}
+                        className="px-8 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold disabled:opacity-60 flex items-center gap-2"
                     >
-                        Continue to Bank Account
+                        {saving ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+                        ) : (
+                            'Continue to Bank Account'
+                        )}
                     </button>
                 </div>
             </div>
