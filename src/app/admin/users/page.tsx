@@ -21,6 +21,9 @@ interface User {
     bankDetails?: any;
     bvn?: string;
     bvnVerified?: boolean;
+    nin?: string;
+    ninVerified?: boolean;
+    kycStatus?: string;
     idType?: string;
     taxId?: string;
     tinVerified?: boolean;
@@ -151,8 +154,9 @@ export default function AdminUsersPage() {
         if (users.length === 0) return;
         const headers = [
             "Name", "Email", "Phone", "Role", "Verified",
-            "BVN", "BVN Verified", "TIN", "TIN Verified",
-            "CAC", "CAC Verified", "State", "LGA", "Date Joined"
+            "BVN", "BVN Verified", "NIN", "NIN Verified",
+            "TIN", "TIN Verified", "CAC", "CAC Verified",
+            "KYC Status", "State", "LGA", "Date Joined"
         ];
         const rows = users.map(u => [
             u.name || "",
@@ -162,10 +166,13 @@ export default function AdminUsersPage() {
             u.isVerified ? "Yes" : "No",
             u.bvn ? "Provided" : "No",
             u.bvnVerified ? "Yes" : "No",
+            u.nin ? "Provided" : "No",
+            u.ninVerified ? "Yes" : "No",
             u.taxId ? "Provided" : "No",
             u.tinVerified ? "Yes" : "No",
             u.cacNumber ? "Provided" : "No",
             u.cacVerified ? "Yes" : "No",
+            u.kycStatus || "pending",
             u.state || "",
             u.lga || "",
             formatDate(u.createdAt),
@@ -226,18 +233,32 @@ export default function AdminUsersPage() {
         {
             header: "KYC",
             accessor: (user: User) => (
-                <div className="flex gap-1.5 flex-wrap w-24">
-                    {user.bvn && (
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.bvnVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} title="BVN">BVN</span>
+                <div className="flex gap-1.5 flex-wrap w-32">
+                    {/* NIN badge */}
+                    {user.nin ? (
+                        <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.ninVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                }`}
+                            title={`NIN: ${user.ninVerified ? 'Verified' : 'Pending'}`}
+                        >NIN</span>
+                    ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-400" title="NIN not provided">NIN</span>
+                    )}
+                    {/* BVN badge */}
+                    {user.bvn ? (
+                        <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.bvnVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                }`}
+                            title={`BVN: ${user.bvnVerified ? 'Verified' : 'Pending'}`}
+                        >BVN</span>
+                    ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-400" title="BVN not provided">BVN</span>
                     )}
                     {user.taxId && (
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.tinVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} title="TIN">TIN</span>
                     )}
                     {user.cacNumber && (
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.cacVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} title="CAC">CAC</span>
-                    )}
-                    {!user.bvn && !user.taxId && !user.cacNumber && (
-                        <span className="text-xs text-slate-400 italic">None</span>
                     )}
                 </div>
             ),
@@ -491,6 +512,7 @@ export default function AdminUsersPage() {
                             <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">KYC Details</h4>
                             <div className="bg-slate-50 p-4 rounded-xl space-y-3 text-sm text-slate-800">
                                 {[
+                                    { key: "nin", label: "NIN", value: selectedUserForModal.nin, verified: selectedUserForModal.ninVerified },
                                     { key: "bvn", label: "BVN", value: selectedUserForModal.bvn, verified: selectedUserForModal.bvnVerified },
                                     { key: "tin", label: "TIN", value: selectedUserForModal.taxId, verified: selectedUserForModal.tinVerified },
                                     { key: "cac", label: "CAC", value: selectedUserForModal.cacNumber, verified: selectedUserForModal.cacVerified },
@@ -499,7 +521,7 @@ export default function AdminUsersPage() {
                                         <div className="flex flex-col">
                                             <span className="font-semibold text-slate-600">{item.label}:</span>
                                             <span className={item.value ? "font-mono font-medium" : "text-slate-400 italic"}>
-                                                {item.value || "Not provided"}
+                                                {item.value ? `${item.value.slice(0, 4)}${'*'.repeat(Math.max(0, item.value.length - 4))}` : "Not provided"}
                                             </span>
                                             {item.key === "bvn" && selectedUserForModal.idType && (
                                                 <span className="text-xs text-slate-500 uppercase">ID Type: {selectedUserForModal.idType}</span>
@@ -518,11 +540,14 @@ export default function AdminUsersPage() {
                                                             setKycProcessingId(pId);
                                                             const result = await toggleUserKycVerificationAction(
                                                                 selectedUserForModal.id,
-                                                                item.key as "bvn" | "tin" | "cac",
+                                                                item.key as 'bvn' | 'nin' | 'tin' | 'cac',
                                                                 !!item.verified
                                                             );
                                                             if (result.success) {
-                                                                const verifyField = item.key === 'bvn' ? 'bvnVerified' : item.key === 'tin' ? 'tinVerified' : 'cacVerified';
+                                                                const verifyField =
+                                                                    item.key === 'nin' ? 'ninVerified' :
+                                                                        item.key === 'bvn' ? 'bvnVerified' :
+                                                                            item.key === 'tin' ? 'tinVerified' : 'cacVerified';
                                                                 const updatedUser = { ...selectedUserForModal, [verifyField]: !item.verified };
                                                                 setSelectedUserForModal(updatedUser as User);
                                                                 setData(prev => prev.map(u => u.id === selectedUserForModal.id ? updatedUser as User : u));

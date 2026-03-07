@@ -24,9 +24,11 @@ export type AuditAction =
     | "user_role_update"
     | "user_delete"
     | "user_kyc_verify_bvn"
+    | "user_kyc_verify_nin"
     | "user_kyc_verify_tin"
     | "user_kyc_verify_cac"
     | "user_kyc_unverify_bvn"
+    | "user_kyc_unverify_nin"
     | "user_kyc_unverify_tin"
     | "user_kyc_unverify_cac"
     | "account_unlock"
@@ -119,8 +121,8 @@ export async function getAuditLogsAction(
 ): Promise<GetAuditLogsState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return null as any;
+        const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized: Admin access required", success: false, data: null };
         }

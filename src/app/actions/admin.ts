@@ -474,7 +474,7 @@ export async function toggleUserVerificationAction(
 
 export async function toggleUserKycVerificationAction(
     userId: string,
-    field: "bvn" | "tin" | "cac",
+    field: 'bvn' | 'nin' | 'tin' | 'cac',
     currentStatus: boolean
 ): Promise<ActionState> {
     try {
@@ -499,17 +499,41 @@ export async function toggleUserKycVerificationAction(
         }
 
         const newVerificationStatus = !currentStatus;
-        const verificationFieldMap = {
-            "bvn": "bvnVerified",
-            "tin": "tinVerified",
-            "cac": "cacVerified"
-        };
-        const targetField = verificationFieldMap[field];
 
-        await userRef.update({
-            [targetField]: newVerificationStatus,
+        // Map to both nested kyc.* paths (new) and top-level fields (legacy compatibility)
+        const nestedFieldMap: Record<string, string> = {
+            bvn: 'kyc.bvnVerified',
+            nin: 'kyc.ninVerified',
+            tin: 'tinVerified',
+            cac: 'cacVerified',
+        };
+        const legacyFieldMap: Record<string, string> = {
+            bvn: 'bvnVerified',
+            nin: 'ninVerified',
+            tin: 'tinVerified',
+            cac: 'cacVerified',
+        };
+        const nestedField = nestedFieldMap[field];
+        const legacyField = legacyFieldMap[field];
+        const statusField = field === 'bvn' ? 'kyc.bvnStatus' : field === 'nin' ? 'kyc.ninStatus' : null;
+
+        const updatePayload: Record<string, any> = {
+            [nestedField]: newVerificationStatus,
+            [legacyField]: newVerificationStatus,
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        };
+        if (statusField) {
+            updatePayload[statusField] = newVerificationStatus ? 'verified' : 'unverified';
+        }
+        // Also update overall kyc.status when BVN or NIN changes
+        if (field === 'bvn' || field === 'nin') {
+            const snap = await userRef.get();
+            const otherVerified = snap.data()?.kyc?.[field === 'bvn' ? 'ninVerified' : 'bvnVerified'] ?? false;
+            updatePayload['kyc.status'] = (newVerificationStatus && otherVerified) ? 'verified' : 'pending';
+            updatePayload['kycVerified'] = newVerificationStatus && otherVerified;
+        }
+
+        await userRef.update(updatePayload);
 
         // CLEAR CACHE
         try {
@@ -1429,14 +1453,20 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 address: data.address,
                 state: data.address?.state || "",
                 lga: data.address?.lga || "",
-                // KYC fields
-                bvn: data.bvn,
-                bvnVerified: data.bvnVerified,
+                // KYC fields — prefer nested kyc.* (written by live QoreID actions),
+                // fall back to legacy top-level fields for existing records
+                bvn: data.kyc?.bvn || data.bvn,
+                bvnVerified: data.kyc?.bvnVerified ?? data.bvnVerified ?? false,
+                bvnStatus: data.kyc?.bvnStatus || (data.bvnVerified ? 'verified' : undefined),
+                nin: data.kyc?.nin || data.nin,
+                ninVerified: data.kyc?.ninVerified ?? data.ninVerified ?? false,
+                ninStatus: data.kyc?.ninStatus || (data.ninVerified ? 'verified' : undefined),
+                kycStatus: data.kyc?.status || data.kycStatus || 'pending',
                 taxId: data.taxId,
                 tinVerified: data.tinVerified,
                 cacNumber: data.cacNumber,
                 cacVerified: data.cacVerified,
-                idType: data.idType,
+                idType: data.kyc?.idType || data.idType,
                 // Other
                 bankDetails: data.bankDetails,
                 metadata: data.metadata,

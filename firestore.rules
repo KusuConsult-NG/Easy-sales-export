@@ -41,9 +41,11 @@ service cloud.firestore {
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                          'fullName', 'phone', 'address', 'businessType', 'updatedAt',
-                         // KYC / Identity fields (collected, not verified client-side)
+                         // KYC / Identity fields (collected or live-verified)
                          'nin', 'ninVerified', 'votersCardNumber',
                          'bvn', 'bvnVerified', 'idType', 'idNumber', 'idVerified',
+                         // Nested KYC map (written by live QoreID server actions)
+                         'kyc',
                          // Bank details
                          'bankDetails', 'bankAccountNumber', 'bankAccountName', 'bankCode',
                          // Notification preferences
