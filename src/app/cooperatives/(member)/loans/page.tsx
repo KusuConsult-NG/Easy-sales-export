@@ -1,5 +1,3 @@
-// ... (This is just a placeholder, I will use the actual content in the tool call)
-
 "use client";
 
 import { useEffect, useState } from "react";

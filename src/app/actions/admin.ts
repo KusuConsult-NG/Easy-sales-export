@@ -2009,7 +2009,39 @@ export async function approveAcademyApplicationAction(
             logger.error('[Academy Approval] Cache clear error:', cacheError);
         }
 
-        // 4. Send Email (Optional/TODO)
+        // 4. Send Approval Email
+        if (userEmail && process.env.RESEND_API_KEY) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                await resend.emails.send({
+                    from: "Easy Sales Export Academy <noreply@easysalesexport.com>",
+                    to: userEmail,
+                    subject: "🎓 Academy Application Approved!",
+                    html: `
+                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+                            <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;border-radius:12px 12px 0 0;text-align:center;">
+                                <h1 style="color:white;margin:0;font-size:24px;">Welcome to the Academy!</h1>
+                            </div>
+                            <div style="padding:32px;background:#fff;border:1px solid #e5e7eb;border-radius:0 0 12px 12px;">
+                                <h2 style="color:#7c3aed;">Application Approved ✅</h2>
+                                <p>Congratulations! Your application to the Easy Sales Export Academy has been <strong>approved</strong>.</p>
+                                <p>You now have full access to Academy training resources, live sessions, and certification programs.</p>
+                                <div style="text-align:center;margin:24px 0;">
+                                    <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/academy/dashboard"
+                                       style="background:#7c3aed;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">
+                                        Go to Academy Dashboard
+                                    </a>
+                                </div>
+                                <p style="color:#6b7280;font-size:14px;">Easy Sales Export Academy Team</p>
+                            </div>
+                        </div>
+                    `
+                });
+            } catch (emailError) {
+                logger.error("Failed to send Academy approval email:", emailError);
+            }
+        }
 
         // 5. Audit
         await logAuditAction("academy_approve", applicationId, "application", {
