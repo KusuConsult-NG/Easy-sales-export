@@ -1,408 +1,113 @@
-"use client";
+/**
+ * Admin Communications Hub
+ * /admin/communications
+ *
+ * Entry point for all admin communication tools.
+ */
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import {
-    ArrowLeft,
-    Mail,
-    Bell,
-    Megaphone,
-    Send,
-    Users,
-    Filter,
-    Clock,
-    CheckCircle,
-} from "lucide-react";
-import { sendBulkEmailAction, createAnnouncementAction, getEmailHistoryAction } from "@/app/actions/admin-communications";
-import { useToast } from "@/contexts/ToastContext";
+import { Mail, History, Megaphone, Users, BarChart3 } from "lucide-react";
 
 export default function AdminCommunicationsPage() {
-    const { showToast } = useToast();
-    const [activeTab, setActiveTab] = useState("email");
-    const [emailRecipients, setEmailRecipients] = useState("all");
-    const [emailSubject, setEmailSubject] = useState("");
-    const [emailBody, setEmailBody] = useState("");
-    const [announcementTitle, setAnnouncementTitle] = useState("");
-    const [announcementMessage, setAnnouncementMessage] = useState("");
-    const [announcementPriority, setAnnouncementPriority] = useState("info");
-    const [sending, setSending] = useState(false);
-    const [emailHistory, setEmailHistory] = useState<any[]>([]);
-    const [historyLoading, setHistoryLoading] = useState(false);
+    const cards = [
+        {
+            title: "Send Broadcast",
+            description: "Compose and send an email to selected user groups with audience filters",
+            icon: Megaphone,
+            href: "/admin/communications/broadcast",
+            color: "text-green-600",
+            bg: "bg-green-100",
+            badge: "Email",
+            badgeColor: "bg-green-600",
+        },
+        {
+            title: "Broadcast History",
+            description: "View all past broadcasts, recipient counts, and delivery stats",
+            icon: History,
+            href: "/admin/communications/history",
+            color: "text-slate-600",
+            bg: "bg-slate-100",
+            badge: "Logs",
+            badgeColor: "bg-slate-600",
+        },
+    ];
 
-    const handleSendEmail = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!emailSubject.trim() || !emailBody.trim()) {
-            showToast("Subject and message are required", "error");
-            return;
-        }
-        setSending(true);
-
-        const formData = new FormData();
-        formData.append('recipients', emailRecipients);
-        formData.append('subject', emailSubject);
-        formData.append('body', emailBody);
-
-        const result = await sendBulkEmailAction({ success: false }, formData);
-
-        if (result.success) {
-            showToast(`Email sent to ${result.recipientCount} recipients!`, 'success');
-            setEmailSubject("");
-            setEmailBody("");
-            // Refresh history if on history tab
-            if (activeTab === "history") loadEmailHistory();
-        } else {
-            showToast(result.error || 'Failed to send email', 'error');
-        }
-
-        setSending(false);
-    };
-
-    const handleCreateAnnouncement = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!announcementTitle.trim() || !announcementMessage.trim()) {
-            showToast("Title and message are required", "error");
-            return;
-        }
-        setSending(true);
-
-        const formData = new FormData();
-        formData.append('title', announcementTitle);
-        formData.append('message', announcementMessage);
-        formData.append('priority', announcementPriority);
-
-        const result = await createAnnouncementAction({ success: false }, formData);
-
-        if (result.success) {
-            showToast('Announcement created successfully!', 'success');
-            setAnnouncementTitle("");
-            setAnnouncementMessage("");
-        } else {
-            showToast(result.error || 'Failed to create announcement', 'error');
-        }
-
-        setSending(false);
-    };
-
-    const loadEmailHistory = async () => {
-        setHistoryLoading(true);
-        try {
-            const result = await getEmailHistoryAction();
-            if (result.success) setEmailHistory(result.history || []);
-        } catch {
-            // non-blocking
-        } finally {
-            setHistoryLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (activeTab === "history") loadEmailHistory();
-    }, [activeTab]);
+    const audienceCards = [
+        { label: "All Users", desc: "Every registered user on the platform" },
+        { label: "Buyers", desc: "Users onboarded as marketplace buyers" },
+        { label: "Sellers", desc: "Approved marketplace sellers" },
+        { label: "Wholesale / Retail", desc: "Filter sellers by category" },
+        { label: "Cooperative Members", desc: "Active cooperative members" },
+        { label: "WAVE Applicants", desc: "WAVE program registrants" },
+    ];
 
     return (
-        <div className="min-h-screen bg-slate-50 p-8">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="mb-8">
-                    <Link
-                        href="/admin"
-                        className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Admin Dashboard
-                    </Link>
-                    <h1 className="text-4xl font-bold text-slate-900 mb-2">
-                        Communications Center
-                    </h1>
-                    <p className="text-slate-600">
-                        Send emails, create announcements, and manage notifications
-                    </p>
+        <div className="min-h-screen bg-slate-50">
+            {/* Header */}
+            <div className="bg-white border-b border-slate-200">
+                <div className="max-w-6xl mx-auto px-8 py-8">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-green-100 flex items-center justify-center">
+                            <Mail className="w-7 h-7 text-green-700" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Communications</h1>
+                            <p className="text-slate-500 mt-0.5">Send email broadcasts to your platform users</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-6xl mx-auto px-8 py-10 space-y-10">
+                {/* Action Cards */}
+                <div>
+                    <h2 className="text-lg font-bold text-slate-800 mb-4">Actions</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {cards.map((card) => {
+                            const Icon = card.icon;
+                            return (
+                                <Link
+                                    key={card.href}
+                                    href={card.href}
+                                    className="group bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md hover:border-slate-300 transition-all flex items-start gap-5"
+                                >
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${card.bg}`}>
+                                        <Icon className={`w-6 h-6 ${card.color}`} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h3 className="font-bold text-slate-900 group-hover:text-green-700 transition">{card.title}</h3>
+                                            <span className={`px-2 py-0.5 text-xs font-bold text-white rounded-full ${card.badgeColor}`}>
+                                                {card.badge}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-slate-500">{card.description}</p>
+                                    </div>
+                                </Link>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="bg-white rounded-2xl shadow-lg mb-6">
-                    <div className="grid grid-cols-3 border-b border-slate-200">
-                        <button
-                            onClick={() => setActiveTab("email")}
-                            className={`flex items-center justify-center gap-2 py-4 font-semibold transition ${activeTab === "email"
-                                ? "text-blue-600 border-b-2 border-blue-600"
-                                : "text-slate-600 hover:text-slate-900"
-                                }`}
-                        >
-                            <Mail className="w-5 h-5" />
-                            Email Composer
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("announcement")}
-                            className={`flex items-center justify-center gap-2 py-4 font-semibold transition ${activeTab === "announcement"
-                                ? "text-blue-600 border-b-2 border-blue-600"
-                                : "text-slate-600 hover:text-slate-900"
-                                }`}
-                        >
-                            <Megaphone className="w-5 h-5" />
-                            Announcements
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("history")}
-                            className={`flex items-center justify-center gap-2 py-4 font-semibold transition ${activeTab === "history"
-                                ? "text-blue-600 border-b-2 border-blue-600"
-                                : "text-slate-600 hover:text-slate-900"
-                                }`}
-                        >
-                            <Clock className="w-5 h-5" />
-                            Send History
-                        </button>
+                {/* Audience overview */}
+                <div>
+                    <h2 className="text-lg font-bold text-slate-800 mb-4">Available Audience Segments</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {audienceCards.map((a) => (
+                            <div key={a.label} className="bg-white border border-slate-200 rounded-xl p-4">
+                                <p className="font-semibold text-slate-900 text-sm">{a.label}</p>
+                                <p className="text-xs text-slate-500 mt-0.5">{a.desc}</p>
+                            </div>
+                        ))}
                     </div>
+                </div>
 
-                    <div className="p-8">
-                        {/* Email Tab */}
-                        {activeTab === "email" && (
-                            <div className="space-y-6">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-4">
-                                        Compose Email
-                                    </h2>
-                                    <p className="text-slate-600 mb-6">
-                                        Send emails to users or specific segments
-                                    </p>
-                                </div>
-
-                                {/* Recipients */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Recipients
-                                    </label>
-                                    <select
-                                        value={emailRecipients}
-                                        onChange={(e) => setEmailRecipients(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-600"
-                                    >
-                                        <option value="all">All Users</option>
-                                        <option value="active">Active Users (30 days)</option>
-                                        <option value="verified">Verified Users</option>
-                                        <option value="cooperative">Cooperative Members</option>
-                                        <option value="wave">WAVE Members</option>
-                                        <option value="sellers">Marketplace Sellers</option>
-                                        <option value="custom">Custom List (CSV)</option>
-                                    </select>
-                                </div>
-
-                                {/* Subject */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Subject
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={emailSubject}
-                                        onChange={(e) => setEmailSubject(e.target.value)}
-                                        placeholder="Enter email subject..."
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-600"
-                                    />
-                                </div>
-
-                                {/* Body */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Message
-                                    </label>
-                                    <textarea
-                                        value={emailBody}
-                                        onChange={(e) => setEmailBody(e.target.value)}
-                                        placeholder="Compose your message..."
-                                        rows={10}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-600 resize-none"
-                                    />
-                                    <p className="text-xs text-slate-500 mt-2">
-                                        Supports HTML formatting
-                                    </p>
-                                </div>
-
-                                {/* Send Button */}
-                                <div className="flex items-center gap-4">
-                                    <button
-                                        type="button"
-                                        onClick={handleSendEmail}
-                                        disabled={!emailSubject.trim() || !emailBody.trim() || sending}
-                                        className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-semibold rounded-xl transition"
-                                    >
-                                        {sending ? (
-                                            <>
-                                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                Sending...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Send className="w-5 h-5" />
-                                                Send Email
-                                            </>
-                                        )}
-                                    </button>
-                                    <p className="text-sm text-slate-500">
-                                        Recipients will be fetched from Firestore when sent
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Announcement Tab */}
-                        {activeTab === "announcement" && (
-                            <div className="space-y-6">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-4">
-                                        Create Announcement
-                                    </h2>
-                                    <p className="text-slate-600 mb-6">
-                                        Display important messages on user dashboards
-                                    </p>
-                                </div>
-
-                                {/* Title */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Title
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={announcementTitle}
-                                        onChange={(e) => setAnnouncementTitle(e.target.value)}
-                                        placeholder="Enter announcement title..."
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-600"
-                                    />
-                                </div>
-
-                                {/* Message */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Message
-                                    </label>
-                                    <textarea
-                                        value={announcementMessage}
-                                        onChange={(e) => setAnnouncementMessage(e.target.value)}
-                                        placeholder="Write your announcement..."
-                                        rows={6}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-600 resize-none"
-                                    />
-                                </div>
-
-                                {/* Priority */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Priority
-                                    </label>
-                                    <select
-                                        value={announcementPriority}
-                                        onChange={(e) => setAnnouncementPriority(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-600"
-                                    >
-                                        <option value="info">Info (Blue)</option>
-                                        <option value="warning">Warning (Yellow)</option>
-                                        <option value="important">Important (Red)</option>
-                                        <option value="success">Success (Green)</option>
-                                    </select>
-                                </div>
-
-                                {/* Preview */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Preview
-                                    </label>
-                                    <div
-                                        className={`p-4 rounded-xl border-l-4 ${announcementPriority === "info"
-                                            ? "bg-blue-50 border-blue-600"
-                                            : announcementPriority === "warning"
-                                                ? "bg-yellow-50 border-yellow-600"
-                                                : announcementPriority === "important"
-                                                    ? "bg-red-50 border-red-600"
-                                                    : "bg-green-50 border-green-600"
-                                            }`}
-                                    >
-                                        <h3 className="font-bold text-slate-900 mb-1">
-                                            {announcementTitle || "Announcement Title"}
-                                        </h3>
-                                        <p className="text-sm text-slate-600">
-                                            {announcementMessage || "Announcement message will appear here..."}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Create Button */}
-                                <button
-                                    onClick={handleCreateAnnouncement}
-                                    disabled={!announcementTitle || !announcementMessage || sending}
-                                    className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-400 text-white font-semibold rounded-xl transition"
-                                >
-                                    {sending ? (
-                                        <>
-                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                            Creating...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Megaphone className="w-5 h-5" />
-                                            Create Announcement
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        )}
-
-                        {/* History Tab */}
-                        {activeTab === "history" && (
-                            <div className="space-y-6">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-slate-900 mb-4">
-                                        Communication History
-                                    </h2>
-                                    <p className="text-slate-600 mb-6">
-                                        Past emails sent from this admin panel
-                                    </p>
-                                </div>
-
-                                {historyLoading ? (
-                                    <div className="flex items-center justify-center py-12">
-                                        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                                    </div>
-                                ) : emailHistory.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <Mail className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                                        <p className="text-slate-600">No emails sent yet</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {emailHistory.map((item: any, index: number) => (
-                                            <div
-                                                key={item.id || index}
-                                                className="flex items-center justify-between p-4 bg-slate-50 rounded-xl"
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-100">
-                                                        <Mail className="w-6 h-6 text-blue-600" />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-semibold text-slate-900">
-                                                            {item.subject}
-                                                        </h4>
-                                                        <p className="text-sm text-slate-600">
-                                                            {item.recipients ? `${item.recipients} segment` : "Custom"}
-                                                            {" • "}
-                                                            {item.recipientCount ? `${item.recipientCount} recipients` : ""}
-                                                            {" • "}
-                                                            {item.sentAt
-                                                                ? new Date(item.sentAt).toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "numeric" })
-                                                                : "Unknown date"}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-                                                    {item.status || "Sent"}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                {/* Info note */}
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex gap-3">
+                    <BarChart3 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div className="text-sm text-blue-800">
+                        <p className="font-semibold mb-1">How broadcasts work</p>
+                        <p>Emails are sent in batches of 50 via Resend. Each send is logged in the broadcast history with delivery counts. Large broadcasts may take a few minutes to complete.</p>
                     </div>
                 </div>
             </div>

@@ -36,6 +36,7 @@ export type AuditAction =
     | 'land_inquiry'
     | 'dispute_created'
     | 'dispute_resolved'
+    | 'dispute_escalated'
     | 'announcement_published'
     | 'announcement_created'
     | 'announcement_updated'

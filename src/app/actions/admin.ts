@@ -2352,3 +2352,96 @@ export async function editApplicationAction(params: {
         return { error: "Failed to update application: " + error.message, success: false };
     }
 }
+
+// ============================================
+// Toggle Verified Badge on a Seller
+// ============================================
+
+/**
+ * Grants or revokes the Verified Badge on a seller_verifications document.
+ * Only approved sellers should receive the badge; the UI can enforce this but
+ * the action itself only requires admin permission.
+ */
+export async function toggleVerifiedBadgeAction(
+    verificationId: string
+): Promise<ActionState> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            return { error: "Unauthorized: Permission required - users:update", success: false };
+        }
+
+        const ref = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
+        const snap = await ref.get();
+        if (!snap.exists) {
+            return { error: "Seller verification record not found", success: false };
+        }
+
+        const data = snap.data()!;
+        const newBadgeState = !data.isVerifiedBadge;
+
+        await ref.update({
+            isVerifiedBadge: newBadgeState,
+            badgeGrantedBy: session.user.id,
+            badgeGrantedAt: newBadgeState ? FieldValue.serverTimestamp() : null,
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Also sync badge onto the user's profile document for storefronts to read
+        if (data.userId) {
+            await db.collection(COLLECTIONS.USERS).doc(data.userId).update({
+                isVerifiedBadge: newBadgeState,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        // Optional email notification to seller
+        if (newBadgeState && data.email && process.env.RESEND_API_KEY) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                await resend.emails.send({
+                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    to: data.email,
+                    subject: "🏅 You've earned a Verified Badge!",
+                    html: `
+                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+                          <div style="background:#16a34a;padding:20px 28px">
+                            <h1 style="color:#fff;margin:0;font-size:20px">Easy Sales Export</h1>
+                          </div>
+                          <div style="padding:28px">
+                            <h2 style="color:#111827">Congratulations, ${data.businessName || data.userName}!</h2>
+                            <p style="color:#374151">Your seller account has been awarded the <strong>Verified Badge</strong> on Easy Sales Export. This badge signals trust and credibility to buyers across our marketplace.</p>
+                            <p style="color:#374151">The badge will now appear on your storefront and product listings.</p>
+                            <p style="color:#9ca3af;font-size:12px;margin-top:24px">Easy Sales Export · easysalesexport.com</p>
+                          </div>
+                        </div>`,
+                });
+            } catch (emailErr: unknown) {
+                logger.warn("[toggleVerifiedBadgeAction] Email failed (non-fatal):", { error: String(emailErr) });
+            }
+        }
+
+        // Audit log
+        await logAuditAction(
+            newBadgeState ? "seller_badge_grant" : "seller_badge_revoke",
+            verificationId,
+            "seller_verification",
+            { adminId: session.user.id }
+        );
+
+        return {
+            error: null,
+            success: true,
+            message: newBadgeState
+                ? "Verified Badge granted and seller notified"
+                : "Verified Badge revoked",
+        };
+    } catch (error: any) {
+        logger.error("toggleVerifiedBadgeAction error:", error);
+        return { error: "Failed to update badge: " + error.message, success: false };
+    }
+}
+

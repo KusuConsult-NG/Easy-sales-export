@@ -4,13 +4,14 @@ import { useEffect, useState, useRef } from "react";
 import { logger } from '@/lib/logger';
 import {
     Store, CheckCircle, XCircle, Clock, Search,
-    Eye, FileText, MapPin, CreditCard, Ban, Download, Pencil, X, Save, Loader2
+    Eye, FileText, MapPin, CreditCard, Ban, Download, Pencil, X, Save, Loader2,
+    BadgeCheck, BadgeX
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 import RejectionModal from "@/components/admin/RejectionModal";
-import { editApplicationAction } from "@/app/actions/admin";
+import { editApplicationAction, toggleVerifiedBadgeAction } from "@/app/actions/admin";
 
 type SellerVerification = {
     id: string;
@@ -32,6 +33,10 @@ type SellerVerification = {
     createdAt: Date;
     approvedBy?: string;
     approvedAt?: Date;
+    // Phase 12 new fields
+    sellerCategory?: "wholesale" | "retail";
+    isVerifiedBadge?: boolean;
+    allowsPaymentOnDelivery?: boolean;
 };
 
 type FilterType = "all" | "pending" | "approved" | "rejected";
@@ -56,6 +61,9 @@ export default function AdminSellersPage() {
     const [editDraft, setEditDraft] = useState<Record<string, string>>({});
     const [editNote, setEditNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
+
+    // Badge toggle state
+    const [isBadgeProcessing, setIsBadgeProcessing] = useState(false);
 
     // Real-time listener
     useEffect(() => {
@@ -227,6 +235,28 @@ export default function AdminSellersPage() {
         setEditSaving(false);
     };
 
+    const handleToggleBadge = async (verification: SellerVerification) => {
+        if (verification.status !== "approved") {
+            showToast("Only approved sellers can receive a Verified Badge", "error");
+            return;
+        }
+        const action = verification.isVerifiedBadge ? "revoke" : "grant";
+        if (!confirm(`${action === "grant" ? "Grant" : "Revoke"} Verified Badge for ${verification.businessName}?`)) return;
+        setIsBadgeProcessing(true);
+        try {
+            const result = await toggleVerifiedBadgeAction(verification.id);
+            if (result.success) {
+                showToast(result.message || `Badge ${action}ed`, "success");
+            } else {
+                showToast(result.error || "Failed to update badge", "error");
+            }
+        } catch {
+            showToast("An error occurred", "error");
+        } finally {
+            setIsBadgeProcessing(false);
+        }
+    };
+
     const stats = {
         total: verifications.length,
         pending: verifications.filter(v => v.status === "pending").length,
@@ -330,6 +360,21 @@ export default function AdminSellersPage() {
                                         <td className="px-6 py-4">
                                             <p className="font-semibold text-slate-900">{v.businessName}</p>
                                             <p className="text-sm text-slate-500 capitalize">{v.businessType}</p>
+                                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                                {v.sellerCategory && (
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${v.sellerCategory === "wholesale"
+                                                        ? "bg-blue-100 text-blue-700"
+                                                        : "bg-emerald-100 text-emerald-700"
+                                                        }`}>
+                                                        {v.sellerCategory === "wholesale" ? "Wholesale" : "Retail"}
+                                                    </span>
+                                                )}
+                                                {v.isVerifiedBadge && (
+                                                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                                                        ✓ Verified
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="text-sm text-slate-900">{v.phone}</p>
@@ -437,10 +482,29 @@ export default function AdminSellersPage() {
                                 </>
                             )}
                             {selectedVerification.status === "approved" && (
-                                <button onClick={() => handleSuspend(selectedVerification.id)} disabled={isProcessing}
-                                    className="flex-1 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl transition-all disabled:opacity-50">
-                                    <Ban className="w-5 h-5 inline mr-2" />Suspend Seller
-                                </button>
+                                <>
+                                    <button onClick={() => handleSuspend(selectedVerification.id)} disabled={isProcessing}
+                                        className="px-5 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2">
+                                        <Ban className="w-4 h-4" />Suspend
+                                    </button>
+                                    {/* Verified Badge Toggle */}
+                                    <button
+                                        onClick={() => handleToggleBadge(selectedVerification)}
+                                        disabled={isBadgeProcessing}
+                                        className={`px-5 py-3 font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 ${selectedVerification.isVerifiedBadge
+                                                ? "bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100"
+                                                : "bg-amber-500 hover:bg-amber-600 text-white"
+                                            }`}
+                                    >
+                                        {isBadgeProcessing
+                                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                                            : selectedVerification.isVerifiedBadge
+                                                ? <BadgeX className="w-4 h-4" />
+                                                : <BadgeCheck className="w-4 h-4" />
+                                        }
+                                        {selectedVerification.isVerifiedBadge ? "Revoke Badge" : "Grant Badge"}
+                                    </button>
+                                </>
                             )}
                             <button onClick={() => handleOpenEdit(selectedVerification)}
                                 className="px-5 py-3 bg-blue-50 border border-blue-200 text-blue-700 font-bold rounded-xl hover:bg-blue-100 transition-all flex items-center gap-2">

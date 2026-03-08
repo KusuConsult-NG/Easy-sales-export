@@ -1,6 +1,6 @@
 "use client";
 
-import { ShoppingBag, Users, AlertTriangle, CheckSquare } from "lucide-react";
+import { ShoppingBag, Users, AlertTriangle, CheckSquare, Zap, Wallet, Shield, Star } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminMarketplacePage() {
@@ -15,8 +15,8 @@ export default function AdminMarketplacePage() {
         },
         {
             title: "Product Reviews",
-            description: "Approve pending product listings",
-            icon: CheckSquare,
+            description: "Moderate pending product and seller reviews",
+            icon: Star,
             href: "/admin/marketplace/reviews",
             color: "text-purple-600",
             bg: "bg-purple-100"
@@ -28,7 +28,31 @@ export default function AdminMarketplacePage() {
             href: "/admin/marketplace/disputes",
             color: "text-red-600",
             bg: "bg-red-100"
-        }
+        },
+        {
+            title: "Village Market",
+            description: "Create and manage flash-sale events",
+            icon: Zap,
+            href: "/admin/marketplace/village-market",
+            color: "text-emerald-600",
+            bg: "bg-emerald-100"
+        },
+        {
+            title: "Wallet Withdrawals",
+            description: "Approve or reject seller withdrawal requests",
+            icon: Wallet,
+            href: "/admin/marketplace/withdrawals",
+            color: "text-amber-600",
+            bg: "bg-amber-100"
+        },
+        {
+            title: "Escrow Management",
+            description: "Oversee escrow holds and release requests",
+            icon: Shield,
+            href: "/admin/marketplace/escrow",
+            color: "text-indigo-600",
+            bg: "bg-indigo-100"
+        },
     ];
 
     return (

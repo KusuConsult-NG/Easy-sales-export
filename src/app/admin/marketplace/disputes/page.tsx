@@ -139,6 +139,13 @@ export default function AdminDisputesPage() {
                     <p className="text-gray-600">
                         Review and resolve marketplace disputes
                     </p>
+                    <button
+                        onClick={() => router.push("/admin/marketplace/disputes/escalated")}
+                        className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 transition"
+                    >
+                        <TrendingUp className="w-4 h-4" />
+                        View Escalation Queue
+                    </button>
                 </div>
 
                 {/* Stats */}

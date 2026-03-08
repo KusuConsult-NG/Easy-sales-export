@@ -1,6 +1,5 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
@@ -9,6 +8,11 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getPlatformFees } from "@/lib/system-settings";
+import {
+    notifyOrderPlaced,
+    notifyPaymentReceived,
+    notifyOrderCancelled,
+} from "@/lib/marketplace-notifications";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number {
@@ -89,8 +93,8 @@ export async function initializeOrderPaymentAction(
 ): Promise<PaymentInitState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -154,6 +158,19 @@ export async function initializeOrderPaymentAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // Fire-and-forget: notify buyer, seller(s), and admins of new order placement
+        // Use first seller for single-seller carts; multi-seller handled by the notification helper
+        const primarySellerId = validatedItems[0]?.sellerId;
+        if (primarySellerId) {
+            notifyOrderPlaced({
+                buyerId: session.user.id,
+                sellerId: primarySellerId,
+                orderId,
+                orderNumber: orderId,
+                amount: totalAmount,
+            }).catch((e) => logger.error("[initializeOrderPaymentAction] Notification failed:", e));
+        }
+
         return {
             success: true,
             data: {
@@ -207,8 +224,8 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -366,6 +383,33 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         revalidatePath("/dashboard");
         revalidatePath("/marketplace/orders");
 
+        // Notify buyer (payment confirmed) + all sellers (payment received) + admins
+        const uniqueSellerIds = Array.from(new Set(orderData.items?.map((i: any) => i.sellerId) || [])) as string[];
+        const notifPromises = [
+            notifyPaymentReceived({
+                buyerId: session.user.id,
+                sellerId: uniqueSellerIds[0] || orderData.sellerIds?.[0] || "",
+                orderId: orderData.orderId,
+                orderNumber: orderData.orderId,
+                amount: amountInNaira,
+                paymentMethod: "escrow",
+            })
+        ];
+        // Fan-out to all sellers if multi-seller order
+        for (let i = 1; i < uniqueSellerIds.length; i++) {
+            notifPromises.push(
+                notifyPaymentReceived({
+                    buyerId: session.user.id,
+                    sellerId: uniqueSellerIds[i],
+                    orderId: orderData.orderId,
+                    orderNumber: orderData.orderId,
+                    amount: amountInNaira,
+                    paymentMethod: "escrow",
+                })
+            );
+        }
+        Promise.allSettled(notifPromises).catch((e) => logger.error("[verifyOrderPaymentAction] Notification failed:", e));
+
         return {
             success: true,
             message: `Payment secured in Escrow! Order #${orderData.orderId} is now processing.`,
@@ -382,7 +426,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
 
         return {
             success: false,
-            error: "Failed to verify payment: " + error.message, // Ensure user sees logical errors (like stock)
+            error: "Failed to verify payment: " + error.message,
         };
     }
 }
@@ -404,8 +448,8 @@ export async function createBankTransferOrderAction(
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -477,5 +521,92 @@ export async function calculateDeliveryAction(items: CartItem[], location?: any)
         return { success: true, fee };
     } catch (error: any) {
         return { success: false, fee: 0, error: error.message };
+    }
+}
+
+// ============================================================================
+// PAYMENT ON DELIVERY — Order Creation
+// ============================================================================
+
+/**
+ * Create a marketplace order with Payment on Delivery.
+ * Only available if the seller has 'allowsPaymentOnDelivery' enabled.
+ * No escrow is created — funds are collected offline on delivery.
+ */
+export async function createPaymentOnDeliveryOrderAction(
+    cartItems: CartItem[],
+    buyerPhone: string,
+    deliveryAddress: {
+        recipientName: string;
+        recipientPhone: string;
+        street: string;
+        city: string;
+        state: string;
+        lga: string;
+    }
+): Promise<{ success: boolean; orderId?: string; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const { session } = sessionResult;
+
+        // Validate and price items server-side
+        const { subtotal, validatedItems } = await validateCartItems(cartItems);
+        const fees = await getPlatformFees();
+        const deliveryFee = calculateDeliveryFee(cartItems, {}, fees);
+        const totalAmount = subtotal + deliveryFee;
+
+        if (totalAmount < fees.minOrderAmount) {
+            return { success: false, error: `Minimum order amount is ₦${fees.minOrderAmount}` };
+        }
+
+        // Verify each seller allows POD
+        const sellerIds = Array.from(new Set(validatedItems.map((i) => i.sellerId))) as string[];
+        for (const sid of sellerIds) {
+            const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(sid).get();
+            if (!sellerDoc.data()?.allowsPaymentOnDelivery) {
+                return {
+                    success: false,
+                    error: "One or more sellers in your cart do not offer Payment on Delivery",
+                };
+            }
+        }
+
+        const orderId = `POD-${Date.now()}-${session.user.id.substring(0, 8)}`;
+
+        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).set({
+            orderId,
+            buyerId: session.user.id,
+            buyerPhone,
+            sellerIds,
+            items: validatedItems,
+            productIds: validatedItems.map((i) => i.productId),
+            subtotal,
+            deliveryFee,
+            totalAmount,
+            paymentMethod: "payment_on_delivery",
+            paymentStatus: "pending",
+            orderStatus: "processing",
+            deliveryAddress,
+            buyerConfirmed: false,
+            reviewSubmitted: false,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Notify buyer + seller(s) + admins
+        await notifyOrderPlaced({
+            buyerId: session.user.id,
+            sellerId: sellerIds[0],
+            orderId,
+            orderNumber: orderId,
+            amount: totalAmount,
+        }).catch((e) => logger.error("[POD] Notification error:", e));
+
+        revalidatePath("/marketplace/buyer/orders");
+        return { success: true, orderId };
+    } catch (error: any) {
+        logger.error("createPaymentOnDeliveryOrderAction error:", error);
+        return { success: false, error: error.message || "Failed to create POD order" };
     }
 }

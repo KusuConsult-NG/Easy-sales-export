@@ -11,6 +11,7 @@ import {
     GraduationCap,
     AlertCircle,
     Loader2,
+    Mail,
 } from "lucide-react";
 import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin-analytics";
 import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
@@ -235,6 +236,17 @@ export default function AdminDashboardPage() {
                         <p className="text-sm text-slate-600">
                             Review pending submissions
                         </p>
+                    </a>
+
+                    <a
+                        href="/admin/communications"
+                        className="bg-white rounded-lg p-6 hover:bg-green-50 border border-green-100 transition shadow-sm flex items-start gap-3"
+                    >
+                        <Mail className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                        <div>
+                            <h3 className="font-semibold text-slate-900 mb-1">Send Broadcast</h3>
+                            <p className="text-sm text-slate-600">Email all or filtered users</p>
+                        </div>
                     </a>
                 </div>
 

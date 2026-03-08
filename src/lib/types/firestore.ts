@@ -37,6 +37,10 @@ export interface User {
     sellerVerificationStatus?: "pending" | "approved" | "rejected" | "suspended";
     sellerVerificationId?: string; // Reference to seller_verifications collection
     sellerPhoneVerified?: boolean;
+    sellerCategory?: "wholesale" | "retail";       // NEW: seller categorization
+    isVerifiedBadge?: boolean;                     // NEW: verified badge granted by admin
+    verifiedBadgeGrantedAt?: Date;                 // NEW
+    allowsPaymentOnDelivery?: boolean;             // NEW: seller opted in to POD
 
     // KYC / Identity Verification
     nin?: string;            // National Identification Number
@@ -193,7 +197,8 @@ export interface Notification {
     userId: string;
     type: "escrow" | "order" | "academy" | "wave" | "cooperative" | "export"
     | "payment" | "loan" | "system" | "event" | "payout"
-    | "info" | "warning" | "success" | "farm_nation" | "marketplace" | "general";
+    | "info" | "warning" | "success" | "farm_nation" | "marketplace" | "general"
+    | "transaction"; // NEW: transaction lifecycle notifications (order placed/shipped/delivered/cancelled)
     title: string;
     message: string;
     link?: string;
@@ -815,6 +820,13 @@ export const COLLECTIONS = {
     ESCROW_MESSAGES: "escrow_messages",
     DISPUTES: "disputes",
 
+    // NEW: Marketplace Expansions (Phase 12)
+    WALLETS: "wallets",
+    WALLET_TRANSACTIONS: "wallet_transactions",
+    VILLAGE_MARKET_EVENTS: "village_market_events",
+    FLASH_SALE_PRODUCTS: "flash_sale_products",
+    SELLER_REVIEWS: "seller_reviews",
+
     // Farm Nation
     FARM_NATION_PROPERTIES: "farm_nation_properties",
     FARM_NATION_TRANSACTIONS: "farm_nation_transactions",
@@ -899,4 +911,11 @@ export const COLLECTIONS = {
 
     // Export Slots (individual investment slots per user per export window)
     // Note: EXPORT_SLOTS is already defined above — this alias is preferred in new code
+
+    // Admin Communications
+    BROADCAST_LOGS: "broadcast_logs",
 } as const;
+
+
+
+

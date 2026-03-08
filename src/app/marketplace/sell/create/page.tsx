@@ -23,11 +23,22 @@ import { useToast } from "@/contexts/ToastContext";
 const initialState = { success: false };
 
 const productCategories = [
+    // New categories
+    { value: "poultry", label: "Poultry" },
+    { value: "sea_foods", label: "Sea Foods" },
+    { value: "horticultural", label: "Horticultural" },
+    { value: "natural_oils", label: "Natural Oils" },
+    { value: "spices_herbs_seasonings", label: "Spices, Herbs & Seasonings" },
+    { value: "beverages", label: "Beverages" },
+    { value: "dairy", label: "Dairy" },
+    { value: "organics", label: "Organics" },
+    { value: "gmos", label: "GMOs" },
+    { value: "health_wellness", label: "Health & Wellness" },
+    // Original categories
     { value: "grains", label: "Grains & Cereals" },
     { value: "vegetables", label: "Vegetables" },
     { value: "fruits", label: "Fruits" },
     { value: "livestock", label: "Livestock" },
-    { value: "poultry", label: "Poultry" },
     { value: "fishery", label: "Fishery" },
     { value: "processed", label: "Processed Foods" },
     { value: "equipment", label: "Farm Equipment" },

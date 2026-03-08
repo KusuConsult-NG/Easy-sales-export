@@ -58,7 +58,11 @@ export type AuditAction =
     | "academy_under_review"
     | "farm_nation_reject"
     | "export_investment"
-    | "admin_edit_application";
+    | "admin_edit_application"
+    | "seller_badge_grant"
+    | "seller_badge_revoke"
+    | "dispute_escalated"
+    | "dispute_resolved";
 
 export interface AuditLog {
     id: string;

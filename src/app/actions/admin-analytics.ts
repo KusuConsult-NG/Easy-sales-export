@@ -2,21 +2,34 @@
 
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
-import { FieldPath, AggregateField } from "firebase-admin/firestore";
+import { AggregateField } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface AnalyticsData {
     platformOverview: {
         totalUsers: number;
         activeUsers: number;
         totalRevenue: number;
+        monthlyRevenue: number;
+        totalTransactions: number;
+        pendingApprovals: number;
     };
     counts: {
         pendingEscrows: number;
         activeLandListings: number;
         pendingLoans: number;
     };
+    /** Last 6 calendar months, revenue from completed escrows (2.5% commission) */
+    revenueByMonth: Array<{ month: string; revenue: number }>;
+    /** Last 6 calendar months, new user registrations */
+    userGrowthByMonth: Array<{ month: string; users: number }>;
+    /** Module participation breakdown for the pie chart */
+    moduleUsage: Array<{ module: string; count: number }>;
     recentTransactions: Array<{
         id: string;
         type: string;
@@ -25,98 +38,227 @@ export interface AnalyticsData {
     }>;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function safeCount(
+    ref: FirebaseFirestore.Query | FirebaseFirestore.CollectionReference
+): Promise<number> {
+    try {
+        const snap = await ref.count().get();
+        return snap.data().count ?? 0;
+    } catch {
+        return 0;
+    }
+}
+
+/** Returns a list of { label, start, end } for the last N calendar months */
+function lastNMonths(n: number): Array<{ label: string; start: Date; end: Date }> {
+    const months: Array<{ label: string; start: Date; end: Date }> = [];
+    const now = new Date();
+    for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const start = new Date(d.getFullYear(), d.getMonth(), 1);
+        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+        const label = d.toLocaleString("en-NG", { month: "short", year: "2-digit" });
+        months.push({ label, start, end });
+    }
+    return months;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main dashboard stats action
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const sessionResult = await requireSession();
     if (!sessionResult.session) return null;
     const { session } = sessionResult;
-    if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+    if (
+        !session?.user?.roles?.includes("admin") &&
+        !session?.user?.roles?.includes("super_admin")
+    ) {
         return null;
     }
 
-    // Get total users
-    const usersSnap = await db.collection("users").count().get();
-    const totalUsers = usersSnap.data().count;
+    const months = lastNMonths(6);
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    // Get active users (users with lastLoginAt in last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    let activeUsers = 0;
+    // ── Parallel Firestore queries ───────────────────────────────────────────
+    const [
+        totalUsersSnap,
+        activeUsersSnap,
+        pendingEscrowsCount,
+        activeLandCount,
+        pendingLoansCount,
+        pendingSellersCount,
+        pendingWithdrawalsCount,
+        totalOrdersCount,
+        totalEscrowsCount,
+        recentLogsSnap,
+    ] = await Promise.allSettled([
+        db.collection(COLLECTIONS.USERS).count().get(),
+        db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
+        safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending")),
+        safeCount(db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "active")),
+        safeCount(db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending")),
+        safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending")),
+        safeCount(db.collection(COLLECTIONS.WALLET_TRANSACTIONS).where("type", "==", "withdrawal").where("status", "==", "pending")),
+        safeCount(db.collection(COLLECTIONS.MARKETPLACE_ORDERS)),
+        safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)),
+        db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc").limit(10).get(),
+    ]);
+
+    const totalUsers =
+        totalUsersSnap.status === "fulfilled" ? (totalUsersSnap.value.data().count ?? 0) : 0;
+    const activeUsers =
+        activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : totalUsers;
+
+    const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
+    const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
+    const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
+    const pendingSellers = pendingSellersCount.status === "fulfilled" ? pendingSellersCount.value : 0;
+    const pendingWithdrawals = pendingWithdrawalsCount.status === "fulfilled" ? pendingWithdrawalsCount.value : 0;
+    const totalOrders = totalOrdersCount.status === "fulfilled" ? totalOrdersCount.value : 0;
+    const totalEscrows = totalEscrowsCount.status === "fulfilled" ? totalEscrowsCount.value : 0;
+    const totalTransactions = totalOrders + totalEscrows;
+    const pendingApprovals = pendingEscrows + pendingSellers + pendingWithdrawals + pendingLoans;
+
+    // ── Revenue: completed escrow commissions ────────────────────────────────
+    let totalRevenue = 0;
+    let monthlyRevenue = 0;
     try {
-        const activeSnap = await db.collection("users")
-            .where("lastLoginAt", ">=", thirtyDaysAgo)
-            .count().get();
-        activeUsers = activeSnap.data().count;
+        const [allRevSnap, monthRevSnap] = await Promise.all([
+            db
+                .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("status", "==", "completed")
+                .aggregate({ total: AggregateField.sum("amount") })
+                .get(),
+            db
+                .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("status", "==", "completed")
+                .where("completedAt", ">=", thisMonthStart)
+                .aggregate({ total: AggregateField.sum("amount") })
+                .get(),
+        ]);
+        totalRevenue = (allRevSnap.data().total ?? 0) * 0.025;
+        monthlyRevenue = (monthRevSnap.data().total ?? 0) * 0.025;
     } catch {
-        activeUsers = totalUsers; // Fallback
+        // collections may not exist yet — leave as 0
     }
 
-    // Get pending escrows
-    let pendingEscrows = 0;
-    try {
-        const escrowSnap = await db.collection("escrows")
-            .where("status", "==", "pending")
-            .count().get();
-        pendingEscrows = escrowSnap.data().count;
-    } catch {
-        // Collection may not exist
-    }
+    // ── Revenue by month (last 6 months) ────────────────────────────────────
+    const revenueByMonth = await Promise.all(
+        months.map(async ({ label, start, end }) => {
+            try {
+                const snap = await db
+                    .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                    .where("status", "==", "completed")
+                    .where("completedAt", ">=", start)
+                    .where("completedAt", "<=", end)
+                    .aggregate({ total: AggregateField.sum("amount") })
+                    .get();
+                return { month: label, revenue: (snap.data().total ?? 0) * 0.025 };
+            } catch {
+                return { month: label, revenue: 0 };
+            }
+        })
+    );
 
-    // Get active land listings
-    let activeLandListings = 0;
-    try {
-        const landSnap = await db.collection("land_listings")
-            .where("status", "==", "active")
-            .count().get();
-        activeLandListings = landSnap.data().count;
-    } catch {
-        // Collection may not exist
-    }
+    // ── User growth by month (last 6 months) ────────────────────────────────
+    const userGrowthByMonth = await Promise.all(
+        months.map(async ({ label, start, end }) => {
+            try {
+                const snap = await db
+                    .collection(COLLECTIONS.USERS)
+                    .where("createdAt", ">=", start)
+                    .where("createdAt", "<=", end)
+                    .count()
+                    .get();
+                return { month: label, users: snap.data().count ?? 0 };
+            } catch {
+                return { month: label, users: 0 };
+            }
+        })
+    );
 
-    // Get pending loans
-    let pendingLoans = 0;
-    try {
-        const loanSnap = await db.collection("loan_applications")
-            .where("status", "==", "pending")
-            .count().get();
-        pendingLoans = loanSnap.data().count;
-    } catch {
-        // Collection may not exist
-    }
+    // ── Module usage (for pie chart) ─────────────────────────────────────────
+    const [waveCount, academyCount, cooperativeCount, farmNationCount, marketplaceCount, exportCount] =
+        await Promise.allSettled([
+            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)),
+            safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
+            safeCount(
+                db
+                    .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("paymentStatus", "==", "completed")
+            ),
+            safeCount(
+                db
+                    .collection(COLLECTIONS.USERS)
+                    .where("serviceRegistrations.farmNation.status", "in", ["pending", "approved"])
+            ),
+            safeCount(
+                db
+                    .collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                    .where("status", "!=", "rejected")
+            ),
+            safeCount(
+                db
+                    .collection(COLLECTIONS.USERS)
+                    .where("serviceRegistrations.export.status", "in", ["pending", "approved"])
+            ),
+        ]);
 
-    // Get recent audit logs as "transactions"
-    let recentTransactions: AnalyticsData["recentTransactions"] = [];
-    try {
-        const logsSnap = await db.collection("audit_logs")
-            .orderBy("timestamp", "desc")
-            .limit(10)
-            .get();
-        recentTransactions = logsSnap.docs.map(doc => {
+    const moduleUsage = [
+        { module: "WAVE", count: waveCount.status === "fulfilled" ? waveCount.value : 0 },
+        { module: "Academy", count: academyCount.status === "fulfilled" ? academyCount.value : 0 },
+        { module: "Cooperative", count: cooperativeCount.status === "fulfilled" ? cooperativeCount.value : 0 },
+        { module: "Farm Nation", count: farmNationCount.status === "fulfilled" ? farmNationCount.value : 0 },
+        { module: "Marketplace", count: marketplaceCount.status === "fulfilled" ? marketplaceCount.value : 0 },
+        { module: "Export Hub", count: exportCount.status === "fulfilled" ? exportCount.value : 0 },
+    ].filter((m) => m.count > 0);
+
+    // ── Recent transactions from audit log ───────────────────────────────────
+    const recentTransactions: AnalyticsData["recentTransactions"] = [];
+    if (recentLogsSnap.status === "fulfilled") {
+        recentLogsSnap.value.docs.forEach((doc) => {
             const data = doc.data();
-            return {
+            recentTransactions.push({
                 id: doc.id,
-                type: data.action || "unknown",
-                amount: data.amount || 0,
-                date: data.timestamp?.toDate?.()?.toISOString() || new Date().toISOString(),
-            };
+                type: data.action ?? "unknown",
+                amount: Number(data.amount) || 0,
+                date: data.timestamp?.toDate?.()?.toISOString() ?? new Date().toISOString(),
+            });
         });
-    } catch {
-        // Collection may not exist
     }
 
     return {
         platformOverview: {
             totalUsers,
             activeUsers,
-            totalRevenue: 0, // Will accumulate as transactions flow
+            totalRevenue,
+            monthlyRevenue,
+            totalTransactions,
+            pendingApprovals,
         },
         counts: {
             pendingEscrows,
             activeLandListings,
             pendingLoans,
         },
+        revenueByMonth,
+        userGrowthByMonth,
+        moduleUsage: moduleUsage.length ? moduleUsage : [{ module: "No data yet", count: 1 }],
         recentTransactions,
     };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Financial Overview (separate action used by finance page)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface FinancialOverview {
     success: boolean;
@@ -124,7 +266,6 @@ export interface FinancialOverview {
     totalRevenue: number;
     totalEscrowVolume: number;
     totalLoansDisbursed: number;
-    /** Sum of all withdrawals with status='approved_pending_payout' — real money awaiting bank transfer */
     pendingPayoutAmount: number;
     recentTransactions: Array<{
         id: string;
@@ -136,7 +277,6 @@ export interface FinancialOverview {
 }
 
 export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
-
     const sessionResult = await requireSession();
     if (!sessionResult.session) {
         return { success: false, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
@@ -151,128 +291,78 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     let totalLoansDisbursed = 0;
     const recentTransactions: FinancialOverview["recentTransactions"] = [];
 
-
     try {
         const [allEscrows, completedEscrows] = await Promise.all([
-            db.collection("escrows").aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection("escrows").where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get()
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).aggregate({ total: AggregateField.sum("amount") }).get(),
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
         ]);
-
-        totalEscrowVolume = allEscrows.data().total || 0;
-        totalRevenue = (completedEscrows.data().total || 0) * 0.025; // 2.5% commission
-
-
+        totalEscrowVolume = allEscrows.data().total ?? 0;
+        totalRevenue = (completedEscrows.data().total ?? 0) * 0.025;
     } catch (e: any) {
         console.error("[FINANCE] Escrow fetch error:", e.message);
     }
 
-
-    // Sum loans disbursed
     try {
-        const loanSnap = await db.collection("loan_applications")
+        const loanSnap = await db
+            .collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where("status", "==", "disbursed")
             .aggregate({ total: AggregateField.sum("amount") })
             .get();
-
-        totalLoansDisbursed = loanSnap.data().total || 0;
-
+        totalLoansDisbursed = loanSnap.data().total ?? 0;
     } catch (e: any) {
         console.error("[FINANCE] Loan fetch error:", e.message);
     }
 
-
-    // Get recent financial transactions from audit logs
     try {
-        const logsSnap = await db.collection("audit_logs")
+        const logsSnap = await db
+            .collection(COLLECTIONS.AUDIT_LOGS)
             .orderBy("timestamp", "desc")
             .limit(20)
             .get();
-        logsSnap.docs.forEach(doc => {
+        logsSnap.docs.forEach((doc) => {
             const data = doc.data();
             recentTransactions.push({
                 id: doc.id,
-                type: data.action || "unknown",
+                type: data.action ?? "unknown",
                 amount: Number(data.amount) || 0,
-                // 🐛 FIX: Convert Firestore Timestamp to ISO string here on the server.
-                // Firestore Timestamp objects can't be serialized across the Server Action
-                // boundary — they arrive as plain {seconds, nanoseconds} with no .toDate() method.
                 timestamp: data.timestamp?.toDate?.()?.toISOString() ?? null,
             });
         });
-
     } catch (e: any) {
         console.error("[FINANCE] Audit logs fetch error:", e.message);
     }
 
-
-    // Sum pending payouts (approved_pending_payout withdrawals across both cooperative and wave)
     let pendingPayoutAmount = 0;
     try {
         const [coopPayouts, wavePayouts] = await Promise.all([
-            db.collection("withdrawalRequests")
-                .where("status", "==", "approved_pending_payout")
-                .aggregate({ total: AggregateField.sum("amount") })
-                .get(),
-            db.collection("wave_withdrawals")
-                .where("status", "==", "approved_pending_payout")
-                .aggregate({ total: AggregateField.sum("amount") })
-                .get()
+            db.collection("withdrawalRequests").where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
+            db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
         ]);
-
-        pendingPayoutAmount = (coopPayouts.data().total || 0) + (wavePayouts.data().total || 0);
-
+        pendingPayoutAmount = (coopPayouts.data().total ?? 0) + (wavePayouts.data().total ?? 0);
     } catch (e: any) {
         console.error("[FINANCE] Payouts fetch error:", e.message);
     }
 
-
-    return {
-        success: true,
-        totalRevenue,
-        totalEscrowVolume,
-        totalLoansDisbursed,
-        pendingPayoutAmount,
-        recentTransactions,
-    };
+    return { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Module Registration Stats (for admin pie/bar chart)
+// Module Registration Stats (cached, for admin charts)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ModuleRegistrationStats {
-    /** Total registered accounts on the platform (users collection) */
     hub: number;
-    /** Full WAVE programme applicants (wave_applications) */
     wave: number;
-    /** Walk-in briefing registrations (wave_briefing_registrations) */
     waveBriefing: number;
-    /** Academy applicants (ACADEMY_APPLICATIONS) */
     academy: number;
-    /** Cooperative enrolled members (cooperative_members) */
     cooperatives: number;
-    /** Cooperative onboarding applicants still in pipeline (cooperative_onboarding_applications) */
     cooperativeOnboarding: number;
-    /** Farm Nation registered sellers (farm_nation_properties) */
     farmNation: number;
-    /** Export Hub investors with a slot (export_slots) */
     exportHub: number;
-    /** Export onboarding applicants still in pipeline (export_onboarding_applications) */
     exportOnboarding: number;
-    /** Marketplace seller verification requests (seller_verifications) */
     marketplace: number;
 }
 
-async function safeCount(query: FirebaseFirestore.Query | FirebaseFirestore.CollectionReference): Promise<number> {
-    try {
-        const snap = await query.count().get();
-        return snap.data().count;
-    } catch {
-        return 0;
-    }
-}
-
-// ─── Cached inner fetcher (5-min TTL, admin-only route) ─────────────────────
 const fetchModuleRegistrationStats = unstable_cache(
     async (): Promise<ModuleRegistrationStats> => {
         const [
@@ -287,42 +377,21 @@ const fetchModuleRegistrationStats = unstable_cache(
             exportOnboarding,
             marketplace,
         ] = await Promise.all([
-            // Hub: all registered platform accounts
             safeCount(db.collection(COLLECTIONS.USERS)),
-
-            // WAVE: submitted applications (exclude drafts by requiring a status field)
             safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS).where("status", "in", ["pending", "submitted", "under_review", "approved", "rejected"])),
-
-            // WAVE Briefings: all walk-in event registrations
             safeCount(db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)),
-
-            // Academy applicants — COLLECTIONS.ACADEMY_APPLICATIONS = "ACADEMY_APPLICATIONS" (verified)
             safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
-
-            // Cooperatives: paid & enrolled members only (exclude pending payment and rejected)
-            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("paymentStatus", "==", "completed")
-                .where("membershipStatus", "!=", "rejected")),
-
-            // Cooperative onboarding pipeline (pending only)
+            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").where("membershipStatus", "!=", "rejected")),
             safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING).where("status", "==", "pending")),
-
-            // Farm Nation: unique registered sellers via user profile
             safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "in", ["pending", "approved"])),
-
-            // Export Hub: unique investors via user profile (not slots — 1:many)
             safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.export.status", "in", ["pending", "approved"])),
-
-            // Export onboarding pipeline (pending_review only)
             safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending_review")),
-
-            // Marketplace: seller verifications excluding rejected
             safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "!=", "rejected")),
         ]);
         return { hub, wave, waveBriefing, academy, cooperatives, cooperativeOnboarding, farmNation, exportHub, exportOnboarding, marketplace };
     },
     ["module-registration-stats"],
-    { revalidate: 300, tags: ["module-registration-stats"] } // 5-minute cache
+    { revalidate: 300, tags: ["module-registration-stats"] }
 );
 
 export async function getModuleRegistrationStatsAction(): Promise<ModuleRegistrationStats> {
@@ -332,6 +401,5 @@ export async function getModuleRegistrationStatsAction(): Promise<ModuleRegistra
     if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
         throw new Error("Unauthorized");
     }
-    // Auth passes — serve from cache (Firestore only hit every 5 minutes)
     return fetchModuleRegistrationStats();
 }

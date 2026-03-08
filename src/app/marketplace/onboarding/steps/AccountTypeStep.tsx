@@ -1,20 +1,25 @@
 /**
- * Step 1: Account Type Selection
- * 
- * User chooses: Buyer, Seller, or Both
+ * Step 1: Account Type Selection & Seller Category
+ *
+ * User chooses: Buyer, Seller, or Both.
+ * If Seller/Both is selected they also choose: Wholesale or Retail.
  */
 
 "use client";
 
-import { ShoppingCart, Store, Users } from "lucide-react";
+import { ShoppingCart, Store, Users, Package, ShoppingBag } from "lucide-react";
+
+export type SellerCategoryType = "wholesale" | "retail";
 
 interface AccountTypeStepProps {
     value?: "buyer" | "seller" | "both";
+    sellerCategory?: SellerCategoryType;
     onChange: (type: "buyer" | "seller" | "both") => void;
+    onSellerCategoryChange?: (cat: SellerCategoryType) => void;
     onNext: () => void;
 }
 
-export default function AccountTypeStep({ value, onChange, onNext }: AccountTypeStepProps) {
+export default function AccountTypeStep({ value, sellerCategory, onChange, onSellerCategoryChange, onNext }: AccountTypeStepProps) {
     const accountTypes = [
         {
             id: "buyer" as const,
@@ -62,10 +67,13 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
     };
 
     const handleContinue = () => {
-        if (value) {
-            onNext();
-        }
+        if (!value) return;
+        // Sellers must pick a category before continuing
+        if ((value === "seller" || value === "both") && !sellerCategory) return;
+        onNext();
     };
+
+    const showCategoryPicker = value === "seller" || value === "both";
 
     return (
         <div className="space-y-8">
@@ -90,8 +98,8 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
                             key={type.id}
                             onClick={() => handleSelect(type.id)}
                             className={`relative p-6 rounded-2xl border-2 transition-all text-left ${isSelected
-                                    ? "border-green-500 bg-green-50 shadow-lg scale-105"
-                                    : "border-slate-200 bg-white hover:border-green-300 hover:shadow-md"
+                                ? "border-green-500 bg-green-50 shadow-lg scale-105"
+                                : "border-slate-200 bg-white hover:border-green-300 hover:shadow-md"
                                 }`}
                         >
                             {/* Selection Indicator */}
@@ -130,10 +138,42 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
                 })}
             </div>
 
+            {/* Seller Category Picker */}
+            {showCategoryPicker && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-slate-900 mb-1">Seller Category</h3>
+                    <p className="text-sm text-slate-500 mb-4">Choose the type that best describes your business</p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <button
+                            onClick={() => onSellerCategoryChange?.("wholesale")}
+                            className={`p-4 rounded-xl border-2 text-left transition-all ${sellerCategory === "wholesale"
+                                ? "border-blue-500 bg-blue-50"
+                                : "border-slate-200 bg-white hover:border-blue-300"
+                                }`}
+                        >
+                            <Package className="w-8 h-8 text-blue-600 mb-2" />
+                            <p className="font-bold text-slate-900">Wholesale</p>
+                            <p className="text-xs text-slate-500 mt-0.5">Bulk orders, large quantities, B2B trade</p>
+                        </button>
+                        <button
+                            onClick={() => onSellerCategoryChange?.("retail")}
+                            className={`p-4 rounded-xl border-2 text-left transition-all ${sellerCategory === "retail"
+                                ? "border-emerald-500 bg-emerald-50"
+                                : "border-slate-200 bg-white hover:border-emerald-300"
+                                }`}
+                        >
+                            <ShoppingBag className="w-8 h-8 text-emerald-600 mb-2" />
+                            <p className="font-bold text-slate-900">Retail</p>
+                            <p className="text-xs text-slate-500 mt-0.5">Individual buyers, smaller quantities, B2C</p>
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Info Banner */}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-white text-sm">ℹ</span>
                     </div>
                     <div className="text-sm">
@@ -152,7 +192,7 @@ export default function AccountTypeStep({ value, onChange, onNext }: AccountType
             <div className="flex justify-end">
                 <button
                     onClick={handleContinue}
-                    disabled={!value}
+                    disabled={!value || ((value === "seller" || value === "both") && !sellerCategory)}
                     className="px-8 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
                 >
                     Continue

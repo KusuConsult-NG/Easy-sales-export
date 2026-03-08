@@ -30,6 +30,7 @@ type AccountType = "buyer" | "seller" | "both";
 interface OnboardingData {
     // Step 1: Account Type
     accountType: AccountType;
+    sellerCategory?: "wholesale" | "retail"; // NEW: wholesale or retail
 
     // Step 2: Business Profile
     businessName: string;
@@ -234,6 +235,7 @@ export default function MarketplaceOnboarding() {
             const formDataPayload = new FormData();
 
             formDataPayload.append("accountType", formData.accountType!);
+            if (formData.sellerCategory) formDataPayload.append("sellerCategory", formData.sellerCategory);
             formDataPayload.append("businessName", formData.businessName || "");
             formDataPayload.append("businessType", formData.businessType || "individual");
             formDataPayload.append("phone", formData.phone || "");
@@ -280,7 +282,9 @@ export default function MarketplaceOnboarding() {
                 return (
                     <AccountTypeStep
                         value={formData.accountType}
+                        sellerCategory={formData.sellerCategory}
                         onChange={(accountType) => updateFormData({ accountType })}
+                        onSellerCategoryChange={(sellerCategory) => updateFormData({ sellerCategory })}
                         onNext={handleNext}
                     />
                 );

@@ -292,6 +292,15 @@ export default function OrdersPage() {
                                                 Funds Released
                                             </div>
                                         )}
+
+                                        {(order.orderStatus === "delivered" || order.orderStatus === "completed") && (
+                                            <Link
+                                                href={`/marketplace/buyer/orders/${order.orderId}/review?productId=${order.items?.[0]?.productId || ""}&sellerId=${order.items?.[0]?.sellerId || ""}`}
+                                                className="flex items-center gap-1.5 px-4 py-2 border border-yellow-400 text-yellow-700 rounded-lg text-sm font-semibold hover:bg-yellow-50 transition"
+                                            >
+                                                ⭐ Leave a Review
+                                            </Link>
+                                        )}
                                     </div>
                                 </div>
                             );

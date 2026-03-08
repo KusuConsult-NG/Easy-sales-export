@@ -11,10 +11,23 @@ import type { FieldValue, Timestamp } from "firebase-admin/firestore";
 // SELLER VERIFICATION
 // ============================================================================
 
+export type SellerCategory = "wholesale" | "retail";
+
 export interface SellerVerification {
     id: string;
     userId: string;
     status: "pending" | "approved" | "rejected" | "suspended";
+
+    // Seller Categorization (NEW)
+    sellerCategory?: SellerCategory;
+
+    // Verified Badge (NEW)
+    isVerifiedBadge?: boolean;
+    verifiedBadgeGrantedAt?: Date;
+    verifiedBadgeGrantedBy?: string;
+
+    // Payment on Delivery (NEW)
+    allowsPaymentOnDelivery?: boolean;
 
     // Phone Verification
     phoneNumber: string;
@@ -72,11 +85,20 @@ export type PricingTier = {
 export type DeliveryMethod = "pickup" | "delivery" | "both";
 
 export type ProductCategory =
+    | "poultry"
+    | "sea_foods"
+    | "horticultural"
+    | "natural_oils"
+    | "spices_herbs_seasonings"
+    | "beverages"
+    | "dairy"
+    | "organics"
+    | "gmos"
+    | "health_wellness"
     | "grains"
     | "vegetables"
     | "fruits"
     | "livestock"
-    | "poultry"
     | "fishery"
     | "processed"
     | "equipment"
@@ -119,7 +141,7 @@ export interface Product {
     productionDate?: Date;
 
     // Status
-    status: "draft" | "active" | "suspended" | "out_of_stock";
+    status: "draft" | "active" | "suspended" | "out_of_stock" | "deleted";
     bulkAvailable: boolean;
     exportReady: boolean;
 
@@ -129,8 +151,10 @@ export interface Product {
     rating: number;
     reviewCount: number;
 
-    // Denormalized Data
+    // Denormalized Seller Data
     sellerName?: string;
+    sellerVerified?: boolean;       // Denormalized from seller_verifications.isVerifiedBadge
+    sellerCategory?: SellerCategory; // Denormalized from seller_verifications.sellerCategory
 
     createdAt: Date;
     updatedAt: Date;
@@ -170,6 +194,8 @@ export type OrderStatus =
     | "cancelled"
     | "disputed";
 
+export type OrderPaymentMethod = "escrow" | "wallet" | "payment_on_delivery";
+
 export interface Order {
     id: string;
     orderNumber: string;
@@ -195,6 +221,9 @@ export interface Order {
     serviceFee: number;
     totalAmount: number;
 
+    // Payment Method (NEW)
+    paymentMethod?: OrderPaymentMethod;
+
     // Delivery
     deliveryAddress: {
         recipientName: string;
@@ -215,6 +244,10 @@ export interface Order {
     trackingNumber?: string;
     estimatedDeliveryDate?: Date;
     deliveredAt?: Date;
+
+    // Review tracking (NEW)
+    reviewSubmitted?: boolean;
+    reviewId?: string;
 
     // Buyer Confirmation
     buyerConfirmed: boolean;
@@ -405,4 +438,127 @@ export interface ProductReview {
     updatedAt?: FieldValue | Timestamp | Date;
 
     createdAt: FieldValue | Timestamp | Date;
+}
+
+// ============================================================================
+// VILLAGE MARKET (FLASH SALES)
+// ============================================================================
+
+export interface VillageMarketEvent {
+    id: string;
+    title: string;
+    description?: string;
+    location: string;            // Physical location / venue name
+    state: string;               // Nigerian state
+    lga?: string;
+
+    // Timing
+    startTime: Date | FieldValue | Timestamp;
+    endTime: Date | FieldValue | Timestamp;
+    isRecurring?: boolean;
+    recurringDay?: string;       // e.g. "Saturday"
+
+    // Participants
+    participantSellerIds?: string[]; // Platform sellers who joined
+    externalMerchants?: ExternalMerchant[];
+
+    // Status
+    status: "upcoming" | "active" | "ended" | "cancelled";
+
+    createdBy: string; // admin UID
+    createdAt: Date | FieldValue | Timestamp;
+    updatedAt?: Date | FieldValue | Timestamp;
+}
+
+export interface ExternalMerchant {
+    id: string;          // generated
+    displayName: string;
+    businessName?: string;
+    phone?: string;
+    productsDescription?: string; // What they're selling
+    imageUrl?: string;
+}
+
+export interface FlashSaleProduct {
+    id: string;
+    eventId: string;
+    sellerId: string;         // Platform user UID (or 'external' for outside merchants)
+    externalMerchantId?: string; // If from an external merchant
+
+    // Product info (may reference an existing product or be ad-hoc)
+    productId?: string;       // Reference to products collection (if platform seller)
+    title: string;
+    description?: string;
+    imageUrl?: string;
+    price: number;
+    unit?: string;
+    availableQuantity?: number;
+
+    // Flash sale specific
+    flashPrice?: number;      // Special discounted price
+    validUntil?: Date | FieldValue | Timestamp;
+
+    status: "active" | "sold_out" | "removed";
+    createdAt: Date | FieldValue | Timestamp;
+    updatedAt?: Date | FieldValue | Timestamp;
+}
+
+// ============================================================================
+// WALLET
+// ============================================================================
+
+export type WalletTransactionType =
+    | "funding"          // Wallet top-up via Paystack
+    | "purchase"         // Order paid from wallet
+    | "refund"           // Refund credited to wallet
+    | "withdrawal"       // Withdrawal to bank account
+    | "bonus";            // Admin-issued bonus
+
+export interface Wallet {
+    id: string;          // Same as userId
+    userId: string;
+    balance: number;     // In Naira (NGN), stored as kobo-safe integer (×100)
+    currency: "NGN";
+    updatedAt: Date | FieldValue | Timestamp;
+    createdAt: Date | FieldValue | Timestamp;
+}
+
+export interface WalletTransaction {
+    id: string;
+    walletId: string;
+    userId: string;
+    type: WalletTransactionType;
+    amount: number;          // Positive = credit, Negative = debit
+    balanceBefore: number;
+    balanceAfter: number;
+    reference?: string;      // Paystack reference for funding
+    orderId?: string;        // Related order (for purchases)
+    description: string;
+    status: "pending" | "completed" | "failed";
+    createdAt: Date | FieldValue | Timestamp;
+    updatedAt?: Date | FieldValue | Timestamp;
+}
+
+// ============================================================================
+// SELLER REVIEWS (buyer reviewing a seller)
+// ============================================================================
+
+export interface SellerReview {
+    id: string;
+    sellerId: string;
+    buyerId: string;
+    orderId: string;
+
+    rating: number; // 1-5
+    comment?: string;
+
+    verified: boolean; // Order was actually completed
+
+    // Admin moderation
+    status: "pending" | "approved" | "rejected";
+    moderatedBy?: string;
+    moderatedAt?: FieldValue | Timestamp | Date;
+
+    createdAt: FieldValue | Timestamp | Date;
+    updatedAt?: FieldValue | Timestamp | Date;
 }

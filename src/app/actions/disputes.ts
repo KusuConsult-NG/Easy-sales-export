@@ -185,6 +185,7 @@ export async function getSellerDisputesAction() {
  */
 export async function getAdminDisputesAction(filters?: {
     status?: "open" | "under_review" | "resolved" | "closed";
+    escalated?: boolean;
 }) {
     try {
         const sessionResult = await requireSession();
@@ -199,15 +200,21 @@ export async function getAdminDisputesAction(filters?: {
             return { success: false, error: "Not authorized as admin" };
         }
 
-        let query = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", "desc");
+        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", "desc");
 
         if (filters?.status) {
-            query = db.collection(COLLECTIONS.DISPUTES)
+            queryRef = db.collection(COLLECTIONS.DISPUTES)
                 .where("status", "==", filters.status)
                 .orderBy("createdAt", "desc");
         }
 
-        const snapshot = await query.get();
+        if (filters?.escalated !== undefined) {
+            queryRef = db.collection(COLLECTIONS.DISPUTES)
+                .where("escalated", "==", filters.escalated)
+                .orderBy("createdAt", "desc");
+        }
+
+        const snapshot = await queryRef.get();
         const disputes: Dispute[] = snapshot.docs.map(doc => {
             const data = doc.data();
             return {

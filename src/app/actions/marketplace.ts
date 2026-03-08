@@ -293,6 +293,9 @@ export async function submitMarketplaceOnboardingAction(
             phone: formData.get("phone"),
             location,
 
+            // Seller Categorization (NEW)
+            sellerCategory: (formData.get("sellerCategory") as string) || "retail",
+
             // Interest Profile
             accountType: formData.get("accountType"), // seller or both
             sellerCategories: JSON.parse(formData.get("sellerCategories") as string || "[]"),
@@ -324,11 +327,13 @@ export async function submitMarketplaceOnboardingAction(
             isSeller: true, // Flag to indicate seller intent
             sellerVerificationStatus: "pending",
             sellerVerificationId: verificationId,
+            sellerCategory: formData.get("sellerCategory") as string || "retail",
             // Use dot notation to preserve other service registrations (Academy, Cooperatives, etc.)
             "serviceRegistrations.marketplace": {
                 status: "pending",
                 verificationId,
                 accountType: formData.get("accountType") as string,
+                sellerCategory: formData.get("sellerCategory") as string || "retail",
                 submittedAt: FieldValue.serverTimestamp(),
             },
             updatedAt: FieldValue.serverTimestamp(),
@@ -1279,5 +1284,149 @@ export async function resubmitSellerVerificationAction(
     } catch (error: any) {
         logger.error('resubmitSellerVerificationAction error:', error);
         return { success: false, error: 'Failed to resubmit seller verification' };
+    }
+}
+
+// ============================================================================
+// VERIFIED BADGE — Admin Actions
+// ============================================================================
+
+/**
+ * Grant or revoke the verified badge for an approved seller.
+ * Admin-only action (enforced via role check).
+ */
+async function _updateSellerBadge(
+    adminUserId: string,
+    sellerId: string,
+    grant: boolean
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        // Role check
+        const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminUserId).get();
+        const adminRoles: string[] = adminDoc.data()?.roles || [];
+        if (!adminRoles.includes("admin") && !adminRoles.includes("super_admin")) {
+            return { success: false, error: "Unauthorized: admin role required" };
+        }
+
+        const now = FieldValue.serverTimestamp();
+
+        // Update seller_verifications doc
+        const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+            .where("userId", "==", sellerId)
+            .limit(1)
+            .get();
+
+        if (!verSnap.empty) {
+            await verSnap.docs[0].ref.update({
+                isVerifiedBadge: grant,
+                verifiedBadgeGrantedAt: grant ? now : null,
+                verifiedBadgeGrantedBy: grant ? adminUserId : null,
+                updatedAt: now,
+            });
+        }
+
+        // Sync on user document
+        await db.collection(COLLECTIONS.USERS).doc(sellerId).update({
+            isVerifiedBadge: grant,
+            verifiedBadgeGrantedAt: grant ? now : null,
+            updatedAt: now,
+        });
+
+        // Denormalize onto all active products by this seller
+        const productsSnap = await db.collection(COLLECTIONS.PRODUCTS)
+            .where("sellerId", "==", sellerId)
+            .where("status", "==", "active")
+            .get();
+
+        if (!productsSnap.empty) {
+            const batch = db.batch();
+            productsSnap.docs.forEach((doc) => {
+                batch.update(doc.ref, { sellerVerified: grant, updatedAt: now });
+            });
+            await batch.commit();
+        }
+
+        // Notify the seller
+        const { notifyBadgeUpdated } = await import("@/lib/marketplace-notifications");
+        await notifyBadgeUpdated({ sellerId, granted: grant });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error(`Badge ${grant ? "grant" : "revoke"} error:`, error);
+        return { success: false, error: error.message || "Failed to update badge" };
+    }
+}
+
+export async function grantSellerVerifiedBadgeAction(
+    sellerId: string
+): Promise<{ success: boolean; error?: string }> {
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+    return _updateSellerBadge(sessionResult.session.user.id, sellerId, true);
+}
+
+export async function revokeSellerVerifiedBadgeAction(
+    sellerId: string
+): Promise<{ success: boolean; error?: string }> {
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+    return _updateSellerBadge(sessionResult.session.user.id, sellerId, false);
+}
+
+// ============================================================================
+// SELLER CATEGORY — Update action for admin
+// ============================================================================
+
+/**
+ * Update the seller category (wholesale/retail) for an existing approved seller.
+ * Admin or the seller themselves can update this.
+ */
+export async function updateSellerCategoryAction(
+    sellerId: string,
+    category: "wholesale" | "retail"
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const actorId = sessionResult.session.user.id;
+
+        // Allow: the seller themselves, or an admin
+        if (actorId !== sellerId) {
+            const actorDoc = await db.collection(COLLECTIONS.USERS).doc(actorId).get();
+            const roles: string[] = actorDoc.data()?.roles || [];
+            if (!roles.includes("admin") && !roles.includes("super_admin")) {
+                return { success: false, error: "Unauthorized" };
+            }
+        }
+
+        const now = FieldValue.serverTimestamp();
+
+        await db.collection(COLLECTIONS.USERS).doc(sellerId).update({
+            sellerCategory: category,
+            updatedAt: now,
+        });
+
+        const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+            .where("userId", "==", sellerId)
+            .limit(1)
+            .get();
+        if (!verSnap.empty) {
+            await verSnap.docs[0].ref.update({ sellerCategory: category, updatedAt: now });
+        }
+
+        // Denormalize onto all products
+        const productsSnap = await db.collection(COLLECTIONS.PRODUCTS)
+            .where("sellerId", "==", sellerId)
+            .get();
+        if (!productsSnap.empty) {
+            const batch = db.batch();
+            productsSnap.docs.forEach((doc) => batch.update(doc.ref, { sellerCategory: category }));
+            await batch.commit();
+        }
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("updateSellerCategoryAction error:", error);
+        return { success: false, error: error.message || "Failed to update seller category" };
     }
 }

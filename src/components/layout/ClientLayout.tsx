@@ -9,6 +9,8 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { FirebaseAuthProvider } from "@/components/providers/FirebaseAuthProvider";
+import { useFCMRegistration } from "@/hooks/useFCMRegistration";
+import { PushNotificationBanner } from "@/components/notifications/PushNotificationBanner";
 
 interface ClientLayoutProps {
     children: ReactNode;
@@ -48,6 +50,12 @@ const MODULE_ROLE_MAP: Record<string, string[]> = {
 function LayoutContent({ children }: ClientLayoutProps) {
     const pathname = usePathname();
     const { data: session, status } = useSession();
+
+    // Register for push notifications once user is authenticated (non-blocking)
+    useFCMRegistration();
+
+    // Show push permission banner to authenticated users
+    const isAuthenticated = status === "authenticated";
 
     // Check if current route should have the Sidebar
     // Requirements:
@@ -106,6 +114,9 @@ function LayoutContent({ children }: ClientLayoutProps) {
                 )}
                 <Toaster position="top-right" richColors />
             </ThemeProvider>
+            {/* Push notification permission banner — only shows to authenticated users
+                who haven't yet granted or denied push permission */}
+            {isAuthenticated && <PushNotificationBanner />}
         </ToastProvider>
     );
 }

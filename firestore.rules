@@ -697,6 +697,55 @@ service cloud.firestore {
     }
     
     // ============================================
+    // DISPUTES
+    // ============================================
+    match /disputes/{disputeId} {
+      // Parties involved + admin can read
+      allow read: if isSignedIn() &&
+                     (resource.data.buyerId == request.auth.uid ||
+                      resource.data.sellerId == request.auth.uid ||
+                      isAdmin());
+      
+      // Disputes are only created by server actions (Admin SDK)
+      allow create: if false;
+      
+      // Parties can update ONLY safe fields (e.g. adding a message)
+      // Admin can update any field EXCEPT escalated/assignedAdminId/assignedBy
+      // which are protected to admin-only write to prevent tampering
+      allow update: if isAdmin() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                         // Status management
+                         'status', 'resolution', 'resolvedBy', 'resolvedAt',
+                         // Escalation — admin-only
+                         'escalated', 'escalatedAt', 'escalatedBy',
+                         // Assignment — admin-only
+                         'assignedAdminId', 'assignedAdminName', 'assignedBy', 'assignedAt',
+                         // Generic
+                         'adminNote', 'updatedAt'
+                       ]);
+      
+      allow delete: if isAdmin();
+      
+      // ── Escalation Notes (subcollection) ────────────────────────────────
+      // Admins create notes; parties involved can read notes on their dispute
+      match /notes/{noteId} {
+        allow read: if isSignedIn() &&
+                       (get(/databases/$(database)/documents/disputes/$(disputeId)).data.buyerId == request.auth.uid ||
+                        get(/databases/$(database)/documents/disputes/$(disputeId)).data.sellerId == request.auth.uid ||
+                        isAdmin());
+        
+        // Only admins can add notes
+        allow create: if isAdmin() &&
+                         request.resource.data.keys().hasAll(['text', 'createdBy', 'createdAt']) &&
+                         request.resource.data.createdBy == request.auth.uid;
+        
+        // Notes are immutable once written
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+    
+    // ============================================
     // DEFAULT DENY
     // ============================================
     match /{document=**} {

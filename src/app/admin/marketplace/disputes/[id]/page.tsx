@@ -11,13 +11,20 @@ import {
     CheckCircle,
     Loader2,
     ShieldCheck,
+    StickyNote,
+    Send,
 } from "lucide-react";
 import {
     getDisputeByIdAction,
     updateDisputeStatusAction,
 } from "@/app/actions/disputes";
 import { getOrderByIdAction } from "@/app/actions/orders";
-import { getEscrowTransactionByIdAction } from "@/app/actions/escrow";
+import { getEscrowTransactionByIdAction, escalateDisputeAction } from "@/app/actions/escrow";
+import {
+    addEscalationNoteAction,
+    getEscalationNotesAction,
+    type EscalationNote,
+} from "@/app/actions/escalation-notes";
 import type { Dispute, Order, DisputeResolution } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
@@ -47,7 +54,35 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     const [escrowData, setEscrowData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [resolving, setResolving] = useState(false);
+    const [escalating, setEscalating] = useState(false);
     const [showResolutionModal, setShowResolutionModal] = useState(false);
+
+    // Escalation notes
+    const [notes, setNotes] = useState<EscalationNote[]>([]);
+    const [noteText, setNoteText] = useState("");
+    const [savingNote, setSavingNote] = useState(false);
+    const [loadingNotes, setLoadingNotes] = useState(false);
+
+    async function loadNotes(dId: string) {
+        setLoadingNotes(true);
+        const res = await getEscalationNotesAction(dId);
+        if (res.success && res.notes) setNotes(res.notes);
+        setLoadingNotes(false);
+    }
+
+    async function handleAddNote() {
+        if (!noteText.trim() || !dispute) return;
+        setSavingNote(true);
+        const res = await addEscalationNoteAction(dispute.id, noteText);
+        setSavingNote(false);
+        if (res.success) {
+            showToast("Note saved", "success");
+            setNoteText("");
+            loadNotes(dispute.id);
+        } else {
+            showToast(res.error || "Failed to save note", "error");
+        }
+    }
 
     const [resolution, setResolution] = useState<DisputeResolution>("refund_buyer");
     const [adminNotes, setAdminNotes] = useState("");
@@ -70,6 +105,8 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
 
             setDispute(disputeResult.dispute);
             const d = disputeResult.dispute;
+            // Load notes for escalated disputes
+            if ((d as any).escalated) loadNotes(d.id);
 
             if (d.orderId) {
                 // ── Marketplace order-origin dispute ──────────────────────
@@ -119,6 +156,19 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
             showToast("Failed to resolve dispute", "error");
         } finally {
             setResolving(false);
+        }
+    }
+
+    async function handleEscalate() {
+        if (!dispute) return;
+        setEscalating(true);
+        const res = await escalateDisputeAction(dispute.id);
+        setEscalating(false);
+        if (res.success) {
+            showToast("Dispute escalated — both parties notified", "success");
+            loadData();
+        } else {
+            showToast(res.error || "Failed to escalate dispute", "error");
         }
     }
 
@@ -176,8 +226,25 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                                 <ShieldCheck className="w-3 h-3" /> Escrow Dispute
                             </span>
                         )}
+                        {(dispute as any).escalated && (
+                            <span className="px-3 py-1 rounded-xl font-semibold text-xs bg-red-100 text-red-800 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" /> ESCALATED
+                            </span>
+                        )}
                     </div>
-                    <p className="text-gray-600">
+                    <div className="flex items-center gap-3 mt-3">
+                        {(dispute.status === "open" || dispute.status === "under_review") && !(dispute as any).escalated && (
+                            <button
+                                onClick={handleEscalate}
+                                disabled={escalating}
+                                className="px-4 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition text-sm flex items-center gap-2 disabled:opacity-60"
+                            >
+                                {escalating ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+                                Escalate Dispute
+                            </button>
+                        )}
+                    </div>
+                    <p className="text-gray-600 mt-1">
                         Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago •{" "}
                         {new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate
                             ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate()
@@ -440,6 +507,65 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                         </div>
                     </div>
                 )}
+                {/* ── Escalation Notes Panel ───────────────────────────── */}
+                {(dispute as any).escalated && (
+                    <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                        <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <StickyNote className="w-6 h-6 text-red-500" />
+                            Escalation Notes
+                        </h2>
+
+                        {/* Notes log */}
+                        {loadingNotes ? (
+                            <div className="flex items-center justify-center py-6">
+                                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                            </div>
+                        ) : notes.length === 0 ? (
+                            <p className="text-slate-400 text-sm mb-4">No notes yet — add the first one below.</p>
+                        ) : (
+                            <div className="space-y-3 mb-5">
+                                {notes.map(note => (
+                                    <div key={note.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-bold text-slate-600">{note.createdByName}</span>
+                                            <span className="text-xs text-slate-400">
+                                                {(note.createdAt as any)?.toDate
+                                                    ? (note.createdAt as any).toDate().toLocaleString()
+                                                    : String(note.createdAt)}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-slate-800 whitespace-pre-wrap">{note.text}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Add note */}
+                        {dispute.status !== "resolved" && (
+                            <div className="flex gap-3">
+                                <textarea
+                                    value={noteText}
+                                    onChange={e => setNoteText(e.target.value)}
+                                    rows={3}
+                                    maxLength={2000}
+                                    placeholder="Add an internal note (visible to admins only)..."
+                                    className="flex-1 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:ring-2 focus:ring-red-400 outline-none resize-none"
+                                />
+                                <button
+                                    onClick={handleAddNote}
+                                    disabled={savingNote || !noteText.trim()}
+                                    className="px-4 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition disabled:opacity-50 flex items-center gap-2 text-sm self-end"
+                                >
+                                    {savingNote
+                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                        : <Send className="w-4 h-4" />}
+                                    Save
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
             </div>
         </div>
     );

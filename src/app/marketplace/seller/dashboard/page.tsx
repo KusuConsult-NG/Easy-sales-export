@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { logger } from '@/lib/logger';
-import { Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle, Eye, Clock, CheckCircle, Loader2 } from "lucide-react";
+import { Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle, Eye, Clock, CheckCircle, Loader2, Wallet, Zap } from "lucide-react";
 import Link from "next/link";
 import { getSellerAnalyticsAction, getSellerOrdersAction, getSellerProductsAction } from "@/app/actions/marketplace";
 import type { Order, Product } from "@/lib/types/marketplace";
@@ -163,32 +163,50 @@ export default function SellerDashboard() {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                     <Link
                         href="/marketplace/sell/create"
-                        className="bg-linear-to-br from-green-600 to-emerald-600 text-white rounded-xl p-6 hover:shadow-lg transition-shadow"
+                        className="bg-linear-to-br from-green-600 to-emerald-600 text-white rounded-xl p-5 hover:shadow-lg transition-shadow"
                     >
-                        <Package className="w-8 h-8 mb-3" />
-                        <h3 className="text-lg font-bold mb-1">Add New Product</h3>
-                        <p className="text-sm text-green-100">List a new product for sale</p>
+                        <Package className="w-7 h-7 mb-2" />
+                        <h3 className="text-sm font-bold mb-0.5">Add Product</h3>
+                        <p className="text-xs text-green-100">List a new product</p>
                     </Link>
 
                     <Link
                         href="/marketplace/sell"
-                        className="bg-linear-to-br from-blue-600 to-cyan-600 text-white rounded-xl p-6 hover:shadow-lg transition-shadow"
+                        className="bg-linear-to-br from-blue-600 to-cyan-600 text-white rounded-xl p-5 hover:shadow-lg transition-shadow"
                     >
-                        <Clock className="w-8 h-8 mb-3" />
-                        <h3 className="text-lg font-bold mb-1">Manage Listings</h3>
-                        <p className="text-sm text-blue-100">Edit or update your products</p>
+                        <Clock className="w-7 h-7 mb-2" />
+                        <h3 className="text-sm font-bold mb-0.5">My Listings</h3>
+                        <p className="text-xs text-blue-100">Manage products</p>
+                    </Link>
+
+                    <Link
+                        href="/dashboard/wallet"
+                        className="bg-linear-to-br from-amber-500 to-orange-600 text-white rounded-xl p-5 hover:shadow-lg transition-shadow"
+                    >
+                        <Wallet className="w-7 h-7 mb-2" />
+                        <h3 className="text-sm font-bold mb-0.5">Wallet</h3>
+                        <p className="text-xs text-amber-100">Balance & withdrawals</p>
+                    </Link>
+
+                    <Link
+                        href="/marketplace/village-market/seller"
+                        className="bg-linear-to-br from-orange-500 to-red-500 text-white rounded-xl p-5 hover:shadow-lg transition-shadow"
+                    >
+                        <Zap className="w-7 h-7 mb-2" />
+                        <h3 className="text-sm font-bold mb-0.5">Village Market</h3>
+                        <p className="text-xs text-orange-100">Flash sales hub</p>
                     </Link>
 
                     <Link
                         href="/marketplace/seller"
-                        className="bg-linear-to-br from-purple-600 to-pink-600 text-white rounded-xl p-6 hover:shadow-lg transition-shadow"
+                        className="bg-linear-to-br from-purple-600 to-pink-600 text-white rounded-xl p-5 hover:shadow-lg transition-shadow"
                     >
-                        <TrendingUp className="w-8 h-8 mb-3" />
-                        <h3 className="text-lg font-bold mb-1">View Analytics</h3>
-                        <p className="text-sm text-purple-100">Track detailed performance</p>
+                        <TrendingUp className="w-7 h-7 mb-2" />
+                        <h3 className="text-sm font-bold mb-0.5">Analytics</h3>
+                        <p className="text-xs text-purple-100">Track performance</p>
                     </Link>
                 </div>
 

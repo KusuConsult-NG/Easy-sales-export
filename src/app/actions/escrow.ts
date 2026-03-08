@@ -9,6 +9,8 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { verifyPaystackPayment } from "@/lib/paystack-server";
+import { smsEscrowReleased, smsDisputeResolved } from "@/lib/termii";
+import { pushEscrowReleased, pushDisputeResolved } from "@/lib/fcm";
 
 /**
  * Marketplace Escrow System
@@ -388,6 +390,19 @@ export async function releaseEscrowAction(
                 link: `/escrow/${escrowId}`,
                 linkText: "View Details",
             }).catch((e) => logger.error("[releaseEscrowAction] Buyer notification failed:", e));
+
+            // SMS + Push (non-fatal)
+            const [sellerDoc, buyerDoc] = await Promise.all([
+                db.collection(COLLECTIONS.USERS).doc(tx.sellerId).get(),
+                db.collection(COLLECTIONS.USERS).doc(tx.buyerId).get(),
+            ]);
+            const sellerPhone: string | undefined = sellerDoc.data()?.phone ?? sellerDoc.data()?.phoneNumber;
+            const orderRef = escrowId; // use escrow ID as order reference in SMS
+            await Promise.allSettled([
+                sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, tx.amount) : Promise.resolve(),
+                pushEscrowReleased(tx.sellerId, orderRef, tx.amount, escrowId),
+                pushDisputeResolved(tx.buyerId, tx.sellerId, orderRef), // reuses push helper — just informs buyer
+            ]);
         }
 
         return { success: true };
@@ -587,12 +602,94 @@ export async function resolveDisputeAction(
                 link: `/escrow/${d.escrowId}`,
                 linkText: "View Resolution",
             }).catch((e) => logger.error("[resolveDisputeAction] Respondent notification failed:", e));
+
+            // SMS + Push to both parties (non-fatal)
+            const [initiatorDoc, respondentDoc] = await Promise.all([
+                db.collection(COLLECTIONS.USERS).doc(d.initiatorId).get(),
+                db.collection(COLLECTIONS.USERS).doc(d.respondentId).get(),
+            ]);
+            const initiatorPhone: string | undefined = initiatorDoc.data()?.phone ?? initiatorDoc.data()?.phoneNumber;
+            const respondentPhone: string | undefined = respondentDoc.data()?.phone ?? respondentDoc.data()?.phoneNumber;
+            const outcomeLabel = outcome === "release_to_seller" ? "release_seller" : "refund_buyer";
+            await Promise.allSettled([
+                initiatorPhone ? smsDisputeResolved(initiatorPhone, escrowId ?? disputeId, outcomeLabel) : Promise.resolve(),
+                respondentPhone ? smsDisputeResolved(respondentPhone, escrowId ?? disputeId, outcomeLabel) : Promise.resolve(),
+                pushDisputeResolved(d.initiatorId, d.respondentId, escrowId ?? disputeId),
+            ]);
         }
 
         return { success: true };
     } catch (error: any) {
         logger.error("Dispute resolution error:", error);
         return { success: false, error: error.message || "Failed to resolve dispute" };
+    }
+}
+
+/**
+ * Admin escalates an open or under_review dispute.
+ * Sets escalated = true, changes status to under_review, logs audit, and
+ * notifies both parties so they know their case is being prioritised.
+ */
+export async function escalateDisputeAction(
+    disputeId: string
+): Promise<{ success: boolean; error?: string }> {
+    const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) {
+        return { success: false, error: adminCheck.error };
+    }
+
+    try {
+        const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
+        const snap = await disputeRef.get();
+        if (!snap.exists) return { success: false, error: "Dispute not found" };
+
+        const data = snap.data() as Dispute;
+        if (!(["open", "under_review"] as const).includes(data.status as "open" | "under_review")) {
+            return { success: false, error: `Dispute cannot be escalated — current status: ${data.status}` };
+        }
+        if ((data as any).escalated) {
+            return { success: false, error: "Dispute is already escalated" };
+        }
+
+        await disputeRef.update({
+            escalated: true,
+            escalatedAt: FieldValue.serverTimestamp(),
+            escalatedBy: (adminCheck as { userId: string }).userId,
+            status: "under_review",
+        });
+
+        await createAdminAuditLog({
+            action: "dispute_escalated",
+            userId: (adminCheck as { userId: string }).userId,
+            targetId: disputeId,
+            targetType: "dispute",
+            metadata: { escrowId: data.escrowId },
+        });
+
+        // Notify both parties
+        await Promise.allSettled([
+            createNotificationAction({
+                userId: data.initiatorId,
+                type: "dispute",
+                title: "Dispute Escalated ⚠️",
+                message: "Your dispute has been escalated to senior review. A decision will be reached within 1–3 business days.",
+                link: `/escrow/${data.escrowId}`,
+                linkText: "View Dispute",
+            }),
+            createNotificationAction({
+                userId: data.respondentId,
+                type: "dispute",
+                title: "Dispute Escalated ⚠️",
+                message: "The dispute for your escrow transaction has been escalated to senior review.",
+                link: `/escrow/${data.escrowId}`,
+                linkText: "View Dispute",
+            }),
+        ]);
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Dispute escalation error:", error);
+        return { success: false, error: error.message || "Failed to escalate dispute" };
     }
 }
 
