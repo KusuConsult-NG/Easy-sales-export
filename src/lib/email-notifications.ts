@@ -43,6 +43,11 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
             ] : undefined,
         });
 
+        if (result.error) {
+            console.error('[EMAIL] Resend API Error:', result.error);
+            return { success: false, error: result.error.message };
+        }
+
         // Log success for monitoring (development only)
         if (process.env.NODE_ENV !== 'production') {
             console.log('[EMAIL] Sent successfully:', {

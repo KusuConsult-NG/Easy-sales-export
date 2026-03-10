@@ -25,8 +25,8 @@ export async function approveAcademyApplicationAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
@@ -83,7 +83,7 @@ export async function approveAcademyApplicationAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
-                await resend.emails.send({
+                const { data, error } = await resend.emails.send({
                     from: "Easy Sales Export Academy <noreply@easysalesexport.com>",
                     to: appData.personalInfo.email,
                     subject: "Welcome to Academy - Application Approved!",
@@ -114,6 +114,9 @@ export async function approveAcademyApplicationAction(
                         </div>
                     `
                 });
+                if (error) {
+                    logger.error("Resend API Error (Academy approval email):", error);
+                }
             } catch (emailError) {
                 logger.error("Failed to send Academy approval email:", emailError);
                 // Don't block success on email failure
@@ -149,8 +152,8 @@ export async function rejectAcademyApplicationAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
@@ -197,7 +200,7 @@ export async function rejectAcademyApplicationAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
-                await resend.emails.send({
+                const { data, error } = await resend.emails.send({
                     from: "Easy Sales Export Academy <noreply@easysalesexport.com>",
                     to: appData.personalInfo.email,
                     subject: "Academy Application Update",
@@ -222,6 +225,9 @@ export async function rejectAcademyApplicationAction(
                         </div>
                     `
                 });
+                if (error) {
+                    logger.error("Resend API Error (Academy rejection email):", error);
+                }
             } catch (emailError) {
                 logger.error("Failed to send Academy rejection email:", emailError);
             }
@@ -257,8 +263,8 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }

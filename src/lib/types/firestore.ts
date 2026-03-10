@@ -914,6 +914,9 @@ export const COLLECTIONS = {
 
     // Admin Communications
     BROADCAST_LOGS: "broadcast_logs",
+
+    // Bounced Email Tracking
+    BOUNCED_EMAILS: "bounced_emails",
 } as const;
 
 

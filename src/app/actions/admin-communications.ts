@@ -120,26 +120,50 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         const { Resend } = await import('resend');
         const resend = new Resend(process.env.RESEND_API_KEY);
 
-        // Batch sending to avoid hitting limits if possible, or send as bcc
-        // For privacy, we should ALWAYS use Bcc for bulk emails
+        // Batch sending to avoid hitting limits
         const fromAddress = process.env.RESEND_FROM_EMAIL || 'noreply@easysalesexport.com';
-        await resend.emails.send({
-            from: `Easy Sales Export <${fromAddress}>`,
-            to: 'admin@easysalesexport.com', // Send to admin, bcc everyone else
-            bcc: emails,
-            subject: subject,
-            html: body
-        });
+
+        const CHUNK_SIZE = 100;
+        let successfulSends = 0;
+        let hasError = false;
+        let lastError = '';
+
+        for (let i = 0; i < emails.length; i += CHUNK_SIZE) {
+            const chunk = emails.slice(i, i + CHUNK_SIZE);
+            const batchPayload = chunk.map(email => ({
+                from: `Easy Sales Export <${fromAddress}>`,
+                to: email,
+                subject: subject,
+                html: body
+            }));
+
+            const { error } = await resend.batch.send(batchPayload);
+
+            if (error) {
+                logger.error(`Resend API Error (bulk email chunk ${i / CHUNK_SIZE + 1}):`, error);
+                hasError = true;
+                lastError = error.message || 'Email delivery failed for some recipients';
+                // Continue sending to other chunks even if one fails
+            } else {
+                successfulSends += chunk.length;
+            }
+        }
+
+        if (hasError && successfulSends === 0) {
+            return { success: false, error: lastError };
+        }
 
         // Log email in database
         await db.collection('email_history').add({
             recipients: recipients,
             subject,
             body,
-            recipientCount: emails.length,
+            recipientCount: successfulSends,
+            attemptedCount: emails.length,
             sentBy: session.user.id,
             sentAt: FieldValue.serverTimestamp(),
-            status: 'sent'
+            status: hasError ? 'partial' : 'sent',
+            error: hasError ? lastError : null
         });
 
         return {

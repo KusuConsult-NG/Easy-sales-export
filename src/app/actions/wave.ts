@@ -301,7 +301,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
 
             // Email to applicant
             if (applicantEmail) {
-                await resend.emails.send({
+                const { error: applicantError } = await resend.emails.send({
                     from: 'RH-WAVE 774 <noreply@easysalesexport.com>',
                     to: applicantEmail,
                     subject: 'Your WAVE Application Has Been Received — RH-WAVE 774',
@@ -324,10 +324,13 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
                         </div>
                     `,
                 });
+                if (applicantError) {
+                    logger.error("Resend API Error (WAVE applicant email):", applicantError);
+                }
             }
 
             // Email to admin
-            await resend.emails.send({
+            const { error: adminError } = await resend.emails.send({
                 from: 'RH-WAVE 774 System <noreply@easysalesexport.com>',
                 to: adminEmail,
                 subject: `New WAVE Application: ${applicantName} — ${applicationId}`,
@@ -347,6 +350,9 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
                     </div>
                 `,
             });
+            if (adminError) {
+                logger.error("Resend API Error (WAVE admin email):", adminError);
+            }
         } catch (emailError) {
             logger.error("WAVE application email notification failed (non-blocking):", emailError);
         }

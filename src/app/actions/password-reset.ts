@@ -78,7 +78,7 @@ export async function sendResetEmailAction(
         const { Resend } = await import('resend');
         const resend = new Resend(process.env.RESEND_API_KEY);
 
-        await resend.emails.send({
+        const { error } = await resend.emails.send({
             from: 'Easy Sales Export <noreply@easysalesexport.com>',
             to: email,
             subject: 'Reset Your Password - Easy Sales Export',
@@ -113,6 +113,14 @@ export async function sendResetEmailAction(
 </html>
             `
         });
+
+        if (error) {
+            logger.error('Resend API Error (password reset):', error);
+            return {
+                success: false,
+                error: 'Failed to send reset email. Please try again later.'
+            };
+        }
 
         return {
             success: true,

@@ -116,7 +116,7 @@ export async function approveWaveApplicationAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
-                await resend.emails.send({
+                const { data, error } = await resend.emails.send({
                     from: "WAVE Program <noreply@easysalesexport.com>",
                     to: userEmail,
                     subject: "Welcome to WAVE - Application Approved!",
@@ -146,6 +146,9 @@ export async function approveWaveApplicationAction(
                         </div>
                     `
                 });
+                if (error) {
+                    logger.error("Resend API Error (WAVE approval email):", error);
+                }
             } catch (emailError) {
                 logger.error("Failed to send WAVE approval email:", emailError);
                 // Don't block success on email failure
@@ -226,7 +229,7 @@ export async function rejectWaveApplicationAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
-                await resend.emails.send({
+                const { data, error } = await resend.emails.send({
                     from: "WAVE Program <noreply@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "WAVE Application Update",
@@ -252,6 +255,9 @@ export async function rejectWaveApplicationAction(
                         </div>
                     `
                 });
+                if (error) {
+                    logger.error("Resend API Error (WAVE rejection email):", error);
+                }
             } catch (emailError) {
                 logger.error("Failed to send WAVE rejection email:", emailError);
             }
@@ -811,12 +817,19 @@ export async function verifyLandListing(
                 if (!listingData.ownerEmail) {
                     logger.error(`Missing ownerEmail forland listing ${listingId}`);
                 } else {
-                    await resend.emails.send({
-                        from: "Easy Sales Export <noreply@easysalesexport.com>",
-                        to: listingData.ownerEmail,
-                        subject: emailSubject,
-                        html: emailContent,
-                    });
+                    try {
+                        const { error } = await resend.emails.send({
+                            from: "Easy Sales Export <noreply@easysalesexport.com>",
+                            to: listingData.ownerEmail,
+                            subject: emailSubject,
+                            html: emailContent,
+                        });
+                        if (error) {
+                            logger.error(`Resend API Error (Land listing ${decision} email):`, error);
+                        }
+                    } catch (emailError) {
+                        logger.error(`Failed to send land listing ${decision} email:`, emailError);
+                    }
                 }
             }
         }
@@ -1110,35 +1123,42 @@ export async function approveLoanApplication(
             if (!loanData.userEmail) {
                 logger.error(`Missing userEmail for loan application ${applicationId}`);
             } else {
-                await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
-                    to: loanData.userEmail,
-                    subject: "Loan Application Approved!",
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
-                            <p>Great news! Your loan application has been approved by our admin team.</p>
-                        
-                        <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                            <h3 style="color: #059669; margin-top: 0;">Loan Details:</h3>
-                            <p><strong>Amount:</strong> ₦${loanData.amount.toLocaleString()}</p>
-                            <p><strong>Duration:</strong> ${loanData.durationMonths} months</p>
-                            <p><strong>Interest Rate:</strong> ${loanData.interestRate}% per month</p>
-                            <p><strong>Monthly Payment:</strong> ₦${Math.round(loanData.monthlyPayment).toLocaleString()}</p>
-                            <p><strong>Total Repayment:</strong> ₦${Math.round(loanData.totalRepayment).toLocaleString()}</p>
-                        </div>
-
-                        <p><strong>Next Steps:</strong></p>
-                        <ul>
-                            <li>${disbursementTransferCode ? 'Your funds have been transferred to your bank account.' : 'Funds will be disbursed to your account shortly.'}</li>
-                            <li>Your first repayment is due 30 days from disbursement</li>
-                            <li>You can track your repayment schedule in your dashboard</li>
-                        </ul>
-
-                            <p>Thank you for being a valued member of our cooperative!</p>
-                        </div>
-                    `,
-                });
+                try {
+                    const { error } = await resend.emails.send({
+                        from: "Easy Sales Export <noreply@easysalesexport.com>",
+                        to: loanData.userEmail,
+                        subject: "Loan Application Approved!",
+                        html: `
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
+                                <p>Great news! Your loan application has been approved by our admin team.</p>
+                            
+                            <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                                <h3 style="color: #059669; margin-top: 0;">Loan Details:</h3>
+                                <p><strong>Amount:</strong> ₦${loanData.amount.toLocaleString()}</p>
+                                <p><strong>Duration:</strong> ${loanData.durationMonths} months</p>
+                                <p><strong>Interest Rate:</strong> ${loanData.interestRate}% per month</p>
+                                <p><strong>Monthly Payment:</strong> ₦${Math.round(loanData.monthlyPayment).toLocaleString()}</p>
+                                <p><strong>Total Repayment:</strong> ₦${Math.round(loanData.totalRepayment).toLocaleString()}</p>
+                            </div>
+    
+                            <p><strong>Next Steps:</strong></p>
+                            <ul>
+                                <li>${disbursementTransferCode ? 'Your funds have been transferred to your bank account.' : 'Funds will be disbursed to your account shortly.'}</li>
+                                <li>Your first repayment is due 30 days from disbursement</li>
+                                <li>You can track your repayment schedule in your dashboard</li>
+                            </ul>
+    
+                                <p>Thank you for being a valued member of our cooperative!</p>
+                            </div>
+                        `,
+                    });
+                    if (error) {
+                        logger.error(`Resend API Error (Loan approval email):`, error);
+                    }
+                } catch (emailError) {
+                    logger.error("Failed to send loan approval email:", emailError);
+                }
             }
         }
 
@@ -1220,34 +1240,41 @@ export async function rejectLoanApplication(
             if (!loanData.userEmail) {
                 logger.error(`Missing userEmail for loan rejection ${applicationId}`);
             } else {
-                await resend.emails.send({
-                    from: "Easy Sales Export <noreply@easysalesexport.com>",
-                    to: loanData.userEmail,
-                    subject: "Loan Application Update",
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #dc2626;">Loan Application Update</h2>
-                            <p>Thank you for applying for a loan with Easy Sales Export.</p>
-                            
-                            <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                                <p>Unfortunately, we are unable to approve your loan application at this time.</p>
-                                <p><strong>Reason:</strong> ${reason}</p>
+                try {
+                    const { error } = await resend.emails.send({
+                        from: "Easy Sales Export <noreply@easysalesexport.com>",
+                        to: loanData.userEmail,
+                        subject: "Loan Application Update",
+                        html: `
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                <h2 style="color: #dc2626;">Loan Application Update</h2>
+                                <p>Thank you for applying for a loan with Easy Sales Export.</p>
+                                
+                                <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                                    <p>Unfortunately, we are unable to approve your loan application at this time.</p>
+                                    <p><strong>Reason:</strong> ${reason}</p>
+                                </div>
+    
+                                <p><strong>What You Can Do:</strong></p>
+                                <ul>
+                                    <li>Review the rejection reason carefully</li>
+                                    <li>Address the issues mentioned</li>
+                                    <li>Consider increasing your cooperative contributions for a higher tier</li>
+                                    <li>Reapply after making the necessary adjustments</li>
+                                </ul>
+    
+                                <p>If you have any questions or need clarification, please don't hesitate to contact our support team.</p>
+                                
+                                <p>We look forward to supporting your financial growth in the future.</p>
                             </div>
-
-                            <p><strong>What You Can Do:</strong></p>
-                            <ul>
-                                <li>Review the rejection reason carefully</li>
-                                <li>Address the issues mentioned</li>
-                                <li>Consider increasing your cooperative contributions for a higher tier</li>
-                                <li>Reapply after making the necessary adjustments</li>
-                            </ul>
-
-                            <p>If you have any questions or need clarification, please don't hesitate to contact our support team.</p>
-                            
-                            <p>We look forward to supporting your financial growth in the future.</p>
-                        </div>
-                    `,
-                });
+                        `,
+                    });
+                    if (error) {
+                        logger.error(`Resend API Error (Loan rejection email):`, error);
+                    }
+                } catch (emailError) {
+                    logger.error("Failed to send loan rejection email:", emailError);
+                }
             }
         }
 
@@ -1630,7 +1657,7 @@ export async function approveSellerVerificationAction(
                     const { Resend } = await import("resend");
                     const resend = new Resend(process.env.RESEND_API_KEY);
 
-                    await resend.emails.send({
+                    const { error } = await resend.emails.send({
                         from: "Easy Sales Export <noreply@easysalesexport.com>",
                         to: userEmail,
                         subject: "Seller Account Approved!",
@@ -1657,6 +1684,9 @@ export async function approveSellerVerificationAction(
                             </div>
                         `
                     });
+                    if (error) {
+                        logger.error("Resend API Error (Seller approval email):", error);
+                    }
                 } catch (emailError) {
                     logger.error("Failed to send seller approval email:", emailError);
                 }
@@ -1748,7 +1778,7 @@ export async function approveExportOnboardingAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
-                await resend.emails.send({
+                const { error } = await resend.emails.send({
                     from: "Easy Sales Export <noreply@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Export Account Approved!",
@@ -1770,6 +1800,9 @@ export async function approveExportOnboardingAction(
                         </div>
                     `
                 });
+                if (error) {
+                    logger.error("Resend API Error (Export approval email):", error);
+                }
             } catch (emailError) {
                 logger.error("Failed to send export approval email:", emailError);
             }
@@ -1859,7 +1892,7 @@ export async function rejectExportApplicationAction(
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
 
-                await resend.emails.send({
+                const { error } = await resend.emails.send({
                     from: "Easy Sales Export <noreply@easysalesexport.com>",
                     to: appData.userEmail,
                     subject: "Export Application Update",
@@ -1882,6 +1915,9 @@ export async function rejectExportApplicationAction(
                         </div>
                     `
                 });
+                if (error) {
+                    logger.error("Resend API Error (Export rejection email):", error);
+                }
             } catch (emailError) {
                 logger.error("Failed to send export rejection email:", emailError);
             }
@@ -2014,7 +2050,7 @@ export async function approveAcademyApplicationAction(
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
-                await resend.emails.send({
+                const { error } = await resend.emails.send({
                     from: "Easy Sales Export Academy <noreply@easysalesexport.com>",
                     to: userEmail,
                     subject: "🎓 Academy Application Approved!",
@@ -2038,6 +2074,9 @@ export async function approveAcademyApplicationAction(
                         </div>
                     `
                 });
+                if (error) {
+                    logger.error("Resend API Error (Academy approval email):", error);
+                }
             } catch (emailError) {
                 logger.error("Failed to send Academy approval email:", emailError);
             }
@@ -2402,7 +2441,7 @@ export async function toggleVerifiedBadgeAction(
             try {
                 const { Resend } = await import("resend");
                 const resend = new Resend(process.env.RESEND_API_KEY);
-                await resend.emails.send({
+                const { error } = await resend.emails.send({
                     from: "Easy Sales Export <noreply@easysalesexport.com>",
                     to: data.email,
                     subject: "🏅 You've earned a Verified Badge!",
@@ -2419,6 +2458,9 @@ export async function toggleVerifiedBadgeAction(
                           </div>
                         </div>`,
                 });
+                if (error) {
+                    logger.error("[toggleVerifiedBadgeAction] Resend API Error:", error);
+                }
             } catch (emailErr: unknown) {
                 logger.warn("[toggleVerifiedBadgeAction] Email failed (non-fatal):", { error: String(emailErr) });
             }

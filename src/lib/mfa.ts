@@ -57,7 +57,7 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
         });
 
         // Send email via Resend
-        await resend.emails.send({
+        const { error } = await resend.emails.send({
             from: 'Easy Sales Export <noreply@easysalesexport.com>',
             to: email,
             subject: 'Your Verification Code',
@@ -73,6 +73,11 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
                 </div>
             `,
         });
+
+        if (error) {
+            console.error('Resend API Error (MFA):', error);
+            return { success: false, error: 'Failed to send verification code. Please try again.' };
+        }
 
         return { success: true };
     } catch (error) {

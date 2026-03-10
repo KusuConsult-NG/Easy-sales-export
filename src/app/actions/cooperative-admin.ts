@@ -68,8 +68,8 @@ export async function getCooperativeStatsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -197,8 +197,8 @@ export async function getAllMembersAction(options?: {
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -247,8 +247,8 @@ export async function updateMemberStatusAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -284,7 +284,7 @@ export async function updateMemberStatusAction(
             try {
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 if (userData?.email) {
-                    await resend.emails.send({
+                    const { error } = await resend.emails.send({
                         from: 'Easy Sales Export <noreply@easysalesexport.com>',
                         to: userData.email,
                         subject: '✅ Your Cooperative Membership Has Been Approved!',
@@ -303,6 +303,9 @@ export async function updateMemberStatusAction(
                             </div>
                         `,
                     });
+                    if (error) {
+                        logger.error("Resend API Error (Cooperative approval email):", error);
+                    }
                 }
             } catch (emailError) {
                 logger.error('Cooperative approval email failed (non-blocking):', emailError);
@@ -331,8 +334,8 @@ export async function getAllTransactionsAction(options?: {
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -396,8 +399,8 @@ export async function getContributionReportsAction(options?: {
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -503,8 +506,8 @@ export async function getRecentActivityAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
@@ -559,8 +562,8 @@ export async function approveWithdrawalAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         // Check admin role directly from session (Performance Optimization)
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
@@ -676,8 +679,8 @@ export async function rejectWithdrawalAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
@@ -797,8 +800,8 @@ export async function requestCooperativeRevisionAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
         }
@@ -832,7 +835,7 @@ export async function requestCooperativeRevisionAction(
             const email = memberData?.email;
             const name = memberData?.firstName ? `${memberData.firstName} ${memberData.lastName || ''}`.trim() : 'Member';
             if (email) {
-                await resend.emails.send({
+                const { error } = await resend.emails.send({
                     from: 'Easy Sales Export <noreply@easysalesexport.com>',
                     to: email,
                     subject: '⚠️ Action Required: Update Your Cooperative Application',
@@ -851,6 +854,9 @@ export async function requestCooperativeRevisionAction(
                         </div>
                     `,
                 });
+                if (error) {
+                    logger.error("Resend API Error (Cooperative revision email):", error);
+                }
             }
         } catch (emailError) {
             logger.error('Cooperative revision email failed (non-blocking):', emailError);

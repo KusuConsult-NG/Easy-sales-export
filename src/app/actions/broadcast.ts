@@ -207,14 +207,29 @@ export async function sendBroadcastAction(
             return { success: false, sent: 0, failed: 0, error: "No recipients matched the selected filters." };
         }
 
+        // --- NEW: Filter out bounced emails ---
+        const bouncedEmailsSnap = await getAdminDb().collection(COLLECTIONS.BOUNCED_EMAILS).get();
+        const bouncedEmailsSet = new Set(bouncedEmailsSnap.docs.map(doc => doc.id.toLowerCase()));
+        
+        const validRecipients = recipients.filter(r => {
+            const normalizedEmail = r.email.toLowerCase().replace(/\//g, "_");
+            return !bouncedEmailsSet.has(normalizedEmail) && !bouncedEmailsSet.has(r.email.toLowerCase());
+        });
+
+        if (validRecipients.length === 0) {
+            return { success: false, sent: 0, failed: 0, error: "All matched recipients have previously bounced or complained." };
+        }
+        // --------------------------------------
+
         const html = buildEmailHtml(subject, body);
         let successCount = 0;
         let failCount = 0;
+        let excludedCount = recipients.length - validRecipients.length;
 
         // Chunk into batches of 50 (Resend rate-limit friendly)
         const BATCH = 50;
-        for (let i = 0; i < recipients.length; i += BATCH) {
-            const chunk = recipients.slice(i, i + BATCH);
+        for (let i = 0; i < validRecipients.length; i += BATCH) {
+            const chunk = validRecipients.slice(i, i + BATCH);
             await Promise.allSettled(
                 chunk.map(async (r) => {
                     const res = await sendEmailNotification({
@@ -223,12 +238,32 @@ export async function sendBroadcastAction(
                         message: html,
                         metadata: { type: "admin_broadcast" },
                     });
-                    if (res.success) successCount++;
-                    else failCount++;
+                    
+                    if (res.success) {
+                         successCount++;
+                    } else {
+                        failCount++;
+                        // --- NEW: Synchronous bounce recording ---
+                        // If Resend immediately rejects it (e.g. invalid format)
+                        if (res.error && (res.error.toLowerCase().includes("invalid") || res.error.toLowerCase().includes("validation"))) {
+                             try {
+                                const docId = r.email.toLowerCase().replace(/\//g, "_");
+                                await getAdminDb().collection(COLLECTIONS.BOUNCED_EMAILS).doc(docId).set({
+                                    email: r.email.toLowerCase(),
+                                    reason: "sync_validation_error",
+                                    metadata: { error: res.error },
+                                    recordedAt: new Date(),
+                                    source: "broadcast_sync"
+                                }, { merge: true });
+                             } catch (e) {
+                                 console.error("Failed to record synchronous bounce for", r.email, e);
+                             }
+                        }
+                    }
                 })
             );
             // throttle between batches
-            if (i + BATCH < recipients.length) await sleep(300);
+            if (i + BATCH < validRecipients.length) await sleep(300);
         }
 
         const status: BroadcastLog["status"] =
