@@ -62,11 +62,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Build branded HTML email from plain subject + body text.
  * Body supports simple line-breaks.
  */
-function buildEmailHtml(subject: string, body: string): string {
+function buildEmailHtml(subject: string, body: string, recipientEmail?: string): string {
     const htmlBody = body
         .split("\n")
         .map((line) => (line.trim() === "" ? "<br/>" : `<p style="margin:0 0 12px">${line}</p>`))
         .join("");
+
+    const unsubscribeFooter = recipientEmail 
+        ? `<p style="font-size:12px;color:#9ca3af;margin:16px 0 0;text-align:center"><a href="mailto:unsubscribe@easysalesexport.com?subject=unsubscribe%20${encodeURIComponent(recipientEmail)}" style="color:#9ca3af;text-decoration:underline">Unsubscribe from these emails</a></p>`
+        : "";
 
     return `
     <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1a1a1a">
@@ -81,6 +85,7 @@ function buildEmailHtml(subject: string, body: string): string {
         <p style="font-size:12px;color:#9ca3af;margin:0;text-align:center">
           Easy Sales Export · <a href="https://easysalesexport.com" style="color:#16a34a">easysalesexport.com</a>
         </p>
+        ${unsubscribeFooter}
       </div>
     </div>`;
 }
@@ -221,7 +226,6 @@ export async function sendBroadcastAction(
         }
         // --------------------------------------
 
-        const html = buildEmailHtml(subject, body);
         let successCount = 0;
         let failCount = 0;
         let excludedCount = recipients.length - validRecipients.length;
@@ -232,11 +236,16 @@ export async function sendBroadcastAction(
             const chunk = validRecipients.slice(i, i + BATCH);
             await Promise.allSettled(
                 chunk.map(async (r) => {
+                    const html = buildEmailHtml(subject, body, r.email);
                     const res = await sendEmailNotification({
                         to: r.email,
                         subject,
                         message: html,
                         metadata: { type: "admin_broadcast" },
+                        headers: {
+                            "List-Unsubscribe": `<mailto:unsubscribe@easysalesexport.com?subject=unsubscribe%20${encodeURIComponent(r.email)}>`,
+                            "Precedence": "bulk"
+                        }
                     });
                     
                     if (res.success) {

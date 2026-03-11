@@ -9,6 +9,7 @@ interface EmailData {
     subject: string;
     message: string;
     metadata?: Record<string, any>;
+    headers?: Record<string, string>;
 }
 
 /**
@@ -37,6 +38,7 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
             to: data.to,
             subject: data.subject,
             html: data.message,
+            headers: data.headers,
             // Add tags for tracking
             tags: data.metadata ? [
                 { name: 'type', value: data.metadata.type || 'general' }
