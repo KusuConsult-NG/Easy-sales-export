@@ -132,7 +132,7 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     let totalRevenue = 0;
     let monthlyRevenue = 0;
     try {
-        const [allRevSnap, monthRevSnap, allCoopSnap, monthCoopSnap] = await Promise.all([
+        const [allRevResult, monthRevResult, allCoopResult, monthCoopResult] = await Promise.allSettled([
             db
                 .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("status", "==", "completed")
@@ -156,10 +156,11 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
                 .aggregate({ total: AggregateField.sum("registrationFee") })
                 .get(),
         ]);
-        const escrowRev = (allRevSnap.data().total ?? 0) * 0.025;
-        const escrowMonthRev = (monthRevSnap.data().total ?? 0) * 0.025;
-        const coopRev = allCoopSnap.data().total ?? 0;
-        const coopMonthRev = monthCoopSnap.data().total ?? 0;
+        
+        const escrowRev = allRevResult.status === "fulfilled" ? (allRevResult.value.data().total ?? 0) * 0.025 : 0;
+        const escrowMonthRev = monthRevResult.status === "fulfilled" ? (monthRevResult.value.data().total ?? 0) * 0.025 : 0;
+        const coopRev = allCoopResult.status === "fulfilled" ? (allCoopResult.value.data().total ?? 0) : 0;
+        const coopMonthRev = monthCoopResult.status === "fulfilled" ? (monthCoopResult.value.data().total ?? 0) : 0;
         
         totalRevenue = escrowRev + coopRev;
         monthlyRevenue = escrowMonthRev + coopMonthRev;
