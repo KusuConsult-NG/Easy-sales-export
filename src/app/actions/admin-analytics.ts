@@ -253,7 +253,7 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const recentTransactions: AnalyticsData["recentTransactions"] = [];
     
     try {
-        const [recentEscrowSnap, recentCoopSnap] = await Promise.all([
+        const [recentEscrowSnap, recentCoopSnap] = await Promise.allSettled([
             db
                 .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .orderBy("createdAt", "desc")
@@ -267,25 +267,31 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
                 .get()
         ]);
         
-        recentEscrowSnap.forEach(doc => {
-            const data = doc.data();
-            recentTransactions.push({
-                id: doc.id,
-                type: "Escrow Transaction",
-                amount: Number(data.amount) || 0,
-                date: (data.createdAt?.toDate?.() || new Date()).toISOString()
+        if (recentEscrowSnap.status === "fulfilled") {
+            recentEscrowSnap.value.forEach(doc => {
+                const data = doc.data();
+                recentTransactions.push({
+                    id: doc.id,
+                    type: "Escrow Transaction",
+                    amount: Number(data.amount) || 0,
+                    date: (data.createdAt?.toDate?.() || new Date()).toISOString()
+                });
             });
-        });
+        }
         
-        recentCoopSnap.forEach(doc => {
-            const data = doc.data();
-            recentTransactions.push({
-                id: doc.id,
-                type: "Cooperative Registration",
-                amount: Number(data.registrationFee) || 0,
-                date: (data.updatedAt?.toDate?.() || new Date()).toISOString()
+        if (recentCoopSnap.status === "fulfilled") {
+            recentCoopSnap.value.forEach(doc => {
+                const data = doc.data();
+                recentTransactions.push({
+                    id: doc.id,
+                    type: "Cooperative Registration",
+                    amount: Number(data.registrationFee) || 0,
+                    date: (data.updatedAt?.toDate?.() || new Date()).toISOString()
+                });
             });
-        });
+        } else {
+            logger.warn("Cooperative members recent transactions query failed (likely missing index).", recentCoopSnap.reason);
+        }
         
         // Sort combined transactions and keep only the latest 5
         recentTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
