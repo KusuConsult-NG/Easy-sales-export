@@ -28,23 +28,31 @@ export async function detectOrphanedUsers(): Promise<OrphanedUser[]> {
         // Get all Auth users
         const listUsersResult = await adminAuth.listUsers(1000); // Max 1000 users
 
-        // Check each user for Firestore profile
-        for (const userRecord of listUsersResult.users) {
-            const firestoreDoc = await db.collection(COLLECTIONS.USERS).doc(userRecord.uid).get();
+        // Check each user for Firestore profile efficiently in batches of 50
+        const chunkSize = 50;
+        for (let i = 0; i < listUsersResult.users.length; i += chunkSize) {
+            const chunk = listUsersResult.users.slice(i, i + chunkSize);
+            const refs = chunk.map(u => db.collection(COLLECTIONS.USERS).doc(u.uid));
+            
+            // Fetch up to 50 docs in parallel
+            const docs = await db.getAll(...refs);
+            
+            docs.forEach((doc, idx) => {
+                const userRecord = chunk[idx];
+                if (!doc.exists) {
+                    orphanedUsers.push({
+                        uid: userRecord.uid,
+                        email: userRecord.email,
+                        displayName: userRecord.displayName,
+                        createdAt: userRecord.metadata.creationTime,
+                    });
 
-            if (!firestoreDoc.exists) {
-                orphanedUsers.push({
-                    uid: userRecord.uid,
-                    email: userRecord.email,
-                    displayName: userRecord.displayName,
-                    createdAt: userRecord.metadata.creationTime,
-                });
-
-                logger.warn('Orphaned user detected', {
-                    uid: userRecord.uid,
-                    email: userRecord.email,
-                });
-            }
+                    logger.warn('Orphaned user detected', {
+                        uid: userRecord.uid,
+                        email: userRecord.email,
+                    });
+                }
+            });
         }
 
         return orphanedUsers;
