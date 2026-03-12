@@ -123,10 +123,10 @@ export default function AdminAnalyticsPage() {
                             </p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900 mb-1">
-                            {platformOverview.totalUsers.toLocaleString()}
+                            {(platformOverview?.totalUsers ?? 0).toLocaleString()}
                         </p>
                         <p className="text-xs text-green-600">
-                            {platformOverview.activeUsers} active (30d)
+                            {platformOverview?.activeUsers ?? 0} active (30d)
                         </p>
                     </div>
 
@@ -157,7 +157,7 @@ export default function AdminAnalyticsPage() {
                             </p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900 mb-1">
-                            {platformOverview.totalTransactions.toLocaleString()}
+                            {(platformOverview?.totalTransactions ?? 0).toLocaleString()}
                         </p>
                         <p className="text-xs text-slate-500">
                             All time

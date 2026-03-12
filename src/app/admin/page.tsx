@@ -93,14 +93,14 @@ export default function AdminDashboardPage() {
     const statCards = [
         {
             label: "Total Users",
-            value: stats.platformOverview.totalUsers.toLocaleString(),
+            value: (stats.platformOverview?.totalUsers ?? 0).toLocaleString(),
             icon: Users,
             color: "blue",
             change: "Total registered accounts",
         },
         {
             label: "Active Users (30d)",
-            value: stats.platformOverview.activeUsers.toLocaleString(),
+            value: (stats.platformOverview?.activeUsers ?? 0).toLocaleString(),
             icon: TrendingUp,
             color: "emerald",
             change: "Logged in recently",

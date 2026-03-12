@@ -53,16 +53,16 @@ export default function RegistrationPieChart({ stats }: RegistrationPieChartProp
     const [hovered, setHovered] = useState<number | null>(null);
 
     const rawSlices: Slice[] = [
-        { label: "Hub (All Users)", shortLabel: "Hub", value: stats.hub, color: COLORS[0] },
-        { label: "WAVE Applications", shortLabel: "WAVE App", value: stats.wave, color: COLORS[1] },
-        { label: "WAVE Briefings", shortLabel: "Briefings", value: stats.waveBriefing, color: COLORS[2] },
-        { label: "Academy", shortLabel: "Academy", value: stats.academy, color: COLORS[3] },
-        { label: "Cooperatives", shortLabel: "Co-ops", value: stats.cooperatives, color: COLORS[4] },
-        { label: "Co-op Onboarding", shortLabel: "Co-op Onb.", value: stats.cooperativeOnboarding, color: COLORS[5] },
-        { label: "Farm Nation", shortLabel: "Farm Nation", value: stats.farmNation, color: COLORS[6] },
-        { label: "Export Hub", shortLabel: "Export Hub", value: stats.exportHub, color: COLORS[7] },
-        { label: "Export Onboarding", shortLabel: "Export Onb.", value: stats.exportOnboarding, color: COLORS[8] },
-        { label: "Marketplace", shortLabel: "Marketplace", value: stats.marketplace, color: COLORS[9] },
+        { label: "Hub (All Users)", shortLabel: "Hub", value: stats?.hub ?? 0, color: COLORS[0] },
+        { label: "WAVE Applications", shortLabel: "WAVE App", value: stats?.wave ?? 0, color: COLORS[1] },
+        { label: "WAVE Briefings", shortLabel: "Briefings", value: stats?.waveBriefing ?? 0, color: COLORS[2] },
+        { label: "Academy", shortLabel: "Academy", value: stats?.academy ?? 0, color: COLORS[3] },
+        { label: "Cooperatives", shortLabel: "Co-ops", value: stats?.cooperatives ?? 0, color: COLORS[4] },
+        { label: "Co-op Onboarding", shortLabel: "Co-op Onb.", value: stats?.cooperativeOnboarding ?? 0, color: COLORS[5] },
+        { label: "Farm Nation", shortLabel: "Farm Nation", value: stats?.farmNation ?? 0, color: COLORS[6] },
+        { label: "Export Hub", shortLabel: "Export Hub", value: stats?.exportHub ?? 0, color: COLORS[7] },
+        { label: "Export Onboarding", shortLabel: "Export Onb.", value: stats?.exportOnboarding ?? 0, color: COLORS[8] },
+        { label: "Marketplace", shortLabel: "Marketplace", value: stats?.marketplace ?? 0, color: COLORS[9] },
     ];
 
     const total = rawSlices.reduce((sum, s) => sum + s.value, 0);

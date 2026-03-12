@@ -82,16 +82,16 @@ function LogRow({ log }: { log: BroadcastLog }) {
                 {/* Stats */}
                 <div className="flex items-center gap-5 shrink-0">
                     <div className="text-center">
-                        <p className="text-xl font-bold text-slate-900">{log.totalRecipients.toLocaleString()}</p>
+                        <p className="text-xl font-bold text-slate-900">{(log.totalRecipients ?? 0).toLocaleString()}</p>
                         <p className="text-xs text-slate-500">Total</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xl font-bold text-green-600">{log.successCount.toLocaleString()}</p>
+                        <p className="text-xl font-bold text-green-600">{(log.successCount ?? 0).toLocaleString()}</p>
                         <p className="text-xs text-slate-500">Sent</p>
                     </div>
                     {log.failCount > 0 && (
                         <div className="text-center">
-                            <p className="text-xl font-bold text-red-500">{log.failCount.toLocaleString()}</p>
+                            <p className="text-xl font-bold text-red-500">{(log.failCount ?? 0).toLocaleString()}</p>
                             <p className="text-xs text-slate-500">Failed</p>
                         </div>
                     )}
