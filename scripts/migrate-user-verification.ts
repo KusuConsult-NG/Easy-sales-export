@@ -17,7 +17,7 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     serviceAccount = {
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        privateKey: process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, '\n'),
     };
 } else {
     serviceAccount = require(path.resolve(__dirname, '../service-account-key.json'));

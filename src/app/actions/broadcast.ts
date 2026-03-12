@@ -40,7 +40,7 @@ export interface BroadcastLog {
     filters: BroadcastFilters;
     sentBy: string;
     sentByName: string;
-    sentAt: Date;
+    sentAt: Date | string;
     totalRecipients: number;
     successCount: number;
     failCount: number;
@@ -308,7 +308,7 @@ export async function getBroadcastHistoryAction(): Promise<{ logs: BroadcastLog[
                 filters: data.filters,
                 sentBy: data.sentBy,
                 sentByName: data.sentByName,
-                sentAt: data.sentAt?.toDate?.() ?? new Date(),
+                sentAt: data.sentAt?.toDate?.()?.toISOString() || new Date().toISOString(),
                 totalRecipients: data.totalRecipients,
                 successCount: data.successCount,
                 failCount: data.failCount,

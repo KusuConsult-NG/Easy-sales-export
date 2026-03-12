@@ -180,8 +180,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         "auth/operation-not-allowed": "Email/password login is not enabled. Please contact support.",
                     };
 
-                    const userMessage = firebaseErrorMap[code] || error.message || "Authentication failed.";
+                    const userMessage = firebaseErrorMap[code] || error?.message || "Authentication failed.";
 
+                    console.error("Throwing AuthError with message:", userMessage, "Original error:", error);
 
                     // NOTE: Must throw CredentialsSignin (not plain Error) — NextAuth v5
                     // maps any plain Error from authorize() to the generic 'Configuration' page.

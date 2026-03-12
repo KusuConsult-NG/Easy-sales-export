@@ -127,11 +127,11 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const totalTransactions = totalOrders + totalEscrows;
     const pendingApprovals = pendingEscrows + pendingSellers + pendingWithdrawals + pendingLoans;
 
-    // ── Revenue: completed escrow commissions ────────────────────────────────
+    // ── Revenue: completed escrow commissions + cooperative fees ─────────────
     let totalRevenue = 0;
     let monthlyRevenue = 0;
     try {
-        const [allRevSnap, monthRevSnap] = await Promise.all([
+        const [allRevSnap, monthRevSnap, allCoopSnap, monthCoopSnap] = await Promise.all([
             db
                 .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("status", "==", "completed")
@@ -143,9 +143,25 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
                 .where("completedAt", ">=", thisMonthStart)
                 .aggregate({ total: AggregateField.sum("amount") })
                 .get(),
+            db
+                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("paymentStatus", "==", "completed")
+                .aggregate({ total: AggregateField.sum("registrationFee") })
+                .get(),
+            db
+                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("paymentStatus", "==", "completed")
+                .where("updatedAt", ">=", thisMonthStart)
+                .aggregate({ total: AggregateField.sum("registrationFee") })
+                .get(),
         ]);
-        totalRevenue = (allRevSnap.data().total ?? 0) * 0.025;
-        monthlyRevenue = (monthRevSnap.data().total ?? 0) * 0.025;
+        const escrowRev = (allRevSnap.data().total ?? 0) * 0.025;
+        const escrowMonthRev = (monthRevSnap.data().total ?? 0) * 0.025;
+        const coopRev = allCoopSnap.data().total ?? 0;
+        const coopMonthRev = monthCoopSnap.data().total ?? 0;
+        
+        totalRevenue = escrowRev + coopRev;
+        monthlyRevenue = escrowMonthRev + coopMonthRev;
     } catch {
         // collections may not exist yet — leave as 0
     }
@@ -154,14 +170,25 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const revenueByMonth = await Promise.all(
         months.map(async ({ label, start, end }) => {
             try {
-                const snap = await db
-                    .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                    .where("status", "==", "completed")
-                    .where("completedAt", ">=", start)
-                    .where("completedAt", "<=", end)
-                    .aggregate({ total: AggregateField.sum("amount") })
-                    .get();
-                return { month: label, revenue: (snap.data().total ?? 0) * 0.025 };
+                const [snap, coopSnap] = await Promise.all([
+                    db
+                        .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                        .where("status", "==", "completed")
+                        .where("completedAt", ">=", start)
+                        .where("completedAt", "<=", end)
+                        .aggregate({ total: AggregateField.sum("amount") })
+                        .get(),
+                    db
+                        .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                        .where("paymentStatus", "==", "completed")
+                        .where("updatedAt", ">=", start)
+                        .where("updatedAt", "<=", end)
+                        .aggregate({ total: AggregateField.sum("registrationFee") })
+                        .get()
+                ]);
+                const escrowRev = (snap.data().total ?? 0) * 0.025;
+                const coopRev = coopSnap.data().total ?? 0;
+                return { month: label, revenue: escrowRev + coopRev };
             } catch {
                 return { month: label, revenue: 0 };
             }
@@ -292,12 +319,15 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     const recentTransactions: FinancialOverview["recentTransactions"] = [];
 
     try {
-        const [allEscrows, completedEscrows] = await Promise.all([
+        const [allEscrows, completedEscrows, coopRevenueSnap] = await Promise.all([
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).aggregate({ total: AggregateField.sum("amount") }).get(),
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").aggregate({ total: AggregateField.sum("registrationFee") }).get(),
         ]);
         totalEscrowVolume = allEscrows.data().total ?? 0;
-        totalRevenue = (completedEscrows.data().total ?? 0) * 0.025;
+        const escrowRevenue = (completedEscrows.data().total ?? 0) * 0.025;
+        const coopRevenue = coopRevenueSnap.data().total ?? 0;
+        totalRevenue = escrowRevenue + coopRevenue;
     } catch (e: any) {
         console.error("[FINANCE] Escrow fetch error:", e.message);
     }
