@@ -323,8 +323,8 @@ export default function AdminAnalyticsPage() {
                                             {transaction.type || "Transaction"}
                                         </p>
                                         <p className="text-xs text-slate-500">
-                                            {transaction.createdAt
-                                                ? new Date(transaction.createdAt).toLocaleDateString()
+                                            {transaction.date
+                                                ? new Date(transaction.date).toLocaleDateString()
                                                 : "N/A"}
                                         </p>
                                     </div>

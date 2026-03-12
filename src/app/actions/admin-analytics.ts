@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase-admin";
 import { AggregateField } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { logger } from '@/lib/logger';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -248,18 +249,51 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         { module: "Export Hub", count: exportCount.status === "fulfilled" ? exportCount.value : 0 },
     ].filter((m) => m.count > 0);
 
-    // ── Recent transactions from audit log ───────────────────────────────────
+    // ── Recent transactions from financial collections ───────────────────────
     const recentTransactions: AnalyticsData["recentTransactions"] = [];
-    if (recentLogsSnap.status === "fulfilled") {
-        recentLogsSnap.value.docs.forEach((doc) => {
+    
+    try {
+        const [recentEscrowSnap, recentCoopSnap] = await Promise.all([
+            db
+                .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .orderBy("createdAt", "desc")
+                .limit(5)
+                .get(),
+            db
+                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("paymentStatus", "==", "completed")
+                .orderBy("updatedAt", "desc")
+                .limit(5)
+                .get()
+        ]);
+        
+        recentEscrowSnap.forEach(doc => {
             const data = doc.data();
             recentTransactions.push({
                 id: doc.id,
-                type: data.action ?? "unknown",
+                type: "Escrow Transaction",
                 amount: Number(data.amount) || 0,
-                date: data.timestamp?.toDate?.()?.toISOString() ?? new Date().toISOString(),
+                date: (data.createdAt?.toDate?.() || new Date()).toISOString()
             });
         });
+        
+        recentCoopSnap.forEach(doc => {
+            const data = doc.data();
+            recentTransactions.push({
+                id: doc.id,
+                type: "Cooperative Registration",
+                amount: Number(data.registrationFee) || 0,
+                date: (data.updatedAt?.toDate?.() || new Date()).toISOString()
+            });
+        });
+        
+        // Sort combined transactions and keep only the latest 5
+        recentTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (recentTransactions.length > 5) {
+            recentTransactions.length = 5;
+        }
+    } catch (e) {
+        logger.error("Failed to fetch recent transactions:", e);
     }
 
     return {

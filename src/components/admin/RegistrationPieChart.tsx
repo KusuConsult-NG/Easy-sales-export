@@ -53,7 +53,6 @@ export default function RegistrationPieChart({ stats }: RegistrationPieChartProp
     const [hovered, setHovered] = useState<number | null>(null);
 
     const rawSlices: Slice[] = [
-        { label: "Hub (All Users)", shortLabel: "Hub", value: stats?.hub ?? 0, color: COLORS[0] },
         { label: "WAVE Applications", shortLabel: "WAVE App", value: stats?.wave ?? 0, color: COLORS[1] },
         { label: "WAVE Briefings", shortLabel: "Briefings", value: stats?.waveBriefing ?? 0, color: COLORS[2] },
         { label: "Academy", shortLabel: "Academy", value: stats?.academy ?? 0, color: COLORS[3] },
@@ -103,7 +102,7 @@ export default function RegistrationPieChart({ stats }: RegistrationPieChartProp
             <p style={{ margin: "0 0 28px 0", fontSize: 13, color: "#64748b" }}>
                 Breakdown of total participants across all platform modules.{" "}
                 <span style={{ color: "#94a3b8", fontStyle: "italic" }}>
-                    Note: one person may appear in multiple modules. Hub total = unique accounts.
+                    Note: one person may appear in multiple modules.
                 </span>
                 {!isEmpty && (
                     <span
@@ -117,9 +116,23 @@ export default function RegistrationPieChart({ stats }: RegistrationPieChartProp
                             fontSize: 12,
                         }}
                     >
-                        {total.toLocaleString()} module registrations
+                        {total.toLocaleString()} total module registrations
                     </span>
                 )}
+                <span
+                    style={{
+                        marginLeft: 8,
+                        background: "#f8fafc",
+                        color: "#475569",
+                        fontWeight: 600,
+                        padding: "2px 8px",
+                        borderRadius: 99,
+                        fontSize: 12,
+                        border: "1px solid #e2e8f0"
+                    }}
+                >
+                    {(stats?.hub ?? 0).toLocaleString()} Unique Accounts
+                </span>
             </p>
 
             <div
