@@ -76,6 +76,53 @@ export async function sendEmailNotification(data: EmailData): Promise<{ success:
 }
 
 /**
+ * Send Batch Email notifications using Resend
+ * Supports up to 100 emails in a single extremely fast API payload.
+ * Eliminates "429 Too Many Requests" errors when broadcasting.
+ */
+export async function sendBatchEmailNotifications(emails: EmailData[]): Promise<{ success: boolean; sent: number; error?: string }> {
+    try {
+        if (!process.env.RESEND_API_KEY) {
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[EMAIL BATCH] RESEND_API_KEY not configured');
+            }
+            return { success: false, sent: 0, error: 'Email service not configured' };
+        }
+
+        const { Resend } = await import('resend');
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const senderEmail = process.env.EMAIL_FROM || 'Easy Sales Export <noreply@easysalesexport.com>';
+
+        const payload = emails.map(data => ({
+            from: senderEmail,
+            to: [data.to],
+            subject: data.subject,
+            html: data.message,
+            headers: data.headers,
+            tags: data.metadata ? [
+                { name: 'type', value: data.metadata.type || 'general' }
+            ] : undefined,
+        }));
+
+        const result = await resend.batch.send(payload);
+
+        if (result.error) {
+            console.error('[EMAIL BATCH] Resend API Error:', result.error);
+            return { success: false, sent: 0, error: result.error.message };
+        }
+
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`[EMAIL BATCH] Successfully dispatched ${emails.length} batched emails.`);
+        }
+
+        return { success: true, sent: emails.length };
+    } catch (error: any) {
+        console.error('[EMAIL BATCH] Failed to send bulk batch:', error.message);
+        return { success: false, sent: 0, error: error.message || 'Failed to send batch payload' };
+    }
+}
+
+/**
  * Send cooperative membership approval email
  */
 export async function sendMembershipApprovalEmail(memberEmail: string, memberName: string) {

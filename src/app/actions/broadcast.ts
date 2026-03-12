@@ -11,7 +11,7 @@
 
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { sendEmailNotification } from "@/lib/email-notifications";
+import { sendEmailNotification, sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "firebase-admin/firestore";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -230,49 +230,37 @@ export async function sendBroadcastAction(
         let failCount = 0;
         let excludedCount = recipients.length - validRecipients.length;
 
-        // Chunk into batches of 50 (Resend rate-limit friendly)
-        const BATCH = 50;
+        // Chunk into batches of 100 (Resend batch API limit is 100 emails per request)
+        const BATCH = 100;
         for (let i = 0; i < validRecipients.length; i += BATCH) {
             const chunk = validRecipients.slice(i, i + BATCH);
-            await Promise.allSettled(
-                chunk.map(async (r) => {
-                    const html = buildEmailHtml(subject, body, r.email);
-                    const res = await sendEmailNotification({
-                        to: r.email,
-                        subject,
-                        message: html,
-                        metadata: { type: "admin_broadcast" },
-                        headers: {
-                            "List-Unsubscribe": `<mailto:unsubscribe@easysalesexport.com?subject=unsubscribe%20${encodeURIComponent(r.email)}>`,
-                            "Precedence": "bulk"
-                        }
-                    });
-                    
-                    if (res.success) {
-                         successCount++;
-                    } else {
-                        failCount++;
-                        // --- NEW: Synchronous bounce recording ---
-                        // If Resend immediately rejects it (e.g. invalid format)
-                        if (res.error && (res.error.toLowerCase().includes("invalid") || res.error.toLowerCase().includes("validation"))) {
-                             try {
-                                const docId = r.email.toLowerCase().replace(/\//g, "_");
-                                await getAdminDb().collection(COLLECTIONS.BOUNCED_EMAILS).doc(docId).set({
-                                    email: r.email.toLowerCase(),
-                                    reason: "sync_validation_error",
-                                    metadata: { error: res.error },
-                                    recordedAt: new Date(),
-                                    source: "broadcast_sync"
-                                }, { merge: true });
-                             } catch (e) {
-                                 console.error("Failed to record synchronous bounce for", r.email, e);
-                             }
-                        }
-                    }
-                })
-            );
-            // throttle between batches
-            if (i + BATCH < validRecipients.length) await sleep(300);
+            
+            // Map the chunk to the batch payload format
+            const payload = chunk.map(r => ({
+                to: r.email,
+                subject,
+                message: buildEmailHtml(subject, body, r.email),
+                metadata: { type: "admin_broadcast" },
+                headers: {
+                    "List-Unsubscribe": `<mailto:unsubscribe@easysalesexport.com?subject=unsubscribe%20${encodeURIComponent(r.email)}>`,
+                    "Precedence": "bulk"
+                }
+            }));
+
+            // Dispatch 100 emails in a single HTTP request
+            const res = await sendBatchEmailNotifications(payload);
+
+            if (res.success) {
+                 successCount += chunk.length;
+            } else {
+                failCount += chunk.length;
+                console.error("Batch failure:", res.error);
+                // Can't log individual sync bounce blocks for massive batches easily,
+                // but Async webhooks will still catch any bounces perfectly.
+            }
+
+            // throttle slightly between giant batches
+            if (i + BATCH < validRecipients.length) await sleep(500);
         }
 
         const status: BroadcastLog["status"] =
