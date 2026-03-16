@@ -105,8 +105,9 @@ export async function initiateCooperativePaymentAction(
                 amount: registrationFee * 100,
                 metadata: {
                     userId,
+                    membershipId: userId,
                     membershipTier: tier,
-                    purpose: "cooperative_membership_registration",
+                    type: "cooperative_membership_registration",
                 },
                 callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/payment/callback`,
             }),
