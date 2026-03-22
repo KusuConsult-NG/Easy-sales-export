@@ -1,5 +1,6 @@
 import { getCached, setCache, deleteCache, CacheKeys, CACHE_TTL } from './redis';
 import { getAdminDb } from './firebase-admin';
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 export interface CachedUserProfile {
     id: string;
@@ -27,7 +28,7 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
 
         // Cache miss — fetch from Firestore
         const db = getAdminDb();
-        const userDoc = await db.collection('users').doc(userId).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) {
             return null;

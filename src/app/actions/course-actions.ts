@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     courseProgressSchema,
@@ -29,7 +30,7 @@ export async function updateLessonProgress(
         // Use a composite ID for uniqueness: userId_courseId_lessonId
         // Alternately, query by fields. Let's use a specific collection for granular tracking.
         const progressId = `${session.user.id}_${validated.lessonId}`;
-        const lessonProgressRef = db.collection('lesson_video_progress').doc(progressId);
+        const lessonProgressRef = db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId);
 
         await lessonProgressRef.set({
             userId: session.user.id,
@@ -78,7 +79,7 @@ export async function enrollInCourse(
         const validated = courseEnrollmentSchema.parse(data);
 
         // Check if already enrolled
-        const snapshot = await db.collection('course_enrollments')
+        const snapshot = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
             .where('userId', '==', session.user.id)
             .where('courseId', '==', validated.courseId)
             .get();
@@ -88,7 +89,7 @@ export async function enrollInCourse(
         }
 
         // Create enrollment
-        const enrollmentRef = await db.collection('course_enrollments').add({
+        const enrollmentRef = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS).add({
             userId: session.user.id,
             courseId: validated.courseId,
             enrolledAt: FieldValue.serverTimestamp(),
@@ -98,7 +99,7 @@ export async function enrollInCourse(
         });
 
         // Initialize progress record
-        await db.collection('course_progress').add({
+        await db.collection(COLLECTIONS.COURSE_PROGRESS).add({
             userId: session.user.id,
             courseId: validated.courseId,
             progressPercent: 0,
@@ -146,7 +147,7 @@ export async function getCourseProgress(courseId: string) {
     const { session } = sessionResult;
 
     try {
-        const snapshot = await db.collection('course_progress')
+        const snapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
             .where('userId', '==', session.user.id)
             .where('courseId', '==', courseId)
             .get();
@@ -188,7 +189,7 @@ export async function getLessonProgress(lessonId: string) {
 
     try {
         const progressId = `${session.user.id}_${lessonId}`;
-        const doc = await db.collection('lesson_video_progress').doc(progressId).get();
+        const doc = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId).get();
 
         if (!doc.exists) {
             return { success: true, progress: null };
@@ -217,7 +218,7 @@ export async function getUserEnrolledCourses() {
     const { session } = sessionResult;
 
     try {
-        const snapshot = await db.collection('course_enrollments')
+        const snapshot = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
             .where('userId', '==', session.user.id)
             .where('status', '==', 'active')
             .get();
@@ -246,7 +247,7 @@ export async function completeCourse(courseId: string) {
     const { session } = sessionResult;
 
     try {
-        const snapshot = await db.collection('course_progress')
+        const snapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
             .where('userId', '==', session.user.id)
             .where('courseId', '==', courseId)
             .get();
@@ -291,7 +292,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
 
     try {
         // Verify course is completed
-        const snapshot = await db.collection('course_progress')
+        const snapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
             .where('userId', '==', session.user.id)
             .where('courseId', '==', courseId)
             .where('completed', '==', true)
@@ -304,7 +305,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         const progressData = snapshot.docs[0].data();
 
         // Check if certificate already exists
-        const certSnapshot = await db.collection('course_certificates')
+        const certSnapshot = await db.collection(COLLECTIONS.COURSE_CERTIFICATES)
             .where('userId', '==', session.user.id)
             .where('courseId', '==', courseId)
             .get();
@@ -320,7 +321,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         }
 
         // Generate certificate
-        const certificateRef = await db.collection('course_certificates').add({
+        const certificateRef = await db.collection(COLLECTIONS.COURSE_CERTIFICATES).add({
             userId: session.user.id,
             userName: session.user.name || "Unknown",
             userEmail: session.user.email,
@@ -377,7 +378,7 @@ export async function getCourseCertificate(courseId: string) {
     const { session } = sessionResult;
 
     try {
-        const snapshot = await db.collection('course_certificates')
+        const snapshot = await db.collection(COLLECTIONS.COURSE_CERTIFICATES)
             .where('userId', '==', session.user.id)
             .where('courseId', '==', courseId)
             .get();

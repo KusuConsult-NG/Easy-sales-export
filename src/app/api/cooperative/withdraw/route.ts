@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase-admin';
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check membership status (Admin SDK)
-        const membershipDoc = await db.collection('cooperative_members').doc(userId).get();
+        const membershipDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
         if (!membershipDoc.exists) {
             return NextResponse.json(
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check for existing pending withdrawal requests (Admin SDK)
-        const existingWithdrawalsSnapshot = await db.collection('withdrawal_requests')
+        const existingWithdrawalsSnapshot = await db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS)
             .where('userId', '==', userId)
             .where('status', '==', 'pending')
             .get();
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Create withdrawal request (Admin SDK with server timestamps)
-        const withdrawalRef = db.collection('withdrawal_requests').doc();
+        const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).doc();
         const withdrawalData = {
             userId,
             userEmail: session.user.email,

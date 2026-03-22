@@ -9,6 +9,7 @@
 
 import { qoreIdService } from '@/lib/qoreid';
 import { db } from '@/lib/firebase-admin';
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
@@ -63,7 +64,7 @@ export async function verifyBVNAction(payload: {
         const result = await qoreIdService.verifyBVN(bvn, firstName, lastName);
 
         // Persist result to Firestore regardless of match outcome
-        await db.collection('users').doc(userId).update({
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
             'kyc.bvn': bvn,
             'kyc.bvnVerified': result.success && result.isMatch,
             'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
@@ -127,7 +128,7 @@ export async function verifyNINAction(payload: {
         const result = await qoreIdService.verifyNIN(nin, firstName, lastName);
 
         // Persist result to Firestore regardless of match outcome
-        await db.collection('users').doc(userId).update({
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
             'kyc.nin': nin,
             'kyc.ninVerified': result.success && result.isMatch,
             'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
@@ -182,7 +183,7 @@ export async function saveKYCProfileAction(payload: {
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        await db.collection('users').doc(userId).update({
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
             'kyc.fullName': payload.fullName,
             'kyc.dateOfBirth': payload.dateOfBirth,
             'kyc.phoneNumber': payload.phoneNumber,
@@ -206,7 +207,7 @@ export async function saveKYCProfileAction(payload: {
 
 async function updateOverallKYCStatus(userId: string) {
     try {
-        const userRef = db.collection('users').doc(userId);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const snap = await userRef.get();
         const kyc = snap.data()?.kyc || {};
 

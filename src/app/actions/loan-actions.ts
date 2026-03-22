@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import {
     loanApplicationSchema,
@@ -28,7 +29,7 @@ export async function submitLoanApplication(
         const validated = loanApplicationSchema.parse(data);
 
         // Create loan application in Firestore
-        const loanRef = await db.collection('loan_applications').add({
+        const loanRef = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).add({
             ...validated,
             userId: session.user.id,
             status: LoanStatus.PENDING,
@@ -78,7 +79,7 @@ export async function getUserLoanApplications() {
     const { session } = sessionResult;
 
     try {
-        const loansQuery = db.collection('loan_applications').where('userId', '==', session.user.id).orderBy('createdAt', 'desc');
+        const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS).where('userId', '==', session.user.id).orderBy('createdAt', 'desc');
 
         const snapshot = await loansQuery.get();
 
@@ -111,7 +112,7 @@ export async function getLoanApplication(loanId: string) {
     const { session } = sessionResult;
 
     try {
-        const loanRef = db.collection('loan_applications').doc(loanId);
+        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
         const loanDoc = await loanRef.get();
 
         if (!loanDoc.exists) {
@@ -154,7 +155,7 @@ export async function getPendingLoanApplications() {
     }
 
     try {
-        const loansQuery = db.collection('loan_applications').where('status', '==', LoanStatus.PENDING).orderBy('createdAt', 'desc');
+        const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS).where('status', '==', LoanStatus.PENDING).orderBy('createdAt', 'desc');
 
         const snapshot = await loansQuery.get();
 
@@ -209,7 +210,7 @@ export async function approveLoanApplication(
             updateData.rejectionReason = validated.rejectionReason;
         }
 
-        await db.collection('loan_applications').doc(validated.loanId).update(updateData);
+        await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(validated.loanId).update(updateData);
 
         // Audit log
         await createAdminAuditLog({
@@ -249,7 +250,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
     }
 
     try {
-        await db.collection('loan_applications').doc(loanId).update({
+        await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId).update({
             status: LoanStatus.DISBURSED,
             disbursedAt: FieldValue.serverTimestamp(),
             disbursedBy: session.user.id,
@@ -293,7 +294,7 @@ export async function getLoanStatistics() {
     try {
         // Optimization: Select only necessary fields to reduce bandwidth
         // Ideally, use Distributed Counters or Firestore Aggregation queries for 100k+ scale
-        const loansSnapshot = await db.collection('loan_applications')
+        const loansSnapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .select('status', 'amount')
             .get();
 

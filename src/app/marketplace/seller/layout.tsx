@@ -10,6 +10,7 @@ import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import MarketplaceSidebar from "./MarketplaceSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 function SellerLayoutContent({ children }: { children: React.ReactNode }) {
     return (
@@ -58,7 +59,7 @@ export default async function SellerLayout({ children }: { children: React.React
             const adminDb = getAdminDb();
 
             try {
-                const sellerDoc = await adminDb.collection('marketplace_sellers').doc(userId).get();
+                const sellerDoc = await adminDb.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(userId).get();
 
                 if (sellerDoc.exists) {
                     const sellerData = sellerDoc.data();

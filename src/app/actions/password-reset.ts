@@ -2,6 +2,7 @@
 
 import { logger } from '@/lib/logger';
 import { db } from '@/lib/firebase-admin';
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
@@ -60,7 +61,7 @@ export async function sendResetEmailAction(
         const expiry = Date.now() + 3600000; // 1 hour from now
 
         // Store reset token in Firestore
-        await db.collection('password_resets').add({
+        await db.collection(COLLECTIONS.PASSWORD_RESETS).add({
             email,
             token,
             expiry,
@@ -161,7 +162,7 @@ export async function resetPasswordAction(
         }
 
         // Find and validate token in Firestore
-        const snapshot = await db.collection('password_resets')
+        const snapshot = await db.collection(COLLECTIONS.PASSWORD_RESETS)
             .where('token', '==', token)
             .where('used', '==', false)
             .get();
@@ -192,7 +193,7 @@ export async function resetPasswordAction(
         }
 
         // Mark token as used
-        await db.collection('password_resets').doc(resetDoc.id).update({
+        await db.collection(COLLECTIONS.PASSWORD_RESETS).doc(resetDoc.id).update({
             used: true,
             usedAt: FieldValue.serverTimestamp()
         });

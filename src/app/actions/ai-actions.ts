@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { AuditActionType } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -82,7 +83,7 @@ export async function sendAIMessage(
         const aiResponse = aiData.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
 
         // Store chat history in Firestore
-        const chatRef = await db.collection('ai_chat_history').add({
+        const chatRef = await db.collection(COLLECTIONS.AI_CHAT_HISTORY).add({
             userId: session.user.id,
             message: validated.message,
             response: aiResponse,
@@ -134,7 +135,7 @@ export async function getAIChatHistory(maxMessages: number = 20) {
     const { session } = sessionResult;
 
     try {
-        const chatQuery = db.collection('ai_chat_history').where('userId', '==', session.user.id).orderBy('createdAt', 'desc').limit(maxMessages);
+        const chatQuery = db.collection(COLLECTIONS.AI_CHAT_HISTORY).where('userId', '==', session.user.id).orderBy('createdAt', 'desc').limit(maxMessages);
 
         const snapshot = await chatQuery.get();
 

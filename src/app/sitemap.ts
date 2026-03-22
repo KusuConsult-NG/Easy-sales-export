@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { MetadataRoute } from 'next'
 import { getAdminDb } from '@/lib/firebase-admin'
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 const BASE_URL = 'https://easysalesexport.com'
 const ACADEMY_URL = 'https://easysalesacademy.com'
@@ -36,7 +37,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
         // Fetch approved marketplace products — collection is 'products' (not 'marketplace_products')
         const productsSnap = await db
-            .collection('products')
+            .collection(COLLECTIONS.PRODUCTS)
             .where('status', '==', 'approved')
             .select('updatedAt', 'createdAt')
             .limit(500)
@@ -55,7 +56,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
         // Fetch verified land listings
         const landSnap = await db
-            .collection('land_listings')
+            .collection(COLLECTIONS.LAND_LISTINGS)
             .where('status', '==', 'verified')
             .select('updatedAt', 'createdAt')
             .limit(200)
@@ -74,7 +75,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
         // Fetch published academy courses
         const coursesSnap = await db
-            .collection('academy_courses')
+            .collection(COLLECTIONS.ACADEMY_COURSES)
             .where('status', '==', 'published')
             .select('updatedAt', 'createdAt')
             .limit(100)

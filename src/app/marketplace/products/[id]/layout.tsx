@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { getAdminDb } from '@/lib/firebase-admin'
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 export const runtime = 'nodejs'
 
@@ -15,7 +16,7 @@ export async function generateMetadata(
 
     try {
         const db = getAdminDb()
-        const doc = await db.collection('products').doc(id).get()
+        const doc = await db.collection(COLLECTIONS.PRODUCTS).doc(id).get()
 
         if (!doc.exists) {
             return {

@@ -3,6 +3,7 @@
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { db } from '@/lib/firebase-admin';
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { auth } from '@/lib/auth';
 
@@ -23,7 +24,7 @@ export interface CreateAnnouncementState {
  */
 async function getRecipientEmails(segment: string): Promise<string[]> {
     try {
-        const query = db.collection('users');
+        const query = db.collection(COLLECTIONS.USERS);
         let snapshot;
 
         // Simple segmentation based on roles or status
@@ -33,7 +34,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
         if (segment === 'cooperative') {
             // 🐛 FIX: Fetch all members from cooperative_members collection directly
             // This ensures we get members who have completed onboarding and paid, even if they aren't approved yet.
-            const coopQuery = db.collection('cooperative_members').where('paymentStatus', '==', 'completed');
+            const coopQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where('paymentStatus', '==', 'completed');
             const coopSnap = await coopQuery.get();
             coopSnap.docs.forEach(doc => {
                 const data = doc.data();
@@ -56,7 +57,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                     break;
                 case 'wave': {
                     // WAVE members are in wave_applications collection, not in users.roles
-                    const waveSnap = await db.collection('wave_applications').get();
+                    const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
                     waveSnap.docs.forEach(doc => {
                         const data = doc.data();
                         const email = data.email || data.userEmail;
@@ -96,7 +97,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
         // Check if user is admin
-        const userRef = db.collection('users').doc(session?.user?.id || 'unknown');
+        const userRef = db.collection(COLLECTIONS.USERS).doc(session?.user?.id || 'unknown');
         const userDoc = await userRef.get();
         const userData = userDoc.data();
 
@@ -161,7 +162,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         }
 
         // Log email in database
-        await db.collection('email_history').add({
+        await db.collection(COLLECTIONS.EMAIL_HISTORY).add({
             recipients: recipients,
             subject,
             body,
@@ -208,7 +209,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
         }
 
         // Create announcement in database
-        const announcementRef = await db.collection('announcements').add({
+        const announcementRef = await db.collection(COLLECTIONS.ANNOUNCEMENTS).add({
             title,
             message,
             priority,
@@ -250,7 +251,7 @@ export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
             return { success: false, error: 'Unauthorized' };
         }
 
-        const snapshot = await db.collection('email_history')
+        const snapshot = await db.collection(COLLECTIONS.EMAIL_HISTORY)
             .orderBy('sentAt', 'desc')
             .limit(50)
             .get();

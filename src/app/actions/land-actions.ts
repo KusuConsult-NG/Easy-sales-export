@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp, GeoPoint } from "firebase-admin/firestore";
 import {
     landListingSchema,
@@ -33,7 +34,7 @@ export async function createLandListing(
         const geoPoint = new GeoPoint(validated.location.lat, validated.location.lng);
 
         // Create land listing in Firestore
-        const listingRef = await db.collection('land_listings').add({
+        const listingRef = await db.collection(COLLECTIONS.LAND_LISTINGS).add({
             ...validated,
             location: {
                 ...validated.location,
@@ -84,12 +85,12 @@ export async function createLandListing(
  */
 export async function getLandListings(filters?: z.infer<typeof landSearchSchema>) {
     try {
-        let listingsQuery = db.collection('land_listings')
+        let listingsQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
             .orderBy('createdAt', 'desc');
 
         // Apply status filter if provided
         if (filters?.status) {
-            listingsQuery = db.collection('land_listings')
+            listingsQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
                 .where('status', '==', filters.status)
                 .orderBy('createdAt', 'desc');
         }
@@ -157,7 +158,7 @@ export async function getVerifiedLandListings(filters?: z.infer<typeof landSearc
  */
 export async function getLandListing(listingId: string) {
     try {
-        const listingDoc = await db.collection('land_listings').doc(listingId).get();
+        const listingDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId).get();
 
         if (!listingDoc.exists) {
             return { success: false, error: "Listing not found", listing: null };
@@ -196,7 +197,7 @@ export async function getMyLandListings() {
     const { session } = sessionResult;
 
     try {
-        const listingsQuery = db.collection('land_listings')
+        const listingsQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
             .where('ownerId', '==', session.user.id)
             .orderBy('createdAt', 'desc');
 
@@ -261,7 +262,7 @@ export async function updateLandListing(
             } as typeof updateData.location & { geopoint: any };
         }
 
-        await db.collection('land_listings').doc(listingId).update({
+        await db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId).update({
             ...updateData,
             updatedAt: FieldValue.serverTimestamp(),
             // Reset to pending if content changed
@@ -323,7 +324,7 @@ export async function verifyLandListing(
             updateData.rejectionReason = validated.rejectionReason;
         }
 
-        await db.collection('land_listings').doc(validated.listingId).update(updateData);
+        await db.collection(COLLECTIONS.LAND_LISTINGS).doc(validated.listingId).update(updateData);
 
         // Audit log
         await createAdminAuditLog({
@@ -371,7 +372,7 @@ export async function deleteLandListing(listingId: string) {
         }
 
         // Soft delete by updating status
-        await db.collection('land_listings').doc(listingId).update({
+        await db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId).update({
             status: 'deleted',
             deletedAt: FieldValue.serverTimestamp(),
             deletedBy: session.user.id,
@@ -411,7 +412,7 @@ export async function getLandStatistics() {
     }
 
     try {
-        const snapshot = await db.collection('land_listings').limit(5000).get();
+        const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS).limit(5000).get();
 
         const stats = {
             total: 0,

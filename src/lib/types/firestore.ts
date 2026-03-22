@@ -888,7 +888,7 @@ export const COLLECTIONS = {
     PROPERTY_PURCHASES: "propertyPurchases",
 
     // Withdrawal Requests
-    WITHDRAWAL_REQUESTS: "withdrawalRequests",
+    WITHDRAWAL_REQUESTS: "withdrawal_requests",
 
     // Marketplace Products & Sellers
     MARKETPLACE_PRODUCTS: "marketplace_products",
@@ -934,6 +934,9 @@ export const COLLECTIONS = {
     COOPERATIVE_FIXED_SAVINGS: "cooperative_fixed_savings",
     COOPERATIVE_LOAN_PRODUCTS: "cooperative_loan_products",
     COOPERATIVE_CONTRIBUTIONS: "cooperative_contributions",
+    LESSON_VIDEO_PROGRESS: "lesson_video_progress",
+    EXPORT_BOOKINGS: "export_bookings",
+    EMAIL_HISTORY: "email_history",
 
     // Platform / Admin Configuration
     PLATFORM_SETTINGS: "platform_settings",

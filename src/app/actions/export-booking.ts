@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase-admin';
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 
 export interface CreateBookingData {
@@ -34,7 +35,7 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
         }
 
         // Check if export window exists and has availability
-        const windowRef = db.collection('export_windows').doc(data.exportWindowId);
+        const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.exportWindowId);
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
@@ -52,7 +53,7 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
         }
 
         // Create booking
-        const bookingRef = await db.collection('export_bookings').add({
+        const bookingRef = await db.collection(COLLECTIONS.EXPORT_BOOKINGS).add({
             userId: session.user.id,
             exportWindowId: data.exportWindowId,
             quantity: data.quantity,
@@ -97,7 +98,7 @@ export async function getUserBookingsAction(): Promise<{
             return { success: false, error: 'Not authenticated' };
         }
 
-        const snapshot = await db.collection('export_bookings')
+        const snapshot = await db.collection(COLLECTIONS.EXPORT_BOOKINGS)
             .where('userId', '==', session.user.id)
             .orderBy('createdAt', 'desc')
             .get();

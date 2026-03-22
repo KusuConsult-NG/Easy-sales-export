@@ -426,7 +426,7 @@ export async function completeLessonAction(
         // 2. If it has a video, verify progress
         if (targetLesson.videoUrl) {
             const progressId = `${userId}_${lessonId}`;
-            const videoProgressDoc = await db.collection('lesson_video_progress').doc(progressId).get();
+            const videoProgressDoc = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId).get();
 
             // Allow if admin (for testing) ?? No, enforce for everyone for now.
             // Maybe allow if no progress doc exists BUT require it?
