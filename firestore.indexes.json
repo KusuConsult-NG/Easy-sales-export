@@ -29,7 +29,7 @@
       ]
     },
     {
-      "collectionGroup": "export_windows",
+      "collectionGroup": "exportWindows",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -43,7 +43,7 @@
       ]
     },
     {
-      "collectionGroup": "export_windows",
+      "collectionGroup": "exportWindows",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -57,7 +57,7 @@
       ]
     },
     {
-      "collectionGroup": "export_windows",
+      "collectionGroup": "exportWindows",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -159,7 +159,7 @@
       ]
     },
     {
-      "collectionGroup": "marketplace_orders",
+      "collectionGroup": "marketplaceOrders",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -177,7 +177,7 @@
       ]
     },
     {
-      "collectionGroup": "marketplace_orders",
+      "collectionGroup": "marketplaceOrders",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -505,7 +505,7 @@
       ]
     },
     {
-      "collectionGroup": "export_investments",
+      "collectionGroup": "exportInvestments",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -901,7 +901,7 @@
       ]
     },
     {
-      "collectionGroup": "reviews",
+      "collectionGroup": "product_reviews",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -989,6 +989,62 @@
         {
           "fieldPath": "endTime",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ai_chat_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "marketplaceOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "sellerIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "read",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "loan_applications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     }
