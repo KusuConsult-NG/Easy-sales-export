@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -82,7 +83,7 @@ export async function createAnnouncementAction(data: {
             active: true,
         };
 
-        const docRef = await db.collection("announcements").add(announcement);
+        const docRef = await db.collection(COLLECTIONS.ANNOUNCEMENTS).add(announcement);
 
         await logAdminAction(
             "announcement_created",
@@ -107,7 +108,7 @@ export async function getActiveAnnouncementsAction(
     try {
         const now = new Date();
 
-        const q = db.collection("announcements").where("active", "==", true);
+        const q = db.collection(COLLECTIONS.ANNOUNCEMENTS).where("active", "==", true);
 
         const snapshot = await q.get();
 
@@ -162,7 +163,7 @@ export async function deactivateAnnouncementAction(
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
-        const announcementRef = db.collection("announcements").doc(announcementId);
+        const announcementRef = db.collection(COLLECTIONS.ANNOUNCEMENTS).doc(announcementId);
 
         await announcementRef.update({
             active: false,
@@ -216,7 +217,7 @@ export async function createBannerAction(data: {
             active: true,
         };
 
-        const docRef = await db.collection("banners").add(banner);
+        const docRef = await db.collection(COLLECTIONS.BANNERS).add(banner);
 
         await logAdminAction(
             "banner_created",
@@ -239,7 +240,7 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
     try {
         const now = new Date();
 
-        const q = db.collection("banners").where("active", "==", true);
+        const q = db.collection(COLLECTIONS.BANNERS).where("active", "==", true);
 
         const snapshot = await q.get();
 
@@ -283,7 +284,7 @@ export async function deactivateBannerAction(
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
-        const bannerRef = db.collection("banners").doc(bannerId);
+        const bannerRef = db.collection(COLLECTIONS.BANNERS).doc(bannerId);
 
         await bannerRef.update({
             active: false,

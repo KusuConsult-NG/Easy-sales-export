@@ -79,7 +79,7 @@ export async function uploadCertificateAction(
             size: file.size,
         };
 
-        const docRef = await db.collection("certificates").add(certificate);
+        const docRef = await db.collection(COLLECTIONS.CERTIFICATES).add(certificate);
 
         await createAdminAuditLog({
             action: "user_update",
@@ -104,7 +104,7 @@ export async function uploadCertificateAction(
  */
 export async function getUserCertificatesAction(userId: string): Promise<Certificate[]> {
     try {
-        const q = db.collection("certificates").where("userId", "==", userId);
+        const q = db.collection(COLLECTIONS.CERTIFICATES).where("userId", "==", userId);
         const snapshot = await q.get();
 
         return snapshot.docs.map((doc) => ({
@@ -131,7 +131,7 @@ export async function deleteCertificateAction(
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
         }
-        const certRef = db.collection("certificates").doc(certificateId);
+        const certRef = db.collection(COLLECTIONS.CERTIFICATES).doc(certificateId);
         const certDoc = await certRef.get();
 
         if (!certDoc.exists) {

@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp } from "firebase-admin/firestore";
 
 /**
@@ -26,7 +27,7 @@ export async function getVendorSalesStatsAction() {
         startOfWeek.setHours(0, 0, 0, 0);
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const ordersSnapshot = await db.collection("vendor_orders")
+        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
             .where("vendorId", "==", vendorId)
             .where("paymentStatus", "==", "paid")
             .get();
@@ -80,7 +81,7 @@ export async function getVendorRevenueTrendsAction() {
         const thirtyDaysAgo = new Date(now);
         thirtyDaysAgo.setDate(now.getDate() - 30);
 
-        const ordersSnapshot = await db.collection("vendor_orders")
+        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
             .where("vendorId", "==", vendorId)
             .where("paymentStatus", "==", "paid")
             .where("createdAt", ">=", thirtyDaysAgo)
@@ -128,7 +129,7 @@ export async function getTopSellingProductsAction(limit: number = 5) {
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
-        const ordersSnapshot = await db.collection("vendor_orders")
+        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
             .where("vendorId", "==", vendorId)
             .where("paymentStatus", "==", "paid")
             .get();
@@ -177,7 +178,7 @@ export async function getVendorInventoryStatsAction() {
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
-        const productsSnapshot = await db.collection("vendor_products")
+        const productsSnapshot = await db.collection(COLLECTIONS.VENDOR_PRODUCTS)
             .where("vendorId", "==", vendorId)
             .get();
 
@@ -224,7 +225,7 @@ export async function getVendorRevenueInsightsAction() {
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
-        const ordersSnapshot = await db.collection("vendor_orders")
+        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
             .where("vendorId", "==", vendorId)
             .get();
 
@@ -281,7 +282,7 @@ export async function getVendorActivityFeedAction(limit: number = 20) {
         const vendorId = session.user.id;
         const activities: Array<any> = [];
 
-        const ordersSnapshot = await db.collection("vendor_orders")
+        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
             .where("vendorId", "==", vendorId)
             .orderBy("createdAt", "desc")
             .limit(10)
@@ -299,7 +300,7 @@ export async function getVendorActivityFeedAction(limit: number = 20) {
             });
         });
 
-        const productsSnapshot = await db.collection("vendor_products")
+        const productsSnapshot = await db.collection(COLLECTIONS.VENDOR_PRODUCTS)
             .where("vendorId", "==", vendorId)
             .get();
 

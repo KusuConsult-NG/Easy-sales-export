@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
@@ -34,7 +35,7 @@ export async function getBriefingRegistrationsAction(): Promise<{ success: boole
             return { success: false, error: "Unauthorized: Admin access required" };
         }
 
-        const snapshot = await db.collection("wave_briefing_registrations")
+        const snapshot = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
             .orderBy("createdAt", "desc")
             .get();
 

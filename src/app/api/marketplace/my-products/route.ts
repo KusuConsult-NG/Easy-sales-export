@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get Seller's Products
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         const userId = session.user.id;
 
         // Get seller's products (Admin SDK)
-        const snapshot = await db.collection("products")
+        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
             .where("sellerId", "==", userId)
             .orderBy("createdAt", "desc")
             .get();

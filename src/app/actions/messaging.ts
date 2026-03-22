@@ -137,7 +137,7 @@ export async function sendMessageAction(
             createdAt: new Date(),
         };
 
-        await conversationRef.collection("messages").add(messageData);
+        await conversationRef.collection(COLLECTIONS.MESSAGES).add(messageData);
 
         // Update conversation
         const updateData: any = {
@@ -189,7 +189,7 @@ export async function markMessagesAsReadAction(conversationId: string) {
         }
 
         // Get unread messages sent to this user
-        const messagesSnapshot = await conversationRef.collection("messages")
+        const messagesSnapshot = await conversationRef.collection(COLLECTIONS.MESSAGES)
             .where("recipientId", "==", userId)
             .where("read", "==", false)
             .get();
@@ -285,7 +285,7 @@ export async function getConversationMessagesAction(
             return { success: false, error: "Not authorized" };
         }
 
-        const snapshot = await conversationRef.collection("messages")
+        const snapshot = await conversationRef.collection(COLLECTIONS.MESSAGES)
             .orderBy("createdAt", "desc")
             .limit(limitCount)
             .get();

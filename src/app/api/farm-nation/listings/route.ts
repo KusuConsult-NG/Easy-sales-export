@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get All Land Listings
@@ -11,7 +12,7 @@ import { db } from "@/lib/firebase-admin";
 export async function GET(request: NextRequest) {
     try {
         // Get all verified land listings (Admin SDK)
-        const snapshot = await db.collection("land_listings")
+        const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
             .where("verificationStatus", "==", "verified")
             .orderBy("createdAt", "desc")
             .get();

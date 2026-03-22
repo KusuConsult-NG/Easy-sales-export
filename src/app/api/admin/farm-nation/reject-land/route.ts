@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const listingRef = db.collection("land_listings").doc(verificationId);
+        const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(verificationId);
         const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {

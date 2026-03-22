@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Verify Certificate (Public)
@@ -15,7 +16,7 @@ export async function GET(
         const { certificateId } = await params;
 
         // Get certificate (Admin SDK)
-        const certificateDoc = await db.collection("certificates").doc(certificateId).get();
+        const certificateDoc = await db.collection(COLLECTIONS.CERTIFICATES).doc(certificateId).get();
 
         if (!certificateDoc.exists) {
             return NextResponse.json(

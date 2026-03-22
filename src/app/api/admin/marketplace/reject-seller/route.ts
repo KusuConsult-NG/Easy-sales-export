@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get verification (Admin SDK)
-        const verificationRef = db.collection("seller_verifications").doc(verificationId);
+        const verificationRef = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
         const verificationDoc = await verificationRef.get();
 
         if (!verificationDoc.exists) {
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Update marketplace_sellers record
-        await db.collection("marketplace_sellers").doc(verificationData.userId).update({
+        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).update({
             verificationStatus: "rejected",
             updatedAt: FieldValue.serverTimestamp(),
         });

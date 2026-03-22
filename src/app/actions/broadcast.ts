@@ -23,6 +23,7 @@ export type BroadcastAudience =
     | "marketplace_onboarded"
     | "cooperative_members"
     | "wave_applicants"
+    | "wave_briefing_registrants"
     | "wholesale_sellers"
     | "retail_sellers";
 
@@ -171,6 +172,18 @@ async function collectRecipients(
                 const a = d.data();
                 const applicantEmail = a.email || a.userEmail;
                 if (applicantEmail) add(applicantEmail, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "Applicant");
+            }
+            break;
+        }
+        case "wave_briefing_registrants": {
+            const snap = await db
+                .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
+                .where("status", "==", "registered")
+                .get();
+            for (const d of snap.docs) {
+                const r = d.data();
+                const regEmail = r.email || r.userEmail;
+                if (regEmail) add(regEmail, r.name || `${r.firstName || ''} ${r.surname || ''}`.trim() || "Registrant");
             }
             break;
         }

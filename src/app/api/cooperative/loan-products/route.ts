@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get All Loan Products
@@ -10,7 +11,7 @@ import { db } from "@/lib/firebase-admin";
  */
 export async function GET(request: NextRequest) {
     try {
-        const snapshot = await db.collection("loan_products")
+        const snapshot = await db.collection(COLLECTIONS.LOAN_PRODUCTS)
             .orderBy("minAmount", "asc")
             .get();
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -66,7 +67,7 @@ export async function createExportWindowAction(data: {
             createdBy: data.adminId,
         };
 
-        const docRef = await db.collection("export_windows").add(window);
+        const docRef = await db.collection(COLLECTIONS.EXPORT_WINDOWS).add(window);
 
         await createAdminAuditLog({
             action: "user_update",
@@ -92,7 +93,7 @@ export async function createExportWindowAction(data: {
  */
 export async function getActiveExportWindowsAction(): Promise<ExportWindow[]> {
     try {
-        const q = db.collection("export_windows").where("status", "==", "open");
+        const q = db.collection(COLLECTIONS.EXPORT_WINDOWS).where("status", "==", "open");
 
         const snapshot = await q.get();
 
@@ -117,7 +118,7 @@ export async function bookExportSlotAction(data: {
     volume: number;
 }): Promise<{ success: boolean; error?: string; slotId?: string }> {
     try {
-        const windowRef = db.collection("export_windows").doc(data.windowId);
+        const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId);
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
@@ -154,7 +155,7 @@ export async function bookExportSlotAction(data: {
             bookedAt: FieldValue.serverTimestamp(),
         };
 
-        const slotRef = await db.collection("export_slots").add(slot);
+        const slotRef = await db.collection(COLLECTIONS.EXPORT_SLOTS).add(slot);
 
         // Update window volume
         await windowRef.update({
@@ -186,7 +187,7 @@ export async function bookExportSlotAction(data: {
  */
 export async function getUserExportSlotsAction(userId: string): Promise<ExportSlot[]> {
     try {
-        const q = db.collection("export_slots").where("userId", "==", userId);
+        const q = db.collection(COLLECTIONS.EXPORT_SLOTS).where("userId", "==", userId);
 
         const snapshot = await q.get();
 

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
         const userId = session.user.id;
 
         // Get user details (Admin SDK)
-        const userDoc = await db.collection("users").doc(userId).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         if (!userDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "User not found" },
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
         const userData = userDoc.data()!;
 
         // Create land listing (Admin SDK)
-        const listingRef = db.collection("land_listings").doc();
+        const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc();
         await listingRef.set({
             userId,
             ownerName: userData.name || userData.email,

@@ -1,6 +1,7 @@
 "use server";
 
 import { db, getAdminAuth } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -17,7 +18,7 @@ export async function cleanupAbandonedDraftsAction(): Promise<{ success: boolean
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 days ago
 
-        const snapshot = await db.collection("land_listings")
+        const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
             .where("status", "==", "draft")
             .where("updatedAt", "<", Timestamp.fromDate(cutoffDate))
             .get();

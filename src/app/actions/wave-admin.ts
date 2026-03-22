@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
@@ -32,12 +33,12 @@ export async function createResourceAction(data: {
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
-        const resourceRef = await db.collection("wave_resources").add({
+        const resourceRef = await db.collection(COLLECTIONS.WAVE_RESOURCES).add({
             downloads: 0,
             uploadedAt: FieldValue.serverTimestamp(),
             uploadedBy: session.user.id,
@@ -79,12 +80,12 @@ export async function updateResourceAction(
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection("wave_resources").doc(resourceId).update({
+        await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
             ...data,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -115,12 +116,12 @@ export async function deleteResourceAction(
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection("wave_resources").doc(resourceId).update({
+        await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
             deleted: true,
             deletedAt: FieldValue.serverTimestamp(),
             deletedBy: session.user.id,
@@ -162,12 +163,12 @@ export async function createTrainingEventAction(data: {
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
-        const eventRef = await db.collection("wave_training_events").add({
+        const eventRef = await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).add({
             currentParticipants: 0,
             status: "upcoming",
             createdAt: FieldValue.serverTimestamp(),
@@ -211,12 +212,12 @@ export async function updateTrainingEventAction(
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection("wave_training_events").doc(eventId).update({
+        await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
             ...data,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -248,7 +249,7 @@ export async function getEventParticipantsAction(eventId: string): Promise<{
             return { success: false, error: "Not authenticated" };
         }
 
-        const snap = await db.collection("wave_training_registrations")
+        const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
             .where("eventId", "==", eventId)
             .get();
 
@@ -282,12 +283,12 @@ export async function getWaveApplicationsAction(): Promise<{
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
-        const snapshot = await db.collection("wave_applications").limit(1000).get();
+        const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(1000).get();
         const applications = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
@@ -312,13 +313,13 @@ export async function approveWaveApplicationAction(
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
         // Get application
-        const appRef = db.collection("wave_applications").doc(applicationId);
+        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
         if (!appDoc.exists) {
             return { success: false, error: "Application not found" };
@@ -335,7 +336,7 @@ export async function approveWaveApplicationAction(
 
         // Enroll user in WAVE
         if (appData?.userId) {
-            await db.collection("wave_members").add({
+            await db.collection(COLLECTIONS.WAVE_MEMBERS).add({
                 userId: appData.userId,
                 enrolledAt: FieldValue.serverTimestamp(),
                 active: true,
@@ -352,7 +353,7 @@ export async function approveWaveApplicationAction(
             }
 
             // Send approval email
-            const userDocData = await db.collection("users").doc(appData.userId).get();
+            const userDocData = await db.collection(COLLECTIONS.USERS).doc(appData.userId).get();
             if (userDocData.exists) {
                 const userData = userDocData.data();
                 const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
@@ -391,18 +392,18 @@ export async function rejectWaveApplicationAction(
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 
         // Get application data for email
-        const appRef = db.collection("wave_applications").doc(applicationId);
+        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
         if (appDoc.exists) {
             const appData = appDoc.data();
             if (appData?.userId) {
-                const userDoc = await db.collection("users").doc(appData.userId).get();
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(appData.userId).get();
                 if (userDoc.exists) {
                     const userData = userDoc.data();
                     const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');

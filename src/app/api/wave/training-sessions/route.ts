@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 
 export async function GET() {
@@ -13,7 +14,7 @@ export async function GET() {
         }
 
         const db = getAdminDb();
-        const snap = await db.collection("wave_training_sessions")
+        const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
             .orderBy("scheduledAt", "asc")
             .get();
 
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
         }
 
         const db = getAdminDb();
-        const ref = await db.collection("wave_training_sessions").add({
+        const ref = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS).add({
             title,
             description: description || "",
             scheduledAt: new Date(scheduledAt),

@@ -374,7 +374,7 @@ export async function releaseEscrowFunds(
             txData = data;
 
             // Create payment instruction atomically within the same transaction
-            const paymentInstructionRef = db.collection("paymentInstructions").doc();
+            const paymentInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();
             tx.set(paymentInstructionRef, {
                 type: "escrow_release",
                 escrowId: transactionId,
@@ -483,7 +483,7 @@ export async function refundEscrowToBuyer(
             txData = data;
 
             // Create refund instruction atomically
-            const refundInstructionRef = db.collection("paymentInstructions").doc();
+            const refundInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();
             tx.set(refundInstructionRef, {
                 type: "escrow_refund",
                 escrowId: transactionId,

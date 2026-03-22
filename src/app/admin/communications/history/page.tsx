@@ -25,6 +25,7 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     marketplace_onboarded: "Marketplace Users",
     cooperative_members: "Cooperative Members",
     wave_applicants: "WAVE Applicants",
+    wave_briefing_registrants: "WAVE Briefing Registrants",
 };
 
 function formatDate(d: Date | string) {

@@ -658,7 +658,7 @@ export async function getSellerOrdersAction(options: {
         // (Firestore does not support full-text search natively)
         const fetchLimit = search ? Math.min(limit * 5, 100) : limit;
 
-        let query = db.collection("marketplaceOrders")
+        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
 
@@ -667,7 +667,7 @@ export async function getSellerOrdersAction(options: {
         }
 
         if (lastId && !search) {
-            const lastDoc = await db.collection("marketplaceOrders").doc(lastId).get();
+            const lastDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(lastId).get();
             if (lastDoc.exists) {
                 query = query.startAfter(lastDoc);
             }
@@ -823,7 +823,7 @@ export async function getBuyerOrdersAction(options: {
         const userId = session.user.id;
         const { limit = 20, lastId, status } = options;
 
-        let query = db.collection("marketplaceOrders")
+        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("buyerId", "==", userId) // marketplace-payment.ts uses buyerId
             .orderBy("createdAt", "desc");
 
@@ -832,7 +832,7 @@ export async function getBuyerOrdersAction(options: {
         }
 
         if (lastId) {
-            const lastDoc = await db.collection("marketplaceOrders").doc(lastId).get();
+            const lastDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(lastId).get();
             if (lastDoc.exists) {
                 query = query.startAfter(lastDoc);
             }

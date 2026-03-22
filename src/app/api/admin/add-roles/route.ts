@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import type { UserRole } from "@/lib/types/roles";
 
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
         }
 
         const db = getAdminDb();
-        const userRef = db.collection("users").doc(userId);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
 
         // Also update admin_users collection if promoting to admin-level roles
         if (roles.some((r) => privilegedRoles.includes(r))) {
-            await db.collection("admin_users").doc(userId).set({
+            await db.collection(COLLECTIONS.ADMIN_USERS).doc(userId).set({
                 userId,
                 email: userDoc.data()?.email ?? "",
                 roles: mergedRoles,
@@ -147,7 +148,7 @@ export async function DELETE(req: NextRequest) {
         }
 
         const db = getAdminDb();
-        const userRef = db.collection("users").doc(userId);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
@@ -165,7 +166,7 @@ export async function DELETE(req: NextRequest) {
         // Remove from admin_users if all privileged roles revoked
         const stillPrivileged = updatedRoles.some((r) => privilegedRoles.includes(r));
         if (!stillPrivileged) {
-            await db.collection("admin_users").doc(userId).delete();
+            await db.collection(COLLECTIONS.ADMIN_USERS).doc(userId).delete();
         }
 
         logger.info(`[add-roles] Roles [${roles.join(", ")}] revoked from ${userId} by ${session?.user?.email}`);

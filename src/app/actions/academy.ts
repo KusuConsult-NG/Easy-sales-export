@@ -120,11 +120,11 @@ export async function getCoursesAction(
     const getCachedCourses = unstable_cache(
         async () => {
             try {
-                let q = db.collection("academy_courses")
+                let q = db.collection(COLLECTIONS.ACADEMY_COURSES)
                     .orderBy("createdAt", "desc");
 
                 if (lastDocId) {
-                    const lastDoc = await db.collection("academy_courses").doc(lastDocId).get();
+                    const lastDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(lastDocId).get();
                     if (lastDoc.exists) {
                         q = q.startAfter(lastDoc);
                     }
@@ -160,7 +160,7 @@ export async function getCoursesAction(
 const getCachedCourseById = (courseId: string) => unstable_cache(
     async () => {
         try {
-            const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+            const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
 
             if (!courseDoc.exists) {
                 return null;
@@ -197,7 +197,7 @@ export async function initializeCoursePaymentAction(courseId: string): Promise<{
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Authentication required" };
 
-        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (!courseDoc.exists) return { success: false, error: "Course not found" };
 
         const course = courseDoc.data() as Course;
@@ -247,7 +247,7 @@ export async function verifyCoursePaymentAction(reference: string): Promise<{ su
         }
 
         // Check if already processed
-        const existingRef = db.collection("processedPayments").doc(reference);
+        const existingRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingDoc = await existingRef.get();
         if (existingDoc.exists) return { success: false, error: "Payment already processed" };
 
@@ -257,7 +257,7 @@ export async function verifyCoursePaymentAction(reference: string): Promise<{ su
         const amountPaid = verify.data.amount / 100;
 
         // 🔒 SECURITY FIX: Amount re-validation against REAL course price
-        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (!courseDoc.exists) return { success: false, error: "Course not found" };
 
         const course = courseDoc.data() as Course;
@@ -342,7 +342,7 @@ export async function enrollInCourseAction(
         }
 
         // 🔒 SECURITY FIX: Check if course is paid
-        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (!courseDoc.exists) return { success: false, error: "Course not found" };
 
         const course = courseDoc.data() as Course;
@@ -406,7 +406,7 @@ export async function completeLessonAction(
 
         // 🔒 SECURITY FIX: Enforce "Watch to Complete" logic
         // 1. Get the course/lesson details to see if it has a video
-        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (!courseDoc.exists) return { success: false, error: "Course not found" };
 
         const course = courseDoc.data() as Course;
@@ -500,7 +500,7 @@ export async function submitQuizScoreAction(
         progress.lastAccessedAt = FieldValue.serverTimestamp();
 
         // Check if module is complete (quiz passed)
-        const courseDoc = await db.collection("academy_courses").doc(courseId).get();
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (courseDoc.exists) {
             const course = courseDoc.data() as Course;
             const module = course.modules.find((m) => m.id === moduleId);
@@ -587,7 +587,7 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
         // Calculate total lessons across all enrolled courses
         let totalLessons = 0;
         for (const progress of enrolledCourses) {
-            const courseDoc = await db.collection("academy_courses").doc(progress.courseId).get();
+            const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(progress.courseId).get();
             if (courseDoc.exists) {
                 const course = courseDoc.data() as Course;
                 totalLessons += course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
@@ -628,7 +628,7 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{
  */
 export async function getLiveSessionsAction(courseId?: string): Promise<LiveSession[]> {
     try {
-        const ref = db.collection("academy_live_sessions");
+        const ref = db.collection(COLLECTIONS.ACADEMY_LIVE_SESSIONS);
         const query = courseId ? ref.where("courseId", "==", courseId) : ref;
         const snapshot = await query.get();
 
@@ -779,7 +779,7 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
 
         // Mark payment as completed for the user
         // Mark payment as completed for the user using dot notation to prevent overwriting
-        await db.collection("users").doc(session.user.id).update({
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
             "serviceRegistrations.academy.paymentStatus": "completed",
             "serviceRegistrations.academy.paymentReference": reference,
             "serviceRegistrations.academy.paymentAmount": verify.data.amount / 100,
@@ -867,7 +867,7 @@ export async function submitAcademyApplicationAction(
 
         // CRITICAL: Update user.serviceRegistrations to link application with auth
         // CRITICAL: Update user.serviceRegistrations to link application with auth using dot notation
-        await db.collection("users").doc(session.user.id).update({
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
             "serviceRegistrations.academy.status": "pending",
             "serviceRegistrations.academy.applicationId": applicationId,
             "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
@@ -916,7 +916,7 @@ export async function createCourseAction(data: any): Promise<{ success: boolean;
 
         const validatedData = validation.data;
 
-        const docRef = await db.collection("academy_courses").add({
+        const docRef = await db.collection(COLLECTIONS.ACADEMY_COURSES).add({
             ...validatedData,
             instructorId: session.user.id, // Ensure instructor is linked
             createdAt: FieldValue.serverTimestamp(),
@@ -948,7 +948,7 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection("academy_courses").doc(courseId).update({
+        await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).update({
             ...data,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -977,7 +977,7 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection("academy_courses").doc(courseId).update({
+        await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).update({
             modules,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -1033,7 +1033,7 @@ export async function getEnrolledCoursesWithDetailsAction(): Promise<{
         // 2. Batch-fetch course metadata for each enrolled course
         const courseIds = progressSnap.docs.map((d) => d.id);
         const courseDocs = await Promise.all(
-            courseIds.map((id) => db.collection("academy_courses").doc(id).get())
+            courseIds.map((id) => db.collection(COLLECTIONS.ACADEMY_COURSES).doc(id).get())
         );
 
         const courses: EnrolledCourseWithDetails[] = [];
@@ -1182,7 +1182,7 @@ export async function logLessonActivityAction(): Promise<{ success: boolean }> {
 
         const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
         await db
-            .collection("user_activity_logs")
+            .collection(COLLECTIONS.USER_ACTIVITY_LOGS)
             .doc(session.user.id)
             .collection("days")
             .doc(today)
@@ -1208,7 +1208,7 @@ export async function calculateStreakAction(userId: string): Promise<{ streak: n
     try {
         // Fetch the last 90 days of activity (enough for any realistic streak)
         const snap = await db
-            .collection("user_activity_logs")
+            .collection(COLLECTIONS.USER_ACTIVITY_LOGS)
             .doc(userId)
             .collection("days")
             .orderBy("date", "desc")

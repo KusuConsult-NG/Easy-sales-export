@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get product (Admin SDK)
-        const productRef = db.collection("loan_products").doc(productId);
+        const productRef = db.collection(COLLECTIONS.LOAN_PRODUCTS).doc(productId);
         const productDoc = await productRef.get();
 
         if (!productDoc.exists) {

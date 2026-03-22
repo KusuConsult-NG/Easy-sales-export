@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Update membership status (Admin SDK)
-        const memberRef = db.collection("cooperative_members").doc(memberId);
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
         const memberDoc = await memberRef.get();
 
         if (!memberDoc.exists) {

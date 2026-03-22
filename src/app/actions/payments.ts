@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -50,7 +51,7 @@ export async function createPaymentRecordAction(data: {
             initiatedAt: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await db.collection("payments").add(payment);
+        const docRef = await db.collection(COLLECTIONS.PAYMENTS).add(payment);
 
         await createAdminAuditLog({
             action: "payment_initiated",
@@ -81,7 +82,7 @@ export async function verifyPaymentAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         // Find payment by reference
-        const snapshot = await db.collection("payments")
+        const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
             .where("paymentReference", "==", paymentReference)
             .get();
 
@@ -90,7 +91,7 @@ export async function verifyPaymentAction(
         }
 
         const paymentDoc = snapshot.docs[0];
-        const paymentRef = db.collection("payments").doc(paymentDoc.id);
+        const paymentRef = db.collection(COLLECTIONS.PAYMENTS).doc(paymentDoc.id);
 
         await paymentRef.update({
             status: "success",
@@ -130,7 +131,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
             case "escrow_payment":
                 if (payment.relatedId) {
                     // Update escrow status to "held"
-                    const escrowRef = db.collection("escrow_transactions").doc(payment.relatedId);
+                    const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(payment.relatedId);
                     await escrowRef.update({
                         status: "held",
                         paymentReference: payment.paymentReference,
@@ -142,7 +143,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
             case "export_slot":
                 if (payment.relatedId) {
                     // Update slot status to "paid"
-                    const slotRef = db.collection("export_slots").doc(payment.relatedId);
+                    const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc(payment.relatedId);
                     await slotRef.update({
                         status: "paid",
                         paidAt: FieldValue.serverTimestamp(),
@@ -153,7 +154,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
             case "loan_repayment":
                 if (payment.relatedId) {
                     // Record the installment
-                    await db.collection("loan_repayments").add({
+                    await db.collection(COLLECTIONS.LOAN_REPAYMENTS).add({
                         loanId: payment.relatedId,
                         userId: payment.userId,
                         amount: payment.amount,
@@ -162,7 +163,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
                         paidAt: FieldValue.serverTimestamp(),
                     });
                     // Update the parent loan's amountRepaid and status
-                    const loanRef = db.collection("cooperative_loans").doc(payment.relatedId);
+                    const loanRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS).doc(payment.relatedId);
                     const loanSnap = await loanRef.get();
                     if (loanSnap.exists) {
                         const loanData = loanSnap.data()!;
@@ -180,7 +181,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
             case "cooperative_contribution":
                 if (payment.relatedId) {
                     // Log the contribution record
-                    await db.collection("cooperative_contributions").add({
+                    await db.collection(COLLECTIONS.COOPERATIVE_CONTRIBUTIONS).add({
                         memberId: payment.relatedId,
                         userId: payment.userId,
                         amount: payment.amount,
@@ -190,7 +191,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
                         type: "monthly",
                     });
                     // Increment member's totalContributions in cooperative_members
-                    const memberRef = db.collection("cooperative_members").doc(payment.relatedId);
+                    const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(payment.relatedId);
                     await memberRef.update({
                         totalContributions: FieldValue.increment(payment.amount),
                         lastContributionAt: FieldValue.serverTimestamp(),
@@ -211,7 +212,7 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
  */
 export async function getUserPaymentHistoryAction(userId: string): Promise<PaymentRecord[]> {
     try {
-        const snapshot = await db.collection("payments")
+        const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
             .where("userId", "==", userId)
             .get();
 
@@ -232,7 +233,7 @@ export async function getPaymentByReferenceAction(
     paymentReference: string
 ): Promise<PaymentRecord | null> {
     try {
-        const snapshot = await db.collection("payments")
+        const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
             .where("paymentReference", "==", paymentReference)
             .get();
 

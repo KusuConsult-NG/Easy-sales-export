@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Check Cooperative Membership Status
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         const userId = session.user.id;
 
         // Check if user is a member (Admin SDK)
-        const membershipDoc = await db.collection("cooperative_members").doc(userId).get();
+        const membershipDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
         if (!membershipDoc.exists) {
             return NextResponse.json({

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
         }
 
         const userId = session.user.id;
-        const membershipRef = db.collection("cooperative_members").doc(userId);
+        const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
 
         // 🔒 IDEMPOTENCY GUARD: Check if already verified before hitting Paystack
         const membershipDoc = await membershipRef.get();

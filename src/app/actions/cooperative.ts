@@ -157,7 +157,7 @@ export async function registerCooperativeMemberAction(
         const userId = session.user.id;
 
         // Check for existing partial record with payment
-        const existingMemberRef = db.collection("cooperative_members").doc(userId);
+        const existingMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
         const existingMember = await existingMemberRef.get();
 
         if (!existingMember.exists) {
@@ -656,7 +656,7 @@ export async function applyForLoanAction(
         const membershipData = membershipDoc.data();
 
         // 1. Check for active loans (Prevent multiple active loans if policy requires)
-        const loansRef = db.collection("cooperative_loans");
+        const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
         const activeLoans = await loansRef
             .where("memberId", "==", userId)
             .where("status", "in", ["pending", "approved", "disbursed"])
@@ -681,7 +681,7 @@ export async function applyForLoanAction(
         let interestRate = 5; // Default 5%
         let durationMonths = 6;
 
-        const productDoc = await db.collection("cooperative_loan_products").doc(productId).get();
+        const productDoc = await db.collection(COLLECTIONS.COOPERATIVE_LOAN_PRODUCTS).doc(productId).get();
         if (productDoc.exists) {
             const prod = productDoc.data()!;
             interestRate = prod.interestRate;
@@ -787,7 +787,7 @@ export async function createFixedSavingsAction(
             });
 
             // Create Fixed Savings Record
-            const fixedSavingsRef = db.collection("cooperative_fixed_savings").doc();
+            const fixedSavingsRef = db.collection(COLLECTIONS.COOPERATIVE_FIXED_SAVINGS).doc();
             transaction.set(fixedSavingsRef, {
                 memberId: userId,
                 amount,

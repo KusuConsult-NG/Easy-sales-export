@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -88,7 +89,7 @@ export async function submitLoanApplicationAction(formData: {
 
         // ===== STANDARD ELIGIBILITY =====
         // Check eligibility
-        const activeLoansSnapshot = await db.collection("loan_applications")
+        const activeLoansSnapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where("userId", "==", formData.userId)
             .where("status", "in", ["approved", "disbursed"])
             .get();
@@ -134,7 +135,7 @@ export async function submitLoanApplicationAction(formData: {
             appliedAt: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await db.collection("loan_applications").add(application);
+        const docRef = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).add(application);
 
         await createAdminAuditLog({
             action: "loan_applied",
@@ -168,7 +169,7 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
             return [];
         }
 
-        const snapshot = await db.collection("loan_applications")
+        const snapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where("userId", "==", userId)
             .get();
 
@@ -194,7 +195,7 @@ export async function getPendingLoanApplicationsAction(): Promise<LoanApplicatio
             return [];
         }
 
-        const snapshot = await db.collection("loan_applications")
+        const snapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where("status", "==", "pending")
             .get();
 
@@ -224,7 +225,7 @@ export async function approveLoanAction(
         }
 
         const effectiveAdminId = session.user.id;
-        const appRef = db.collection("loan_applications").doc(applicationId);
+        const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
 
         // Transactional Locking to prevent Double Lending
         await db.runTransaction(async (transaction) => {
@@ -247,7 +248,7 @@ export async function approveLoanAction(
             // However, Firestore transactions require reads to come before writes.
             // We will query for "approved" or "disbursed" loans for this user.
 
-            const activeLoansQuery = db.collection("loan_applications")
+            const activeLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
                 .where("userId", "==", appData.userId)
                 .where("status", "in", ["approved", "disbursed"]);
 
@@ -306,7 +307,7 @@ export async function rejectLoanAction(
 
         const effectiveAdminId = session.user.id;
 
-        const appRef = db.collection("loan_applications").doc(applicationId);
+        const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
@@ -356,7 +357,7 @@ export async function disburseLoanAction(
         }
 
         const effectiveAdminId = session.user.id;
-        const appRef = db.collection("loan_applications").doc(applicationId);
+        const appRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
 
         // Transactional execution
         await db.runTransaction(async (transaction) => {
@@ -442,7 +443,7 @@ export async function getRepaymentScheduleAction(
     loanId: string
 ): Promise<{ success: boolean; error?: string; schedule?: RepaymentInstallment[] }> {
     try {
-        const loanRef = db.collection("loan_applications").doc(loanId);
+        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
         const loanDoc = await loanRef.get();
 
         if (!loanDoc.exists) {
@@ -459,7 +460,7 @@ export async function getRepaymentScheduleAction(
         }
 
         // Check if schedule exists
-        const scheduleSnapshot = await db.collection("loan_repayments")
+        const scheduleSnapshot = await db.collection(COLLECTIONS.LOAN_REPAYMENTS)
             .where("loanId", "==", loanId)
             .get();
 
@@ -491,7 +492,7 @@ export async function getRepaymentScheduleAction(
             const dueDate = new Date(startDate);
             dueDate.setMonth(dueDate.getMonth() + i + 1);
 
-            const installmentRef = await db.collection("loan_repayments").add({
+            const installmentRef = await db.collection(COLLECTIONS.LOAN_REPAYMENTS).add({
                 loanId,
                 userId: loanData.userId,
                 installmentNumber: i + 1,
@@ -566,8 +567,8 @@ export async function submitRepaymentAction(data: {
             return { success: false, error: "Invalid repayment amount" };
         }
 
-        const installmentRef = db.collection("loan_repayments").doc(data.installmentId);
-        const loanRef = db.collection("loan_applications").doc(data.loanId);
+        const installmentRef = db.collection(COLLECTIONS.LOAN_REPAYMENTS).doc(data.installmentId);
+        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(data.loanId);
 
         let calculatedPenalty = 0;
         let calculatedStatus: "pending" | "paid" | "overdue" | "partial" = "pending";
@@ -621,7 +622,7 @@ export async function submitRepaymentAction(data: {
             });
 
             // Create payment record (Atomic add)
-            const paymentRef = db.collection("loan_payments").doc();
+            const paymentRef = db.collection(COLLECTIONS.LOAN_PAYMENTS).doc();
             transaction.set(paymentRef, {
                 loanId: data.loanId,
                 installmentId: data.installmentId,
@@ -648,7 +649,7 @@ export async function submitRepaymentAction(data: {
 
         // Post-transaction: Check if all installments are paid to update Loan Status
         // This is safe to run after because even if it races, the worst case is the loan status updates to 'repaid' twice.
-        const allInstallmentsSnapshot = await db.collection("loan_repayments")
+        const allInstallmentsSnapshot = await db.collection(COLLECTIONS.LOAN_REPAYMENTS)
             .where("loanId", "==", data.loanId)
             .get();
 
@@ -709,7 +710,7 @@ export async function getRepaymentHistoryAction(
         // Note: For history, we should ideally check ownership of the loan first, 
         // but skipping for now or adding a quick check would be better.
         // Let's add a quick loan check.
-        const loanDoc = await db.collection("loan_applications").doc(loanId).get();
+        const loanDoc = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId).get();
         if (loanDoc.exists) {
             const loanData = loanDoc.data();
             if (loanData && loanData.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
@@ -717,7 +718,7 @@ export async function getRepaymentHistoryAction(
             }
         }
 
-        const paymentsSnapshot = await db.collection("loan_payments")
+        const paymentsSnapshot = await db.collection(COLLECTIONS.LOAN_PAYMENTS)
             .where("loanId", "==", loanId)
             .get();
 

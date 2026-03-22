@@ -82,7 +82,7 @@ export async function getCooperativeStatsAction(): Promise<{
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
         // Get members (Scoped)
-        let membersQuery: FirebaseFirestore.Query = db.collection("cooperative_members");
+        let membersQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
         if (adminScope) {
             membersQuery = membersQuery.where("cooperativeId", "==", adminScope);
         }
@@ -97,7 +97,7 @@ export async function getCooperativeStatsAction(): Promise<{
         const suspendedMembers = members.filter((m: any) => m.membershipStatus === "suspended").length;
 
         // Get transactions (Scoped)
-        let txnQuery: FirebaseFirestore.Query = db.collection("cooperative_transactions");
+        let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
         if (adminScope) {
             txnQuery = txnQuery.where("cooperativeId", "==", adminScope);
         }
@@ -126,7 +126,7 @@ export async function getCooperativeStatsAction(): Promise<{
         // Get loans (Scoped via memberId mapping is hard without joins, assuming loans have coopId or we filter by member list)
         // Ideally loans should have cooperativeId. Checking Schema...
         // If not, we filter in memory against the 'members' list we already fetched.
-        const loansSnap = await db.collection("cooperative_loans").limit(5000).get();
+        const loansSnap = await db.collection(COLLECTIONS.COOPERATIVE_LOANS).limit(5000).get();
         let loans = loansSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         if (adminScope) {
@@ -210,7 +210,7 @@ export async function getAllMembersAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        let q = db.collection("cooperative_members").orderBy("createdAt", "desc");
+        let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
 
         // 🔒 SECURITY FIX: Content Scoping
         if (adminScope) {
@@ -258,7 +258,7 @@ export async function updateMemberStatusAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection("cooperative_members").doc(memberId).update({
+        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId).update({
             membershipStatus: status,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -269,13 +269,13 @@ export async function updateMemberStatusAction(
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(memberId).get();
             const userData = userDoc.data();
 
-            await db.collection("users").doc(memberId).set({
+            await db.collection(COLLECTIONS.USERS).doc(memberId).set({
                 isVerified: true,
                 roles: FieldValue.arrayUnion("cooperative_member"),
                 updatedAt: FieldValue.serverTimestamp(),
             }, { merge: true });
             // Also sync serviceRegistrations status (dot notation to avoid cross-module data loss)
-            await db.collection("users").doc(memberId).update({
+            await db.collection(COLLECTIONS.USERS).doc(memberId).update({
                 "serviceRegistrations.cooperatives.status": "active",
                 "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
             });
@@ -347,7 +347,7 @@ export async function getAllTransactionsAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        let q = db.collection("cooperative_transactions").orderBy("date", "desc");
+        let q = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).orderBy("date", "desc");
 
         // 🔒 SECURITY FIX: Content Scoping
         if (adminScope) {
@@ -413,7 +413,7 @@ export async function getContributionReportsAction(options?: {
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
         // Get all contributions
-        let q = db.collection("cooperative_transactions")
+        let q = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
             .where("type", "==", "contribution")
             .where("status", "==", "completed");
 
@@ -520,7 +520,7 @@ export async function getRecentActivityAction(): Promise<{
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
         // Get recent transactions
-        let q = db.collection("cooperative_transactions")
+        let q = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
             .orderBy("date", "desc")
             .limit(10);
 
@@ -605,7 +605,7 @@ export async function approveWithdrawalAction(
                 name = userDoc.data()?.fullName || "Member";
             }
 
-            const coopMemberRef = db.collection("cooperative_members").doc(userId);
+            const coopMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
             const coopMemberDoc = await transaction.get(coopMemberRef);
 
             if (coopMemberDoc.exists) {
@@ -616,7 +616,7 @@ export async function approveWithdrawalAction(
             } else {
                 if (withdrawalData.cooperativeId) {
                     const nestedMemberRef = db
-                        .collection("cooperatives")
+                        .collection(COLLECTIONS.COOPERATIVES)
                         .doc(withdrawalData.cooperativeId)
                         .collection("members")
                         .doc(userId);
@@ -721,7 +721,7 @@ export async function rejectWithdrawalAction(
                 name = userDoc.data()?.fullName || "Member";
             }
 
-            const coopMemberRef = db.collection("cooperative_members").doc(userId);
+            const coopMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
             const coopMemberDoc = await transaction.get(coopMemberRef);
 
             if (coopMemberDoc.exists) {
@@ -733,7 +733,7 @@ export async function rejectWithdrawalAction(
             } else {
                 if (withdrawalData.cooperativeId) {
                     const nestedMemberRef = db
-                        .collection("cooperatives")
+                        .collection(COLLECTIONS.COOPERATIVES)
                         .doc(withdrawalData.cooperativeId)
                         .collection("members")
                         .doc(userId);

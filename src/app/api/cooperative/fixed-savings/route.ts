@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get User's Fixed Savings Plans
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         const userId = session.user.id;
 
         // Fetch user's fixed savings plans (Admin SDK)
-        const snapshot = await db.collection("fixed_savings_plans")
+        const snapshot = await db.collection(COLLECTIONS.FIXED_SAVINGS_PLANS)
             .where("memberId", "==", userId)
             .orderBy("createdAt", "desc")
             .get();

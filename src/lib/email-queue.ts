@@ -1,6 +1,7 @@
 
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 interface EmailData {
     to: string;
@@ -76,7 +77,7 @@ export async function queueEmail(data: EmailData): Promise<{ success: boolean; q
  */
 async function saveToQueue(data: EmailData, lastError: string) {
     try {
-        await db.collection("email_queue").add({
+        await db.collection(COLLECTIONS.EMAIL_QUEUE).add({
             to: data.to,
             subject: data.subject,
             message: data.message,

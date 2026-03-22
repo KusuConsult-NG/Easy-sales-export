@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const inviteRef = db.collection("whatsapp_invites").doc(token);
+        const inviteRef = db.collection(COLLECTIONS.WHATSAPP_INVITES).doc(token);
         const inviteSnap = await inviteRef.get();
 
         // --- 2. Token must exist ---

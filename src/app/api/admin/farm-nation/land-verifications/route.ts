@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get All Land Verifications (Admin)
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get all land listings (Admin SDK)
-        const snapshot = await db.collection("land_listings")
+        const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
             .orderBy("createdAt", "desc")
             .get();
 

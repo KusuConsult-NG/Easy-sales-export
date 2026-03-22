@@ -16,6 +16,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { getAdminStorage, getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp } from "firebase-admin/firestore";
 
 const ALLOWED_TYPES: Record<string, string> = {
@@ -83,7 +84,7 @@ async function uploadToFirestore(
     documentType: string
 ): Promise<string> {
     const db = getAdminDb();
-    const docRef = db.collection("_document_uploads").doc();
+    const docRef = db.collection(COLLECTIONS.DOCUMENT_UPLOADS).doc();
     const docId = docRef.id;
 
     await docRef.set({

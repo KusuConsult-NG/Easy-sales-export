@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db, adminStorage } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * DELETE - Delete certificate
@@ -24,7 +25,7 @@ export async function DELETE(
         }
 
         // Get certificate (Admin SDK)
-        const certDoc = await db.collection("user_certificates").doc(id).get();
+        const certDoc = await db.collection(COLLECTIONS.USER_CERTIFICATES).doc(id).get();
 
         if (!certDoc.exists) {
             return NextResponse.json(
@@ -55,7 +56,7 @@ export async function DELETE(
         }
 
         // Delete from Firestore (Admin SDK)
-        await db.collection("user_certificates").doc(id).delete();
+        await db.collection(COLLECTIONS.USER_CERTIFICATES).doc(id).delete();
 
         return NextResponse.json({
             success: true,

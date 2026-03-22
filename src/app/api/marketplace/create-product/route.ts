@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
         const userId = session.user.id;
 
         // Check if user is an approved seller (Admin SDK)
-        const sellerDoc = await db.collection("marketplace_sellers").doc(userId).get();
+        const sellerDoc = await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(userId).get();
         if (!sellerDoc.exists || sellerDoc.data()?.verificationStatus !== "approved") {
             return NextResponse.json(
                 { success: false, message: "You must be an approved seller to list products" },
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
         const sellerData = sellerDoc.data()!;
 
         // Create product (Admin SDK)
-        const productRef = db.collection("products").doc();
+        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc();
         await productRef.set({
             sellerId: userId,
             sellerName: sellerData.businessName || session.user.name,

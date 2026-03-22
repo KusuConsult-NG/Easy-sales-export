@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get verification (Admin SDK)
-        const verificationRef = db.collection("seller_verifications").doc(verificationId);
+        const verificationRef = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
         const verificationDoc = await verificationRef.get();
 
         if (!verificationDoc.exists) {
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Update marketplace_sellers record
-        await db.collection("marketplace_sellers").doc(verificationData.userId).update({
+        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).update({
             verificationStatus: "suspended",
             updatedAt: FieldValue.serverTimestamp(),
         });

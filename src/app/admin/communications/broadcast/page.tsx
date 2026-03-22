@@ -36,6 +36,7 @@ const AUDIENCE_OPTIONS: { value: BroadcastAudience; label: string; desc: string 
     { value: "marketplace_onboarded", label: "Marketplace Users", desc: "All onboarded marketplace participants" },
     { value: "cooperative_members", label: "Cooperative Members", desc: "Active cooperative members" },
     { value: "wave_applicants", label: "WAVE Applicants", desc: "WAVE program registrants" },
+    { value: "wave_briefing_registrants", label: "WAVE Briefing Registrants", desc: "Users registered for WAVE briefing sessions" },
 ];
 
 const SELLER_STATUS_OPTIONS = [

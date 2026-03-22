@@ -140,7 +140,7 @@ export async function initializeOrderPaymentAction(
 
         // Create pending order record with VALIDATED items
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
-        await db.collection("marketplaceOrders").doc(orderId).set({
+        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).set({
             sellerIds,
             orderId,
             buyerId: session.user.id,
@@ -232,7 +232,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
         if (existingPayment.exists) {
@@ -275,7 +275,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         }
 
         // Find order record
-        const orderQuery = await db.collection("marketplaceOrders")
+        const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("paymentReference", "==", reference)
             .limit(1)
             .get();
@@ -294,7 +294,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         // 3. Escrow Ledger Creation (Revenue Split)
         await db.runTransaction(async (transaction) => {
             // 1. Update order status -> escrow_held
-            const orderRef = db.collection("marketplaceOrders").doc(orderDoc.id);
+            const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id);
             transaction.update(orderRef, {
                 paymentStatus: "escrow_held", // Funds are held, not yet paid to seller
                 orderStatus: "processing",
@@ -361,7 +361,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
             // Create Escrow Record for each seller
             Object.entries(sellerTotals).forEach(([sellerId, grossAmount]) => {
                 const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
-                const escrowRef = db.collection("escrow_transactions").doc(escrowId);
+                const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
                 const platformFee = Math.round(grossAmount * fees.platformFeePercentage);
                 const netAmount = grossAmount - platformFee;
@@ -477,7 +477,7 @@ export async function createBankTransferOrderAction(
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
         const orderReference = `BT-${Date.now()}`;
 
-        await db.collection("marketplaceOrders").doc(orderId).set({
+        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).set({
             sellerIds,
             orderId,
             buyerId: session.user.id,

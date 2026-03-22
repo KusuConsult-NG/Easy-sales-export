@@ -69,7 +69,7 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
         }
 
         // Get messages
-        const messagesRef = conversationDoc.ref.collection("messages");
+        const messagesRef = conversationDoc.ref.collection(COLLECTIONS.MESSAGES);
         const snapshot = await messagesRef
             .orderBy("timestamp", "desc")
             .limit(limit)
@@ -128,7 +128,7 @@ export async function sendMessageAction(conversationId: string, text: string) {
             type: "text"
         };
 
-        await conversationRef.collection("messages").add(messageData);
+        await conversationRef.collection(COLLECTIONS.MESSAGES).add(messageData);
 
         // Update conversation's lastMessage and updatedAt
         await conversationRef.update({

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is an approved cooperative member
-        const memberRef = db.collection("cooperative_members").doc(userId);
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
         const memberDoc = await memberRef.get();
 
         if (!memberDoc.exists) {
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
             });
 
             // Create fixed savings plan
-            const planRef = db.collection("fixed_savings_plans").doc();
+            const planRef = db.collection(COLLECTIONS.FIXED_SAVINGS_PLANS).doc();
             transaction.set(planRef, {
                 memberId: userId,
                 amount,
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
             });
 
             // Create transaction record
-            const txRef = db.collection("transactions").doc();
+            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc();
             transaction.set(txRef, {
                 userId,
                 type: "fixed_savings_funding",

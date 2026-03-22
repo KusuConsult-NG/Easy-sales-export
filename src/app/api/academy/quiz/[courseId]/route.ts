@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get Quiz for Student
@@ -24,7 +25,7 @@ export async function GET(
         const { courseId } = await params;
 
         // Get quiz for the course (Admin SDK)
-        const snapshot = await db.collection("quizzes")
+        const snapshot = await db.collection(COLLECTIONS.QUIZZES)
             .where("courseId", "==", courseId)
             .orderBy("createdAt", "desc")
             .limit(1)

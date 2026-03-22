@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
@@ -46,7 +47,7 @@ export async function initializePropertyPaymentAction(
         }
 
         // Check if property exists and is available
-        const propertyRef = db.collection("farmNationProperties").doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
@@ -80,7 +81,7 @@ export async function initializePropertyPaymentAction(
 
         // Create pending purchase record
         const purchaseId = `${session.user.id}_${propertyId}_${Date.now()}`;
-        await db.collection("propertyPurchases").doc(purchaseId).set({
+        await db.collection(COLLECTIONS.PROPERTY_PURCHASES).doc(purchaseId).set({
             purchaseId,
             propertyId,
             propertyTitle,
@@ -130,7 +131,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
         if (existingPayment.exists) {
@@ -164,7 +165,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         // Without this, two simultaneous buyers could both pass the processedPayments
         // check (both arrive before either writes it), and both call propertyRef.update()
         // with status="sold". Last write wins, causing a double-sale.
-        const propertyRef = db.collection("farmNationProperties").doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         let amountInNaira = 0;
 
         await db.runTransaction(async (tx) => {
@@ -196,7 +197,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
             tx.update(propertyRef, updatedData);
 
             // Mark payment as processed inside the transaction for full atomicity
-            const processedRef = db.collection("processedPayments").doc(reference);
+            const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
             tx.set(processedRef, {
                 processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
@@ -206,13 +207,13 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
             });
 
             // Update purchase record if it exists
-            const purchaseQuery = await db.collection("propertyPurchases")
+            const purchaseQuery = await db.collection(COLLECTIONS.PROPERTY_PURCHASES)
                 .where("paymentReference", "==", reference)
                 .limit(1)
                 .get();
 
             if (!purchaseQuery.empty) {
-                const purchaseRef = db.collection("propertyPurchases").doc(purchaseQuery.docs[0].id);
+                const purchaseRef = db.collection(COLLECTIONS.PROPERTY_PURCHASES).doc(purchaseQuery.docs[0].id);
                 tx.update(purchaseRef, {
                     status: "completed",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),

@@ -1,5 +1,6 @@
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
         const now = new Date();
 
         // Fetch Pending Emails ready for retry
-        const snapshot = await db.collection("email_queue")
+        const snapshot = await db.collection(COLLECTIONS.EMAIL_QUEUE)
             .where("status", "==", "pending")
             .where("nextRetry", "<=", now)
             .limit(10) // Process in small batches
@@ -76,7 +77,7 @@ export async function GET(request: Request) {
                 // Success: Delete or Mark Complete
                 // We'll delete to keep collection clean, or move to 'sent_log' if audit needed.
                 // For resilience, let's just delete the queue item.
-                await db.collection("email_queue").doc(doc.id).delete();
+                await db.collection(COLLECTIONS.EMAIL_QUEUE).doc(doc.id).delete();
                 logger.info(`[CRON] Successfully sent email to ${data.to} (ID: ${doc.id})`);
                 successCount++;
 
@@ -87,7 +88,7 @@ export async function GET(request: Request) {
                 // Handle Check for Max Attempts
                 if (attempts >= maxAttempts) {
                     // Mark as DEAD LETTER (failed permanently)
-                    await db.collection("email_queue").doc(doc.id).update({
+                    await db.collection(COLLECTIONS.EMAIL_QUEUE).doc(doc.id).update({
                         status: "failed",
                         lastError: error.message,
                         failedAt: FieldValue.serverTimestamp(),
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
                     const nextRetry = new Date();
                     nextRetry.setMinutes(nextRetry.getMinutes() + 15); // Fixed 15m backoff for simplicity
 
-                    await db.collection("email_queue").doc(doc.id).update({
+                    await db.collection(COLLECTIONS.EMAIL_QUEUE).doc(doc.id).update({
                         attempts: FieldValue.increment(1),
                         lastError: error.message,
                         nextRetry: nextRetry,

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
         const userId = session.user.id;
 
         // Check if user already has a verification request (Admin SDK)
-        const existingDoc = await db.collection("seller_verifications").doc(userId).get();
+        const existingDoc = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(userId).get();
         if (existingDoc.exists) {
             const existingData = existingDoc.data()!;
             if (existingData.status === "pending") {
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Create verification record (Admin SDK)
-        await db.collection("seller_verifications").doc(userId).set({
+        await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(userId).set({
             userId,
             businessName,
             businessType,
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Update marketplace_sellers with pending status
-        await db.collection("marketplace_sellers").doc(userId).set({
+        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(userId).set({
             userId,
             verificationStatus: "pending",
             verificationId: userId,

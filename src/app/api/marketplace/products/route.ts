@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * Marketplace Products API
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
 
         // Query real products from Firestore
         let query: FirebaseFirestore.Query = db
-            .collection("marketplace_products")
+            .collection(COLLECTIONS.MARKETPLACE_PRODUCTS)
             .where("status", "==", "approved")
             .where("inStock", "==", true)
             .orderBy("createdAt", "desc")
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
         // Apply category filter at DB level
         if (category && category !== "all") {
             query = db
-                .collection("marketplace_products")
+                .collection(COLLECTIONS.MARKETPLACE_PRODUCTS)
                 .where("status", "==", "approved")
                 .where("category", "==", category)
                 .orderBy("createdAt", "desc")

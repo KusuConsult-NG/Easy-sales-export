@@ -5,6 +5,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
@@ -25,7 +26,7 @@ export async function checkWaveMembershipAction(): Promise<{
             return { enrolled: false };
         }
 
-        const memberDoc = await db.collection("wave_members").doc(session.user.id).get();
+        const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
 
         if (!memberDoc.exists || !memberDoc.data()?.active) {
             // Auto-Healing: If user has role but no doc, create/reactivate it
@@ -49,7 +50,7 @@ export async function checkWaveMembershipAction(): Promise<{
                     updatedAt: FieldValue.serverTimestamp(),
                 };
 
-                await db.collection("wave_members").doc(session.user.id).set(memberData, { merge: true });
+                await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).set(memberData, { merge: true });
 
                 return {
                     enrolled: true,
@@ -103,12 +104,12 @@ export async function getWaveMemberStatsAction(): Promise<{
         }
 
         // Get resources accessed
-        const resourceAccessSnap = await db.collection("wave_resource_access")
+        const resourceAccessSnap = await db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS)
             .where("userId", "==", session.user.id)
             .get();
 
         // Get training registrations
-        const trainingSnap = await db.collection("wave_training_registrations")
+        const trainingSnap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
             .where("userId", "==", session.user.id)
             .get();
 
@@ -153,14 +154,14 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{
         }
 
         // Check if already accessed
-        const accessSnap = await db.collection("wave_resource_access")
+        const accessSnap = await db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS)
             .where("userId", "==", session.user.id)
             .where("resourceId", "==", resourceId)
             .get();
 
         if (accessSnap.empty) {
             // First time access
-            await db.collection("wave_resource_access").add({
+            await db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS).add({
                 userId: session.user.id,
                 resourceId,
                 accessedAt: new Date(),
@@ -179,7 +180,7 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{
         }
 
         // Increment resource downloads
-        await db.collection("wave_resources").doc(resourceId).update({
+        await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
             downloads: FieldValue.increment(1),
         });
 
@@ -206,7 +207,7 @@ export async function getUserTrainingRegistrationsAction(): Promise<{
             return { success: false, error: "Not authenticated" };
         }
 
-        const snap = await db.collection("wave_training_registrations")
+        const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
             .where("userId", "==", session.user.id)
             .get();
 

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Export WAVE Compliance Reports (PDF/CSV)
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Fetch WAVE applications (Admin SDK)
-        let query: FirebaseFirestore.Query = db.collection("wave_applications");
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
 
         if (dateFilter) {
             query = query.where("createdAt", ">=", dateFilter);

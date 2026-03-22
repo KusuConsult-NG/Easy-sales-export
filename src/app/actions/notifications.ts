@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
@@ -39,7 +40,7 @@ export async function createNotificationAction(data: {
             createdAt: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await db.collection("notifications").add(notification);
+        const docRef = await db.collection(COLLECTIONS.NOTIFICATIONS).add(notification);
 
         return { success: true, notificationId: docRef.id };
     } catch (error) {
@@ -57,7 +58,7 @@ export async function createBulkNotificationsAction(
 ): Promise<{ success: boolean; error?: string; count?: number }> {
     try {
         const batch = db.batch();
-        const notificationsRef = db.collection("notifications");
+        const notificationsRef = db.collection(COLLECTIONS.NOTIFICATIONS);
 
         userIds.forEach((userId) => {
             const docRef = notificationsRef.doc();
@@ -83,7 +84,7 @@ export async function createBulkNotificationsAction(
  */
 export async function getUserNotificationsAction(userId: string): Promise<Notification[]> {
     try {
-        const snapshot = await db.collection("notifications")
+        const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
             .where("userId", "==", userId)
             .orderBy("createdAt", "desc")
             .get();
@@ -116,7 +117,7 @@ export async function markNotificationAsReadAction(
     notificationId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        await db.collection("notifications").doc(notificationId).update({
+        await db.collection(COLLECTIONS.NOTIFICATIONS).doc(notificationId).update({
             read: true,
             readAt: FieldValue.serverTimestamp(),
         });
@@ -133,7 +134,7 @@ export async function markNotificationAsReadAction(
  */
 export async function markAllAsReadAction(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const snapshot = await db.collection("notifications")
+        const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
             .where("userId", "==", userId)
             .where("read", "==", false)
             .get();
@@ -164,7 +165,7 @@ export async function markAllAsReadAction(userId: string): Promise<{ success: bo
  */
 export async function getUnreadCountAction(userId: string): Promise<number> {
     try {
-        const snapshot = await db.collection("notifications")
+        const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
             .where("userId", "==", userId)
             .where("read", "==", false)
             .count()

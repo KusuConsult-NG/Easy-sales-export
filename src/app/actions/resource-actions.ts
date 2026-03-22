@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -45,7 +46,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
         }
 
         // Check if user is admin (multi-role array aware)
-        const userRef = db.collection("users").doc(session.user.id);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
@@ -125,7 +126,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
             updatedAt: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await db.collection("wave_resources").add(resourceData);
+        const docRef = await db.collection(COLLECTIONS.WAVE_RESOURCES).add(resourceData);
 
         // Create audit log
         await createAdminAuditLog({
@@ -147,7 +148,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
  */
 export async function getResourcesAction(category?: string): Promise<WaveResource[]> {
     try {
-        let query = db.collection("wave_resources")
+        let query = db.collection(COLLECTIONS.WAVE_RESOURCES)
             .where("isActive", "==", true)
             .orderBy("uploadedAt", "desc");
 
@@ -184,7 +185,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{
             return { success: false, error: "Authentication required" };
         }
 
-        const resourceRef = db.collection("wave_resources").doc(resourceId);
+        const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
         const resourceDoc = await resourceRef.get();
 
         if (!resourceDoc.exists) {
@@ -231,7 +232,7 @@ export async function deleteResourceAction(resourceId: string): Promise<{
         }
 
         // Check if user is admin (multi-role array aware)
-        const userRef = db.collection("users").doc(session.user.id);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
@@ -239,7 +240,7 @@ export async function deleteResourceAction(resourceId: string): Promise<{
             return { success: false, error: "Admin access required" };
         }
 
-        const resourceRef = db.collection("wave_resources").doc(resourceId);
+        const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
 
         // Soft delete
         await resourceRef.update({
@@ -285,7 +286,7 @@ export async function updateResourceAction(
         }
 
         // Check if user is admin (multi-role array aware)
-        const userRef = db.collection("users").doc(session.user.id);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
@@ -293,7 +294,7 @@ export async function updateResourceAction(
             return { success: false, error: "Admin access required" };
         }
 
-        const resourceRef = db.collection("wave_resources").doc(resourceId);
+        const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
 
         await resourceRef.update({
             title,

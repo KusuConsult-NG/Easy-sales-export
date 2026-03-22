@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 
 /**
@@ -31,7 +32,7 @@ export async function GET() {
         }> = [];
 
         // 1. Academy course completions
-        const enrollSnap = await db.collection("course_enrollments")
+        const enrollSnap = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
             .where("userId", "==", userId)
             .where("status", "==", "completed")
             .get();
@@ -52,7 +53,7 @@ export async function GET() {
         }
 
         // 2. WAVE program certificates
-        const waveSnap = await db.collection("wave_certificates")
+        const waveSnap = await db.collection(COLLECTIONS.WAVE_CERTIFICATES)
             .where("userId", "==", userId)
             .get();
 

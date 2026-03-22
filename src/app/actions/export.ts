@@ -228,7 +228,7 @@ export async function updateExportStatusAction(
         if (newStatus === "completed") {
             try {
                 const { sendExportWindowCompleteEmail } = await import("@/lib/email-notifications");
-                const slotsSnap = await db.collection("export_slots")
+                const slotsSnap = await db.collection(COLLECTIONS.EXPORT_SLOTS)
                     .where("exportId", "==", exportId)
                     .where("status", "==", "active")
                     .get();
@@ -890,7 +890,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
         if (userId !== session.user.id) return { success: false, error: "User mismatch" };
 
         // Check already processed
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const processedDoc = await processedRef.get();
         if (processedDoc.exists) return { success: false, error: "Payment already processed" };
 

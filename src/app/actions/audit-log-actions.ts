@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log";
 
 /**
@@ -28,13 +29,13 @@ export async function getAuditLogsAction(filters: {
         }
 
         // Check if user is admin
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
-        let q = db.collection("audit_logs").orderBy("timestamp", "desc");
+        let q = db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc");
 
         // Apply filters
         if (filters.userId) {
@@ -99,7 +100,7 @@ export async function exportAuditLogsCSV(filters: {
         }
 
         // Check if user is admin
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
@@ -162,7 +163,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
         }
 
         // Check if user is admin
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
@@ -171,7 +172,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
-        const q = db.collection("audit_logs").where("timestamp", ">=", startDate);
+        const q = db.collection(COLLECTIONS.AUDIT_LOGS).where("timestamp", ">=", startDate);
 
         const snapshot = await q.get();
         const logs = snapshot.docs.map((doc) => doc.data()) as AuditLogEntry[];

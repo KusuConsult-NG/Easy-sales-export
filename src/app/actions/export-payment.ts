@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
@@ -51,7 +52,7 @@ export async function initializeInvestmentPaymentAction(
         }
 
         // Check if export window exists and is open
-        const windowRef = db.collection("exportWindows").doc(windowId);
+        const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId);
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
@@ -96,7 +97,7 @@ export async function initializeInvestmentPaymentAction(
 
         // Create pending investment record
         const investmentId = `${session.user.id}_${windowId}_${Date.now()}`;
-        await db.collection("exportInvestments").doc(investmentId).set({
+        await db.collection(COLLECTIONS.EXPORT_INVESTMENTS).doc(investmentId).set({
             investmentId,
             windowId,
             windowTitle,
@@ -149,7 +150,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
         if (existingPayment.exists) {
@@ -192,7 +193,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         }
 
         // Find investment record
-        const investmentQuery = await db.collection("exportInvestments")
+        const investmentQuery = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
             .where("paymentReference", "==", reference)
             .limit(1)
             .get();
@@ -207,7 +208,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
         await db.runTransaction(async (transaction) => {
             // Update investment status
-            const investmentRef = db.collection("exportInvestments").doc(investmentDoc.id);
+            const investmentRef = db.collection(COLLECTIONS.EXPORT_INVESTMENTS).doc(investmentDoc.id);
             transaction.update(investmentRef, {
                 status: "active",
                 paymentStatus: "paid",
@@ -216,7 +217,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             });
 
             // Update export window funding
-            const windowRef = db.collection("exportWindows").doc(windowId);
+            const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId);
             const windowSnap = await transaction.get(windowRef);
 
             if (!windowSnap.exists) {
@@ -243,7 +244,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
 
             // Update or create investor portfolio
             const portfolioId = session.user.id || "";
-            const portfolioRef = db.collection("investorPortfolios").doc(portfolioId);
+            const portfolioRef = db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(portfolioId);
             const portfolioSnap = await transaction.get(portfolioRef);
 
             if (portfolioSnap.exists) {

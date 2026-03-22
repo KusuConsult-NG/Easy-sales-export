@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
         const userId = session.user.id;
 
         // Get user details (Admin SDK)
-        const userDoc = await db.collection("users").doc(userId).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         if (!userDoc.exists) {
             return NextResponse.json(
                 { success: false, message: "User not found" },
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get course progress (Admin SDK)
-        const progressRef = db.collection("course_progress").doc(`${userId}_${courseId}`);
+        const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${userId}_${courseId}`);
         const progressDoc = await progressRef.get();
 
         if (!progressDoc.exists) {
@@ -76,12 +77,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Get course details (Admin SDK)
-        const courseDoc = await db.collection("courses").doc(courseId).get();
+        const courseDoc = await db.collection(COLLECTIONS.COURSES).doc(courseId).get();
         const courseData = courseDoc.data();
         const courseTitle = courseDoc.exists && courseData ? courseData.title : "Course Completion";
 
         // Create certificate (Admin SDK)
-        const certificateRef = db.collection("certificates").doc();
+        const certificateRef = db.collection(COLLECTIONS.CERTIFICATES).doc();
         const userData = userDoc.data();
         if (!userData) {
             return NextResponse.json(

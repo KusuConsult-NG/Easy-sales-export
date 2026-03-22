@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { hasAppAccess } from "@/lib/role-app-mapping";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 // import CooperativeSidebar from "./CooperativeSidebar"; // Removed in favor of global Sidebar
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -47,7 +48,7 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
         if (!memberData) {
             // Cache miss - fetch from Firestore
             const db = getAdminDb();
-            const memberSnapshot = await db.collection("cooperative_members").doc(userId).get();
+            const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
             if (memberSnapshot.exists) {
                 memberData = memberSnapshot.data();
                 // Cache for 5 minutes

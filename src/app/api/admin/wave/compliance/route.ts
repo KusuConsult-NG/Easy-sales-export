@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get WAVE Compliance Data (Admin)
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Fetch WAVE applications (Admin SDK)
-        let query: FirebaseFirestore.Query = db.collection("wave_applications");
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
 
         if (dateFilter) {
             query = query.where("createdAt", ">=", dateFilter);
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
         const averageLoanSize = approved > 0 ? totalDisbursed / approved : 0;
 
         // Calculate repayment rate from actual loan data (Admin SDK)
-        const loansSnapshot = await db.collection("loans").get();
+        const loansSnapshot = await db.collection(COLLECTIONS.LOANS).get();
         const totalLoans = loansSnapshot.size;
         const repaidLoans = loansSnapshot.docs.filter(
             doc => doc.data().status === "repaid" || doc.data().status === "completed"

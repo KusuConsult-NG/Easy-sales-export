@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Delete Product
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const productRef = db.collection("products").doc(productId);
+        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
         const productDoc = await productRef.get();
 
         if (!productDoc.exists) {

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToStream } from "@react-pdf/renderer";
 import { CertificateDocument } from "@/components/pdf/CertificateDocument";
 import { db } from "@/lib/firebase-admin"; // Use Admin SDK for security
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
@@ -23,7 +24,7 @@ export async function GET(
         const courseId = certificateId;
 
         // Fetch course
-        const courseDoc = await db.collection("courses").doc(courseId).get();
+        const courseDoc = await db.collection(COLLECTIONS.COURSES).doc(courseId).get();
         if (!courseDoc.exists) {
             return NextResponse.json({ error: "Course not found" }, { status: 404 });
         }

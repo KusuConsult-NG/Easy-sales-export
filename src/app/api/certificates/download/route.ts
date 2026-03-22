@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * GET - Download certificate
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get certificate (Admin SDK)
-        const certDoc = await db.collection("user_certificates").doc(id).get();
+        const certDoc = await db.collection(COLLECTIONS.USER_CERTIFICATES).doc(id).get();
 
         if (!certDoc.exists) {
             return NextResponse.json(

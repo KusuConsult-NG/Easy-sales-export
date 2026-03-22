@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { withRateLimit } from "@/lib/rate-limit";
 
@@ -34,7 +35,7 @@ async function applyLoanHandler(request: NextRequest) {
         }
 
         // Check membership status (Admin SDK)
-        const membershipDoc = await db.collection("cooperative_members").doc(userId).get();
+        const membershipDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
         if (!membershipDoc.exists) {
             return NextResponse.json(
@@ -62,7 +63,7 @@ async function applyLoanHandler(request: NextRequest) {
         }
 
         // Get loan product details (Admin SDK)
-        const productDoc = await db.collection("loan_products").doc(productId).get();
+        const productDoc = await db.collection(COLLECTIONS.LOAN_PRODUCTS).doc(productId).get();
 
         if (!productDoc.exists) {
             return NextResponse.json(
@@ -99,7 +100,7 @@ async function applyLoanHandler(request: NextRequest) {
         }
 
         // ELIGIBILITY CHECK #2: Check for existing active loans (Admin SDK)
-        const existingLoansSnapshot = await db.collection("loan_applications")
+        const existingLoansSnapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where("userId", "==", userId)
             .where("status", "in", ["pending", "approved", "active"])
             .get();
@@ -131,7 +132,7 @@ async function applyLoanHandler(request: NextRequest) {
             (Math.pow(1 + monthlyRate, product.durationMonths) - 1);
 
         // Create loan application (Admin SDK)
-        const applicationRef = db.collection("loan_applications").doc();
+        const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
         const applicationData = {
             userId,
             productId,

@@ -154,7 +154,7 @@ export async function getBuyerOrdersAction() {
             return { success: false, error: "Authentication required" };
         }
 
-        const snapshot = await db.collection("marketplaceOrders")
+        const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("buyerId", "==", session.user.id)
             .orderBy("createdAt", "desc")
             .get();
@@ -190,7 +190,7 @@ export async function confirmOrderReceiptAction(orderId: string) {
         }
 
         // 1. Get Order
-        const orderRef = db.collection("marketplaceOrders").doc(orderId);
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
         const orderDoc = await orderRef.get();
 
         if (!orderDoc.exists) {
@@ -218,7 +218,7 @@ export async function confirmOrderReceiptAction(orderId: string) {
             });
 
             // 4. Release Escrow Funds
-            const escrowQuery = await db.collection("escrow_transactions")
+            const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("orderId", "==", orderId)
                 .get();
 

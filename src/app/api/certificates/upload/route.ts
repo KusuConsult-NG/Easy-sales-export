@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db, adminStorage } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
         const fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
 
         // Save metadata to Firestore (Admin SDK)
-        await db.collection("user_certificates").add({
+        await db.collection(COLLECTIONS.USER_CERTIFICATES).add({
             userId: session.user.id,
             fileName: file.name,
             fileUrl,

@@ -54,7 +54,7 @@ export async function approveAcademyApplicationAction(
         });
 
         // 3. Update User Profile (Verify, Add Role, Activate Service) - dot notation prevents cross-module data loss
-        await db.collection("users").doc(userId).set({
+        await db.collection(COLLECTIONS.USERS).doc(userId).set({
             isVerified: true,
             verifiedBy: session.user.id,
             verifiedAt: FieldValue.serverTimestamp(),
@@ -62,7 +62,7 @@ export async function approveAcademyApplicationAction(
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
         // Separate dot-notation update for nested serviceRegistrations to avoid overwriting other services
-        await db.collection("users").doc(userId).update({
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
             "serviceRegistrations.academy.status": "approved",
             "serviceRegistrations.academy.applicationId": applicationId,
             "serviceRegistrations.academy.approvedAt": FieldValue.serverTimestamp(),

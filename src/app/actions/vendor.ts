@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
@@ -71,7 +72,7 @@ export async function getVendorOrdersAction(filters?: {
             return { success: false, error: "Unauthorized" };
         }
 
-        let query = db.collection("vendor_orders").where("vendorId", "==", session.user.id);
+        let query = db.collection(COLLECTIONS.VENDOR_ORDERS).where("vendorId", "==", session.user.id);
 
         if (filters?.status) {
             query = query.where("status", "==", filters.status);
@@ -111,7 +112,7 @@ export async function updateVendorOrderStatusAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        const orderRef = db.collection("vendor_orders").doc(orderId);
+        const orderRef = db.collection(COLLECTIONS.VENDOR_ORDERS).doc(orderId);
 
         const updateData: any = {
             status,
@@ -154,7 +155,7 @@ export async function getVendorProductsAction(filters?: {
             return { success: false, error: "Unauthorized" };
         }
 
-        let query = db.collection("vendor_products").where("vendorId", "==", session.user.id);
+        let query = db.collection(COLLECTIONS.VENDOR_PRODUCTS).where("vendorId", "==", session.user.id);
 
         if (filters?.status) {
             query = query.where("status", "==", filters.status);
@@ -198,7 +199,7 @@ export async function updateVendorProductInventoryAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        const productRef = db.collection("vendor_products").doc(productId);
+        const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
         const productDoc = await productRef.get();
 
         if (!productDoc.exists) {
@@ -258,7 +259,7 @@ export async function toggleVendorProductStatusAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        const productRef = db.collection("vendor_products").doc(productId);
+        const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
         const productDoc = await productRef.get();
 
         if (!productDoc.exists) {
@@ -293,7 +294,7 @@ export async function deleteVendorProductAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        const productRef = db.collection("vendor_products").doc(productId);
+        const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
         const productDoc = await productRef.get();
 
         if (!productDoc.exists) {

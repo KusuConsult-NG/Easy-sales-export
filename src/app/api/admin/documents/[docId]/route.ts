@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * Serves documents stored via the Firestore fallback upload path.
@@ -22,7 +23,7 @@ export async function GET(
         }
 
         const db = getAdminDb();
-        const docSnap = await db.collection("_document_uploads").doc(docId).get();
+        const docSnap = await db.collection(COLLECTIONS.DOCUMENT_UPLOADS).doc(docId).get();
 
         if (!docSnap.exists) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });

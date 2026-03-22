@@ -406,7 +406,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     let pendingPayoutAmount = 0;
     try {
         const [coopPayouts, wavePayouts] = await Promise.all([
-            db.collection("withdrawalRequests").where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
+            db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
             db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
         ]);
         pendingPayoutAmount = (coopPayouts.data().total ?? 0) + (wavePayouts.data().total ?? 0);

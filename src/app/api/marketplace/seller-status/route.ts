@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Check Marketplace Seller Status
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         const userId = session.user.id;
 
         // Check seller verification status (Admin SDK)
-        const sellerDoc = await db.collection("marketplace_sellers").doc(userId).get();
+        const sellerDoc = await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(userId).get();
 
         if (!sellerDoc.exists) {
             return NextResponse.json({

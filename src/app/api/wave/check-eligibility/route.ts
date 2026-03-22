@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Check WAVE Eligibility and Application Status
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         const userId = session.user.id;
 
         // Get user profile for gender (Admin SDK)
-        const userDoc = await db.collection("users").doc(userId).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) {
             return NextResponse.json({
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
         const gender = userData.gender || null;
 
         // Check WAVE application status (Admin SDK)
-        const waveDoc = await db.collection("wave_applications").doc(userId).get();
+        const waveDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(userId).get();
 
         let applicationStatus = "not_applied";
         if (waveDoc.exists) {

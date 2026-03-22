@@ -7,9 +7,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { auth } from "@/lib/auth";
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
     try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+            return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+        }
+
         const { searchParams } = new URL(req.url);
         const statusFilter = searchParams.get("status") || "pending";
 

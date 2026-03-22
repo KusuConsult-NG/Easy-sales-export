@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { sendBriefingConfirmationEmail } from "@/lib/email-notifications";
@@ -56,7 +57,7 @@ export const registerForBriefingAction = withSafeAction(
 
             // Check for duplicate registration
             const existingSnapshot = await db
-                .collection("wave_briefing_registrations")
+                .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
                 .where("email", "==", emailToStore)
                 .limit(1)
                 .get();
@@ -69,7 +70,7 @@ export const registerForBriefingAction = withSafeAction(
 
             // Store registration with standardized schema
             const status: BriefingStatus = "registered";
-            const docRef = await db.collection("wave_briefing_registrations").add({
+            const docRef = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).add({
                 fullName: validData.fullName,
                 phoneNumber: phoneToStore,
                 email: emailToStore,

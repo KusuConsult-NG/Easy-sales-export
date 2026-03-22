@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * GET - List user's certificates
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
         }
 
         // List certificates (Admin SDK)
-        const snapshot = await db.collection("user_certificates")
+        const snapshot = await db.collection(COLLECTIONS.USER_CERTIFICATES)
             .where("userId", "==", session.user.id)
             .get();
 

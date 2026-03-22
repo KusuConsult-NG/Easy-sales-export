@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -32,7 +33,7 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ success: false, error: "withdrawalId is required" }, { status: 400 });
         }
 
-        const ref = db.collection("cooperative_withdrawals").doc(withdrawalId);
+        const ref = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);
         const snap = await ref.get();
 
         if (!snap.exists) {

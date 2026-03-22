@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get All Cooperative Membership Applications (Admin)
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
         const toDate = searchParams.get("toDate") || "";
 
         // Build query — start from collection
-        let query: FirebaseFirestore.Query = db.collection("cooperative_members");
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
         // Status filter
         if (status && status !== "all") {

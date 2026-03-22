@@ -675,7 +675,7 @@ export async function exportUserDataAction(
 
         // Get loans
         const loansSnapshot = await db
-            .collection("loan_applications")
+            .collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where("userId", "==", userId)
             .get();
         userDataExport.loans = loansSnapshot.docs.map(doc => doc.data());

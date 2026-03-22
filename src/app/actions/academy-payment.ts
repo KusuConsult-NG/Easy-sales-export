@@ -120,7 +120,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
         if (existingPayment.exists) {

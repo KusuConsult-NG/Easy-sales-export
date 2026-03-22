@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -69,7 +70,7 @@ export async function createLandListingAction(data: {
             updatedAt: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await db.collection("land_listings").add(listing);
+        const docRef = await db.collection(COLLECTIONS.LAND_LISTINGS).add(listing);
 
         await createAdminAuditLog({
             action: "user_update",
@@ -93,7 +94,7 @@ async function submitForVerificationAction(
     ownerId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const listingRef = db.collection("land_listings").doc(listingId);
+        const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
@@ -133,7 +134,7 @@ export async function verifyLandListingAction(
         if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
             return { success: false, error: "Unauthorized: Admin access required" };
         }
-        const listingRef = db.collection("land_listings").doc(listingId);
+        const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
@@ -180,7 +181,7 @@ export async function rejectLandListingAction(
         if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
             return { success: false, error: "Unauthorized: Admin access required" };
         }
-        const listingRef = db.collection("land_listings").doc(listingId);
+        const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
@@ -246,7 +247,7 @@ export async function searchLandListingsAction(filters: {
     const getCachedListings = unstable_cache(
         async () => {
             try {
-                let q = db.collection("land_listings")
+                let q = db.collection(COLLECTIONS.LAND_LISTINGS)
                     .where("status", "==", "verified")
                     .orderBy("createdAt", "desc"); // Ensure stable ordering
 
@@ -259,7 +260,7 @@ export async function searchLandListingsAction(filters: {
 
                 // Pagination
                 if (filters.lastDocId) {
-                    const lastDoc = await db.collection("land_listings").doc(filters.lastDocId).get();
+                    const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(filters.lastDocId).get();
                     if (lastDoc.exists) {
                         q = q.startAfter(lastDoc);
                     }
@@ -315,7 +316,7 @@ export async function searchLandListingsAction(filters: {
  */
 export async function getPendingLandListingsAction(): Promise<LandListing[]> {
     try {
-        const snapshot = await db.collection("land_listings")
+        const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
             .where("status", "==", "pending_verification")
             .get();
 
@@ -375,7 +376,7 @@ export async function submitLandListingAction(data: {
             (listing as LandListing & { gpsCoordinates?: { latitude: number; longitude: number } }).gpsCoordinates = data.gpsCoordinates;
         }
 
-        const docRef = await db.collection("land_listings").add(listing);
+        const docRef = await db.collection(COLLECTIONS.LAND_LISTINGS).add(listing);
 
         // Create audit log
         await createAdminAuditLog({
@@ -416,7 +417,7 @@ export async function submitLandListingAction(data: {
 const getCachedPropertyById = (id: string) => unstable_cache(
     async () => {
         try {
-            const docRef = db.collection("land_listings").doc(id);
+            const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
             const docSnap = await docRef.get();
 
             if (docSnap.exists) {
@@ -451,7 +452,7 @@ export async function submitLandInquiryAction(data: {
 }): Promise<{ success: boolean; error?: string }> {
     try {
         // 1. Save inquiry to database
-        const inquiryRef = await db.collection("land_inquiries").add({
+        const inquiryRef = await db.collection(COLLECTIONS.LAND_INQUIRIES).add({
             ...data,
             status: "pending",
             createdAt: FieldValue.serverTimestamp(),
@@ -490,7 +491,7 @@ export async function submitLandInquiryAction(data: {
  */
 export async function getLandInquiriesAction(userId: string): Promise<{ success: boolean; inquiries?: any[]; error?: string }> {
     try {
-        const snapshot = await db.collection("land_inquiries")
+        const snapshot = await db.collection(COLLECTIONS.LAND_INQUIRIES)
             .where("listingOwnerId", "==", userId)
             .orderBy("createdAt", "desc")
             .get();
@@ -507,7 +508,7 @@ export async function getLandInquiriesAction(userId: string): Promise<{ success:
  */
 export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ success: boolean; inquiry?: any; error?: string }> {
     try {
-        const docRef = db.collection("land_inquiries").doc(inquiryId);
+        const docRef = db.collection(COLLECTIONS.LAND_INQUIRIES).doc(inquiryId);
         const docSnap = await docRef.get();
 
         if (docSnap.exists) {

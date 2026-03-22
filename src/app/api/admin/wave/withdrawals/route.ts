@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -25,12 +26,12 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const status = searchParams.get("status") || "pending";
 
-        let query: FirebaseFirestore.Query = db.collection("wave_withdrawals")
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
             .orderBy("requestedAt", "desc")
             .limit(50);
 
         if (status !== "all") {
-            query = db.collection("wave_withdrawals")
+            query = db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
                 .where("status", "==", status)
                 .orderBy("requestedAt", "desc")
                 .limit(50);
@@ -72,7 +73,7 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Invalid request" }, { status: 400 });
         }
 
-        const ref = db.collection("wave_withdrawals").doc(withdrawalId);
+        const ref = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(withdrawalId);
         const doc = await ref.get();
 
         if (!doc.exists) {

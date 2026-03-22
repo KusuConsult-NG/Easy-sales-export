@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
             logger.info(`[Paystack Webhook] Processing success for ${reference}`, { type, amount: amountPaidv });
 
             // Check if already processed
-            const processedRef = db.collection("processedPayments").doc(reference);
+            const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
             const processedDoc = await processedRef.get();
 
             if (processedDoc.exists) {
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
                     // Log unhandled types so they appear in Vercel logs — never silently drop money.
                     logger.warn(`[Paystack Webhook] UNHANDLED payment type: "${type}" for reference ${reference}. Amount: ${amountPaidv}. Metadata: ${JSON.stringify(metadata)}`);
                     // Still mark as processed to avoid infinite retries.
-                    await db.collection("processedPayments").doc(reference).set({
+                    await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference).set({
                         reference, type, userId, amount: amountPaidv,
                         processedAt: FieldValue.serverTimestamp(),
                         source: "webhook",
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
  */
 async function processMarketplaceOrder(reference: string, amount: number, userId: string) {
     // Find order
-    const orderQuery = await db.collection("marketplaceOrders")
+    const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
         .where("paymentReference", "==", reference)
         .limit(1)
         .get();
@@ -132,8 +132,8 @@ async function processMarketplaceOrder(reference: string, amount: number, userId
     }
 
     await db.runTransaction(async (transaction) => {
-        const orderRef = db.collection("marketplaceOrders").doc(orderDoc.id);
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         // 1. Update Order
         transaction.update(orderRef, {
@@ -170,7 +170,7 @@ async function processMarketplaceOrder(reference: string, amount: number, userId
 
         Object.entries(sellerTotals).forEach(([sellerId, totalAmount]) => {
             const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
-            const escrowRef = db.collection("escrow_transactions").doc(escrowId);
+            const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
             transaction.set(escrowRef, {
                 id: escrowId,
@@ -239,7 +239,7 @@ async function processExportInvestment(reference: string, amount: number, userId
         });
 
         // 3. Mark Payment Processed
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         t.set(processedRef, {
             reference,
             type: "export_investment",
@@ -275,10 +275,10 @@ async function processCooperativeRegistration(reference: string, amount: number,
     // The doc ID is membershipId (not userId). Prefer direct lookup via membershipId from metadata.
     let memberRef: FirebaseFirestore.DocumentReference;
     if (membershipId) {
-        memberRef = db.collection("cooperative_members").doc(membershipId);
+        memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(membershipId);
     } else {
         // Fallback: query by userId field
-        const querySnap = await db.collection("cooperative_members")
+        const querySnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where("userId", "==", userId)
             .orderBy("createdAt", "desc")
             .limit(1)
@@ -290,7 +290,7 @@ async function processCooperativeRegistration(reference: string, amount: number,
     }
 
     await db.runTransaction(async (t) => {
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         t.set(memberRef, {
             paymentStatus: "completed",
@@ -315,7 +315,7 @@ async function processCooperativeRegistration(reference: string, amount: number,
 
     // Send one-time WhatsApp group invite via email — non-blocking
     try {
-        const userSnap = await db.collection("users").doc(userId).get();
+        const userSnap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userSnap.data();
         const userEmail = userData?.email;
         const userName = userData?.fullName || userData?.name || userEmail?.split("@")[0] || "Member";
@@ -353,8 +353,8 @@ async function processAcademyRegistration(reference: string, amount: number, use
     }
 
     await db.runTransaction(async (t) => {
-        const userRef = db.collection("users").doc(userId);
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         // 1. Update User Service Registration
         t.set(userRef, {
@@ -392,8 +392,8 @@ async function processAcademyRegistration(reference: string, amount: number, use
  */
 async function processFarmNationRegistration(reference: string, amount: number, userId: string) {
     await db.runTransaction(async (t) => {
-        const userRef = db.collection("users").doc(userId);
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         t.set(userRef, {
             serviceRegistrations: {
@@ -425,8 +425,8 @@ async function processFarmNationRegistration(reference: string, amount: number, 
  */
 async function processWaveRegistration(reference: string, amount: number, userId: string) {
     await db.runTransaction(async (t) => {
-        const userRef = db.collection("users").doc(userId);
-        const processedRef = db.collection("processedPayments").doc(reference);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
         t.set(userRef, {
             serviceRegistrations: {

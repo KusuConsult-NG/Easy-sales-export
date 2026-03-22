@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get Student Dashboard Data
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
         const userId = session.user.id;
 
         // Get course progress (Admin SDK)
-        const progressSnapshot = await db.collection("course_progress")
+        const progressSnapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
             .where("userId", "==", userId)
             .get();
 
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
         }));
 
         // Get certificates (Admin SDK)
-        const certSnapshot = await db.collection("certificates")
+        const certSnapshot = await db.collection(COLLECTIONS.CERTIFICATES)
             .where("userId", "==", userId)
             .get();
 

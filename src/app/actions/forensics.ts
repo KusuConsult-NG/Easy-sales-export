@@ -192,7 +192,7 @@ export async function runForensicScanAction(): Promise<{ success: boolean; resul
                 const profileBalance = doc.data().cooperativeProfile?.savingsBalance || 0;
 
                 // Sum Sync Transactions
-                const transactionsSnapshot = await db.collection("cooperative_transactions")
+                const transactionsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
                     .where("userId", "==", userId)
                     .where("status", "==", "completed") // Only completed transactions count
                     .get();
@@ -241,7 +241,7 @@ export async function runForensicScanAction(): Promise<{ success: boolean; resul
             for (const doc of verifiedFarmersQuery.docs) {
                 const userId = doc.id;
                 // Check if verification doc exists
-                const verifSnapshot = await db.collection("land_verifications")
+                const verifSnapshot = await db.collection(COLLECTIONS.LAND_VERIFICATIONS)
                     .where("userId", "==", userId)
                     .where("status", "==", "verified")
                     .limit(1)
@@ -269,7 +269,7 @@ export async function runForensicScanAction(): Promise<{ success: boolean; resul
 
         // CHECK: Investment Cap Breach
         try {
-            const activeWindows = await db.collection("export_windows")
+            const activeWindows = await db.collection(COLLECTIONS.EXPORT_WINDOWS)
                 .where("status", "==", "active")
                 .get();
 
@@ -303,7 +303,7 @@ export async function runForensicScanAction(): Promise<{ success: boolean; resul
 
         // CHECK: Enrollment Integrity (Paid but no Transaction)
         try {
-            const enrollments = await db.collection("course_enrollments")
+            const enrollments = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
                 .where("paymentStatus", "==", "paid")
                 .limit(50)
                 .get();

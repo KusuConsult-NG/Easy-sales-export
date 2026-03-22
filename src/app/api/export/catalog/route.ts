@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 
 // Default catalog (used when Firestore collection is empty)
@@ -20,7 +21,7 @@ const DEFAULT_CATALOG = [
 export async function GET() {
     try {
         const db = getAdminDb();
-        const snap = await db.collection("export_catalog")
+        const snap = await db.collection(COLLECTIONS.EXPORT_CATALOG)
             .where("isActive", "==", true)
             .orderBy("sortOrder", "asc")
             .get();
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
 
         if (body.id) {
             // Update existing
-            await db.collection("export_catalog").doc(body.id).set({
+            await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(body.id).set({
                 ...body,
                 updatedAt: new Date(),
                 updatedBy: session!.user.id,
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: true, id: body.id });
         } else {
             // Create new
-            const ref = await db.collection("export_catalog").add({
+            const ref = await db.collection(COLLECTIONS.EXPORT_CATALOG).add({
                 ...body,
                 isActive: true,
                 sortOrder: Date.now(),
@@ -87,7 +88,7 @@ export async function DELETE(req: Request) {
         if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
         const db = getAdminDb();
-        await db.collection("export_catalog").doc(id).update({ isActive: false, deletedAt: new Date() });
+        await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id).update({ isActive: false, deletedAt: new Date() });
 
         return NextResponse.json({ success: true });
     } catch (error) {

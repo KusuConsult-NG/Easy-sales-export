@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -27,7 +28,7 @@ export async function updateVendorProfileAction(profileData: {
         }
 
         const vendorId = session.user.id;
-        const vendorRef = db.collection("vendor_profiles").doc(vendorId);
+        const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
 
         await vendorRef.set({
             storeInfo: {
@@ -66,7 +67,7 @@ export async function updateVendorPaymentConfigAction(paymentData: {
         }
 
         const vendorId = session.user.id;
-        const vendorRef = db.collection("vendor_profiles").doc(vendorId);
+        const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
 
         await vendorRef.set({
             paymentConfig: {
@@ -102,7 +103,7 @@ export async function updateVendorNotificationPrefsAction(prefs: {
         }
 
         const vendorId = session.user.id;
-        const vendorRef = db.collection("vendor_profiles").doc(vendorId);
+        const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
 
         await vendorRef.set({
             notifications: prefs,
@@ -131,7 +132,7 @@ export async function updateVendorShippingConfigAction(shippingData: {
         }
 
         const vendorId = session.user.id;
-        const vendorRef = db.collection("vendor_profiles").doc(vendorId);
+        const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
 
         await vendorRef.set({
             shipping: {
@@ -159,7 +160,7 @@ export async function getVendorSettingsAction() {
         }
 
         const vendorId = session.user.id;
-        const vendorDoc = await db.collection("vendor_profiles").doc(vendorId).get();
+        const vendorDoc = await db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId).get();
 
         if (!vendorDoc.exists) {
             return {

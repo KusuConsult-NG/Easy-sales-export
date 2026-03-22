@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get All Loan Products (Admin Only)
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get all loan products (Admin SDK)
-        const snapshot = await db.collection("loan_products")
+        const snapshot = await db.collection(COLLECTIONS.LOAN_PRODUCTS)
             .orderBy("minAmount", "asc")
             .get();
 

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * API Route: Get All Loan Applications (Admin Only)
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Get all loan applications (Admin SDK)
-        const snapshot = await db.collection("loan_applications")
+        const snapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .orderBy("appliedAt", "desc")
             .get();
 
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
                 const data = appDoc.data();
 
                 // Get user details
-                const userDoc = await db.collection("users").doc(data.userId).get();
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(data.userId).get();
                 const userData = userDoc.exists ? userDoc.data() : {};
 
                 return {

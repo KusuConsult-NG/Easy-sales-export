@@ -392,7 +392,7 @@ export async function enrollInWaveAction(userId: string): Promise<{
             return { success: false, error: eligibility.reason };
         }
 
-        await db.collection("wave_members").doc(userId).set({
+        await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userId).set({
             enrolledAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
@@ -423,7 +423,7 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
         if (!session?.user) return [];
 
         // STRICT ENROLLMENT CHECK
-        const memberDoc = await db.collection("wave_members").doc(session.user.id).get();
+        const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
         if (!memberDoc.exists || !memberDoc.data()?.active) {
             // Check if admin, otherwise deny
             if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
@@ -432,7 +432,7 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
             }
         }
 
-        const q = db.collection("wave_resources");
+        const q = db.collection(COLLECTIONS.WAVE_RESOURCES);
         let queryRef;
 
         if (category) {
@@ -466,7 +466,7 @@ export async function getWaveTrainingEventsAction(): Promise<WaveTrainingEvent[]
         // Optional: Check enrollment here too if trainings are exclusive
         // For now, allowing visibility but restricting registration
 
-        const snapshot = await db.collection("wave_training_events")
+        const snapshot = await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS)
             .where("status", "in", ["upcoming", "ongoing"])
             .get();
 
@@ -519,7 +519,7 @@ export async function getShipmentTrackingAction(userId: string): Promise<Shipmen
         // Users can only see their own shipments
         if (session.user.id !== userId) return [];
 
-        const snapshot = await db.collection("wave_shipments")
+        const snapshot = await db.collection(COLLECTIONS.WAVE_SHIPMENTS)
             .where("memberId", "==", userId)
             .get();
 
@@ -556,7 +556,7 @@ export async function updateShipmentStatusAction(
             return { success: false, error: "Admin access required" };
         }
 
-        const shipmentRef = db.collection("wave_shipments").doc(shipmentId);
+        const shipmentRef = db.collection(COLLECTIONS.WAVE_SHIPMENTS).doc(shipmentId);
         const shipmentDoc = await shipmentRef.get();
 
         if (!shipmentDoc.exists) {
@@ -596,7 +596,7 @@ export async function updateShipmentStatusAction(
  */
 export async function syncShipmentWithCarrierAction(shipmentId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const shipmentRef = db.collection("wave_shipments").doc(shipmentId);
+        const shipmentRef = db.collection(COLLECTIONS.WAVE_SHIPMENTS).doc(shipmentId);
         const shipmentDoc = await shipmentRef.get();
 
         if (!shipmentDoc.exists) {
@@ -666,7 +666,7 @@ export async function calculateEarningsAction(userId: string): Promise<MemberEar
             throw new Error("Unauthorized");
         }
 
-        const snapshot = await db.collection("marketplace_orders")
+        const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerId", "==", userId)
             .get();
 
@@ -782,7 +782,7 @@ export async function generateCertificateAction(
             verificationUrl: `/wave/verify-certificate/${certNumber}`,
         };
 
-        await db.collection("wave_certificates").doc(certId).set(certificate);
+        await db.collection(COLLECTIONS.WAVE_CERTIFICATES).doc(certId).set(certificate);
 
         await createAdminAuditLog({
             action: "user_update",
@@ -811,7 +811,7 @@ export async function getMemberCertificatesAction(userId: string): Promise<WaveC
         // Allow reading own certificates
         if (session.user.id !== userId) return [];
 
-        const snapshot = await db.collection("wave_certificates")
+        const snapshot = await db.collection(COLLECTIONS.WAVE_CERTIFICATES)
             .where("memberId", "==", userId)
             .get();
 
@@ -867,7 +867,7 @@ export async function uploadWaveResourceAction(
             downloads: 0,
         };
 
-        await db.collection("wave_resources").doc(resourceId).set(resourceData);
+        await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).set(resourceData);
 
         return { success: true, resourceId };
     } catch (error: any) {
@@ -887,7 +887,7 @@ export async function incrementResourceDownloadAction(
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
 
-        const resourceRef = db.collection("wave_resources").doc(resourceId);
+        const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
 
         await resourceRef.update({
             downloads: FieldValue.increment(1)
@@ -916,7 +916,7 @@ export async function registerForTrainingAction(
             return { success: false, error: "Cannot register for another user" };
         }
 
-        const eventRef = db.collection("wave_training_events").doc(eventId);
+        const eventRef = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId);
 
         await db.runTransaction(async (transaction) => {
             const eventDoc = await transaction.get(eventRef);
@@ -931,7 +931,7 @@ export async function registerForTrainingAction(
             }
 
             // Create registration
-            const registrationRef = db.collection("wave_training_registrations").doc();
+            const registrationRef = db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS).doc();
             transaction.set(registrationRef, {
                 userId,
                 eventId,
@@ -991,7 +991,7 @@ export async function withdrawEarningsAction(
         }
 
         // Block if there's already a pending withdrawal
-        const existingSnap = await db.collection("wave_withdrawals")
+        const existingSnap = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
             .where("userId", "==", userId)
             .where("status", "==", "pending")
             .limit(1)
@@ -1003,7 +1003,7 @@ export async function withdrawEarningsAction(
 
         const withdrawalId = `WD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
-        await db.collection("wave_withdrawals").doc(withdrawalId).set({
+        await db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(withdrawalId).set({
             withdrawalId,
             userId,
             userEmail: session.user.email,

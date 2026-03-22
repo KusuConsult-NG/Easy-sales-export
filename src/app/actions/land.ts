@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import type { LandListing } from "@/types/strict";
 
 /**
@@ -10,7 +11,7 @@ import type { LandListing } from "@/types/strict";
  */
 export async function getVerifiedLandListings(): Promise<LandListing[]> {
     try {
-        const q = db.collection("land_listings")
+        const q = db.collection(COLLECTIONS.LAND_LISTINGS)
             .where("verificationStatus", "==", "verified")
             .limit(100); // Protection: Limit map pins to 100 for now
 

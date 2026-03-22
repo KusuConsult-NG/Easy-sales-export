@@ -2,6 +2,7 @@
 import { requireSession } from "@/lib/session-guard";
 
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { ActionResponse, withSafeAction } from "@/lib/safe-action";
@@ -24,7 +25,7 @@ export const deleteUserAccountAction = withSafeAction(
             }
 
             const userId = session.user.id;
-            const userRef = db.collection("users").doc(userId);
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
             const userSnap = await userRef.get();
             if (!userSnap.exists) {

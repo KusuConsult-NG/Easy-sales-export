@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Get quiz data to calculate score (Admin SDK)
-        const quizDoc = await db.collection("quizzes").doc(quizId).get();
+        const quizDoc = await db.collection(COLLECTIONS.QUIZZES).doc(quizId).get();
 
         if (!quizDoc.exists) {
             return NextResponse.json(
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
         const passed = scorePercentage >= quizData.passingScore;
 
         // Save quiz attempt (Admin SDK)
-        const attemptRef = db.collection("quiz_attempts").doc();
+        const attemptRef = db.collection(COLLECTIONS.QUIZ_ATTEMPTS).doc();
         await attemptRef.set({
             quizId,
             userId: session.user.id,
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
 
         // Update course progress if passed
         if (passed) {
-            const progressRef = db.collection("courseProgress").doc(`${session.user.id}_${courseId}`);
+            const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${session.user.id}_${courseId}`);
             const progressDoc = await progressRef.get();
 
             const moduleId = quizData.moduleId || "module_unknown";

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 /**
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
 
         // 🔒 Use a transaction for atomic loan approval + balance update
         await db.runTransaction(async (transaction) => {
-            const applicationRef = db.collection("loan_applications").doc(applicationId);
+            const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
             const applicationDoc = await transaction.get(applicationRef);
 
             if (!applicationDoc.exists) {
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
             });
 
             // Update member's loan balance
-            const memberRef = db.collection("cooperative_members").doc(appData.userId);
+            const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(appData.userId);
             transaction.update(memberRef, {
                 loanBalance: FieldValue.increment(appData.amount),
                 updatedAt: FieldValue.serverTimestamp(),

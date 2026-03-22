@@ -2,6 +2,7 @@
 
 import { logger } from "@/lib/logger";
 import { db, adminAuth } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 interface StandardizationReport {
@@ -29,7 +30,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         // ============================================================================
         const usersReport: StandardizationReport = { collection: "users", scanned: 0, updated: 0, details: [] };
         // Validating in batches or just all for now (assuming < 10k users for this script run, otherwise paginate)
-        const usersSnapshot = await db.collection("users").get();
+        const usersSnapshot = await db.collection(COLLECTIONS.USERS).get();
         usersReport.scanned = usersSnapshot.size;
 
         const userUpdates: Promise<any>[] = [];
@@ -84,7 +85,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         // 2. PRODUCTS COLLECTION (Marketplace)
         // ============================================================================
         const productsReport: StandardizationReport = { collection: "products", scanned: 0, updated: 0, details: [] };
-        const productSnapshot = await db.collection("products").get();
+        const productSnapshot = await db.collection(COLLECTIONS.PRODUCTS).get();
         productsReport.scanned = productSnapshot.size;
         const productUpdates: Promise<any>[] = [];
 
@@ -129,7 +130,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         // 3. EXPORT WINDOWS
         // ============================================================================
         const exportReport: StandardizationReport = { collection: "export_windows", scanned: 0, updated: 0, details: [] };
-        const exportSnapshot = await db.collection("export_windows").get();
+        const exportSnapshot = await db.collection(COLLECTIONS.EXPORT_WINDOWS).get();
         exportReport.scanned = exportSnapshot.size;
         const exportUpdates: Promise<any>[] = [];
 
@@ -167,7 +168,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         // 4. COOPERATIVES
         // ============================================================================
         const coopReport: StandardizationReport = { collection: "cooperatives", scanned: 0, updated: 0, details: [] };
-        const coopSnapshot = await db.collection("cooperatives").get();
+        const coopSnapshot = await db.collection(COLLECTIONS.COOPERATIVES).get();
         coopReport.scanned = coopSnapshot.size;
         const coopUpdates: Promise<any>[] = [];
 
@@ -204,7 +205,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         // 5. WAVE APPLICATIONS
         // ============================================================================
         const waveReport: StandardizationReport = { collection: "wave_applications", scanned: 0, updated: 0, details: [] };
-        const waveSnapshot = await db.collection("wave_applications").get();
+        const waveSnapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
         waveReport.scanned = waveSnapshot.size;
         const waveUpdates: Promise<any>[] = [];
 

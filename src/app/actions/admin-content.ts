@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
 export type ContentType = "products" | "land" | "loans" | "wave" | "certificates" | "resources" | "courses";
@@ -42,7 +43,7 @@ export async function getPendingContentAction(): Promise<{
         }
 
         // Check admin role
-        const userDoc = await db.collection("users").doc(session.user.id).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         if (!userDoc.exists || !userData || userData.role !== "admin") {
             return { success: false, error: "Unauthorized" };
@@ -51,7 +52,7 @@ export async function getPendingContentAction(): Promise<{
         const pendingItems: PendingContentItem[] = [];
 
         // 1. Marketplace Products
-        const productsQuery = db.collection("marketplace_products").where("status", "==", "pending");
+        const productsQuery = db.collection(COLLECTIONS.MARKETPLACE_PRODUCTS).where("status", "==", "pending");
         const productsSnap = await productsQuery.get();
         productsSnap.forEach((doc) => {
             const data = doc.data();
@@ -68,7 +69,7 @@ export async function getPendingContentAction(): Promise<{
         });
 
         // 2. Land Listings
-        const landQuery = db.collection("land_listings").where("verificationStatus", "==", "pending");
+        const landQuery = db.collection(COLLECTIONS.LAND_LISTINGS).where("verificationStatus", "==", "pending");
         const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
             const data = doc.data();
@@ -85,7 +86,7 @@ export async function getPendingContentAction(): Promise<{
         });
 
         // 3. Loans
-        const loansQuery = db.collection("loans").where("status", "==", "pending");
+        const loansQuery = db.collection(COLLECTIONS.LOANS).where("status", "==", "pending");
         const loansSnap = await loansQuery.get();
         loansSnap.forEach((doc) => {
             const data = doc.data();
@@ -102,7 +103,7 @@ export async function getPendingContentAction(): Promise<{
         });
 
         // 4. WAVE Applications
-        const waveQuery = db.collection("wave_applications").where("status", "==", "pending");
+        const waveQuery = db.collection(COLLECTIONS.WAVE_APPLICATIONS).where("status", "==", "pending");
         const waveSnap = await waveQuery.get();
         waveSnap.forEach((doc) => {
             const data = doc.data();
@@ -146,28 +147,28 @@ export async function approveContentAction(
 
         switch (type) {
             case "products":
-                await db.collection("marketplace_products").doc(id).update({
+                await db.collection(COLLECTIONS.MARKETPLACE_PRODUCTS).doc(id).update({
                     status: "approved",
                     approvedAt: timestamp,
                     approvedBy: adminId,
                 });
                 break;
             case "land":
-                await db.collection("land_listings").doc(id).update({
+                await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).update({
                     verificationStatus: "verified",
                     verifiedAt: timestamp,
                     verifiedBy: adminId,
                 });
                 break;
             case "loans":
-                await db.collection("loans").doc(id).update({
+                await db.collection(COLLECTIONS.LOANS).doc(id).update({
                     status: "approved", // or 'processing' depending on flow, but 'approved' for now
                     approvedAt: timestamp,
                     approvedBy: adminId,
                 });
                 break;
             case "wave":
-                await db.collection("wave_applications").doc(id).update({
+                await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(id).update({
                     status: "approved",
                     approvedAt: timestamp,
                     approvedBy: adminId,
@@ -211,7 +212,7 @@ export async function rejectContentAction(
 
         switch (type) {
             case "products":
-                await db.collection("marketplace_products").doc(id).update({
+                await db.collection(COLLECTIONS.MARKETPLACE_PRODUCTS).doc(id).update({
                     status: "rejected",
                     rejectionReason: reason,
                     rejectedAt: timestamp,
@@ -219,7 +220,7 @@ export async function rejectContentAction(
                 });
                 break;
             case "land":
-                await db.collection("land_listings").doc(id).update({
+                await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).update({
                     verificationStatus: "rejected",
                     verificationNotes: reason, // land uses 'verificationNotes' usually
                     rejectedAt: timestamp,
@@ -227,7 +228,7 @@ export async function rejectContentAction(
                 });
                 break;
             case "loans":
-                await db.collection("loans").doc(id).update({
+                await db.collection(COLLECTIONS.LOANS).doc(id).update({
                     status: "rejected",
                     rejectionReason: reason,
                     rejectedAt: timestamp,
@@ -235,7 +236,7 @@ export async function rejectContentAction(
                 });
                 break;
             case "wave":
-                await db.collection("wave_applications").doc(id).update({
+                await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(id).update({
                     status: "rejected",
                     rejectionReason: reason,
                     rejectedAt: timestamp,

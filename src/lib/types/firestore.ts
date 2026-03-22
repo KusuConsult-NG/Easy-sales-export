@@ -789,13 +789,14 @@ export const COLLECTIONS = {
     IDEMPOTENCY_KEYS: "idempotency_keys",
 
     // Export & Agriculture
-    EXPORT_WINDOWS: "export_windows",
+    EXPORT_WINDOWS: "exportWindows",
     EXPORT_SLOTS: "export_slots",
 
     // Cooperatives & Finance
     COOPERATIVES: "cooperatives",
     COOPERATIVE_MEMBERS: "cooperative_members",
     COOPERATIVE_TRANSACTIONS: "cooperative_transactions",
+    COOPERATIVE_LOANS: "cooperative_loans",
     FIXED_SAVINGS_PLANS: "fixed_savings_plans",
     LOAN_PRODUCTS: "loan_products",
     LOAN_APPLICATIONS: "loan_applications",
@@ -812,13 +813,14 @@ export const COLLECTIONS = {
 
     // Land & Marketplace
     PRODUCTS: "products",
-    MARKETPLACE_ORDERS: "marketplace_orders",
+    MARKETPLACE_ORDERS: "marketplaceOrders",
     LAND_LISTINGS: "land_listings",
     LAND_VERIFICATIONS: "land_verifications",
     SELLER_VERIFICATIONS: "seller_verifications",
     ESCROW_TRANSACTIONS: "escrow_transactions",
     ESCROW_MESSAGES: "escrow_messages",
     DISPUTES: "disputes",
+    PROCESSED_PAYMENTS: "processedPayments",
 
     // NEW: Marketplace Expansions (Phase 12)
     WALLETS: "wallets",
@@ -828,7 +830,7 @@ export const COLLECTIONS = {
     SELLER_REVIEWS: "seller_reviews",
 
     // Farm Nation
-    FARM_NATION_PROPERTIES: "farm_nation_properties",
+    FARM_NATION_PROPERTIES: "farmNationProperties",
     FARM_NATION_TRANSACTIONS: "farm_nation_transactions",
 
     // NEW: Marketplace Enhancement
@@ -870,10 +872,33 @@ export const COLLECTIONS = {
     // Vendor
     VENDOR_SETTINGS: "vendor_settings",
     VENDOR_REVIEWS: "vendor_reviews",
+    VENDOR_ORDERS: "vendor_orders",
+    VENDOR_PRODUCTS: "vendor_products",
+    VENDOR_PROFILES: "vendor_profiles",
+
+    // WAVE Resource Access
+    WAVE_RESOURCE_ACCESS: "wave_resource_access",
 
     // Export Investments
-    EXPORT_INVESTMENTS: "export_investments",
+    EXPORT_INVESTMENTS: "exportInvestments",
     EXPORT_APPLICATIONS: "export_onboarding_applications",
+
+    // Investor Portfolios
+    INVESTOR_PORTFOLIOS: "investorPortfolios",
+    PROPERTY_PURCHASES: "propertyPurchases",
+
+    // Withdrawal Requests
+    WITHDRAWAL_REQUESTS: "withdrawalRequests",
+
+    // Marketplace Products & Sellers
+    MARKETPLACE_PRODUCTS: "marketplace_products",
+    MARKETPLACE_SELLERS: "marketplace_sellers",
+
+    // Admin Users
+    ADMIN_USERS: "admin_users",
+
+    // Loans (standalone)
+    LOANS: "loans",
 
     // WAVE — full suite
     WAVE_CERTIFICATES: "wave_certificates",
@@ -903,6 +928,13 @@ export const COLLECTIONS = {
     // Cooperative Withdrawals (member savings withdrawals)
     COOPERATIVE_WITHDRAWALS: "cooperative_withdrawals",
 
+    // Additional collections
+    LAND_INQUIRIES: "land_inquiries",
+    USER_ACTIVITY_LOGS: "user_activity_logs",
+    COOPERATIVE_FIXED_SAVINGS: "cooperative_fixed_savings",
+    COOPERATIVE_LOAN_PRODUCTS: "cooperative_loan_products",
+    COOPERATIVE_CONTRIBUTIONS: "cooperative_contributions",
+
     // Platform / Admin Configuration
     PLATFORM_SETTINGS: "platform_settings",
 
@@ -917,6 +949,27 @@ export const COLLECTIONS = {
 
     // Bounced Email Tracking
     BOUNCED_EMAILS: "bounced_emails",
+
+    // Email Queue (cron-processed outgoing emails)
+    EMAIL_QUEUE: "email_queue",
+
+    // WhatsApp Group Invites
+    WHATSAPP_INVITES: "whatsapp_invites",
+
+    // Academy Quizzes (standalone collection — distinct from ACADEMY_QUIZZES)
+    QUIZZES: "quizzes",
+
+    // Export Catalog (products listed for export buyers)
+    EXPORT_CATALOG: "export_catalog",
+
+    // WAVE Training Sessions (scheduled sessions — distinct from WAVE_TRAINING_EVENTS)
+    WAVE_TRAINING_SESSIONS: "wave_training_sessions",
+
+    // User-uploaded certificates (KYC / identity documents)
+    USER_CERTIFICATES: "user_certificates",
+
+    // Payment Instructions (escrow payment/refund records)
+    PAYMENT_INSTRUCTIONS: "paymentInstructions",
 } as const;
 
 

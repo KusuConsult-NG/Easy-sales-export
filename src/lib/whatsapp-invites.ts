@@ -7,6 +7,7 @@
 
 import { randomUUID } from "crypto";
 import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import {
@@ -42,7 +43,7 @@ export async function generateAndSendWhatsAppInvite(
         expiresAt.setDate(expiresAt.getDate() + 7);
 
         // Persist token to Firestore
-        await db.collection("whatsapp_invites").doc(token).set({
+        await db.collection(COLLECTIONS.WHATSAPP_INVITES).doc(token).set({
             token,
             groupType: type,
             email,

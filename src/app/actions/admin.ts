@@ -94,7 +94,7 @@ export async function approveWaveApplicationAction(
         });
 
         // 3. Create/Update Wave Member Record (Enrolled)
-        await db.collection("wave_members").doc(userId).set({
+        await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userId).set({
             active: true,
             enrolledAt: FieldValue.serverTimestamp(),
             applicationId: applicationId,
@@ -709,7 +709,7 @@ export async function getPendingLandListings(limit = 50): Promise<{
         }
 
         // Pending lists are usually small, but let's cap it anyway
-        const snapshot = await db.collection("land_listings")
+        const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
             .where("verificationStatus", "==", "pending")
             .orderBy("createdAt", "desc")
             .limit(limit)
@@ -755,7 +755,7 @@ export async function verifyLandListing(
         }
 
         // Update listing status
-        const listingRef = db.collection("land_listings").doc(listingId);
+        const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
         const ownerId = listingDoc.exists ? listingDoc.data()?.ownerId : null;
 
@@ -2208,7 +2208,7 @@ export async function savePlatformSettingsAction(
             return { error: "Unauthorized: Admin access required", success: false };
         }
 
-        await db.collection("platform_settings").doc("general").set({
+        await db.collection(COLLECTIONS.PLATFORM_SETTINGS).doc("general").set({
             ...settings,
             updatedBy: session!.user.id,
             updatedAt: FieldValue.serverTimestamp(),
@@ -2234,7 +2234,7 @@ export async function getPlatformSettingsAction(): Promise<{
     maintenanceMode: boolean;
 }> {
     try {
-        const doc = await db.collection("platform_settings").doc("general").get();
+        const doc = await db.collection(COLLECTIONS.PLATFORM_SETTINGS).doc("general").get();
         if (!doc.exists) {
             return {
                 platformName: "Easy Sales Export",

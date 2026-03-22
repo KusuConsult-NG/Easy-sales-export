@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { auth } from "@/lib/auth";
 
 export async function GET() {
@@ -32,7 +33,7 @@ export async function GET() {
         };
 
         // 1. Fetch All Members
-        const membersSnapshot = await adminDb.collection("cooperative_members").get();
+        const membersSnapshot = await adminDb.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
         const memberIds = new Set<string>();
 
         report.stats.totalMembers = membersSnapshot.size;
@@ -58,7 +59,7 @@ export async function GET() {
         });
 
         // 2. Fetch All Loans (Foreign Key Check)
-        const loansSnapshot = await adminDb.collection("cooperative_loans").get();
+        const loansSnapshot = await adminDb.collection(COLLECTIONS.COOPERATIVE_LOANS).get();
         report.stats.totalLoans = loansSnapshot.size;
 
         loansSnapshot.forEach(doc => {
@@ -71,7 +72,7 @@ export async function GET() {
         });
 
         // 3. Fetch All Fixed Savings (Foreign Key Check)
-        const fixedSavingsSnapshot = await adminDb.collection("cooperative_fixed_savings").get();
+        const fixedSavingsSnapshot = await adminDb.collection(COLLECTIONS.COOPERATIVE_FIXED_SAVINGS).get();
         report.stats.totalFixedSavings = fixedSavingsSnapshot.size;
 
         fixedSavingsSnapshot.forEach(doc => {
