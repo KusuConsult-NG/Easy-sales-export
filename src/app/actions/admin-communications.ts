@@ -54,9 +54,16 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 case 'sellers':
                     snapshot = await query.where('roles', 'array-contains', 'seller').get();
                     break;
-                case 'wave':
-                    snapshot = await query.where('roles', 'array-contains', 'wave_student').get();
-                    break;
+                case 'wave': {
+                    // WAVE members are in wave_applications collection, not in users.roles
+                    const waveSnap = await db.collection('wave_applications').get();
+                    waveSnap.docs.forEach(doc => {
+                        const data = doc.data();
+                        const email = data.email || data.userEmail;
+                        if (email) emails.push(email);
+                    });
+                    return [...new Set(emails)];
+                }
                 case 'all':
                 default:
                     snapshot = await query.get();

@@ -169,7 +169,8 @@ async function collectRecipients(
             const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
             for (const d of snap.docs) {
                 const a = d.data();
-                if (a.email) add(a.email, a.name || "Applicant");
+                const applicantEmail = a.email || a.userEmail;
+                if (applicantEmail) add(applicantEmail, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "Applicant");
             }
             break;
         }
