@@ -382,6 +382,42 @@ async function processAcademyRegistration(reference: string, amount: number, use
         });
     });
 
+    // Auto-create academy_applications record so admin can see paid users
+    try {
+        const userSnap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userData = userSnap.data();
+        const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).set({
+            userId,
+            applicationId,
+            personalInfo: {
+                fullName: userData?.fullName || userData?.name || "Unknown",
+                email: userData?.email || "Unknown",
+                phone: userData?.phone || userData?.phoneNumber || "",
+            },
+            education: {
+                educationLevel: "Not provided (auto-created from payment)",
+                fieldOfStudy: "Not provided",
+            },
+            status: "pending",
+            paymentStatus: "completed",
+            paymentReference: reference,
+            paymentAmount: amount,
+            plan: normalisedPlan,
+            submittedAt: FieldValue.serverTimestamp(),
+            source: "webhook",
+        });
+
+        // Link the application to the user
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            "serviceRegistrations.academy.applicationId": applicationId,
+            "serviceRegistrations.academy.status": "pending",
+        });
+    } catch (appError: any) {
+        logger.error(`[Paystack Webhook] Failed to create academy_applications doc for ${userId}:`, appError);
+        // Non-blocking: payment registration is already committed
+    }
 
     logger.info(`[Paystack Webhook] Processed Academy Registration for ${userId}`);
 }

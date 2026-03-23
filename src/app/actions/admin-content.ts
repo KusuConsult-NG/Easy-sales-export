@@ -45,7 +45,8 @@ export async function getPendingContentAction(): Promise<{
         // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        const roles = userData?.roles || [];
+        if (!userDoc.exists || !userData || (!roles.includes("admin") && !roles.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
         }
 

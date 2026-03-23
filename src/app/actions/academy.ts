@@ -777,7 +777,6 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
             return { success: false, error: "Invalid payment type" };
         }
 
-        // Mark payment as completed for the user
         // Mark payment as completed for the user using dot notation to prevent overwriting
         await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
             "serviceRegistrations.academy.paymentStatus": "completed",
@@ -786,6 +785,43 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
             "serviceRegistrations.academy.plan": metadata.plan || "foundation",
             "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
             "updatedAt": FieldValue.serverTimestamp(),
+        });
+
+        // Auto-create academy_applications record so admin can see paid users
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+        const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).set({
+            userId: session.user.id,
+            applicationId,
+            personalInfo: {
+                fullName: userData?.fullName || userData?.name || session.user.name || "Unknown",
+                email: userData?.email || session.user.email || "Unknown",
+                phone: userData?.phone || userData?.phoneNumber || "",
+            },
+            education: {
+                educationLevel: "Not provided (auto-created from payment)",
+                fieldOfStudy: "Not provided",
+            },
+            interests: {
+                learningPaths: [],
+                topics: "",
+                goals: "",
+            },
+            status: "pending",
+            paymentStatus: "completed",
+            paymentReference: reference,
+            paymentAmount: verify.data.amount / 100,
+            plan: metadata.plan || "foundation",
+            submittedAt: FieldValue.serverTimestamp(),
+            source: "payment_callback",
+        });
+
+        // Link the application to the user
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+            "serviceRegistrations.academy.applicationId": applicationId,
+            "serviceRegistrations.academy.status": "pending",
         });
 
         return { success: true };
