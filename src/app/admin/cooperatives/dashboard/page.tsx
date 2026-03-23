@@ -156,27 +156,33 @@ export default function AdminCooperativeDashboardPage() {
                     </div>
 
                     {/* Total Savings */}
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                    <Link
+                        href="/admin/cooperatives/contributions"
+                        className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                    >
                         <div className="flex items-center justify-between mb-4">
                             <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
                                 <Wallet className="w-6 h-6 text-indigo-600" />
                             </div>
+                            <span className="text-xs text-indigo-600 font-semibold">View details →</span>
                         </div>
                         <p className="text-sm text-gray-600 mb-1">Total Savings</p>
                         <p className="text-3xl font-bold text-gray-900">
                             {formatCurrency(stats?.totalSavings || 0)}
                         </p>
-                        <p className="text-sm text-gray-600 mt-2">
-                            Fixed savings deposits
-                        </p>
-                    </div>
+                        <p className="text-sm text-gray-600 mt-2">Fixed savings deposits</p>
+                    </Link>
 
                     {/* Monthly Growth */}
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                    <Link
+                        href="/admin/cooperatives/transactions"
+                        className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                    >
                         <div className="flex items-center justify-between mb-4">
                             <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
                                 <Activity className="w-6 h-6 text-emerald-600" />
                             </div>
+                            <span className="text-xs text-emerald-600 font-semibold">View transactions →</span>
                         </div>
                         <p className="text-sm text-gray-600 mb-1">Monthly Growth</p>
                         <div className="flex items-center gap-2">
@@ -189,10 +195,8 @@ export default function AdminCooperativeDashboardPage() {
                                 <ArrowDown className="w-6 h-6 text-red-600" />
                             )}
                         </div>
-                        <p className="text-sm text-gray-600 mt-2">
-                            vs. previous month
-                        </p>
-                    </div>
+                        <p className="text-sm text-gray-600 mt-2">vs. previous month</p>
+                    </Link>
 
                     {/* Transactions */}
                     <div className="bg-white rounded-2xl p-6 shadow-lg">

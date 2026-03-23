@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { logger } from '@/lib/logger';
+import Link from "next/link";
 import {
     Users,
     DollarSign,
@@ -12,6 +13,7 @@ import {
     AlertCircle,
     Loader2,
     Mail,
+    ArrowRight,
 } from "lucide-react";
 import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin-analytics";
 import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
@@ -90,6 +92,16 @@ export default function AdminDashboardPage() {
     // Fallback if stats is null but no error (mostly shouldn't happen with current action logic)
     if (!stats) return null;
 
+    const colorClasses: Record<string, { bg: string; bgLight: string; text: string }> = {
+        blue:    { bg: "bg-blue-500",    bgLight: "bg-blue-50",    text: "text-blue-600" },
+        emerald: { bg: "bg-emerald-500", bgLight: "bg-emerald-50", text: "text-emerald-600" },
+        purple:  { bg: "bg-purple-500",  bgLight: "bg-purple-50",  text: "text-purple-600" },
+        amber:   { bg: "bg-amber-500",   bgLight: "bg-amber-50",   text: "text-amber-600" },
+        indigo:  { bg: "bg-indigo-500",  bgLight: "bg-indigo-50",  text: "text-indigo-600" },
+        red:     { bg: "bg-red-500",     bgLight: "bg-red-50",     text: "text-red-600" },
+        cyan:    { bg: "bg-cyan-500",    bgLight: "bg-cyan-50",    text: "text-cyan-600" },
+    };
+
     const statCards = [
         {
             label: "Total Users",
@@ -97,6 +109,7 @@ export default function AdminDashboardPage() {
             icon: Users,
             color: "blue",
             change: "Total registered accounts",
+            href: "/admin/users",
         },
         {
             label: "Active Users (30d)",
@@ -104,13 +117,15 @@ export default function AdminDashboardPage() {
             icon: TrendingUp,
             color: "emerald",
             change: "Logged in recently",
+            href: "/admin/users",
         },
         {
-            label: "Total RevenueEstimate",
+            label: "Total Revenue",
             value: `₦${(stats.platformOverview.totalRevenue / 1000000).toFixed(1)}M`,
             icon: DollarSign,
             color: "purple",
             change: "Based on transaction volume",
+            href: "/admin/finance",
         },
         {
             label: "Pending Escrows",
@@ -118,6 +133,7 @@ export default function AdminDashboardPage() {
             icon: Package,
             color: "amber",
             change: "Requires attention",
+            href: "/admin/content-approval",
         },
         {
             label: "Active Land Listings",
@@ -125,6 +141,7 @@ export default function AdminDashboardPage() {
             icon: FileText,
             color: "indigo",
             change: "Verified listings",
+            href: "/admin/farm-nation",
         },
         {
             label: "Pending Loans",
@@ -132,6 +149,7 @@ export default function AdminDashboardPage() {
             icon: AlertCircle,
             color: "red",
             change: "Requires review",
+            href: "/admin/cooperatives/loans",
         },
         {
             label: "Recent Activity",
@@ -139,6 +157,7 @@ export default function AdminDashboardPage() {
             icon: GraduationCap,
             color: "cyan",
             change: "Actions in last 24h",
+            href: "/admin/audit-logs",
         },
     ];
 
@@ -159,43 +178,19 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
                     {statCards.map((stat, index) => {
                         const Icon = stat.icon;
-                        const colorMap = {
-                            blue: "bg-blue-500",
-                            emerald: "bg-emerald-500",
-                            purple: "bg-purple-500",
-                            amber: "bg-amber-500",
-                            indigo: "bg-indigo-500",
-                            red: "bg-red-500",
-                            cyan: "bg-cyan-500",
-                        };
+                        const c = colorClasses[stat.color] ?? colorClasses.blue;
 
                         return (
-                            <div
+                            <Link
                                 key={index}
-                                className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition"
+                                href={stat.href}
+                                className="group bg-white rounded-xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
                             >
                                 <div className="flex items-center justify-between mb-4">
-                                    <div
-                                        className={`p-3 rounded-lg ${colorMap[stat.color as keyof typeof colorMap]
-                                            } bg-opacity-10`}
-                                    >
-                                        <Icon
-                                            className={`w-6 h-6 ${stat.color === "blue"
-                                                ? "text-blue-600"
-                                                : stat.color === "emerald"
-                                                    ? "text-emerald-600"
-                                                    : stat.color === "purple"
-                                                        ? "text-purple-600"
-                                                        : stat.color === "amber"
-                                                            ? "text-amber-600"
-                                                            : stat.color === "indigo"
-                                                                ? "text-indigo-600"
-                                                                : stat.color === "red"
-                                                                    ? "text-red-600"
-                                                                    : "text-cyan-600"
-                                                }`}
-                                        />
+                                    <div className={`p-3 rounded-lg ${c.bgLight}`}>
+                                        <Icon className={`w-6 h-6 ${c.text}`} />
                                     </div>
+                                    <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
                                 </div>
 
                                 <p className="text-sm text-slate-600 mb-1">
@@ -207,58 +202,158 @@ export default function AdminDashboardPage() {
                                 <p className="text-xs text-slate-500">
                                     {stat.change}
                                 </p>
-                            </div>
+                            </Link>
                         );
                     })}
                 </div>
 
                 {/* Quick Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                    <a
-                        href="/admin/loans"
-                        className="bg-white rounded-lg p-6 hover:bg-slate-50 transition shadow-sm"
-                    >
-                        <h3 className="font-semibold text-slate-900 mb-2">
-                            Review Loans
-                        </h3>
-                        <p className="text-sm text-slate-600">
-                            {stats.counts.pendingLoans} pending applications
-                        </p>
-                    </a>
+                <div className="mb-8">
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <Link
+                            href="/admin/cooperatives/loans"
+                            className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm flex items-start gap-4"
+                        >
+                            <div className="p-2.5 bg-amber-50 rounded-lg shrink-0">
+                                <AlertCircle className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-blue-600 transition">
+                                    Review Loans
+                                </h3>
+                                <p className="text-sm text-slate-500">
+                                    {stats.counts.pendingLoans} pending applications
+                                </p>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
+                        </Link>
 
-                    <a
-                        href="/admin/land-verification"
-                        className="bg-white rounded-lg p-6 hover:bg-slate-50 transition shadow-sm"
-                    >
-                        <h3 className="font-semibold text-slate-900 mb-2">
-                            Verify Land Listings
-                        </h3>
-                        <p className="text-sm text-slate-600">
-                            Review pending submissions
-                        </p>
-                    </a>
+                        <Link
+                            href="/admin/farm-nation"
+                            className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm flex items-start gap-4"
+                        >
+                            <div className="p-2.5 bg-indigo-50 rounded-lg shrink-0">
+                                <FileText className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-blue-600 transition">
+                                    Verify Land Listings
+                                </h3>
+                                <p className="text-sm text-slate-500">
+                                    Review pending submissions
+                                </p>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
+                        </Link>
 
-                    <a
-                        href="/admin/communications"
-                        className="bg-white rounded-lg p-6 hover:bg-green-50 border border-green-100 transition shadow-sm flex items-start gap-3"
-                    >
-                        <Mail className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                        <div>
-                            <h3 className="font-semibold text-slate-900 mb-1">Send Broadcast</h3>
-                            <p className="text-sm text-slate-600">Email all or filtered users</p>
-                        </div>
-                    </a>
+                        <Link
+                            href="/admin/communications"
+                            className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm border border-green-100 flex items-start gap-4"
+                        >
+                            <div className="p-2.5 bg-green-50 rounded-lg shrink-0">
+                                <Mail className="w-5 h-5 text-green-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-green-600 transition">
+                                    Send Broadcast
+                                </h3>
+                                <p className="text-sm text-slate-500">
+                                    Email all or filtered users
+                                </p>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
+                        </Link>
+                    </div>
                 </div>
 
-                {/* Module Registration Chart */}
-                {moduleStatsLoading ? (
-                    <div className="bg-white rounded-2xl shadow-sm p-8 flex items-center justify-center gap-3 text-slate-400 text-sm">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Loading registration stats...
+                {/* Recent Transactions + Module Registration */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    {/* Recent Transactions */}
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-bold text-slate-900">
+                                Recent Transactions
+                            </h2>
+                            <Link
+                                href="/admin/cooperatives/transactions"
+                                className="text-sm text-blue-600 hover:text-blue-700 font-medium transition"
+                            >
+                                View All →
+                            </Link>
+                        </div>
+                        {stats.recentTransactions.length === 0 ? (
+                            <div className="text-center py-8">
+                                <DollarSign className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                                <p className="text-sm text-slate-500">No recent transactions</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {stats.recentTransactions.slice(0, 6).map((tx: any, i: number) => (
+                                    <div
+                                        key={tx.id || i}
+                                        className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                                                <DollarSign className="w-4 h-4 text-blue-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-900 capitalize">
+                                                    {(tx.type || "transaction").replace(/_/g, " ")}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {tx.date
+                                                        ? new Date(
+                                                              typeof tx.date === "string"
+                                                                  ? tx.date
+                                                                  : tx.date?.toDate
+                                                                    ? tx.date.toDate()
+                                                                    : tx.date
+                                                          ).toLocaleDateString("en-NG", {
+                                                              month: "short",
+                                                              day: "numeric",
+                                                          })
+                                                        : "—"}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-sm font-bold text-emerald-600">
+                                                ₦{(tx.amount || 0).toLocaleString()}
+                                            </p>
+                                            <p className={`text-xs capitalize ${
+                                                tx.status === "completed"
+                                                    ? "text-green-600"
+                                                    : tx.status === "pending"
+                                                      ? "text-yellow-600"
+                                                      : "text-slate-500"
+                                            }`}>
+                                                {tx.status || "—"}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
-                ) : moduleStats ? (
-                    <RegistrationPieChart stats={moduleStats} />
-                ) : null}
+
+                    {/* Module Registration Chart */}
+                    <div>
+                        {moduleStatsLoading ? (
+                            <div className="bg-white rounded-2xl shadow-sm p-8 flex items-center justify-center gap-3 text-slate-400 text-sm h-full">
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                Loading registration stats...
+                            </div>
+                        ) : moduleStats ? (
+                            <RegistrationPieChart stats={moduleStats} />
+                        ) : (
+                            <div className="bg-white rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm h-full flex items-center justify-center">
+                                No registration data available
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );

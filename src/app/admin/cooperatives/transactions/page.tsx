@@ -2,29 +2,48 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { logger } from '@/lib/logger';
+import Link from "next/link";
 import {
     Filter,
     Download,
     Loader2,
-    TrendingUp,
-    TrendingDown,
     Clock,
     CheckCircle,
     XCircle,
     Search,
+    ArrowLeft,
+    ChevronDown,
+    ChevronUp,
+    Copy,
+    DollarSign,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getAllTransactionsAction } from "@/app/actions/cooperative-admin";
+import { toast } from "sonner";
 
 type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings";
 type TransactionStatus = "all" | "pending" | "completed" | "failed";
 
+interface Transaction {
+    id: string;
+    userId: string;
+    userName: string;
+    type: string;
+    amount: number;
+    status: string;
+    date: string;
+    description?: string;
+    reference?: string;
+    metadata?: Record<string, unknown>;
+}
+
 export default function AdminTransactionsPage() {
     const [loading, setLoading] = useState(true);
-    const [transactions, setTransactions] = useState<any[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [typeFilter, setTypeFilter] = useState<TransactionType>("all");
     const [statusFilter, setStatusFilter] = useState<TransactionStatus>("all");
     const [searchTerm, setSearchTerm] = useState("");
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     const loadTransactions = useCallback(async () => {
         setLoading(true);
@@ -37,9 +56,12 @@ export default function AdminTransactionsPage() {
 
             if (result.success && result.data) {
                 setTransactions(result.data);
+            } else {
+                toast.error(result.error || "Failed to load transactions");
             }
         } catch (error) {
             logger.error("Failed to load transactions:", error);
+            toast.error("Failed to load transactions");
         } finally {
             setLoading(false);
         }
@@ -52,11 +74,11 @@ export default function AdminTransactionsPage() {
     function getStatusIcon(status: string) {
         switch (status) {
             case "completed":
-                return <CheckCircle className="w-5 h-5 text-green-600" />;
+                return <CheckCircle className="w-4 h-4 text-green-600" />;
             case "pending":
-                return <Clock className="w-5 h-5 text-yellow-600" />;
+                return <Clock className="w-4 h-4 text-yellow-600" />;
             case "failed":
-                return <XCircle className="w-5 h-5 text-red-600" />;
+                return <XCircle className="w-4 h-4 text-red-600" />;
             default:
                 return null;
         }
@@ -84,36 +106,83 @@ export default function AdminTransactionsPage() {
             case "loan":
                 return "bg-orange-100 text-orange-700";
             case "fixed_savings":
-                return "bg-green-100 text-green-700";
+                return "bg-emerald-100 text-emerald-700";
             default:
                 return "bg-gray-100 text-gray-700";
         }
     }
 
-    const filteredTransactions = transactions.filter((t) =>
-        t.userId?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    function copyToClipboard(text: string) {
+        navigator.clipboard.writeText(text);
+        toast.success("Copied to clipboard");
+    }
 
-    // Calculate totals
+    function exportCsv() {
+        if (!filteredTransactions.length) return;
+        const headers = ["Date", "User", "Type", "Amount", "Status", "Description", "Reference"];
+        const rows = filteredTransactions.map((t) => [
+            new Date(t.date).toLocaleDateString("en-NG"),
+            t.userName,
+            t.type.replace(/_/g, " "),
+            t.amount.toString(),
+            t.status,
+            t.description || "",
+            t.reference || "",
+        ]);
+        const csvContent = [headers, ...rows]
+            .map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(","))
+            .join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `transactions-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // Search across userId, userName, description, reference
+    const filteredTransactions = transactions.filter((t) => {
+        if (!searchTerm) return true;
+        const term = searchTerm.toLowerCase();
+        return (
+            t.userId?.toLowerCase().includes(term) ||
+            t.userName?.toLowerCase().includes(term) ||
+            t.description?.toLowerCase().includes(term) ||
+            t.reference?.toLowerCase().includes(term)
+        );
+    });
+
+    // Calculate summary stats
     const totalAmount = filteredTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
     const completedCount = filteredTransactions.filter((t) => t.status === "completed").length;
     const pendingCount = filteredTransactions.filter((t) => t.status === "pending").length;
     const failedCount = filteredTransactions.filter((t) => t.status === "failed").length;
 
     return (
-        <div className="min-h-screen bg-gray-50 py-8">
-            <div className="max-w-7xl mx-auto px-4">
+        <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 p-8">
+            <div className="max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-start justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                        <Link
+                            href="/admin"
+                            className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back to Dashboard
+                        </Link>
+                        <h1 className="text-4xl font-bold text-slate-900 mb-2">
                             Transaction Monitor
                         </h1>
-                        <p className="text-gray-600">
+                        <p className="text-slate-600">
                             View and manage all cooperative transactions
                         </p>
                     </div>
-                    <button className="px-6 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition flex items-center gap-2">
+                    <button
+                        onClick={exportCsv}
+                        className="px-6 py-3 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition flex items-center gap-2 shadow-sm"
+                    >
                         <Download className="w-5 h-5" />
                         Export CSV
                     </button>
@@ -121,50 +190,66 @@ export default function AdminTransactionsPage() {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-gray-600 mb-1">Total Transactions</p>
-                        <p className="text-3xl font-bold text-gray-900">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                                <DollarSign className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <p className="text-sm text-slate-500">Total Transactions</p>
+                        </div>
+                        <p className="text-3xl font-bold text-slate-900">
                             {filteredTransactions.length}
                         </p>
                     </div>
 
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-gray-600 mb-1">Total Amount</p>
-                        <p className="text-3xl font-bold text-gray-900">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+                                <DollarSign className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <p className="text-sm text-slate-500">Total Amount</p>
+                        </div>
+                        <p className="text-3xl font-bold text-slate-900">
                             {formatCurrency(totalAmount)}
                         </p>
                     </div>
 
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-gray-600 mb-1">Completed</p>
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                                <CheckCircle className="w-5 h-5 text-green-600" />
+                            </div>
+                            <p className="text-sm text-slate-500">Completed</p>
+                        </div>
                         <p className="text-3xl font-bold text-green-600">{completedCount}</p>
                     </div>
 
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <div className="flex items-center gap-3">
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1">Status</p>
-                                <p className="text-sm">
-                                    <span className="text-yellow-600">Pending: {pendingCount}</span>
-                                    {" • "}
-                                    <span className="text-red-600">Failed: {failedCount}</span>
-                                </p>
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 bg-yellow-50 rounded-xl flex items-center justify-center">
+                                <Clock className="w-5 h-5 text-yellow-600" />
                             </div>
+                            <p className="text-sm text-slate-500">Pending / Failed</p>
                         </div>
+                        <p className="text-lg">
+                            <span className="font-bold text-yellow-600">{pendingCount}</span>
+                            <span className="text-slate-400 mx-2">•</span>
+                            <span className="font-bold text-red-600">{failedCount}</span>
+                        </p>
                     </div>
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
+                <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">
                                 Transaction Type
                             </label>
                             <select
                                 value={typeFilter}
                                 onChange={(e) => setTypeFilter(e.target.value as TransactionType)}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-green-600"
+                                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                             >
                                 <option value="all">All Types</option>
                                 <option value="contribution">Contribution</option>
@@ -175,13 +260,13 @@ export default function AdminTransactionsPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">
                                 Status
                             </label>
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value as TransactionStatus)}
-                                className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-green-600"
+                                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                             >
                                 <option value="all">All Status</option>
                                 <option value="pending">Pending</option>
@@ -191,17 +276,17 @@ export default function AdminTransactionsPage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                Search User ID
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                Search
                             </label>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                                 <input
                                     type="text"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search by user ID..."
-                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-green-600"
+                                    placeholder="Search by name, ID, or reference..."
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                 />
                             </div>
                         </div>
@@ -210,73 +295,133 @@ export default function AdminTransactionsPage() {
 
                 {/* Transactions Table */}
                 {loading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <Loader2 className="w-12 h-12 animate-spin text-green-600" />
+                    <div className="flex items-center justify-center py-16">
+                        <div className="text-center">
+                            <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-3" />
+                            <p className="text-sm text-slate-500">Loading transactions…</p>
+                        </div>
                     </div>
                 ) : filteredTransactions.length > 0 ? (
-                    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                    <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full">
-                                <thead className="bg-gray-50">
+                                <thead className="bg-slate-50 border-b border-slate-100">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                             Date
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                                            User ID
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            User
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                             Type
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                             Amount
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                             Status
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            Reference
+                                        </th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            Detail
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-200">
+                                <tbody className="divide-y divide-slate-100">
                                     {filteredTransactions.map((transaction) => {
-                                        const date = transaction.date?.toDate
-                                            ? transaction.date.toDate()
-                                            : new Date(transaction.date);
+                                        const isExpanded = expandedId === transaction.id;
+                                        const date = new Date(transaction.date);
                                         return (
-                                            <tr
-                                                key={transaction.id}
-                                                className="hover:bg-gray-50"
-                                            >
-                                                <td className="px-6 py-4 text-sm text-gray-900">
-                                                    {date.toLocaleDateString()} {date.toLocaleTimeString()}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-600">
-                                                    {transaction.userId}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span
-                                                        className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${getTypeColor(
-                                                            transaction.type
-                                                        )}`}
-                                                    >
-                                                        {transaction.type.replace("_", " ")}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                                                    {formatCurrency(transaction.amount)}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        {getStatusIcon(transaction.status)}
+                                            <>
+                                                <tr
+                                                    key={transaction.id}
+                                                    className={`hover:bg-slate-50 transition cursor-pointer ${isExpanded ? "bg-blue-50/50" : ""}`}
+                                                    onClick={() => setExpandedId(isExpanded ? null : transaction.id)}
+                                                >
+                                                    <td className="px-6 py-4 text-sm text-slate-900 whitespace-nowrap">
+                                                        <div>
+                                                            <p className="font-medium">{date.toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}</p>
+                                                            <p className="text-xs text-slate-500">{date.toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" })}</p>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-slate-900">{transaction.userName}</p>
+                                                            <p className="text-xs text-slate-500">{transaction.userId.slice(0, 12)}…</p>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
                                                         <span
-                                                            className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${getStatusColor(
-                                                                transaction.status
-                                                            )}`}
+                                                            className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${getTypeColor(transaction.type)}`}
                                                         >
-                                                            {transaction.status}
+                                                            {transaction.type.replace(/_/g, " ")}
                                                         </span>
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm font-bold text-slate-900">
+                                                        {formatCurrency(transaction.amount)}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-1.5">
+                                                            {getStatusIcon(transaction.status)}
+                                                            <span
+                                                                className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${getStatusColor(transaction.status)}`}
+                                                            >
+                                                                {transaction.status}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        {transaction.reference ? (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(transaction.reference!); }}
+                                                                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-blue-600 font-mono bg-slate-100 px-2 py-1 rounded transition"
+                                                                title="Click to copy"
+                                                            >
+                                                                {transaction.reference.slice(0, 10)}…
+                                                                <Copy className="w-3 h-3" />
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-xs text-slate-400">—</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        {isExpanded ? (
+                                                            <ChevronUp className="w-4 h-4 text-slate-400 mx-auto" />
+                                                        ) : (
+                                                            <ChevronDown className="w-4 h-4 text-slate-400 mx-auto" />
+                                                        )}
+                                                    </td>
+                                                </tr>
+
+                                                {/* Expandable Detail Row */}
+                                                {isExpanded && (
+                                                    <tr key={`${transaction.id}-detail`}>
+                                                        <td colSpan={7} className="px-6 py-4 bg-slate-50/80">
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                <div className="space-y-2">
+                                                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Transaction Info</h4>
+                                                                    <div className="space-y-1 text-sm">
+                                                                        <p><span className="text-slate-500">ID:</span> <span className="font-mono text-slate-900">{transaction.id}</span></p>
+                                                                        <p><span className="text-slate-500">User ID:</span> <span className="font-mono text-slate-900">{transaction.userId}</span></p>
+                                                                        {transaction.description && (
+                                                                            <p><span className="text-slate-500">Description:</span> <span className="text-slate-900">{transaction.description}</span></p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="md:col-span-2">
+                                                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Full Metadata</h4>
+                                                                    <pre className="text-xs text-slate-600 bg-white p-3 rounded-lg border border-slate-200 overflow-auto max-h-48 whitespace-pre-wrap font-mono">
+                                                                        {JSON.stringify(transaction.metadata, null, 2)}
+                                                                    </pre>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </>
                                         );
                                     })}
                                 </tbody>
@@ -284,12 +429,12 @@ export default function AdminTransactionsPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-                        <Filter className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                    <div className="bg-white rounded-2xl shadow-sm p-16 text-center">
+                        <Filter className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold text-slate-900 mb-2">
                             No Transactions Found
                         </h3>
-                        <p className="text-gray-600">
+                        <p className="text-slate-500">
                             Try adjusting your filters or search criteria
                         </p>
                     </div>

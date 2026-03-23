@@ -122,7 +122,10 @@ export default function AdminFinancePage() {
 
                 {/* Revenue Overview */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
+                    <Link
+                        href="/admin/cooperatives/transactions"
+                        className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                    >
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
                                 <DollarSign className="w-6 h-6" />
@@ -132,10 +135,13 @@ export default function AdminFinancePage() {
                         <p className="text-4xl font-bold mb-2">
                             {formatCurrency(financial.totalRevenue)}
                         </p>
-                        <p className="text-xs opacity-75">Platform commission earnings</p>
-                    </div>
+                        <p className="text-xs opacity-75">Platform commission earnings →</p>
+                    </Link>
 
-                    <div className="bg-linear-to-br from-blue-500 to-cyan-600 rounded-2xl p-6 shadow-lg text-white">
+                    <Link
+                        href="/admin/marketplace/escrow"
+                        className="bg-linear-to-br from-blue-500 to-cyan-600 rounded-2xl p-6 shadow-lg text-white hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                    >
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
                                 <Wallet className="w-6 h-6" />
@@ -145,10 +151,13 @@ export default function AdminFinancePage() {
                         <p className="text-4xl font-bold mb-2">
                             {formatCurrency(financial.totalEscrowVolume)}
                         </p>
-                        <p className="text-xs opacity-75">Total funds in escrow</p>
-                    </div>
+                        <p className="text-xs opacity-75">Total funds in escrow →</p>
+                    </Link>
 
-                    <div className="bg-linear-to-br from-purple-500 to-pink-600 rounded-2xl p-6 shadow-lg text-white">
+                    <Link
+                        href="/admin/cooperatives/loans"
+                        className="bg-linear-to-br from-purple-500 to-pink-600 rounded-2xl p-6 shadow-lg text-white hover:shadow-xl hover:-translate-y-0.5 transition-all"
+                    >
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
                                 <TrendingUp className="w-6 h-6" />
@@ -158,54 +167,46 @@ export default function AdminFinancePage() {
                         <p className="text-4xl font-bold mb-2">
                             {formatCurrency(financial.totalLoansDisbursed)}
                         </p>
-                        <p className="text-xs opacity-75">Total loan volume</p>
-                    </div>
+                        <p className="text-xs opacity-75">Total loan volume →</p>
+                    </Link>
                 </div>
 
                 {/* Secondary Metrics */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-slate-600 mb-2">
-                            Avg Commission
-                        </p>
+                        <p className="text-sm text-slate-600 mb-2">Avg Commission</p>
                         <p className="text-2xl font-bold text-slate-900">
                             {financial.totalEscrowVolume > 0
                                 ? `${((financial.totalRevenue / financial.totalEscrowVolume) * 100).toFixed(1)}%`
                                 : "—"}
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                            Earned / Escrow volume
-                        </p>
+                        <p className="text-xs text-slate-500 mt-1">Earned / Escrow volume</p>
                     </div>
 
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-slate-600 mb-2">
-                            Pending Payouts
-                        </p>
+                    <Link
+                        href="/admin/marketplace/withdrawals"
+                        className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all group"
+                    >
+                        <p className="text-sm text-slate-600 mb-2 group-hover:text-blue-600 transition">Pending Payouts</p>
                         <p className="text-2xl font-bold text-yellow-600">
                             {formatCurrency(financial.pendingPayoutAmount ?? 0)}
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                            Approved, awaiting transfer
-                        </p>
-                    </div>
+                        <p className="text-xs text-slate-500 mt-1">Approved, awaiting transfer →</p>
+                    </Link>
 
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-slate-600 mb-2">
-                            Transaction Count
-                        </p>
+                    <Link
+                        href="/admin/cooperatives/transactions"
+                        className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all group"
+                    >
+                        <p className="text-sm text-slate-600 mb-2 group-hover:text-blue-600 transition">Transaction Count</p>
                         <p className="text-2xl font-bold text-slate-900">
                             {financial.recentTransactions.length}
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                            From Firestore
-                        </p>
-                    </div>
+                        <p className="text-xs text-slate-500 mt-1">View all transactions →</p>
+                    </Link>
 
                     <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-slate-600 mb-2">
-                            Avg Transaction
-                        </p>
+                        <p className="text-sm text-slate-600 mb-2">Avg Transaction</p>
                         <p className="text-2xl font-bold text-slate-900">
                             {formatCurrency(
                                 financial.recentTransactions.length > 0
@@ -213,9 +214,7 @@ export default function AdminFinancePage() {
                                     : 0
                             )}
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                            Per transaction
-                        </p>
+                        <p className="text-xs text-slate-500 mt-1">Per transaction</p>
                     </div>
                 </div>
 
@@ -340,7 +339,7 @@ export default function AdminFinancePage() {
                 {/* Quick Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Link
-                        href="/admin/withdrawals"
+                        href="/admin/marketplace/withdrawals"
                         className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition flex items-center justify-between group"
                     >
                         <div>

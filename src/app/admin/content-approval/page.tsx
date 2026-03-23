@@ -130,7 +130,10 @@ export default function ContentApprovalPage() {
 
                 {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-yellow-50 p-6 rounded-xl border border-yellow-100">
+                    <button
+                        onClick={() => setContentFilter("all")}
+                        className="bg-yellow-50 p-6 rounded-xl border border-yellow-100 text-left hover:shadow-md transition hover:-translate-y-0.5"
+                    >
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm text-yellow-700 mb-1">Pending Review</p>
@@ -138,6 +141,29 @@ export default function ContentApprovalPage() {
                             </div>
                             <Clock className="w-12 h-12 text-yellow-600 opacity-50" />
                         </div>
+                        <p className="text-xs text-yellow-600 mt-2">Click to show pending →</p>
+                    </button>
+
+                    <div className="bg-green-50 p-6 rounded-xl border border-green-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-green-700 mb-1">Approved</p>
+                                <p className="text-3xl font-bold text-green-900">{stats.approved}</p>
+                            </div>
+                            <CheckCircle className="w-12 h-12 text-green-600 opacity-50" />
+                        </div>
+                        <p className="text-xs text-green-600 mt-2">Items approved this session</p>
+                    </div>
+
+                    <div className="bg-red-50 p-6 rounded-xl border border-red-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-red-700 mb-1">Rejected</p>
+                                <p className="text-3xl font-bold text-red-900">{stats.rejected}</p>
+                            </div>
+                            <XCircle className="w-12 h-12 text-red-600 opacity-50" />
+                        </div>
+                        <p className="text-xs text-red-600 mt-2">Items rejected this session</p>
                     </div>
                 </div>
 

@@ -35,7 +35,8 @@ export default function AdminAcademyApplicationsPage() {
     const [applications, setApplications] = useState<AcademyApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("pending");
+    const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
+    const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
 
     const fetchApplications = useCallback(async () => {
@@ -113,15 +114,28 @@ export default function AdminAcademyApplicationsPage() {
         setProcessingId(null);
     };
 
-    const formatDate = (date: Date) => {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit"
-        }).format(new Date(date));
+    const formatDate = (date: Date | string | null | undefined) => {
+        if (!date) return "—";
+        try {
+            return new Intl.DateTimeFormat("en-NG", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+            }).format(new Date(date as string));
+        } catch {
+            return "—";
+        }
     };
+
+    const filteredApplications = search.trim()
+        ? applications.filter(app =>
+            app.personalInfo?.fullName?.toLowerCase().includes(search.toLowerCase()) ||
+            app.personalInfo?.email?.toLowerCase().includes(search.toLowerCase()) ||
+            app.personalInfo?.phone?.includes(search)
+          )
+        : applications;
 
     const getStatusColor = (status: ApplicationStatus) => {
         switch (status) {
@@ -144,20 +158,37 @@ export default function AdminAcademyApplicationsPage() {
                 </p>
             </div>
 
-            {/* Filter */}
-            <div className="flex items-center gap-4 mb-6">
-                <Filter className="w-5 h-5 text-slate-500" />
-                <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "all")}
-                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
-                >
-                    <option value="all">All Applications</option>
-                    <option value="pending">Pending</option>
-                    <option value="under_review">Under Review</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                </select>
+            {/* Filter + Search */}
+            <div className="flex flex-wrap items-center gap-4 mb-6">
+                <div className="flex items-center gap-2">
+                    <Filter className="w-5 h-5 text-slate-500" />
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "all")}
+                        className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm"
+                    >
+                        <option value="all">All Applications</option>
+                        <option value="pending">Pending</option>
+                        <option value="under_review">Under Review</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                        type="text"
+                        placeholder="Search by name, email or phone…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </div>
+                {!isLoading && (
+                    <span className="text-sm text-slate-500">
+                        {filteredApplications.length} result{filteredApplications.length !== 1 ? "s" : ""}
+                    </span>
+                )}
             </div>
 
             {/* Loading State */}
@@ -178,7 +209,7 @@ export default function AdminAcademyApplicationsPage() {
             {/* Applications List */}
             {!isLoading && !error && (
                 <div className="space-y-4">
-                    {applications.map((app) => (
+                    {filteredApplications.map((app) => (
                         <div
                             key={app.id}
                             className="bg-white rounded-2xl p-6 elevation-2"
@@ -248,16 +279,18 @@ export default function AdminAcademyApplicationsPage() {
                         </div>
                     ))}
 
-                    {applications.length === 0 && (
+                    {filteredApplications.length === 0 && (
                         <div className="bg-white rounded-2xl p-12 text-center">
                             <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                             <h3 className="text-xl font-bold text-slate-900 mb-2">
                                 No Applications Found
                             </h3>
                             <p className="text-slate-600">
-                                {statusFilter !== "all"
-                                    ? `No ${statusFilter} applications`
-                                    : "No applications have been submitted yet"}
+                                {search
+                                    ? `No results for "${search}"`
+                                    : statusFilter !== "all"
+                                        ? `No ${statusFilter} applications`
+                                        : "No applications have been submitted yet"}
                             </p>
                         </div>
                     )}

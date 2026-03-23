@@ -15,10 +15,30 @@ export interface PendingContentItem {
     type: ContentType;
     title: string;
     submittedBy: string; // Email or Name
-    submittedAt: Date;
+    submittedAt: string; // ISO string (Date objects can't cross server action boundary)
     status: ApprovalStatus;
     description?: string;
-    metadata?: any; // Original document data
+    metadata?: Record<string, unknown>; // Sanitized document data
+}
+
+/** Convert Firestore Timestamps / Date objects to ISO strings so the
+ *  value can be serialized across the Server Action boundary. */
+function sanitizeForSerialization(obj: unknown): unknown {
+    if (obj === null || obj === undefined) return obj;
+    // Firestore Timestamp
+    if (typeof obj === "object" && typeof (obj as any).toDate === "function") {
+        return (obj as any).toDate().toISOString();
+    }
+    if (obj instanceof Date) return obj.toISOString();
+    if (Array.isArray(obj)) return obj.map(sanitizeForSerialization);
+    if (typeof obj === "object") {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+            out[k] = sanitizeForSerialization(v);
+        }
+        return out;
+    }
+    return obj;
 }
 
 /**
@@ -61,11 +81,11 @@ export async function getPendingContentAction(): Promise<{
                 id: doc.id,
                 type: "products",
                 title: data.name || "Untitled Product",
-                submittedBy: data.sellerId || "Unknown Seller", // ideally fetch seller name
-                submittedAt: data.createdAt?.toDate() || new Date(),
+                submittedBy: data.sellerId || "Unknown Seller",
+                submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
                 status: "pending",
                 description: `Price: ${data.price} - Category: ${data.category}`,
-                metadata: data,
+                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
 
@@ -79,10 +99,10 @@ export async function getPendingContentAction(): Promise<{
                 type: "land",
                 title: data.title || "Untitled Land",
                 submittedBy: data.ownerName || "Unknown Owner",
-                submittedAt: data.createdAt?.toDate() || new Date(),
+                submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
                 status: "pending",
                 description: `${data.size} ${data.unit} at ${data.state}, ${data.lga}`,
-                metadata: data,
+                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
 
@@ -96,10 +116,10 @@ export async function getPendingContentAction(): Promise<{
                 type: "loans",
                 title: `Loan Request: ₦${data.amount?.toLocaleString()}`,
                 submittedBy: data.userName || data.userId,
-                submittedAt: data.createdAt?.toDate() || new Date(),
+                submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
                 status: "pending",
                 description: `Purpose: ${data.purpose}`,
-                metadata: data,
+                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
 
@@ -113,15 +133,15 @@ export async function getPendingContentAction(): Promise<{
                 type: "wave",
                 title: `WAVE Application: ${data.businessName || "Unknown Business"}`,
                 submittedBy: data.applicantName || data.email || "Unknown Applicant",
-                submittedAt: data.createdAt?.toDate() || new Date(),
+                submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
                 status: "pending",
                 description: `Business Type: ${data.businessType}`,
-                metadata: data,
+                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
 
-        // Sort by submittedAt desc
-        pendingItems.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime());
+        // Sort by submittedAt desc (ISO strings sort lexicographically)
+        pendingItems.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
         return { success: true, data: pendingItems };
 

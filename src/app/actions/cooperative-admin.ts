@@ -329,7 +329,18 @@ export async function getAllTransactionsAction(options?: {
     limit?: number;
 }): Promise<{
     success: boolean;
-    data?: any[];
+    data?: Array<{
+        id: string;
+        userId: string;
+        userName: string;
+        type: string;
+        amount: number;
+        status: string;
+        date: string;
+        description?: string;
+        reference?: string;
+        metadata?: Record<string, unknown>;
+    }>;
     error?: string;
 }> {
     try {
@@ -367,10 +378,63 @@ export async function getAllTransactionsAction(options?: {
         }
 
         const snapshot = await q.get();
-        const transactions = snapshot.docs.map((doc) => ({
+        const rawDocs = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
         }));
+
+        // Batch-resolve user names
+        const userIds = [...new Set(rawDocs.map((d: any) => d.userId).filter(Boolean))];
+        const userNameMap = new Map<string, string>();
+        
+        // Firestore getAll supports up to 100 refs at a time
+        for (let i = 0; i < userIds.length; i += 100) {
+            const batch = userIds.slice(i, i + 100);
+            const refs = batch.map(uid => db.collection(COLLECTIONS.USERS).doc(uid));
+            try {
+                const userDocs = await db.getAll(...refs);
+                userDocs.forEach(doc => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        userNameMap.set(doc.id, data?.fullName || data?.displayName || data?.email || doc.id);
+                    }
+                });
+            } catch {
+                // Non-fatal — names will fall back to userId
+            }
+        }
+
+        // Serialize: convert Firestore Timestamps to ISO strings
+        const transactions = rawDocs.map((raw: any) => {
+            const dateVal = raw.date?.toDate ? raw.date.toDate() : (raw.date ? new Date(raw.date) : new Date());
+            return {
+                id: raw.id,
+                userId: raw.userId || "",
+                userName: userNameMap.get(raw.userId) || raw.userId || "Unknown",
+                type: raw.type || "unknown",
+                amount: Number(raw.amount) || 0,
+                status: raw.status || "unknown",
+                date: dateVal.toISOString(),
+                description: raw.description || raw.notes || raw.purpose || undefined,
+                reference: raw.reference || raw.paymentReference || raw.id?.slice(0, 12) || undefined,
+                metadata: raw,
+            };
+        });
+
+        // Sanitize metadata timestamps
+        for (const tx of transactions) {
+            if (tx.metadata) {
+                tx.metadata = JSON.parse(JSON.stringify(tx.metadata, (_key, value) => {
+                    if (value && typeof value === "object" && typeof value.toDate === "function") {
+                        return value.toDate().toISOString();
+                    }
+                    if (value && typeof value === "object" && value._seconds !== undefined) {
+                        return new Date(value._seconds * 1000).toISOString();
+                    }
+                    return value;
+                }));
+            }
+        }
 
         return { success: true, data: transactions };
     } catch (error) {

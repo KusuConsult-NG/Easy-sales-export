@@ -1949,22 +1949,49 @@ export async function getAcademyApplicationsAction(
             }
         }
 
-        let query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-            .orderBy("submittedAt", "desc");
-
+        // NOTE: Compound queries (where + orderBy on different fields) require
+        // a composite Firestore index. To avoid that dependency, we:
+        // - Use only orderBy for the unfiltered case (single-field index exists)
+        // - Use only where for the filtered case, then sort in memory
+        let snapshot;
         if (statusFilter) {
-            query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+            // Single-field filter only — avoids composite index requirement
+            const filteredQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", statusFilter)
-                .orderBy("submittedAt", "desc");
+                .limit(200);
+            snapshot = await filteredQuery.get();
+        } else {
+            const allQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .orderBy("submittedAt", "desc")
+                .limit(200);
+            snapshot = await allQuery.get();
         }
 
-        const snapshot = await query.get();
-        const applications = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            submittedAt: doc.data().submittedAt?.toDate() || new Date(),
-            reviewedAt: doc.data().reviewedAt?.toDate(),
-        }));
+        const applications = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const submittedRaw = data.submittedAt;
+            const reviewedRaw = data.reviewedAt;
+            return {
+                id: doc.id,
+                ...data,
+                // Serialize as ISO string — Timestamps are not serializable across Server Action boundaries
+                submittedAt: submittedRaw?.toDate
+                    ? submittedRaw.toDate().toISOString()
+                    : submittedRaw instanceof Date
+                        ? submittedRaw.toISOString()
+                        : new Date().toISOString(),
+                reviewedAt: reviewedRaw?.toDate
+                    ? reviewedRaw.toDate().toISOString()
+                    : reviewedRaw instanceof Date
+                        ? reviewedRaw.toISOString()
+                        : null,
+            };
+        });
+
+        // Sort in memory by submittedAt descending
+        applications.sort((a, b) =>
+            new Date(b.submittedAt as string).getTime() - new Date(a.submittedAt as string).getTime()
+        );
 
         return {
             error: null,
