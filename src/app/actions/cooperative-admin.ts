@@ -476,9 +476,8 @@ export async function getContributionReportsAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        // Get all contributions
-        let q = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-            .where("type", "==", "contribution")
+        // Get all contributions (includes membership registration fees)
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
             .where("status", "==", "completed");
 
         if (adminScope) {
@@ -487,10 +486,10 @@ export async function getContributionReportsAction(options?: {
 
         const transactionsSnap = await q.get();
 
-        const contributions = transactionsSnap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
+        // Filter to contribution types in memory
+        const contributions = transactionsSnap.docs
+            .map((doc) => ({ id: doc.id, ...doc.data() }))
+            .filter((t: any) => t.type === "contribution" || t.type === "membership_registration");
 
         // Calculate totals
         const totalContributions = contributions.reduce(
