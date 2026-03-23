@@ -1385,25 +1385,24 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             return { error: "Unauthorized: Permission required - users:read", success: false };
         }
 
-        const pageSize = options.limit || 20;
+        const pageSize = options.limit || 50;
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
 
         // Apply filters
-        // Prioritize exact match for Search if it looks like an email or phone
+        // *** IMPORTANT: We deliberately avoid orderBy('createdAt') because Firestore
+        // silently excludes any document where that field is null/missing.
+        // All sorting is done in-memory after fetching. ***
         if (options.search) {
             const search = options.search.trim();
             // Email exact match
             if (search.includes("@")) {
                 query = query.where("email", "==", search);
             }
-            // Phone exact match (if it looks like a phone number, e.g. starts with + or 0 and has digits)
+            // Phone exact match
             else if (/^[\d+]+$/.test(search) && search.length > 5) {
                 query = query.where("phone", "==", search);
             }
-            // For names, we still have to rely on the fallback filtering for now, 
-            // but we can at least try to search by 'fullName' if we had a dedicated index, 
-            // or just let the client-side filter handle the 'fuzzy' name part on the fetched page (limited).
-            // NOTE: This limits 'Name' search to the first pageSize results if we don't have an external search engine.
+            // Name searches are handled client-side below
         }
 
         // Basic filtering (Role/Status/State/LGA) - Only apply if NOT doing a direct search
@@ -1412,37 +1411,33 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 query = query.where("roles", "array-contains", options.role);
             }
 
+            // Fix: field is stored as 'isVerified', not 'verified'
             if (options.status === "verified") {
-                query = query.where("verified", "==", true);
+                query = query.where("isVerified", "==", true);
             } else if (options.status === "unverified") {
-                query = query.where("verified", "==", false);
+                query = query.where("isVerified", "==", false);
             }
 
-            // Location filters (stored under address.state / address.lga)
+            // Location filters
             if (options.state && options.state !== "all") {
                 query = query.where("address.state", "==", options.state);
             }
             if (options.lga && options.lga !== "all") {
                 query = query.where("address.lga", "==", options.lga);
             }
-
-            // Sort by createdAt descending — only safe when no equality filters conflict
-            if (!options.role && !options.status && !options.state && !options.lga) {
-                query = query.orderBy("createdAt", "desc");
-            }
         }
 
-        // Pagination
+        // Pagination cursor
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
-                // Use the document snapshot directly for cursor pagination.
-                // This automatically matches whatever orderBy is applied.
                 query = query.startAfter(lastDoc);
             }
         }
 
-        query = query.limit(pageSize);
+        // Fetch with higher limit then sort in memory — avoids composite index requirement
+        const fetchLimit = options.lastDocId ? pageSize : Math.max(pageSize, 200);
+        query = query.limit(fetchLimit);
 
         const snapshot = await query.get();
 
@@ -1460,7 +1455,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 phone: data.phone,
                 role: data.roles?.[0] || "general_user",
                 roles: data.roles || [],
-                isVerified: data.verified ?? false,
+                isVerified: data.isVerified ?? data.verified ?? false,
                 createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
                 verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate() : undefined,
                 // Location
@@ -1511,14 +1506,23 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             filteredUsers = filteredUsers.filter(u => new Date(u.createdAt) <= to);
         }
 
+        // Sort in-memory by createdAt descending (avoids composite index requirement)
+        filteredUsers.sort((a, b) => {
+            const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+            const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+            return bTime - aTime;
+        });
+
+        // Apply pagination window after in-memory sort
+        const pagedUsers = options.lastDocId ? filteredUsers.slice(0, pageSize) : filteredUsers.slice(0, pageSize);
         const lastVisible = snapshot.docs[snapshot.docs.length - 1];
 
         return {
             error: null,
             success: true,
-            users: filteredUsers,
-            lastDocId: lastVisible ? lastVisible.id : undefined,
-            hasMore: snapshot.docs.length === pageSize
+            users: pagedUsers,
+            lastDocId: snapshot.docs.length >= fetchLimit ? lastVisible?.id : undefined,
+            hasMore: snapshot.docs.length >= fetchLimit
         };
     } catch (error: any) {
         logger.error("Get users error:", error);

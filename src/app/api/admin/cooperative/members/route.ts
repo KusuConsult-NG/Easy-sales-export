@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
             query = query.where("lga", "==", lgaFilter);
         }
 
-        // Date range filters
+        // Date range filters — only when both from/to provided (required for orderBy inequality combo)
+        const hasDateFilter = !!(fromDate || toDate);
         if (fromDate) {
             query = query.where("createdAt", ">=", new Date(fromDate));
         }
@@ -59,15 +60,21 @@ export async function GET(request: NextRequest) {
             query = query.where("createdAt", "<=", end);
         }
 
-        // Always order by createdAt desc (must come after all inequality filters)
-        query = query.orderBy("createdAt", "desc");
+        // IMPORTANT: Only apply orderBy('createdAt') when a date inequality filter is active.
+        // Firestore silently excludes documents where the field is null/missing when orderBy is used.
+        // We sort in-memory instead for the default (no-date-filter) case.
+        if (hasDateFilter) {
+            query = query.orderBy("createdAt", "desc");
+        }
 
-        // Cursor-based pagination
-        if (lastCreatedAt) {
+        // Cursor-based pagination (only valid when using orderBy)
+        if (lastCreatedAt && hasDateFilter) {
             query = query.startAfter(new Date(lastCreatedAt));
         }
 
-        query = query.limit(limitParam);
+        // Fetch with a generous limit so in-memory sort sees all results
+        const fetchLimit = hasDateFilter ? limitParam : Math.max(limitParam, 500);
+        query = query.limit(fetchLimit);
 
         const snapshot = await query.get();
 
@@ -98,19 +105,22 @@ export async function GET(request: NextRequest) {
                     address: data.nextOfKin?.address || data.nextOfKinAddress || "",
                 },
                 documents: data.documents || {},
-                createdAt: data.createdAt?.toDate?.() || new Date(),
-                updatedAt: data.updatedAt?.toDate?.() || new Date(),
+                createdAt: data.createdAt?.toDate?.() || new Date(0),
+                updatedAt: data.updatedAt?.toDate?.() || new Date(0),
             };
         });
 
-        // 🐛 FIX: Only return paid members in the list to match dashboard counts
-        // Exclude abandoned/unpaid registrations
-        const paidMembers = members.filter(m => m.paymentStatus === "completed");
+        // Sort in-memory by createdAt descending (newest first, safe for docs missing the field)
+        members.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-        const hasMore = snapshot.docs.length === limitParam;
-        const newLastCreatedAt = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].data().createdAt?.toDate() : undefined;
+        // Show ALL members regardless of payment status — admins need full visibility
+        // (payment status filter can be applied client-side if needed)
+        const pagedMembers = members.slice(0, limitParam);
 
-        return NextResponse.json({ success: true, members: paidMembers, hasMore, lastCreatedAt: newLastCreatedAt });
+        const hasMore = members.length > limitParam;
+        const newLastCreatedAt = pagedMembers.length > 0 ? pagedMembers[pagedMembers.length - 1].createdAt : undefined;
+
+        return NextResponse.json({ success: true, members: pagedMembers, hasMore, lastCreatedAt: newLastCreatedAt });
     } catch (error) {
         logger.error("Failed to fetch members:", error);
         return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
