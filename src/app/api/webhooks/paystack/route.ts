@@ -112,6 +112,10 @@ export async function POST(req: NextRequest) {
                 gatewayResponse: data.gateway_response ?? null,
                 channel: data.channel ?? null,
                 currency: data.currency ?? "NGN",
+                customerEmail: data.customer?.email ?? null,
+                customerName: data.customer?.first_name
+                    ? `${data.customer.first_name} ${data.customer.last_name ?? ""}`.trim()
+                    : null,
                 failedAt: FieldValue.serverTimestamp(),
                 paystackEvent: "charge.failed",
                 metadata: metadata,
@@ -141,6 +145,10 @@ export async function POST(req: NextRequest) {
                 gatewayResponse: "Customer did not complete payment",
                 channel: data.channel ?? null,
                 currency: data.currency ?? "NGN",
+                customerEmail: data.customer?.email ?? null,
+                customerName: data.customer?.first_name
+                    ? `${data.customer.first_name} ${data.customer.last_name ?? ""}`.trim()
+                    : null,
                 abandonedAt: FieldValue.serverTimestamp(),
                 failedAt: FieldValue.serverTimestamp(),
                 paystackEvent: event.event,

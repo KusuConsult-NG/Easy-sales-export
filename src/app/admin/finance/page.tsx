@@ -14,6 +14,8 @@ import {
     XCircle,
     Clock,
     ChevronDown,
+    Mail,
+    Loader2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase";
@@ -64,9 +66,16 @@ export default function AdminFinancePage() {
     const [totalRevenue, setTotalRevenue] = useState(0);
     const [activeTab, setActiveTab] = useState<"successful" | "failed" | "abandoned">("successful");
     const [visibleCount, setVisibleCount] = useState(50);
+    const [selectedRefs, setSelectedRefs] = useState<Set<string>>(new Set());
+    const [isSending, setIsSending] = useState(false);
+    const [sendResult, setSendResult] = useState<string | null>(null);
 
-    // Reset pagination when switching tabs
-    useEffect(() => { setVisibleCount(50); }, [activeTab]);
+    // Reset pagination + selection when switching tabs
+    useEffect(() => {
+        setVisibleCount(50);
+        setSelectedRefs(new Set());
+        setSendResult(null);
+    }, [activeTab]);
 
     // ── Real-time listener: processedPayments (all successful Paystack payments)
     useEffect(() => {
@@ -142,6 +151,45 @@ export default function AdminFinancePage() {
     // Slice for rendering — full array used for CSV export
     const visibleTx = displayedTx.slice(0, visibleCount);
     const hasMore = visibleCount < displayedTx.length;
+    const isRecoveryTab = activeTab !== "successful";
+
+    // ── Selection helpers ────────────────────────────────────────────────────
+    const toggleSelect = (id: string) => {
+        setSelectedRefs(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+    const toggleSelectAll = () => {
+        if (selectedRefs.size === visibleTx.length) {
+            setSelectedRefs(new Set());
+        } else {
+            setSelectedRefs(new Set(visibleTx.map(t => t.id)));
+        }
+    };
+
+    // ── Recovery email handler ───────────────────────────────────────────────
+    const sendRecoveryEmails = async () => {
+        if (selectedRefs.size === 0 || isSending) return;
+        setIsSending(true);
+        setSendResult(null);
+        try {
+            const res = await fetch("/api/admin/finance/recovery-emails", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ references: Array.from(selectedRefs) }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed");
+            setSendResult(`✓ ${data.sent} sent, ${data.skipped} skipped (no email), ${data.errors} errors`);
+            setSelectedRefs(new Set());
+        } catch (err: any) {
+            setSendResult(`✗ Error: ${err.message}`);
+        } finally {
+            setIsSending(false);
+        }
+    };
 
     function exportCsv() {
         const rows = displayedTx.map(t => [
@@ -234,23 +282,33 @@ export default function AdminFinancePage() {
                 {/* Tabs + Table */}
                 <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
                     <div className="p-6 border-b border-slate-200 flex items-center justify-between flex-wrap gap-4">
-                        <div className="flex gap-2">
-                            {(["successful", "abandoned", "failed"] as const).map(tab => (
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex gap-2">
+                                {(["successful", "abandoned", "failed"] as const).map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                                            activeTab === tab
+                                                ? tab === "successful" ? "bg-green-600 text-white"
+                                                : tab === "abandoned" ? "bg-yellow-500 text-white"
+                                                : "bg-red-600 text-white"
+                                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                        }`}
+                                    >
+                                        {tab.charAt(0).toUpperCase() + tab.slice(1)}&nbsp;
+                                        ({tab === "successful" ? transactions.length : tab === "abandoned" ? abandonedTx.length : errorTx.length})
+                                    </button>
+                                ))}
+                            </div>
+                            {isRecoveryTab && visibleTx.length > 0 && (
                                 <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
-                                        activeTab === tab
-                                            ? tab === "successful" ? "bg-green-600 text-white"
-                                            : tab === "abandoned" ? "bg-yellow-500 text-white"
-                                            : "bg-red-600 text-white"
-                                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                                    }`}
+                                    onClick={toggleSelectAll}
+                                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 underline underline-offset-2 transition"
                                 >
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}&nbsp;
-                                    ({tab === "successful" ? transactions.length : tab === "abandoned" ? abandonedTx.length : errorTx.length})
+                                    {selectedRefs.size === visibleTx.length ? "Deselect all" : `Select all ${visibleTx.length}`}
                                 </button>
-                            ))}
+                            )}
                         </div>
                         <button
                             onClick={exportCsv}
@@ -261,10 +319,38 @@ export default function AdminFinancePage() {
                         </button>
                     </div>
 
+                    {/* Recovery Email Action Bar */}
+                    {isRecoveryTab && selectedRefs.size > 0 && (
+                        <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between gap-4 flex-wrap">
+                            <p className="text-sm font-semibold text-blue-800">
+                                {selectedRefs.size} transaction{selectedRefs.size > 1 ? "s" : ""} selected
+                            </p>
+                            <div className="flex items-center gap-3">
+                                {sendResult && (
+                                    <p className={`text-xs font-medium ${
+                                        sendResult.startsWith("✓") ? "text-green-700" : "text-red-600"
+                                    }`}>{sendResult}</p>
+                                )}
+                                <button
+                                    onClick={sendRecoveryEmails}
+                                    disabled={isSending}
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition"
+                                >
+                                    {isSending
+                                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+                                        : <><Mail className="w-4 h-4" /> Send Recovery Email</>}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-slate-50">
                                 <tr>
+                                    {isRecoveryTab && (
+                                        <th className="px-4 py-4 w-10"></th>
+                                    )}
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Type</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
@@ -277,8 +363,27 @@ export default function AdminFinancePage() {
                                 {visibleTx.map((tx, i) => {
                                     const isFailed = activeTab !== "successful";
                                     const failed = tx as FailedTransaction;
+                                    const isChecked = selectedRefs.has(tx.id);
                                     return (
-                                        <tr key={tx.id || i} className="hover:bg-slate-50 transition">
+                                        <tr
+                                            key={tx.id || i}
+                                            onClick={() => isRecoveryTab && toggleSelect(tx.id)}
+                                            className={`transition ${
+                                                isRecoveryTab ? "cursor-pointer" : ""
+                                            } ${
+                                                isChecked ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-slate-50"
+                                            }`}
+                                        >
+                                            {isRecoveryTab && (
+                                                <td className="px-4 py-4" onClick={e => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => toggleSelect(tx.id)}
+                                                        className="w-4 h-4 rounded border-slate-300 text-blue-600 cursor-pointer"
+                                                    />
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
