@@ -91,6 +91,65 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ message: "Event processed" }, { status: 200 });
         }
 
+        // 3. Handle 'charge.failed' — payment attempt that errored (card declined, network error, etc.)
+        if (event.event === "charge.failed") {
+            const data = event.data;
+            const reference = data.reference;
+            const amount = (data.amount ?? 0) / 100;
+            const metadata = data.metadata || {};
+            const userId = metadata.userId;
+            const type = metadata.type;
+
+            logger.warn(`[Paystack Webhook] charge.failed for ${reference} — amount: ${amount}, reason: ${data.gateway_response}`);
+
+            // Upsert into failedPayments — use reference as doc ID for deduplication
+            await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).set({
+                reference,
+                type: type ?? "unknown",
+                userId: userId ?? null,
+                amount,
+                status: "failed",
+                gatewayResponse: data.gateway_response ?? null,
+                channel: data.channel ?? null,
+                currency: data.currency ?? "NGN",
+                failedAt: FieldValue.serverTimestamp(),
+                paystackEvent: "charge.failed",
+                metadata: metadata,
+            }, { merge: true });
+
+            return NextResponse.json({ message: "Failure recorded" }, { status: 200 });
+        }
+
+        // 4. Handle abandoned transactions — Paystack sends these via the Transactions API
+        //    but they can also arrive as charge events with status "abandoned"
+        if (event.event === "charge.abandoned" || (event.event === "charge.success" && event.data?.status === "abandoned")) {
+            const data = event.data;
+            const reference = data.reference;
+            const amount = (data.amount ?? 0) / 100;
+            const metadata = data.metadata || {};
+            const userId = metadata.userId;
+            const type = metadata.type;
+
+            logger.info(`[Paystack Webhook] Abandoned transaction: ${reference} — amount: ${amount}`);
+
+            await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).set({
+                reference,
+                type: type ?? "unknown",
+                userId: userId ?? null,
+                amount,
+                status: "abandoned",
+                gatewayResponse: "Customer did not complete payment",
+                channel: data.channel ?? null,
+                currency: data.currency ?? "NGN",
+                abandonedAt: FieldValue.serverTimestamp(),
+                failedAt: FieldValue.serverTimestamp(),
+                paystackEvent: event.event,
+                metadata: metadata,
+            }, { merge: true });
+
+            return NextResponse.json({ message: "Abandoned transaction recorded" }, { status: 200 });
+        }
+
         return NextResponse.json({ message: "Event ignored" }, { status: 200 });
 
     } catch (error: any) {

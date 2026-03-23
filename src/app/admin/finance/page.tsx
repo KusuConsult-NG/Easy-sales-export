@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { logger } from '@/lib/logger';
 import Link from "next/link";
 import {
     DollarSign,
@@ -9,95 +8,141 @@ import {
     TrendingDown,
     Wallet,
     ArrowLeft,
-    Loader2,
     Download,
     AlertCircle,
+    CheckCircle,
+    XCircle,
+    Clock,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, orderBy, limit, Timestamp } from "firebase/firestore";
 
+// ─── Types ─────────────────────────────────────────────────────────────────
+interface Transaction {
+    id: string;
+    type: string;
+    amount: number;
+    status: string;
+    reference: string | null;
+    timestamp: string | null;
+}
+
+interface FailedTransaction {
+    id: string;
+    type: string;
+    amount: number;
+    status: "failed" | "abandoned";
+    gatewayResponse: string | null;
+    timestamp: string | null;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+function toIso(ts: any): string | null {
+    if (!ts) return null;
+    if (ts instanceof Timestamp) return ts.toDate().toISOString();
+    if (ts?.toDate) return ts.toDate().toISOString();
+    if (typeof ts === "string") return ts;
+    return new Date(ts).toISOString();
+}
+
+function fmtDate(iso: string | null) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function typeLabel(raw: string | null | undefined): string {
+    if (!raw) return "Payment";
+    return raw.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ─── Page ───────────────────────────────────────────────────────────────────
 export default function AdminFinancePage() {
-    const [loading, setLoading] = useState(true);
-    const [financial, setFinancial] = useState<any>(null);
-    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [failedTx, setFailedTx] = useState<FailedTransaction[]>([]);
+    const [totalRevenue, setTotalRevenue] = useState(0);
+    const [activeTab, setActiveTab] = useState<"successful" | "failed" | "abandoned">("successful");
 
-    function exportCsv() {
-        if (!financial?.recentTransactions?.length) return;
-        const headers = ["ID", "Type", "Amount (NGN)", "Date", "Status"];
-        const rows = financial.recentTransactions.map((tx: any) => [
-            tx.id || "",
-            tx.type?.replace(/_/g, " ") || "",
-            (tx.amount || 0).toString(),
-            tx.date ? new Date(tx.date).toLocaleDateString("en-NG") : "N/A",
-            "Completed",
-        ]);
-        const csvContent = [headers, ...rows].map(r => r.map((c: string) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `finance-export-${new Date().toISOString().slice(0, 10)}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    }
-
-    const loadFinancial = async () => {
-        setLoading(true);
-        setErrorMsg(null);
-        try {
-            const data = await getFinancialOverviewAction();
-            if (!data || data.success === false) {
-                setErrorMsg(data?.error || "Failed to load financial data.");
-                return;
-            }
-            setFinancial({
-                totalRevenue: data.totalRevenue,
-                totalEscrowVolume: data.totalEscrowVolume,
-                totalLoansDisbursed: data.totalLoansDisbursed,
-                pendingPayoutAmount: data.pendingPayoutAmount,
-                recentTransactions: data.recentTransactions.map((tx: any) => ({
-                    ...tx,
-                    date: tx.timestamp ? new Date(tx.timestamp).toISOString() : new Date().toISOString()
-                }))
-            });
-        } catch (error: any) {
-            logger.error("Finance dashboard error:", error);
-            setErrorMsg(error?.message || "Failed to load financial data. Check admin permissions.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    // ── Real-time listener: processedPayments (all successful Paystack payments)
     useEffect(() => {
-        loadFinancial();
+        const q = query(
+            collection(db, "processedPayments"),
+            orderBy("processedAt", "desc"),
+            limit(200)
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            const txs: Transaction[] = snap.docs.map(doc => {
+                const d = doc.data();
+                const ts = d.processedAt ?? d.createdAt ?? d.timestamp ?? null;
+                return {
+                    id: doc.id,
+                    type: d.type ?? "payment",
+                    amount: Number(d.amount) || 0,
+                    status: d.status ?? "completed",
+                    reference: d.reference ?? doc.id,
+                    timestamp: toIso(ts),
+                };
+            }).filter(t => t.amount > 0);
+            setTransactions(txs);
+            setTotalRevenue(txs.reduce((sum, t) => sum + t.amount, 0));
+        }, () => {
+            // Silently handle permission errors - show what we have
+        });
+        return () => unsub();
     }, []);
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
-            </div>
+    // ── Real-time listener: failedPayments (failed + abandoned)
+    useEffect(() => {
+        const q = query(
+            collection(db, "failedPayments"),
+            orderBy("failedAt", "desc"),
+            limit(200)
         );
-    }
+        const unsub = onSnapshot(q, (snap) => {
+            const txs: FailedTransaction[] = snap.docs.map(doc => {
+                const d = doc.data();
+                const ts = d.failedAt ?? d.abandonedAt ?? null;
+                return {
+                    id: doc.id,
+                    type: d.type ?? "unknown",
+                    amount: Number(d.amount) || 0,
+                    status: (d.status === "abandoned" ? "abandoned" : "failed") as "failed" | "abandoned",
+                    gatewayResponse: d.gatewayResponse ?? null,
+                    timestamp: toIso(ts),
+                };
+            });
+            setFailedTx(txs);
+        }, () => {
+            // Silently handle — collection may not exist yet (no failed payments)
+        });
+        return () => unsub();
+    }, []);
 
-    if (!financial) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <div className="text-center">
-                    <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                    <p className="text-slate-700 font-semibold mb-2">Failed to load financial data</p>
-                    {errorMsg && (
-                        <p className="text-sm text-slate-500 mb-4 max-w-xs mx-auto">{errorMsg}</p>
-                    )}
-                    <button
-                        onClick={loadFinancial}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition"
-                    >
-                        Retry
-                    </button>
-                </div>
-            </div>
-        );
+    const abandonedTx = failedTx.filter(t => t.status === "abandoned");
+    const errorTx = failedTx.filter(t => t.status === "failed");
+
+    const displayedTx =
+        activeTab === "successful" ? transactions :
+        activeTab === "abandoned" ? abandonedTx :
+        errorTx;
+
+    function exportCsv() {
+        const rows = displayedTx.map(t => [
+            t.id,
+            typeLabel(t.type),
+            t.amount.toString(),
+            fmtDate(t.timestamp),
+            (t as any).status ?? activeTab,
+            (t as any).gatewayResponse ?? "",
+        ]);
+        const csv = [["ID", "Type", "Amount (NGN)", "Date", "Status", "Reason"], ...rows]
+            .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+            .join("\n");
+        const a = Object.assign(document.createElement("a"), {
+            href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
+            download: `transactions-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`,
+        });
+        a.click();
     }
 
     return (
@@ -105,129 +150,90 @@ export default function AdminFinancePage() {
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-8">
-                    <Link
-                        href="/admin"
-                        className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition"
-                    >
+                    <Link href="/admin" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 transition">
                         <ArrowLeft className="w-4 h-4" />
                         Back to Admin Dashboard
                     </Link>
-                    <h1 className="text-4xl font-bold text-slate-900 mb-2">
-                        Financial Dashboard
-                    </h1>
-                    <p className="text-slate-600">
-                        Revenue, escrow, and payout management
-                    </p>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-4xl font-bold text-slate-900 mb-2">Financial Dashboard</h1>
+                            <p className="text-slate-600">Live data — updates automatically</p>
+                        </div>
+                        {/* Live indicator */}
+                        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-2">
+                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                            <span className="text-sm font-semibold text-green-700">Live</span>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Revenue Overview */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <Link
-                        href="/admin/cooperatives/transactions"
-                        className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                    >
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                                <DollarSign className="w-6 h-6" />
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                                <DollarSign className="w-5 h-5" />
                             </div>
                             <p className="text-sm font-medium opacity-90">Total Revenue</p>
                         </div>
-                        <p className="text-4xl font-bold mb-2">
-                            {formatCurrency(financial.totalRevenue)}
-                        </p>
-                        <p className="text-xs opacity-75">Platform commission earnings →</p>
-                    </Link>
-
-                    <Link
-                        href="/admin/marketplace/escrow"
-                        className="bg-linear-to-br from-blue-500 to-cyan-600 rounded-2xl p-6 shadow-lg text-white hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                    >
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                                <Wallet className="w-6 h-6" />
-                            </div>
-                            <p className="text-sm font-medium opacity-90">Escrow Volume</p>
-                        </div>
-                        <p className="text-4xl font-bold mb-2">
-                            {formatCurrency(financial.totalEscrowVolume)}
-                        </p>
-                        <p className="text-xs opacity-75">Total funds in escrow →</p>
-                    </Link>
-
-                    <Link
-                        href="/admin/cooperatives/loans"
-                        className="bg-linear-to-br from-purple-500 to-pink-600 rounded-2xl p-6 shadow-lg text-white hover:shadow-xl hover:-translate-y-0.5 transition-all"
-                    >
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                                <TrendingUp className="w-6 h-6" />
-                            </div>
-                            <p className="text-sm font-medium opacity-90">Loans Disbursed</p>
-                        </div>
-                        <p className="text-4xl font-bold mb-2">
-                            {formatCurrency(financial.totalLoansDisbursed)}
-                        </p>
-                        <p className="text-xs opacity-75">Total loan volume →</p>
-                    </Link>
-                </div>
-
-                {/* Secondary Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-slate-600 mb-2">Avg Commission</p>
-                        <p className="text-2xl font-bold text-slate-900">
-                            {financial.totalEscrowVolume > 0
-                                ? `${((financial.totalRevenue / financial.totalEscrowVolume) * 100).toFixed(1)}%`
-                                : "—"}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">Earned / Escrow volume</p>
+                        <p className="text-3xl font-bold">{formatCurrency(totalRevenue)}</p>
+                        <p className="text-xs opacity-75 mt-1">{transactions.length} successful payments</p>
                     </div>
 
-                    <Link
-                        href="/admin/marketplace/withdrawals"
-                        className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all group"
-                    >
-                        <p className="text-sm text-slate-600 mb-2 group-hover:text-blue-600 transition">Pending Payouts</p>
-                        <p className="text-2xl font-bold text-yellow-600">
-                            {formatCurrency(financial.pendingPayoutAmount ?? 0)}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">Approved, awaiting transfer →</p>
-                    </Link>
-
-                    <Link
-                        href="/admin/cooperatives/transactions"
-                        className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all group"
-                    >
-                        <p className="text-sm text-slate-600 mb-2 group-hover:text-blue-600 transition">Transaction Count</p>
-                        <p className="text-2xl font-bold text-slate-900">
-                            {financial.recentTransactions.length}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">View all transactions →</p>
-                    </Link>
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                                <CheckCircle className="w-5 h-5 text-green-600" />
+                            </div>
+                            <p className="text-sm text-slate-600">Successful</p>
+                        </div>
+                        <p className="text-3xl font-bold text-slate-900">{transactions.length}</p>
+                        <p className="text-xs text-slate-500 mt-1">Confirmed payments</p>
+                    </div>
 
                     <div className="bg-white rounded-2xl p-6 shadow-lg">
-                        <p className="text-sm text-slate-600 mb-2">Avg Transaction</p>
-                        <p className="text-2xl font-bold text-slate-900">
-                            {formatCurrency(
-                                financial.recentTransactions.length > 0
-                                    ? financial.totalEscrowVolume / financial.recentTransactions.length
-                                    : 0
-                            )}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">Per transaction</p>
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+                                <Clock className="w-5 h-5 text-yellow-600" />
+                            </div>
+                            <p className="text-sm text-slate-600">Abandoned</p>
+                        </div>
+                        <p className="text-3xl font-bold text-yellow-600">{abandonedTx.length}</p>
+                        <p className="text-xs text-slate-500 mt-1">Left checkout</p>
+                    </div>
+
+                    <div className="bg-white rounded-2xl p-6 shadow-lg">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                                <XCircle className="w-5 h-5 text-red-600" />
+                            </div>
+                            <p className="text-sm text-slate-600">Failed</p>
+                        </div>
+                        <p className="text-3xl font-bold text-red-600">{errorTx.length}</p>
+                        <p className="text-xs text-slate-500 mt-1">Card / network errors</p>
                     </div>
                 </div>
 
-                {/* Recent Transactions Table */}
+                {/* Tabs + Table */}
                 <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
-                    <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-xl font-bold text-slate-900 mb-1">
-                                Recent Financial Activity
-                            </h2>
-                            <p className="text-sm text-slate-600">
-                                Latest {financial.recentTransactions.length} transactions
-                            </p>
+                    <div className="p-6 border-b border-slate-200 flex items-center justify-between flex-wrap gap-4">
+                        <div className="flex gap-2">
+                            {(["successful", "abandoned", "failed"] as const).map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                                        activeTab === tab
+                                            ? tab === "successful" ? "bg-green-600 text-white"
+                                            : tab === "abandoned" ? "bg-yellow-500 text-white"
+                                            : "bg-red-600 text-white"
+                                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                    }`}
+                                >
+                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}&nbsp;
+                                    ({tab === "successful" ? transactions.length : tab === "abandoned" ? abandonedTx.length : errorTx.length})
+                                </button>
+                            ))}
                         </div>
                         <button
                             onClick={exportCsv}
@@ -242,94 +248,72 @@ export default function AdminFinancePage() {
                         <table className="w-full">
                             <thead className="bg-slate-50">
                                 <tr>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Type</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Type
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Amount
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Date
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                                        Status
+                                        {activeTab === "successful" ? "Status" : "Reason"}
                                     </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {financial.recentTransactions.slice(0, 10).map((transaction: any, index: number) => (
-                                    <tr
-                                        key={transaction.id || index}
-                                        className="hover:bg-slate-50 transition"
-                                    >
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${transaction.type === "payment_completed"
-                                                    ? "bg-green-100"
-                                                    : transaction.type === "escrow_released"
-                                                        ? "bg-blue-100"
-                                                        : "bg-purple-100"
+                                {displayedTx.map((tx, i) => {
+                                    const isFailed = activeTab !== "successful";
+                                    const failed = tx as FailedTransaction;
+                                    return (
+                                        <tr key={tx.id || i} className="hover:bg-slate-50 transition">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                                                        activeTab === "successful" ? "bg-green-100" :
+                                                        activeTab === "abandoned" ? "bg-yellow-100" : "bg-red-100"
                                                     }`}>
-                                                    {transaction.type === "payment_completed" ? (
-                                                        <DollarSign className="w-5 h-5 text-green-600" />
-                                                    ) : transaction.type === "escrow_released" ? (
-                                                        <TrendingDown className="w-5 h-5 text-blue-600" />
-                                                    ) : (
-                                                        <TrendingUp className="w-5 h-5 text-purple-600" />
-                                                    )}
+                                                        {activeTab === "successful"
+                                                            ? <CheckCircle className="w-4 h-4 text-green-600" />
+                                                            : activeTab === "abandoned"
+                                                            ? <Clock className="w-4 h-4 text-yellow-600" />
+                                                            : <XCircle className="w-4 h-4 text-red-600" />
+                                                        }
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-slate-900">{typeLabel(tx.type)}</p>
+                                                        <p className="text-xs text-slate-500">Ref: {tx.id.slice(0, 12)}…</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-slate-900">
-                                                        {transaction.type
-                                                            ?.replace(/_/g, " ")
-                                                            .replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                                                    </p>
-                                                    <p className="text-xs text-slate-500">
-                                                        ID: {transaction.id?.slice(0, 8)}...
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <p className="text-sm font-bold text-slate-900">
-                                                {formatCurrency(transaction.amount || 0)}
-                                            </p>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <p className="text-sm text-slate-600">
-                                                {transaction.timestamp
-                                                    ? new Date(transaction.timestamp).toLocaleDateString("en-NG", {
-                                                        year: "numeric",
-                                                        month: "short",
-                                                        day: "numeric",
-                                                    })
-                                                    : "N/A"}
-                                            </p>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${transaction.status === "completed" || transaction.status === undefined
-                                                ? "bg-green-100 text-green-700"
-                                                : transaction.status === "pending"
-                                                    ? "bg-yellow-100 text-yellow-700"
-                                                    : transaction.status === "failed"
-                                                        ? "bg-red-100 text-red-700"
-                                                        : "bg-slate-100 text-slate-700"
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className={`text-sm font-bold ${
+                                                    activeTab === "successful" ? "text-slate-900" :
+                                                    activeTab === "abandoned" ? "text-yellow-700" : "text-red-700"
                                                 }`}>
-                                                {transaction.status
-                                                    ? transaction.status.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
-                                                    : "Completed"}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
+                                                    {formatCurrency(tx.amount)}
+                                                </p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-sm text-slate-600">{fmtDate(tx.timestamp)}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {isFailed ? (
+                                                    <p className="text-xs text-slate-500 max-w-[200px]">{failed.gatewayResponse ?? "—"}</p>
+                                                ) : (
+                                                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                                        Completed
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
 
-                        {financial.recentTransactions.length === 0 && (
+                        {displayedTx.length === 0 && (
                             <div className="text-center py-12">
-                                <Wallet className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                                <p className="text-slate-600">
-                                    No recent transactions
+                                <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                                <p className="text-slate-500">
+                                    {activeTab === "successful" ? "No transactions yet" :
+                                     activeTab === "abandoned" ? "No abandoned transactions" :
+                                     "No failed transactions"}
                                 </p>
                             </div>
                         )}
@@ -338,49 +322,26 @@ export default function AdminFinancePage() {
 
                 {/* Quick Actions */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Link
-                        href="/admin/marketplace/withdrawals"
-                        className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition flex items-center justify-between group"
-                    >
+                    <Link href="/admin/marketplace/withdrawals" className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition flex items-center justify-between group">
                         <div>
-                            <h3 className="font-bold text-slate-900 mb-1">
-                                Process Withdrawals
-                            </h3>
-                            <p className="text-sm text-slate-600">
-                                Review pending requests
-                            </p>
+                            <h3 className="font-bold text-slate-900 mb-1">Process Withdrawals</h3>
+                            <p className="text-sm text-slate-600">Review pending requests</p>
                         </div>
                         <TrendingDown className="w-6 h-6 text-blue-600 group-hover:translate-x-1 transition" />
                     </Link>
-
-                    <Link
-                        href="/admin/cooperatives/transactions"
-                        className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition flex items-center justify-between group"
-                    >
+                    <Link href="/admin/cooperatives/transactions" className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition flex items-center justify-between group">
                         <div>
-                            <h3 className="font-bold text-slate-900 mb-1">
-                                View Transactions
-                            </h3>
-                            <p className="text-sm text-slate-600">
-                                All platform activity
-                            </p>
+                            <h3 className="font-bold text-slate-900 mb-1">Cooperative Transactions</h3>
+                            <p className="text-sm text-slate-600">Member payment records</p>
                         </div>
                         <DollarSign className="w-6 h-6 text-green-600 group-hover:translate-x-1 transition" />
                     </Link>
-
-                    <Link
-                        href="/admin/audit-logs"
-                        className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition flex items-center justify-between group"
-                    >
+                    <Link href="/admin/audit-logs" className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition flex items-center justify-between group">
                         <div>
-                            <h3 className="font-bold text-slate-900 mb-1">
-                                Audit Logs
-                            </h3>
-                            <p className="text-sm text-slate-600">
-                                Review system activity
-                            </p>
+                            <h3 className="font-bold text-slate-900 mb-1">Audit Logs</h3>
+                            <p className="text-sm text-slate-600">Review system activity</p>
                         </div>
-                        <AlertCircle className="w-6 h-6 text-purple-600 group-hover:translate-x-1 transition" />
+                        <TrendingUp className="w-6 h-6 text-purple-600 group-hover:translate-x-1 transition" />
                     </Link>
                 </div>
             </div>

@@ -327,13 +327,21 @@ export interface FinancialOverview {
         reference?: string | null;
         timestamp: string | null;
     }>;
+    failedTransactions: Array<{
+        id: string;
+        type: string;
+        amount: number;
+        status: "failed" | "abandoned";
+        gatewayResponse: string | null;
+        timestamp: string | null;
+    }>;
 }
 
 
 export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     const sessionResult = await requireSession();
     if (!sessionResult.session) {
-        return { success: false, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
+        return { success: false, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] };
     }
     const { session } = sessionResult;
 
@@ -349,7 +357,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         }
     }
     if (!isAdmin) {
-        return { success: false, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
+        return { success: false, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] };
     }
 
     let totalRevenue = 0;
@@ -420,7 +428,32 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         (coopPayoutsR.status === "fulfilled" ? (coopPayoutsR.value.data().total ?? 0) : 0) +
         (wavePayoutsR.status === "fulfilled" ? (wavePayoutsR.value.data().total ?? 0) : 0);
 
-    return { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions };
+    // Fetch failed/abandoned transactions (from failedPayments collection)
+    const failedTransactions: FinancialOverview["failedTransactions"] = [];
+    try {
+        const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).limit(100).get();
+        failedSnap.docs.forEach(doc => {
+            const d = doc.data();
+            const ts = d.failedAt ?? d.abandonedAt ?? null;
+            failedTransactions.push({
+                id: doc.id,
+                type: d.type ?? "unknown",
+                amount: Number(d.amount) || 0,
+                status: (d.status === "abandoned" ? "abandoned" : "failed") as "failed" | "abandoned",
+                gatewayResponse: d.gatewayResponse ?? null,
+                timestamp: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : null),
+            });
+        });
+        failedTransactions.sort((a, b) => {
+            const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return tb - ta;
+        });
+    } catch {
+        // Silently skip — collection may not exist yet
+    }
+
+    return { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

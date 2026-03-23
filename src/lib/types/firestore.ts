@@ -824,6 +824,7 @@ export const COLLECTIONS = {
     ESCROW_MESSAGES: "escrow_messages",
     DISPUTES: "disputes",
     PROCESSED_PAYMENTS: "processedPayments",
+    FAILED_PAYMENTS: "failedPayments",
 
     // NEW: Marketplace Expansions (Phase 12)
     WALLETS: "wallets",
