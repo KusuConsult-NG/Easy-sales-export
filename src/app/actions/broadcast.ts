@@ -14,6 +14,9 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendEmailNotification, sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "firebase-admin/firestore";
 
+// Extend Vercel serverless function timeout for broadcast operations (Pro plan: up to 300s)
+export const maxDuration = 300;
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type BroadcastAudience =

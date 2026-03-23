@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import {
     previewBroadcastAction,
-    sendBroadcastAction,
 } from "@/app/actions/broadcast";
 import type { BroadcastAudience, BroadcastFilters } from "@/app/actions/broadcast";
 import { diagnoseBroadcastAction } from "@/app/actions/diagnose-broadcast";
@@ -118,11 +117,24 @@ export default function BroadcastComposePage() {
 
     const handleSend = async () => {
         setSending(true);
-        const res = await sendBroadcastAction(buildFilters(), subject, body);
+        try {
+            const res = await fetch("/api/admin/broadcast/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filters: buildFilters(), subject, body }),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.error || "Send failed", "error");
+                setSending(false);
+                return;
+            }
+            setResult({ sent: data.sent, failed: data.failed });
+            setStep("done");
+        } catch (err: any) {
+            showToast(err.message || "Network error — the broadcast may still be sending in the background. Check history.", "error");
+        }
         setSending(false);
-        if (!res.success) { showToast(res.error || "Send failed", "error"); return; }
-        setResult({ sent: res.sent, failed: res.failed });
-        setStep("done");
     };
 
     const canProceed = subject.trim().length > 0 && body.trim().length > 3;
