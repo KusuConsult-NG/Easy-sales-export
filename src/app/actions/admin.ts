@@ -1360,10 +1360,11 @@ export async function unlockUserAccount(email: string): Promise<ActionState> {
 
 interface GetUsersOptions {
     limit?: number;
+    page?: number;      // 0-indexed page number for offset pagination
     role?: string;
     status?: "verified" | "unverified" | "all";
     search?: string;
-    lastDocId?: string;
+    lastDocId?: string; // kept for backwards-compat but now treated as page number string
     state?: string;     // filter by address.state
     lga?: string;       // filter by address.lga
     fromDate?: string;  // ISO date string – createdAt >= fromDate
@@ -1376,6 +1377,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
     users?: any[];
     lastDocId?: string;
     hasMore?: boolean;
+    totalCount?: number;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -1386,6 +1388,8 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
         }
 
         const pageSize = options.limit || 50;
+        const page = options.page ?? 0; // page offset (0-indexed)
+
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
 
         // Apply filters
@@ -1427,24 +1431,12 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             }
         }
 
-        // Pagination cursor
-        if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
-            if (lastDoc.exists) {
-                query = query.startAfter(lastDoc);
-            }
-        }
-
-        // Fetch with higher limit then sort in memory — avoids composite index requirement
-        const fetchLimit = options.lastDocId ? pageSize : Math.max(pageSize, 200);
-        query = query.limit(fetchLimit);
+        // Fetch a large batch — no orderBy (avoids missing-field exclusion).
+        // We page in-memory after sort.
+        const FETCH_LIMIT = 500;
+        query = query.limit(FETCH_LIMIT);
 
         const snapshot = await query.get();
-
-        // Manual search filtering (if needed, though inefficient for large datasets without 3rd party search)
-        // For this implementation, we will assume search happens on the filtered set or rely on precise filters.
-        // If 'search' is provided, we might need a specific index or external service.
-        // For now, let's process the snapshot.
 
         const users = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -1456,7 +1448,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 role: data.roles?.[0] || "general_user",
                 roles: data.roles || [],
                 isVerified: data.isVerified ?? data.verified ?? false,
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(0),
                 verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate() : undefined,
                 // Location
                 address: data.address,
@@ -1483,7 +1475,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             };
         });
 
-        // Client-side filters for search + date range
+        // Client-side search + date range filtering
         let filteredUsers = users;
         if (options.search) {
             const searchLower = options.search.toLowerCase();
@@ -1513,22 +1505,27 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             return bTime - aTime;
         });
 
-        // Apply pagination window after in-memory sort
-        const pagedUsers = options.lastDocId ? filteredUsers.slice(0, pageSize) : filteredUsers.slice(0, pageSize);
-        const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+        // Page-offset slice: each page returns exactly pageSize items
+        const offset = page * pageSize;
+        const pagedUsers = filteredUsers.slice(offset, offset + pageSize);
+        const totalAfterFilter = filteredUsers.length;
+        const hasMore = offset + pageSize < totalAfterFilter;
 
         return {
             error: null,
             success: true,
             users: pagedUsers,
-            lastDocId: snapshot.docs.length >= fetchLimit ? lastVisible?.id : undefined,
-            hasMore: snapshot.docs.length >= fetchLimit
+            // nextPage is used by callers for the NEXT request's `page` param
+            lastDocId: hasMore ? String(page + 1) : undefined,
+            hasMore,
+            totalCount: totalAfterFilter,
         };
     } catch (error: any) {
         logger.error("Get users error:", error);
         return { error: "Failed to fetch users: " + error.message, success: false };
     }
 }
+
 
 // Update User Roles Action
 export async function updateUserRolesAction(

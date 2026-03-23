@@ -49,11 +49,17 @@ export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions
         try {
             const cursor = resetCursors ? undefined : cursorStack.current[page] ?? undefined;
 
+            // If the cursor is a numeric string, it's a page-offset marker (not a Firestore doc ID)
+            const cursorAsPage = cursor && /^\d+$/.test(cursor) ? Number(cursor) : undefined;
+
             const params = {
                 limit: lim,
                 search: s,
                 ...f,
-                lastDocId: cursor,
+                // For offset-based pagination (e.g. getUsersAction): pass as `page`
+                ...(cursorAsPage !== undefined ? { page: cursorAsPage } : {}),
+                // For cursor-based pagination (other actions): pass as `lastDocId`
+                ...(cursor && cursorAsPage === undefined ? { lastDocId: cursor } : {}),
             };
 
             logger.debug('[useAdminData] Fetching', { page, cursor, search: s, filters: f });
@@ -89,6 +95,7 @@ export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions
         // fetchData has no external deps — it reads everything from latestRef at call-time.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
 
     // Serialize search/filters so the effect correctly detects deep changes.
     const searchKey = search;

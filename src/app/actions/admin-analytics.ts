@@ -340,9 +340,12 @@ export interface FinancialOverview {
         type: string;
         amount: number;
         status?: string;
+        description?: string | null;
+        reference?: string | null;
         timestamp: string | null;
     }>;
 }
+
 
 export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     const sessionResult = await requireSession();
@@ -385,22 +388,45 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     }
 
     try {
-        const logsSnap = await db
-            .collection(COLLECTIONS.AUDIT_LOGS)
-            .orderBy("timestamp", "desc")
-            .limit(20)
-            .get();
-        logsSnap.docs.forEach((doc) => {
-            const data = doc.data();
-            recentTransactions.push({
+        // Pull real transactions from actual payment collections (no orderBy to avoid missing-field drops)
+        const [escrowSnap, coopTxSnap, walletSnap, waveWdSnap] = await Promise.all([
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).limit(100).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).limit(100).get(),
+            db.collection(COLLECTIONS.WALLET_TRANSACTIONS).limit(100).get(),
+            db.collection(COLLECTIONS.WAVE_WITHDRAWALS).limit(100).get(),
+        ]);
+
+        const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot, typePrefix: string) => {
+            const d = doc.data();
+            const ts = d.createdAt ?? d.requestedAt ?? d.timestamp ?? null;
+            return {
                 id: doc.id,
-                type: data.action ?? "unknown",
-                amount: Number(data.amount) || 0,
-                timestamp: data.timestamp?.toDate?.()?.toISOString() ?? null,
-            });
-        });
+                type: d.type ?? d.action ?? typePrefix,
+                amount: Number(d.amount) || 0,
+                status: d.status ?? "completed",
+                description: d.description ?? d.purpose ?? d.note ?? null,
+                reference: d.reference ?? d.paymentReference ?? null,
+                timestamp: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : null),
+            };
+        };
+
+        const all = [
+            ...escrowSnap.docs.map(d => toTx(d, "escrow")),
+            ...coopTxSnap.docs.map(d => toTx(d, "cooperative_transaction")),
+            ...walletSnap.docs.map(d => toTx(d, "wallet_transaction")),
+            ...waveWdSnap.docs.map(d => toTx(d, "wave_withdrawal")),
+        ]
+        .filter(tx => tx.amount > 0) // exclude zero-amount noise
+        .sort((a, b) => {
+            const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return tb - ta;
+        })
+        .slice(0, 50);
+
+        recentTransactions.push(...all);
     } catch (e: any) {
-        console.error("[FINANCE] Audit logs fetch error:", e.message);
+        console.error("[FINANCE] Transactions fetch error:", e.message);
     }
 
     let pendingPayoutAmount = 0;
