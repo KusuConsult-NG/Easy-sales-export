@@ -1436,22 +1436,9 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
-                // Determine if orderBy was applied (same logic as above)
-                const hasFilters = options.role || options.status || options.state || options.lga;
-
-                if (!options.search && !hasFilters) {
-                    // Ordered by createdAt descending -> string explicitly
-                    const createdAt = lastDoc.data()?.createdAt;
-                    if (createdAt) {
-                        query = query.startAfter(createdAt, lastDoc.id);
-                    } else {
-                        // Fallback using snapshot if missing field
-                        query = query.startAfter(lastDoc);
-                    }
-                } else {
-                    // No explicit orderBy, ordered by document ID ascending
-                    query = query.startAfter(lastDoc.id);
-                }
+                // Use the document snapshot directly for cursor pagination.
+                // This automatically matches whatever orderBy is applied.
+                query = query.startAfter(lastDoc);
             }
         }
 

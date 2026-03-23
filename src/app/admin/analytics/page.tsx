@@ -140,10 +140,10 @@ export default function AdminAnalyticsPage() {
                             </p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900 mb-1">
-                            {formatCurrency(platformOverview.totalRevenue)}
+                            {formatCurrency(platformOverview?.totalRevenue ?? 0)}
                         </p>
                         <p className="text-xs text-green-600">
-                            {formatCurrency(platformOverview.monthlyRevenue)} this month
+                            {formatCurrency(platformOverview?.monthlyRevenue ?? 0)} this month
                         </p>
                     </div>
 
@@ -174,7 +174,7 @@ export default function AdminAnalyticsPage() {
                             </p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900 mb-1">
-                            {platformOverview.pendingApprovals}
+                            {platformOverview?.pendingApprovals ?? 0}
                         </p>
                         <p className="text-xs text-yellow-600">
                             Requires attention
@@ -191,7 +191,7 @@ export default function AdminAnalyticsPage() {
                             </p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900 mb-1">
-                            {((platformOverview.activeUsers / platformOverview.totalUsers) * 100).toFixed(1)}%
+                            {((platformOverview?.activeUsers ?? 0) / (platformOverview?.totalUsers || 1) * 100).toFixed(1)}%
                         </p>
                         <p className="text-xs text-slate-500">
                             Active user ratio
@@ -209,8 +209,8 @@ export default function AdminAnalyticsPage() {
                         </div>
                         <p className="text-3xl font-bold text-slate-900 mb-1">
                             {formatCurrency(
-                                platformOverview.totalTransactions > 0
-                                    ? platformOverview.totalRevenue / platformOverview.totalTransactions
+                                (platformOverview?.totalTransactions ?? 0) > 0
+                                    ? (platformOverview?.totalRevenue ?? 0) / (platformOverview?.totalTransactions ?? 1)
                                     : 0
                             )}
                         </p>
@@ -292,7 +292,7 @@ export default function AdminAnalyticsPage() {
                                     outerRadius={100}
                                     label={(entry) => entry.name}
                                 >
-                                    {moduleUsage.map((entry: any, index: number) => (
+                                    {(moduleUsage || []).map((entry: any, index: number) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
@@ -313,7 +313,7 @@ export default function AdminAnalyticsPage() {
                             Recent Transactions
                         </h3>
                         <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                            {recentTransactions.slice(0, 5).map((transaction: any) => (
+                            {(recentTransactions || []).slice(0, 5).map((transaction: any) => (
                                 <div
                                     key={transaction.id}
                                     className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"
