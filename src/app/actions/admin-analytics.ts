@@ -250,58 +250,44 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         { module: "Export Hub", count: exportCount.status === "fulfilled" ? exportCount.value : 0 },
     ].filter((m) => m.count > 0);
 
-    // ── Recent transactions from financial collections ───────────────────────
+    // ── Recent transactions from financial collections (no orderBy — avoids missing-field drops) ──
     const recentTransactions: AnalyticsData["recentTransactions"] = [];
-    
+
     try {
-        const [recentEscrowSnap, recentCoopSnap] = await Promise.allSettled([
-            db
-                .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                .orderBy("createdAt", "desc")
-                .limit(5)
-                .get(),
-            db
-                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("paymentStatus", "==", "completed")
-                .orderBy("updatedAt", "desc")
-                .limit(5)
-                .get()
+        const [escrowSnap, coopTxSnap, walletSnap, waveWdSnap] = await Promise.allSettled([
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).limit(50).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).limit(50).get(),
+            db.collection(COLLECTIONS.WALLET_TRANSACTIONS).limit(50).get(),
+            db.collection(COLLECTIONS.WAVE_WITHDRAWALS).limit(50).get(),
         ]);
-        
-        if (recentEscrowSnap.status === "fulfilled") {
-            recentEscrowSnap.value.forEach(doc => {
-                const data = doc.data();
-                recentTransactions.push({
-                    id: doc.id,
-                    type: "Escrow Transaction",
-                    amount: Number(data.amount) || 0,
-                    date: (data.createdAt?.toDate?.() || new Date()).toISOString()
-                });
-            });
-        }
-        
-        if (recentCoopSnap.status === "fulfilled") {
-            recentCoopSnap.value.forEach(doc => {
-                const data = doc.data();
-                recentTransactions.push({
-                    id: doc.id,
-                    type: "Cooperative Registration",
-                    amount: Number(data.registrationFee) || 0,
-                    date: (data.updatedAt?.toDate?.() || new Date()).toISOString()
-                });
-            });
-        } else {
-            logger.warn("Cooperative members recent transactions query failed (likely missing index).", recentCoopSnap.reason);
-        }
-        
-        // Sort combined transactions and keep only the latest 5
-        recentTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        if (recentTransactions.length > 5) {
-            recentTransactions.length = 5;
-        }
+
+        const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot, typeLabel: string) => {
+            const d = doc.data();
+            const ts = d.createdAt ?? d.requestedAt ?? d.timestamp ?? d.updatedAt ?? null;
+            return {
+                id: doc.id,
+                type: d.type ?? d.action ?? typeLabel,
+                amount: Number(d.amount ?? d.registrationFee) || 0,
+                date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : new Date(0).toISOString()),
+            };
+        };
+
+        const allTx: Array<{ id: string; type: string; amount: number; date: string }> = [];
+
+        if (escrowSnap.status === "fulfilled") allTx.push(...escrowSnap.value.docs.map(d => toTx(d, "Escrow Transaction")));
+        if (coopTxSnap.status === "fulfilled") allTx.push(...coopTxSnap.value.docs.map(d => toTx(d, "Cooperative Transaction")));
+        if (walletSnap.status === "fulfilled") allTx.push(...walletSnap.value.docs.map(d => toTx(d, "Wallet Transaction")));
+        if (waveWdSnap.status === "fulfilled") allTx.push(...waveWdSnap.value.docs.map(d => toTx(d, "WAVE Withdrawal")));
+
+        allTx
+            .filter(tx => tx.amount > 0)
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 8)
+            .forEach(tx => recentTransactions.push(tx));
     } catch (e) {
         logger.error("Failed to fetch recent transactions:", e);
     }
+
 
     return {
         platformOverview: {
