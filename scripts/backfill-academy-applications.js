@@ -1,134 +1,115 @@
-#!/usr/bin/env node
-
 /**
- * Backfill Script: Create academy_applications records for users who paid
- * but have no corresponding academy_applications document.
+ * backfill-academy-applications.js
+ * ─────────────────────────────────
+ * Finds all users with completed academy payments (serviceRegistrations.academy.paymentStatus === "completed")
+ * that do NOT already have an academy_applications document, then creates one for each.
  *
- * Usage: node scripts/backfill-academy-applications.js
+ * Run: node scripts/backfill-academy-applications.js
  */
 
-const { initializeApp, cert } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const fs = require("fs");
 const path = require("path");
+require("dotenv").config({ path: ".env.local" });
 
-// Load .env.local
-const envPath = path.join(__dirname, "..", ".env.local");
-if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, "utf-8");
-    envContent.split("\n").forEach((line) => {
-        const match = line.match(/^([^#=]+)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(.+))$/);
-        if (match) {
-            const key = match[1].trim();
-            let value = match[2] ?? match[3] ?? match[4] ?? "";
-            // Unescape \\n → actual newlines
-            value = value.replace(/\\n/g, "\n");
-            if (!process.env[key]) {
-                process.env[key] = value;
-            }
-        }
-    });
+const { initializeApp, cert, getApps } = require("firebase-admin/app");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+
+// ── Firebase Init ───────────────────────────────────────────────────────────
+function initFirebase() {
+    if (getApps().length) return getFirestore();
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+
+    if (!projectId || !clientEmail || !privateKey) {
+        console.error("❌ Missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY in .env.local");
+        process.exit(1);
+    }
+    initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+    return getFirestore();
 }
 
-const projectId = process.env.FIREBASE_PROJECT_ID;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+const db = initFirebase();
 
-if (!projectId || !clientEmail || !privateKey) {
-    console.error("❌ Missing FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, or FIREBASE_PRIVATE_KEY in .env.local");
-    process.exit(1);
-}
+async function run() {
+    console.log("🔍 Scanning users for completed academy payments...");
 
-const app = initializeApp({
-    credential: cert({ projectId, clientEmail, privateKey }),
-});
+    // 1. Get all existing academy_applications to avoid duplicates
+    const existingSnap = await db.collection("academy_applications").get();
+    const existingRefs = new Set(existingSnap.docs.map(d => d.data().paymentReference).filter(Boolean));
+    const existingUserIds = new Set(existingSnap.docs.map(d => d.data().userId).filter(Boolean));
+    console.log(`   Existing academy_applications: ${existingSnap.size}`);
 
-const db = getFirestore(app);
-
-async function backfillAcademyApplications() {
-    console.log("🔍 Scanning users for academy payments without academy_applications...\n");
-
+    // 2. Get all users  
     const usersSnap = await db.collection("users").get();
-    let found = 0;
-    let created = 0;
-    let skipped = 0;
+    console.log(`   Total users: ${usersSnap.size}`);
+
+    const batch = db.batch();
+    let count = 0;
 
     for (const userDoc of usersSnap.docs) {
         const userData = userDoc.data();
-        const academy = userData?.serviceRegistrations?.academy;
+        const academy = userData.serviceRegistrations?.academy;
 
-        if (!academy || academy.paymentStatus !== "completed") {
+        if (!academy) continue;
+        if (academy.paymentStatus !== "completed") continue;
+
+        const ref = academy.paymentReference;
+        const userId = userDoc.id;
+
+        // Skip if already have an entry for this user or this payment reference
+        if (existingUserIds.has(userId) || (ref && existingRefs.has(ref))) {
+            console.log(`   ↳ Skipping ${userId} — already has academy_applications entry`);
             continue;
         }
 
-        found++;
+        const applicationId = academy.applicationId || `ACADEMY-BACKFILL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const appRef = db.collection("academy_applications").doc(applicationId);
 
-        // Check if they already have an academy_applications doc
-        if (academy.applicationId) {
-            const existingApp = await db.collection("academy_applications").doc(academy.applicationId).get();
-            if (existingApp.exists) {
-                console.log(`  ⏭️  ${userData.email || userDoc.id} — already has application ${academy.applicationId}`);
-                skipped++;
-                continue;
-            }
-        }
-
-        // Also check by userId query
-        const existingByUser = await db.collection("academy_applications")
-            .where("userId", "==", userDoc.id)
-            .limit(1)
-            .get();
-
-        if (!existingByUser.empty) {
-            console.log(`  ⏭️  ${userData.email || userDoc.id} — found existing application by userId`);
-            skipped++;
-            continue;
-        }
-
-        // Create the academy_applications document
-        const applicationId = `ACADEMY-BACKFILL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-        const appDoc = {
-            userId: userDoc.id,
+        batch.set(appRef, {
+            userId,
             applicationId,
             personalInfo: {
                 fullName: userData.fullName || userData.name || "Unknown",
-                email: userData.email || "Unknown",
+                email: userData.email || "—",
                 phone: userData.phone || userData.phoneNumber || "",
             },
             education: {
                 educationLevel: "Not provided (backfilled from payment)",
                 fieldOfStudy: "Not provided",
             },
-            status: "pending",
+            status: academy.status || "pending",
             paymentStatus: "completed",
-            paymentReference: academy.paymentReference || "unknown",
-            paymentAmount: academy.paymentAmount || 0,
-            plan: academy.plan || "foundation",
+            paymentReference: ref || null,
+            paymentAmount: academy.paymentAmount || null,
+            plan: academy.plan || null,
             submittedAt: academy.paidAt || FieldValue.serverTimestamp(),
-            source: "backfill_script",
-        };
+            source: "backfill_script_v2",
+        }, { merge: true });
 
-        await db.collection("academy_applications").doc(applicationId).set(appDoc);
+        // Also link back to user doc if not already linked
+        if (!academy.applicationId) {
+            const userRef = db.collection("users").doc(userId);
+            batch.update(userRef, {
+                "serviceRegistrations.academy.applicationId": applicationId,
+            });
+        }
 
-        // Link back to user
-        await db.collection("users").doc(userDoc.id).update({
-            "serviceRegistrations.academy.applicationId": applicationId,
-            "serviceRegistrations.academy.status": "pending",
-        });
-
-        console.log(`  ✅ Created application for ${userData.email || userDoc.id} → ${applicationId}`);
-        created++;
+        count++;
+        console.log(`   ✅ Queued: ${userData.fullName || userData.email} (${userId}) — plan: ${academy.plan}, amount: ${academy.paymentAmount}`);
     }
 
-    console.log(`\n📊 Summary:`);
-    console.log(`   Users with academy payment: ${found}`);
-    console.log(`   Already had application:    ${skipped}`);
-    console.log(`   New applications created:   ${created}`);
-    console.log(`\n✅ Done!`);
+    if (count === 0) {
+        console.log("\n✅ Nothing to backfill — all academy payments already have applications.");
+        process.exit(0);
+    }
+
+    console.log(`\n📝 Committing ${count} new academy_applications entries...`);
+    await batch.commit();
+    console.log("✅ Done.\n");
+    process.exit(0);
 }
 
-backfillAcademyApplications().catch((err) => {
-    console.error("❌ Backfill failed:", err);
+run().catch(err => {
+    console.error("❌ Error:", err);
     process.exit(1);
 });

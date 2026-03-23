@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy, limit, Timestamp } from "firebase/firestore";
+import { collection, onSnapshot, query, limit, Timestamp } from "firebase/firestore";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -65,10 +65,10 @@ export default function AdminFinancePage() {
 
     // ── Real-time listener: processedPayments (all successful Paystack payments)
     useEffect(() => {
+        // No orderBy — sorting in-memory to avoid dropping docs without that field index
         const q = query(
             collection(db, "processedPayments"),
-            orderBy("processedAt", "desc"),
-            limit(200)
+            limit(500)
         );
         const unsub = onSnapshot(q, (snap) => {
             const txs: Transaction[] = snap.docs.map(doc => {
@@ -82,7 +82,12 @@ export default function AdminFinancePage() {
                     reference: d.reference ?? doc.id,
                     timestamp: toIso(ts),
                 };
-            }).filter(t => t.amount > 0);
+            }).filter(t => t.amount > 0)
+              .sort((a, b) => {
+                  const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                  const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                  return tb - ta;
+              });
             setTransactions(txs);
             setTotalRevenue(txs.reduce((sum, t) => sum + t.amount, 0));
         }, () => {
@@ -95,8 +100,7 @@ export default function AdminFinancePage() {
     useEffect(() => {
         const q = query(
             collection(db, "failedPayments"),
-            orderBy("failedAt", "desc"),
-            limit(200)
+            limit(500)
         );
         const unsub = onSnapshot(q, (snap) => {
             const txs: FailedTransaction[] = snap.docs.map(doc => {
@@ -110,6 +114,10 @@ export default function AdminFinancePage() {
                     gatewayResponse: d.gatewayResponse ?? null,
                     timestamp: toIso(ts),
                 };
+            }).sort((a, b) => {
+                const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                return tb - ta;
             });
             setFailedTx(txs);
         }, () => {
