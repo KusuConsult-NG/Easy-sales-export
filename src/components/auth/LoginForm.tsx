@@ -75,24 +75,29 @@ export default function LoginForm() {
             // Force session update to be absolutely sure client state matches server
             showToast("Login successful!", "success");
 
-            // CRITICAL: Prioritize explicit callback URL over automatic redirect logic
-            // If user came from a specific page (e.g., activation link), honor that destination
-            const searchParams = new URLSearchParams(window.location.search);
-            const explicitCallbackUrl = searchParams.get('callbackUrl');
+            // After login success: determine where to redirect
+            // IMPORTANT: Never use an error URL as the callback destination.
+            // If the current URL has ?error=... (e.g. MissingCSRF from a previous
+            // failed attempt), we ignore it and fall through to smart redirect.
+            const currentParams = new URLSearchParams(window.location.search);
+            const rawCallback = currentParams.get('callbackUrl');
 
-            if (explicitCallbackUrl) {
-                // Explicit callback specified - use it directly
-                console.log("Using explicit callback URL:", explicitCallbackUrl);
-                router.push(explicitCallbackUrl);
+            // Only honour callback if it's an internal path with no error param
+            const isValidCallback = rawCallback &&
+                rawCallback.startsWith('/') &&
+                !rawCallback.includes('error=');
+
+            if (isValidCallback) {
+                console.log("Using explicit callback URL:", rawCallback);
+                router.push(rawCallback);
             } else {
-                // No callback - use smart redirect based on user's roles/status
+                // No valid callback — use smart redirect based on user's roles
                 const redirectResult = await getPostLoginRedirect(formData.email);
 
                 if (redirectResult.success && redirectResult.redirectUrl) {
                     console.log("Using smart redirect:", redirectResult.redirectUrl);
                     router.push(redirectResult.redirectUrl);
                 } else {
-                    // Fallback to module selection
                     router.push("/auth/get-started");
                 }
             }
@@ -109,6 +114,7 @@ export default function LoginForm() {
         if (errorParam) {
             const errorMap: Record<string, string> = {
                 "CredentialsSignin": "Invalid email or password",
+                "MissingCSRF": "Session expired — please refresh the page and try again.",
                 "session_expired": "Your session has expired. Please log in again.",
                 "access_denied": "You do not have permission to access that resource.",
                 "Default": "Authentication failed."
