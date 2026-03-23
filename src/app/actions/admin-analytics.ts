@@ -339,7 +339,19 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         return { success: false, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
     }
     const { session } = sessionResult;
-    if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+
+    // Verify admin role from Firestore directly (avoids stale JWT claims causing false "no access" errors)
+    let isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
+    if (!isAdmin) {
+        try {
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const roles: string[] = userDoc.data()?.roles ?? [];
+            isAdmin = roles.includes("admin") || roles.includes("super_admin");
+        } catch {
+            // fall through — isAdmin stays false
+        }
+    }
+    if (!isAdmin) {
         return { success: false, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [] };
     }
 
@@ -348,34 +360,24 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     let totalLoansDisbursed = 0;
     const recentTransactions: FinancialOverview["recentTransactions"] = [];
 
-    try {
-        const [allEscrows, completedEscrows, coopRevenueSnap] = await Promise.all([
-            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").aggregate({ total: AggregateField.sum("registrationFee") }).get(),
-        ]);
-        totalEscrowVolume = allEscrows.data().total ?? 0;
-        const escrowRevenue = (completedEscrows.data().total ?? 0) * 0.025;
-        const coopRevenue = coopRevenueSnap.data().total ?? 0;
-        totalRevenue = escrowRevenue + coopRevenue;
-    } catch (e: any) {
-        console.error("[FINANCE] Escrow fetch error:", e.message);
-    }
+    const [allEscrowsR, completedEscrowsR, coopRevenueR] = await Promise.allSettled([
+        db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).aggregate({ total: AggregateField.sum("amount") }).get(),
+        db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
+        db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").aggregate({ total: AggregateField.sum("registrationFee") }).get(),
+    ]);
+    totalEscrowVolume = allEscrowsR.status === "fulfilled" ? (allEscrowsR.value.data().total ?? 0) : 0;
+    const escrowRevenue = completedEscrowsR.status === "fulfilled" ? (completedEscrowsR.value.data().total ?? 0) * 0.025 : 0;
+    const coopRevenue = coopRevenueR.status === "fulfilled" ? (coopRevenueR.value.data().total ?? 0) : 0;
+    totalRevenue = escrowRevenue + coopRevenue;
+
+    const loanR = await Promise.allSettled([
+        db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "disbursed").aggregate({ total: AggregateField.sum("amount") }).get(),
+    ]);
+    totalLoansDisbursed = loanR[0].status === "fulfilled" ? (loanR[0].value.data().total ?? 0) : 0;
 
     try {
-        const loanSnap = await db
-            .collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .where("status", "==", "disbursed")
-            .aggregate({ total: AggregateField.sum("amount") })
-            .get();
-        totalLoansDisbursed = loanSnap.data().total ?? 0;
-    } catch (e: any) {
-        console.error("[FINANCE] Loan fetch error:", e.message);
-    }
-
-    try {
-        // Pull real transactions from actual payment collections (no orderBy to avoid missing-field drops)
-        const [escrowSnap, coopTxSnap, walletSnap, waveWdSnap] = await Promise.all([
+        // Pull real transactions from actual payment collections (no orderBy — avoids missing-field drops)
+        const [escrowSnap, coopTxSnap, walletSnap, waveWdSnap] = await Promise.allSettled([
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).limit(100).get(),
             db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).limit(100).get(),
             db.collection(COLLECTIONS.WALLET_TRANSACTIONS).limit(100).get(),
@@ -396,35 +398,33 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
             };
         };
 
-        const all = [
-            ...escrowSnap.docs.map(d => toTx(d, "escrow")),
-            ...coopTxSnap.docs.map(d => toTx(d, "cooperative_transaction")),
-            ...walletSnap.docs.map(d => toTx(d, "wallet_transaction")),
-            ...waveWdSnap.docs.map(d => toTx(d, "wave_withdrawal")),
-        ]
-        .filter(tx => tx.amount > 0) // exclude zero-amount noise
-        .sort((a, b) => {
-            const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-            const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-            return tb - ta;
-        })
-        .slice(0, 50);
+        const all: ReturnType<typeof toTx>[] = [];
+        if (escrowSnap.status === "fulfilled") all.push(...escrowSnap.value.docs.map(d => toTx(d, "escrow")));
+        if (coopTxSnap.status === "fulfilled") all.push(...coopTxSnap.value.docs.map(d => toTx(d, "cooperative_transaction")));
+        if (walletSnap.status === "fulfilled") all.push(...walletSnap.value.docs.map(d => toTx(d, "wallet_transaction")));
+        if (waveWdSnap.status === "fulfilled") all.push(...waveWdSnap.value.docs.map(d => toTx(d, "wave_withdrawal")));
 
-        recentTransactions.push(...all);
+        all
+            .filter(tx => tx.amount > 0)
+            .sort((a, b) => {
+                const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                return tb - ta;
+            })
+            .slice(0, 50)
+            .forEach(tx => recentTransactions.push(tx));
     } catch (e: any) {
         console.error("[FINANCE] Transactions fetch error:", e.message);
     }
 
     let pendingPayoutAmount = 0;
-    try {
-        const [coopPayouts, wavePayouts] = await Promise.all([
-            db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
-        ]);
-        pendingPayoutAmount = (coopPayouts.data().total ?? 0) + (wavePayouts.data().total ?? 0);
-    } catch (e: any) {
-        console.error("[FINANCE] Payouts fetch error:", e.message);
-    }
+    const [coopPayoutsR, wavePayoutsR] = await Promise.allSettled([
+        db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
+        db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
+    ]);
+    pendingPayoutAmount =
+        (coopPayoutsR.status === "fulfilled" ? (coopPayoutsR.value.data().total ?? 0) : 0) +
+        (wavePayoutsR.status === "fulfilled" ? (wavePayoutsR.value.data().total ?? 0) : 0);
 
     return { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions };
 }
