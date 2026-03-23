@@ -7,8 +7,6 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "firebase-admin/firestore";
 
-const db = getAdminDb();
-
 /**
  * PATCH /api/admin/cooperative/mark-withdrawal-completed
  * Marks an approved_pending_payout cooperative withdrawal as completed
@@ -16,6 +14,7 @@ const db = getAdminDb();
  */
 export async function PATCH(request: NextRequest) {
     try {
+        const db = getAdminDb();
         const session = await auth();
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });

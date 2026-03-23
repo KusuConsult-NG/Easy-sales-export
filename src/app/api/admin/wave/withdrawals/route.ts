@@ -7,14 +7,13 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "firebase-admin/firestore";
 
-const db = getAdminDb();
-
 /**
  * GET /api/admin/wave/withdrawals
  * List WAVE withdrawal requests (admin only)
  */
 export async function GET(request: NextRequest) {
     try {
+        const db = getAdminDb();
         const session = await auth();
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -58,6 +57,7 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
     try {
+        const db = getAdminDb();
         const session = await auth();
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });

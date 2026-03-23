@@ -997,6 +997,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /failedPayments/{paymentId} {
+      allow read: if isAdmin();
+      allow create: if false;  // Server-side only (Paystack webhook)
+      allow update: if false;
+      allow delete: if false;
+    }
+
     match /paymentInstructions/{instructionId} {
       allow read: if isOwner(resource.data.userId) || isAdmin();
       allow create: if false;

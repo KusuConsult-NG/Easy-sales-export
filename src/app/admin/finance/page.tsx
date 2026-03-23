@@ -177,7 +177,7 @@ export default function AdminFinancePage() {
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
+                   <div className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                                 <DollarSign className="w-5 h-5" />
