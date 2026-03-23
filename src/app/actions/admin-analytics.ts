@@ -250,20 +250,19 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         { module: "Export Hub", count: exportCount.status === "fulfilled" ? exportCount.value : 0 },
     ].filter((m) => m.count > 0);
 
-    // ── Recent transactions from financial collections (no orderBy — avoids missing-field drops) ──
+    // ── Recent transactions: primary source is processedPayments (all Paystack webhook payments)
+    // ── Supplemented by escrow_transactions for marketplace escrow entries
     const recentTransactions: AnalyticsData["recentTransactions"] = [];
 
     try {
-        const [escrowSnap, coopTxSnap, walletSnap, waveWdSnap] = await Promise.allSettled([
+        const [processedSnap, escrowSnap] = await Promise.allSettled([
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).limit(100).get(),
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).limit(50).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).limit(50).get(),
-            db.collection(COLLECTIONS.WALLET_TRANSACTIONS).limit(50).get(),
-            db.collection(COLLECTIONS.WAVE_WITHDRAWALS).limit(50).get(),
         ]);
 
         const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot, typeLabel: string) => {
             const d = doc.data();
-            const ts = d.createdAt ?? d.requestedAt ?? d.timestamp ?? d.updatedAt ?? null;
+            const ts = d.processedAt ?? d.createdAt ?? d.requestedAt ?? d.timestamp ?? null;
             return {
                 id: doc.id,
                 type: d.type ?? d.action ?? typeLabel,
@@ -274,10 +273,8 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
 
         const allTx: Array<{ id: string; type: string; amount: number; date: string }> = [];
 
+        if (processedSnap.status === "fulfilled") allTx.push(...processedSnap.value.docs.map(d => toTx(d, "Payment")));
         if (escrowSnap.status === "fulfilled") allTx.push(...escrowSnap.value.docs.map(d => toTx(d, "Escrow Transaction")));
-        if (coopTxSnap.status === "fulfilled") allTx.push(...coopTxSnap.value.docs.map(d => toTx(d, "Cooperative Transaction")));
-        if (walletSnap.status === "fulfilled") allTx.push(...walletSnap.value.docs.map(d => toTx(d, "Wallet Transaction")));
-        if (waveWdSnap.status === "fulfilled") allTx.push(...waveWdSnap.value.docs.map(d => toTx(d, "WAVE Withdrawal")));
 
         allTx
             .filter(tx => tx.amount > 0)
@@ -376,17 +373,16 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     totalLoansDisbursed = loanR[0].status === "fulfilled" ? (loanR[0].value.data().total ?? 0) : 0;
 
     try {
-        // Pull real transactions from actual payment collections (no orderBy — avoids missing-field drops)
-        const [escrowSnap, coopTxSnap, walletSnap, waveWdSnap] = await Promise.allSettled([
+        // PRIMARY: processedPayments = every Paystack webhook payment (all 50 real transactions)
+        // SECONDARY: escrow_transactions = marketplace escrow entries (created by marketplace_order handler)
+        const [processedSnap, escrowSnap] = await Promise.allSettled([
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).limit(200).get(),
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).limit(100).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).limit(100).get(),
-            db.collection(COLLECTIONS.WALLET_TRANSACTIONS).limit(100).get(),
-            db.collection(COLLECTIONS.WAVE_WITHDRAWALS).limit(100).get(),
         ]);
 
         const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot, typePrefix: string) => {
             const d = doc.data();
-            const ts = d.createdAt ?? d.requestedAt ?? d.timestamp ?? null;
+            const ts = d.processedAt ?? d.createdAt ?? d.requestedAt ?? d.timestamp ?? null;
             return {
                 id: doc.id,
                 type: d.type ?? d.action ?? typePrefix,
@@ -399,10 +395,8 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         };
 
         const all: ReturnType<typeof toTx>[] = [];
+        if (processedSnap.status === "fulfilled") all.push(...processedSnap.value.docs.map(d => toTx(d, "payment")));
         if (escrowSnap.status === "fulfilled") all.push(...escrowSnap.value.docs.map(d => toTx(d, "escrow")));
-        if (coopTxSnap.status === "fulfilled") all.push(...coopTxSnap.value.docs.map(d => toTx(d, "cooperative_transaction")));
-        if (walletSnap.status === "fulfilled") all.push(...walletSnap.value.docs.map(d => toTx(d, "wallet_transaction")));
-        if (waveWdSnap.status === "fulfilled") all.push(...waveWdSnap.value.docs.map(d => toTx(d, "wave_withdrawal")));
 
         all
             .filter(tx => tx.amount > 0)
