@@ -13,6 +13,7 @@ import {
     CheckCircle,
     XCircle,
     Clock,
+    ChevronDown,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase";
@@ -62,6 +63,10 @@ export default function AdminFinancePage() {
     const [failedTx, setFailedTx] = useState<FailedTransaction[]>([]);
     const [totalRevenue, setTotalRevenue] = useState(0);
     const [activeTab, setActiveTab] = useState<"successful" | "failed" | "abandoned">("successful");
+    const [visibleCount, setVisibleCount] = useState(50);
+
+    // Reset pagination when switching tabs
+    useEffect(() => { setVisibleCount(50); }, [activeTab]);
 
     // ── Real-time listener: processedPayments (all successful Paystack payments)
     useEffect(() => {
@@ -133,6 +138,10 @@ export default function AdminFinancePage() {
         activeTab === "successful" ? transactions :
         activeTab === "abandoned" ? abandonedTx :
         errorTx;
+
+    // Slice for rendering — full array used for CSV export
+    const visibleTx = displayedTx.slice(0, visibleCount);
+    const hasMore = visibleCount < displayedTx.length;
 
     function exportCsv() {
         const rows = displayedTx.map(t => [
@@ -265,7 +274,7 @@ export default function AdminFinancePage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {displayedTx.map((tx, i) => {
+                                {visibleTx.map((tx, i) => {
                                     const isFailed = activeTab !== "successful";
                                     const failed = tx as FailedTransaction;
                                     return (
@@ -324,6 +333,28 @@ export default function AdminFinancePage() {
                                      "No failed transactions"}
                                 </p>
                             </div>
+                        )}
+
+                        {/* Load More */}
+                        {hasMore && (
+                            <div className="flex flex-col items-center gap-2 py-6 border-t border-slate-100">
+                                <p className="text-xs text-slate-400">
+                                    Showing {visibleTx.length} of {displayedTx.length} transactions
+                                </p>
+                                <button
+                                    onClick={() => setVisibleCount(c => c + 50)}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-white border border-slate-200 hover:border-blue-400 hover:text-blue-600 text-slate-700 font-semibold rounded-xl shadow-sm hover:shadow transition-all"
+                                >
+                                    <ChevronDown className="w-4 h-4" />
+                                    Load 50 more
+                                </button>
+                            </div>
+                        )}
+
+                        {!hasMore && displayedTx.length > 0 && (
+                            <p className="text-center text-xs text-slate-400 py-4">
+                                All {displayedTx.length} transactions loaded
+                            </p>
                         )}
                     </div>
                 </div>
