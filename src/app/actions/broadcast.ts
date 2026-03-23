@@ -95,7 +95,9 @@ function buildEmailHtml(subject: string, body: string, recipientEmail?: string):
 async function collectRecipients(
     filters: BroadcastFilters
 ): Promise<{ name: string; email: string }[]> {
+    console.log("[Broadcast] collectRecipients called with filters:", JSON.stringify(filters));
     const db = getAdminDb();
+    console.log("[Broadcast] getAdminDb() succeeded");
     const recipients: Map<string, { name: string; email: string }> = new Map();
 
     const add = (email: string, name: string) => {
@@ -104,11 +106,18 @@ async function collectRecipients(
 
     switch (filters.audience) {
         case "all": {
+            console.log(`[Broadcast] Querying collection: '${COLLECTIONS.USERS}'`);
             const snap = await db.collection(COLLECTIONS.USERS).get();
+            console.log(`[Broadcast] 'all' audience: ${snap.size} docs found in '${COLLECTIONS.USERS}'`);
             snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
                 const u = d.data();
                 if (filters.state && u.state !== filters.state) return;
-                add(u.email || u.emailAddress, u.name || u.displayName || "User");
+                const resolvedEmail = u.email || u.emailAddress;
+                const resolvedName = u.fullName || u.name || u.displayName || "User";
+                if (!resolvedEmail) {
+                    console.log(`[Broadcast] Skipping user doc ${d.id} — no email field`);
+                }
+                add(resolvedEmail, resolvedName);
             });
             break;
         }
@@ -189,7 +198,9 @@ async function collectRecipients(
         }
     }
 
-    return Array.from(recipients.values());
+    const result = Array.from(recipients.values());
+    console.log(`[Broadcast] collectRecipients returning ${result.length} recipients`);
+    return result;
 }
 
 // ── Actions ────────────────────────────────────────────────────────────────
@@ -201,12 +212,15 @@ export async function previewBroadcastAction(
     filters: BroadcastFilters
 ): Promise<BroadcastPreviewResult> {
     try {
+        console.log("[Broadcast] previewBroadcastAction called");
         const recipients = await collectRecipients(filters);
+        console.log(`[Broadcast] preview result: ${recipients.length} recipients`);
         return {
             count: recipients.length,
             sample: recipients.slice(0, 3),
         };
     } catch (error: any) {
+        console.error("[Broadcast] previewBroadcastAction ERROR:", error);
         return { count: 0, sample: [], error: error.message };
     }
 }

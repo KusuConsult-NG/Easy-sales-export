@@ -23,19 +23,17 @@ export interface CreateAnnouncementState {
  * Get recipient emails based on segment
  */
 async function getRecipientEmails(segment: string): Promise<string[]> {
+    console.log(`[AdminComms] getRecipientEmails called with segment: '${segment}'`);
     try {
         const query = db.collection(COLLECTIONS.USERS);
         let snapshot;
 
-        // Simple segmentation based on roles or status
-        // Note: In a real app, you might want to paginate this or use a dedicated email service for large lists
         let emails: string[] = [];
 
         if (segment === 'cooperative') {
-            // 🐛 FIX: Fetch all members from cooperative_members collection directly
-            // This ensures we get members who have completed onboarding and paid, even if they aren't approved yet.
             const coopQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where('paymentStatus', '==', 'completed');
             const coopSnap = await coopQuery.get();
+            console.log(`[AdminComms] cooperative segment: ${coopSnap.size} docs found`);
             coopSnap.docs.forEach(doc => {
                 const data = doc.data();
                 if (data.email) {
@@ -43,7 +41,6 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 }
             });
         } else {
-            // Handle standard segment logic against 'users' collection
             let snapshot;
             switch (segment) {
                 case 'active':
@@ -56,8 +53,8 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                     snapshot = await query.where('roles', 'array-contains', 'seller').get();
                     break;
                 case 'wave': {
-                    // WAVE members are in wave_applications collection, not in users.roles
                     const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
+                    console.log(`[AdminComms] wave segment: ${waveSnap.size} docs found`);
                     waveSnap.docs.forEach(doc => {
                         const data = doc.data();
                         const email = data.email || data.userEmail;
@@ -71,17 +68,21 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                     break;
             }
 
+            console.log(`[AdminComms] segment '${segment}': ${snapshot.size} docs found in '${COLLECTIONS.USERS}'`);
             snapshot.docs.forEach(doc => {
                 const data = doc.data();
                 if (data.email) {
                     emails.push(data.email);
+                } else {
+                    console.log(`[AdminComms] User doc ${doc.id} has no 'email' field. Fields: ${Object.keys(data).join(', ')}`);
                 }
             });
         }
 
-        // Remove duplicates
+        console.log(`[AdminComms] Returning ${emails.length} emails (deduped: ${[...new Set(emails)].length})`);
         return [...new Set(emails)];
     } catch (error) {
+        console.error('[AdminComms] ERROR in getRecipientEmails:', error);
         logger.error('Error fetching recipient emails:', error);
         return [];
     }
@@ -111,6 +112,8 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         const recipients = formData.get('recipients') as string;
         const subject = formData.get('subject') as string;
         const body = formData.get('body') as string;
+
+        console.log(`[AdminComms] sendBulkEmailAction — recipients: '${recipients}', subject: '${subject?.substring(0, 50)}', body length: ${body?.length || 0}`);
 
         if (!recipients || !subject || !body) {
             return { success: false, error: 'All fields are required' };

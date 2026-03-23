@@ -25,6 +25,7 @@ import {
     sendBroadcastAction,
 } from "@/app/actions/broadcast";
 import type { BroadcastAudience, BroadcastFilters } from "@/app/actions/broadcast";
+import { diagnoseBroadcastAction } from "@/app/actions/diagnose-broadcast";
 import { useToast } from "@/contexts/ToastContext";
 
 const AUDIENCE_OPTIONS: { value: BroadcastAudience; label: string; desc: string }[] = [
@@ -92,6 +93,7 @@ export default function BroadcastComposePage() {
 
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState<{ sent: number; failed: number } | null>(null);
+    const [diagResult, setDiagResult] = useState<string | null>(null);
 
     const isSellerAudience = ["sellers", "wholesale_sellers", "retail_sellers"].includes(audience);
 
@@ -294,6 +296,15 @@ export default function BroadcastComposePage() {
                                 {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-4 h-4" />}
                                 {sending ? "Sending…" : "Send Broadcast"}
                             </button>
+                            <button
+                                onClick={async () => {
+                                    const r = await diagnoseBroadcastAction();
+                                    setDiagResult(JSON.stringify(r, null, 2));
+                                }}
+                                className="px-4 py-3 border border-amber-300 bg-amber-50 text-amber-800 font-semibold rounded-xl hover:bg-amber-100 transition text-xs"
+                            >
+                                🔍 Diagnose
+                            </button>
                         </div>
 
                         {/* Recipient estimate result */}
@@ -318,6 +329,12 @@ export default function BroadcastComposePage() {
                                     )}
                                 </div>
                             </div>
+                        )}
+
+                        {diagResult && (
+                            <pre className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 overflow-auto max-h-48 whitespace-pre-wrap">
+                                {diagResult}
+                            </pre>
                         )}
                     </div>
 
