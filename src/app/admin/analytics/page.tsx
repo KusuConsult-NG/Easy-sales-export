@@ -265,16 +265,23 @@ export default function AdminAnalyticsPage() {
                                     nameKey="module"
                                     cx="50%"
                                     cy="50%"
-                                    outerRadius={100}
-                                    label={({ name, percent }: any) => `${name} (${((percent ?? 0) * 100).toFixed(0)}%)`}
-                                    labelLine={false}
+                                    outerRadius={110}
+                                    label={false}
                                 >
                                     {(moduleUsage || []).map((_entry: any, index: number) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip contentStyle={tooltipStyle} />
-                                <Legend />
+                                <Tooltip
+                                    contentStyle={tooltipStyle}
+                                    formatter={(value: any, name: any) => [value, name]}
+                                />
+                                <Legend
+                                    iconType="circle"
+                                    formatter={(value) => (
+                                        <span style={{ color: "#475569", fontSize: 12 }}>{value}</span>
+                                    )}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
@@ -286,7 +293,7 @@ export default function AdminAnalyticsPage() {
                                 Recent Transactions
                             </h3>
                             <Link
-                                href="/admin/cooperatives/transactions"
+                                href="/admin/finance"
                                 className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium transition"
                             >
                                 View All
@@ -314,14 +321,14 @@ export default function AdminAnalyticsPage() {
                                                     {transaction.type || "Transaction"}
                                                 </p>
                                                 <p className="text-xs text-slate-500">
-                                                    {transaction.date
-                                                        ? new Date(transaction.date).toLocaleDateString("en-NG", {
+                                                    {(transaction.timestamp || transaction.date)
+                                                        ? new Date(transaction.timestamp || transaction.date).toLocaleDateString("en-NG", {
                                                             month: "short",
                                                             day: "numeric",
                                                             hour: "2-digit",
                                                             minute: "2-digit",
                                                         })
-                                                        : "N/A"}
+                                                        : "—"}
                                                 </p>
                                             </div>
                                         </div>

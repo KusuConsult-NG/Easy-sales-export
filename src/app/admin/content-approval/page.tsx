@@ -15,15 +15,17 @@ export default function ContentApprovalPage() {
     const [actionLoading, setActionLoading] = useState(false);
 
     const loadContent = useCallback(async () => {
-        // Delay synchronous state to satisfy React hydration effect rules
-        setTimeout(() => setLoading(true), 0);
-        const result = await getPendingContentAction();
-        if (result.success && result.data) {
-            setPendingItems(result.data);
-        } else {
-            toast.error(result.error || "Failed to load content");
+        setLoading(true);
+        try {
+            const result = await getPendingContentAction();
+            if (result.success && result.data) {
+                setPendingItems(result.data);
+            } else {
+                toast.error(result.error || "Failed to load content");
+            }
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }, []);
 
     useEffect(() => {
