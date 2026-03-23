@@ -727,7 +727,8 @@ export async function initiateAcademyPaymentAction(
                 amount: amount * 100, // Kobo
                 metadata: {
                     userId,
-                    purpose: "academy_registration",
+                    type: "academy_registration", // Required for webhook routing
+                    purpose: "academy_registration", // Kept for backward compat with verifyAcademyPaymentAction
                     plan, // Store the plan!
                 },
                 callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/payment/callback`,
