@@ -68,7 +68,7 @@ export default function AdminFinancePage() {
         // No orderBy — sorting in-memory to avoid dropping docs without that field index
         const q = query(
             collection(db, "processedPayments"),
-            limit(500)
+            limit(2000) // raised from 500 — we only have ~50 docs, but future-proofed
         );
         const unsub = onSnapshot(q, (snap) => {
             const txs: Transaction[] = snap.docs.map(doc => {
@@ -100,7 +100,7 @@ export default function AdminFinancePage() {
     useEffect(() => {
         const q = query(
             collection(db, "failedPayments"),
-            limit(500)
+            limit(5000) // raised from 500 — we have 1940+ docs, need to show all
         );
         const unsub = onSnapshot(q, (snap) => {
             const txs: FailedTransaction[] = snap.docs.map(doc => {

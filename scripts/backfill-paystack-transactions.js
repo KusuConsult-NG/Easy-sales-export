@@ -1,17 +1,17 @@
 /**
  * backfill-paystack-transactions.js
  *
- * Pulls all transactions from the Paystack API between Feb 25 and Mar 23 2026
- * and backfills them into Firestore:
- *   - charge.success  → processedPayments (doc ID = reference, idempotent)
- *   - failed          → failedPayments
- *   - abandoned       → failedPayments
+ * Fetches ALL historical transactions from Paystack (no date limit)
+ * and backfills into Firestore:
+ *   - status=success   → processedPayments (doc ID = reference, idempotent)
+ *   - status=failed    → failedPayments
+ *   - status=abandoned → failedPayments
  *
  * Usage:
  *   node scripts/backfill-paystack-transactions.js
  *
- * Safe to re-run — uses Paystack reference as Firestore doc ID so duplicates
- * are simply skipped (set with merge:false on existing docs).
+ * IDEMPOTENT: uses Paystack reference as Firestore doc ID.
+ * Running multiple times is safe — already-existing docs are skipped.
  */
 
 const path = require("path");
@@ -66,10 +66,6 @@ if (!PAYSTACK_SECRET_KEY) {
     process.exit(1);
 }
 
-// Date range: Feb 25, 2026 to Mar 23, 2026 (UTC)
-const FROM_DATE = "2026-02-25";
-const TO_DATE   = "2026-03-24"; // exclusive upper bound
-
 // ─── Paystack API Helper ─────────────────────────────────────────────────────
 function paystackGet(path) {
     return new Promise((resolve, reject) => {
@@ -95,43 +91,48 @@ function paystackGet(path) {
     });
 }
 
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 async function fetchAllTransactions() {
     const all = [];
     let page = 1;
     const perPage = 100;
+    let totalPages = null;
 
     while (true) {
-        const url = `/transaction?from=${FROM_DATE}&to=${TO_DATE}&perPage=${perPage}&page=${page}`;
-        console.log(`  Fetching page ${page}...`);
+        // No date filter — fetch ALL historical transactions
+        const url = `/transaction?perPage=${perPage}&page=${page}`;
+        process.stdout.write(`  Fetching page ${page}${totalPages ? `/${totalPages}` : ''}...`);
         const resp = await paystackGet(url);
 
-        if (!resp.status || !resp.data || resp.data.length === 0) break;
+        if (!resp.status || !resp.data) {
+            console.log(` ERROR: ${JSON.stringify(resp).substring(0, 200)}`);
+            break;
+        }
+        if (resp.data.length === 0) { console.log(' done.'); break; }
+
         all.push(...resp.data);
-        if (resp.data.length < perPage) break;
+
+        // Determine total pages from meta
+        const meta = resp.meta || {};
+        if (!totalPages && meta.pageCount) totalPages = meta.pageCount;
+        const total = meta.total || '?';
+        console.log(` got ${resp.data.length} (total so far: ${all.length}/${total})`);
+
+        if (resp.data.length < perPage || (totalPages && page >= totalPages)) break;
         page++;
+        await sleep(250); // stay within Paystack rate limit
     }
     return all;
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-async function main() {
-    console.log("🔍 Fetching transactions from Paystack API...");
-    console.log(`   Date range: ${FROM_DATE} → ${TO_DATE}\n`);
-
-    const transactions = await fetchAllTransactions();
-    console.log(`📊 Found ${transactions.length} total transactions from Paystack\n`);
-
-    let successCount = 0;
-    let failedCount = 0;
-    let abandonedCount = 0;
-    let skippedCount = 0;
-
-    for (const tx of transactions) {
+async function processBatch(txList, successCount, failedCount, abandonedCount, skippedCount) {
+    const tasks = txList.map(async (tx) => {
         const reference = tx.reference;
-        const amount = tx.amount / 100; // kobo → naira
-        const status = tx.status; // "success", "failed", "abandoned"
+        const amount = tx.amount / 100;
+        const status = tx.status;
         const metadata = tx.metadata || {};
-        const userId = metadata.userId || tx.customer?.email || null;
+        const userId = metadata.userId || null;
         const type = metadata.type || null;
         const channel = tx.channel || null;
         const currency = tx.currency || "NGN";
@@ -141,129 +142,102 @@ async function main() {
         if (status === "success") {
             const ref = db.collection("processedPayments").doc(reference);
             const existing = await ref.get();
-            if (existing.exists) {
-                console.log(`  ⏭  SKIP (already exists): ${reference} — ${type}`);
-                skippedCount++;
-                continue;
-            }
-
+            if (existing.exists) { skippedCount.v++; return; }
             await ref.set({
                 reference,
                 type: type || "unknown",
-                userId: userId || null,
+                userId,
                 amount,
                 plan: metadata.plan || null,
                 tier: metadata.membershipTier || null,
                 exportId: metadata.exportId || null,
-                channel,
-                currency,
+                channel, currency,
                 status: "completed",
                 processedAt: paidAt ? new Date(paidAt) : FieldValue.serverTimestamp(),
+                customerEmail: tx.customer?.email || null,
+                customerName: tx.customer?.first_name ? `${tx.customer.first_name} ${tx.customer.last_name || ''}`.trim() : null,
                 source: "paystack_backfill",
                 paystackMetadata: metadata,
             });
-            console.log(`  ✅ processedPayments: ${reference} — ${type || "unknown"} — ₦${amount}`);
-            successCount++;
+            successCount.v++;
 
-            // Also backfill academy_applications if academy_registration
+            // Auto-create academy_applications if needed
             if (type === "academy_registration" && userId) {
                 try {
-                    const applicationId = `BACKFILL-ACADEMY-${reference}`;
-                    const appRef = db.collection("academy_applications").doc(applicationId);
-                    const appExisting = await appRef.get();
-                    if (!appExisting.exists) {
-                        const userSnap = await db.collection("users").doc(userId).get();
-                        const userData = userSnap.data() || {};
+                    const appRef = db.collection("academy_applications").doc(`BACKFILL-ACADEMY-${reference}`);
+                    if (!(await appRef.get()).exists) {
+                        const userData = (await db.collection("users").doc(userId).get()).data() || {};
                         await appRef.set({
-                            userId,
-                            applicationId,
-                            personalInfo: {
-                                fullName: userData.fullName || userData.name || "Unknown",
-                                email: userData.email || "Unknown",
-                                phone: userData.phone || userData.phoneNumber || "",
-                            },
-                            education: {
-                                educationLevel: "Not provided (backfilled from Paystack)",
-                                fieldOfStudy: "Not provided",
-                            },
-                            status: "pending",
-                            paymentStatus: "completed",
-                            paymentReference: reference,
-                            paymentAmount: amount,
+                            userId, applicationId: `BACKFILL-ACADEMY-${reference}`,
+                            personalInfo: { fullName: userData.fullName || userData.name || "Unknown", email: userData.email || "Unknown", phone: userData.phone || "" },
+                            education: { educationLevel: "Not provided (backfilled)", fieldOfStudy: "Not provided" },
+                            status: "pending", paymentStatus: "completed",
+                            paymentReference: reference, paymentAmount: amount,
                             plan: (metadata.plan || "foundation").toLowerCase(),
                             submittedAt: paidAt ? new Date(paidAt) : FieldValue.serverTimestamp(),
                             source: "paystack_backfill",
                         });
-                        console.log(`     📋 academy_applications created for ${userId}`);
                     }
-                } catch (e) {
-                    console.warn(`     ⚠️  academy_applications create failed for ${reference}:`, e.message);
-                }
+                } catch (e) { /* non-blocking */ }
             }
 
-        } else if (status === "failed") {
+        } else if (status === "failed" || status === "abandoned") {
             const ref = db.collection("failedPayments").doc(reference);
             const existing = await ref.get();
-            if (existing.exists) {
-                skippedCount++;
-                console.log(`  ⏭  SKIP failed (exists): ${reference}`);
-                continue;
-            }
+            if (existing.exists) { skippedCount.v++; return; }
             await ref.set({
-                reference,
-                type: type || "unknown",
-                userId: userId || null,
-                amount,
-                status: "failed",
-                gatewayResponse,
-                channel,
-                currency,
+                reference, type: type || "unknown", userId, amount,
+                status: status === "abandoned" ? "abandoned" : "failed",
+                gatewayResponse: status === "abandoned" ? "Customer did not complete payment" : gatewayResponse,
+                channel, currency,
                 failedAt: paidAt ? new Date(paidAt) : FieldValue.serverTimestamp(),
-                paystackEvent: "charge.failed",
-                source: "paystack_backfill",
-                metadata,
+                abandonedAt: status === "abandoned" ? (paidAt ? new Date(paidAt) : FieldValue.serverTimestamp()) : null,
+                customerEmail: tx.customer?.email || null,
+                paystackEvent: status === "abandoned" ? "charge.abandoned" : "charge.failed",
+                source: "paystack_backfill", metadata,
             });
-            console.log(`  ❌ failedPayments: ${reference} — ₦${amount}`);
-            failedCount++;
-
-        } else if (status === "abandoned") {
-            const ref = db.collection("failedPayments").doc(reference);
-            const existing = await ref.get();
-            if (existing.exists) {
-                skippedCount++;
-                console.log(`  ⏭  SKIP abandoned (exists): ${reference}`);
-                continue;
-            }
-            await ref.set({
-                reference,
-                type: type || "unknown",
-                userId: userId || null,
-                amount,
-                status: "abandoned",
-                gatewayResponse: "Customer did not complete payment",
-                channel,
-                currency,
-                abandonedAt: paidAt ? new Date(paidAt) : FieldValue.serverTimestamp(),
-                failedAt: paidAt ? new Date(paidAt) : FieldValue.serverTimestamp(),
-                paystackEvent: "charge.abandoned",
-                source: "paystack_backfill",
-                metadata,
-            });
-            console.log(`  🕐 failedPayments (abandoned): ${reference} — ₦${amount}`);
-            abandonedCount++;
+            if (status === "abandoned") abandonedCount.v++;
+            else failedCount.v++;
         } else {
-            console.log(`  ⚠️  UNKNOWN STATUS "${status}": ${reference} — skipping`);
-            skippedCount++;
+            skippedCount.v++;
         }
+    });
+
+    // Process 20 at a time to avoid hammering Firestore
+    const BATCH = 20;
+    for (let i = 0; i < tasks.length; i += BATCH) {
+        await Promise.all(tasks.slice(i, i + BATCH));
+    }
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
+async function main() {
+    console.log("🚀 Paystack → Firestore Full Historical Backfill");
+    console.log(`   Fetching ALL transactions (no date limit)...\n`);
+
+    const transactions = await fetchAllTransactions();
+    console.log(`\n📊 Total fetched from Paystack: ${transactions.length}\n`);
+
+    const successCount = { v: 0 };
+    const failedCount  = { v: 0 };
+    const abandonedCount = { v: 0 };
+    const skippedCount = { v: 0 };
+
+    // Process in pages of 100 to show progress
+    const PAGE = 100;
+    for (let i = 0; i < transactions.length; i += PAGE) {
+        const chunk = transactions.slice(i, i + PAGE);
+        await processBatch(chunk, successCount, failedCount, abandonedCount, skippedCount);
+        console.log(`  Processed ${Math.min(i + PAGE, transactions.length)}/${transactions.length} ` +
+            `| ✅ ${successCount.v} success | ❌ ${failedCount.v} failed | 🔄 ${abandonedCount.v} abandoned | ⏭ ${skippedCount.v} skipped`);
     }
 
     console.log("\n" + "═".repeat(60));
     console.log("✨ Backfill Complete:");
-    console.log(`   ✅ Successful  → processedPayments : ${successCount}`);
-    console.log(`   ❌ Failed      → failedPayments    : ${failedCount}`);
-    console.log(`   🕐 Abandoned   → failedPayments    : ${abandonedCount}`);
-    console.log(`   ⏭  Skipped (already existed)       : ${skippedCount}`);
-    console.log(`   📊 Total Paystack transactions      : ${transactions.length}`);
+    console.log(`   ✅ Written to processedPayments : ${successCount.v}`);
+    console.log(`   ❌ Written to failedPayments    : ${failedCount.v + abandonedCount.v} (${failedCount.v} failed + ${abandonedCount.v} abandoned)`);
+    console.log(`   ⏭  Skipped (already existed)   : ${skippedCount.v}`);
+    console.log(`   📊 Total Paystack transactions  : ${transactions.length}`);
     console.log("═".repeat(60));
 }
 
