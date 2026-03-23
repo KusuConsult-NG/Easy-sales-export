@@ -7,7 +7,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendBatchEmailNotifications } from "@/lib/email-notifications";
@@ -47,16 +46,15 @@ function buildEmailHtml(subject: string, body: string, recipientEmail?: string):
 
 export async function POST(req: NextRequest) {
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
         }
 
-        const { session } = sessionResult;
         const db = getAdminDb();
 
         // Verify admin role
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id!).get();
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         const roles = userData?.roles || [];
         if (!roles.includes("admin") && !roles.includes("super_admin")) {
