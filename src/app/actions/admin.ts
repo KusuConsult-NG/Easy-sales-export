@@ -1962,12 +1962,13 @@ export async function getAcademyApplicationsAction(
             // Single-field filter only — avoids composite index requirement
             const filteredQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", statusFilter)
-                .limit(200);
+                .limit(500);
             snapshot = await filteredQuery.get();
         } else {
+            // IMPORTANT: No orderBy here — Firestore silently excludes docs where
+            // 'submittedAt' is null/missing. We sort in-memory below instead.
             const allQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .orderBy("submittedAt", "desc")
-                .limit(200);
+                .limit(500);
             snapshot = await allQuery.get();
         }
 
@@ -1983,7 +1984,7 @@ export async function getAcademyApplicationsAction(
                     ? submittedRaw.toDate().toISOString()
                     : submittedRaw instanceof Date
                         ? submittedRaw.toISOString()
-                        : new Date().toISOString(),
+                        : new Date(0).toISOString(),
                 reviewedAt: reviewedRaw?.toDate
                     ? reviewedRaw.toDate().toISOString()
                     : reviewedRaw instanceof Date
