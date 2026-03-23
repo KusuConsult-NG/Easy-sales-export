@@ -104,9 +104,9 @@ export async function getCooperativeStatsAction(): Promise<{
         const transactionsSnap = await txnQuery.get();
         const transactions = transactionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-        // Calculate contribution totals
+        // Calculate contribution totals (contributions + membership registration fees)
         const contributionTxns = transactions.filter(
-            (t: any) => t.type === "contribution" && t.status === "completed"
+            (t: any) => (t.type === "contribution" || t.type === "membership_registration") && t.status === "completed"
         );
         const totalContributions = contributionTxns.reduce(
             (sum: number, t: any) => sum + (t.amount || 0),
@@ -324,7 +324,7 @@ export async function updateMemberStatusAction(
 // ============================================================================
 
 export async function getAllTransactionsAction(options?: {
-    type?: "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings";
+    type?: "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
     status?: "all" | "pending" | "completed" | "failed";
     limit?: number;
 }): Promise<{

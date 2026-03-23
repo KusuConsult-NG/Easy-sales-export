@@ -21,7 +21,7 @@ import { formatCurrency } from "@/lib/utils";
 import { getAllTransactionsAction } from "@/app/actions/cooperative-admin";
 import { toast } from "sonner";
 
-type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings";
+type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
 type TransactionStatus = "all" | "pending" | "completed" | "failed";
 
 interface Transaction {
@@ -107,6 +107,8 @@ export default function AdminTransactionsPage() {
                 return "bg-orange-100 text-orange-700";
             case "fixed_savings":
                 return "bg-emerald-100 text-emerald-700";
+            case "membership_registration":
+                return "bg-violet-100 text-violet-700";
             default:
                 return "bg-gray-100 text-gray-700";
         }
@@ -252,6 +254,7 @@ export default function AdminTransactionsPage() {
                                 className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                             >
                                 <option value="all">All Types</option>
+                                <option value="membership_registration">Membership Registration</option>
                                 <option value="contribution">Contribution</option>
                                 <option value="withdrawal">Withdrawal</option>
                                 <option value="loan">Loan</option>
