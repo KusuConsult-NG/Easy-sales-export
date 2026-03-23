@@ -25,7 +25,10 @@ export interface User {
     phone?: string;
     gender?: "male" | "female"; // Required for WAVE participant validation
     roles: UserRole[]; // Multi-role support (changed from single role)
+    /** @deprecated Use `isVerified` instead. Kept for backward compatibility with old docs. */
     verified: boolean;
+    /** Canonical verification field — always read this one in application code. */
+    isVerified?: boolean;
 
     // Cooperative
     cooperativeId?: string;
