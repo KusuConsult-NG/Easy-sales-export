@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Plus, GripVertical, Trash2, Edit2, PlayCircle, FileText, HelpCircle, Loader2, UploadCloud } from "lucide-react";
+import { Trash2, Plus, GripVertical, FileText, PlayCircle, HelpCircle, Upload, Save, Edit2, Loader2, ArrowLeft, Settings, UploadCloud } from "lucide-react";
 import { getCourseByIdAction, updateCourseAction, updateCourseModulesAction, type Course, type CourseModule, type Lesson, type Quiz } from "@/app/actions/academy";
 import { toast } from "sonner";
 import Modal from "@/components/ui/Modal";
@@ -31,7 +31,20 @@ export default function CourseManagerPage() {
     const [modules, setModules] = useState<CourseModuleWithState[]>([]);
 
     const [editingLesson, setEditingLesson] = useState<{ moduleId: string; lesson: LessonWithState } | null>(null);
+    const [editingModule, setEditingModule] = useState<CourseModuleWithState | null>(null);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [isCourseSettingsOpen, setIsCourseSettingsOpen] = useState(false);
+    const [courseDetailsForm, setCourseDetailsForm] = useState<{
+        title: string;
+        description: string;
+        instructor: string;
+        tier: "free" | "foundation" | "standard" | "elite";
+    }>({
+        title: "",
+        description: "",
+        instructor: "",
+        tier: "free",
+    });
     const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
     useEffect(() => {
@@ -45,7 +58,14 @@ export default function CourseManagerPage() {
             if (data) {
                 setCourse(data);
                 // Cast the modules to include the optional UI state properties
-                setModules((data.modules || []) as CourseModuleWithState[]);
+                const processedModules = (data.modules || []).map(m => ({ ...m, isExpanded: false })) as CourseModuleWithState[];
+                setModules(processedModules.sort((a, b) => a.order - b.order));
+                setCourseDetailsForm({
+                    title: data.title || "",
+                    description: data.description || "",
+                    instructor: data.instructor || "",
+                    tier: (data.tier || "free") as "free" | "foundation" | "standard" | "elite"
+                });
             } else {
                 toast.error("Course not found");
                 router.push("/admin/academy");
@@ -64,12 +84,9 @@ export default function CourseManagerPage() {
     };
 
     function handleAddModule() {
-        const title = prompt("Enter Module Title:");
-        if (!title) return;
-
         const newModule: CourseModule = {
             id: `m-${Date.now()}`,
-            title,
+            title: "New Module (Click Edit to Rename)",
             description: "",
             lessons: [],
             order: modules.length,
@@ -77,19 +94,17 @@ export default function CourseManagerPage() {
         const newModules = [...modules, newModule];
         setModules(newModules);
         saveModules(newModules);
+        toast.success("Module added. You can now edit its title.");
     };
 
     const handleAddLesson = (moduleId: string) => {
-        const title = prompt("Enter Lesson Title:");
-        if (!title) return;
-
         const newModules = modules.map(m => {
             if (m.id === moduleId) {
                 return {
                     ...m,
                     lessons: [...m.lessons, {
                         id: `l-${Date.now()}`,
-                        title,
+                        title: "New Lesson (Click Edit to Rename)",
                         content: "",
                         duration: "00:00",
                         order: m.lessons.length
@@ -100,25 +115,40 @@ export default function CourseManagerPage() {
         });
         setModules(newModules);
         saveModules(newModules);
+        toast.success("Lesson added. You can now edit its content.");
     };
 
     const handleDeleteModule = (moduleId: string) => {
-        if (!confirm("Delete this module and all its lessons?")) return;
-        const newModules = modules.filter(m => m.id !== moduleId);
-        setModules(newModules);
-        saveModules(newModules);
+        toast("Delete this module and all its lessons?", {
+            action: {
+                label: "Delete",
+                onClick: () => {
+                    const newModules = modules.filter(m => m.id !== moduleId);
+                    setModules(newModules);
+                    saveModules(newModules);
+                }
+            },
+            cancel: { label: "Cancel", onClick: () => {} }
+        });
     };
 
     const handleDeleteLesson = (moduleId: string, lessonId: string) => {
-        if (!confirm("Delete this lesson?")) return;
-        const newModules = modules.map(m => {
-            if (m.id === moduleId) {
-                return { ...m, lessons: m.lessons.filter(l => l.id !== lessonId) };
-            }
-            return m;
+        toast("Delete this lesson?", {
+            action: {
+                label: "Delete",
+                onClick: () => {
+                    const newModules = modules.map(m => {
+                        if (m.id === moduleId) {
+                            return { ...m, lessons: m.lessons.filter(l => l.id !== lessonId) };
+                        }
+                        return m;
+                    });
+                    setModules(newModules);
+                    saveModules(newModules);
+                }
+            },
+            cancel: { label: "Cancel", onClick: () => {} }
         });
-        setModules(newModules);
-        saveModules(newModules);
     };
 
     const handleEditLesson = (moduleId: string, lesson: LessonWithState) => {
@@ -142,6 +172,33 @@ export default function CourseManagerPage() {
         setIsUploadModalOpen(false);
         setEditingLesson(null);
     };
+
+    async function handleSaveModuleEdit() {
+        if (!editingModule) return;
+        const newModules = modules.map(m => m.id === editingModule.id ? editingModule : m);
+        setModules(newModules);
+        await saveModules(newModules);
+        setEditingModule(null);
+    }
+
+    async function handleSaveCourseDetails() {
+        if (!course) return;
+        setIsLoading(true);
+        try {
+            const result = await updateCourseAction(courseId, courseDetailsForm);
+            if (result.success) {
+                setCourse({ ...course, ...courseDetailsForm });
+                setIsCourseSettingsOpen(false);
+                toast.success("Course details updated successfully");
+            } else {
+                toast.error(result.error || "Failed to update course details");
+            }
+        } catch (error) {
+            toast.error("An error occurred while updating course details");
+        } finally {
+            setIsLoading(false);
+        }
+    }
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'document') => {
         const file = e.target.files?.[0];
@@ -222,15 +279,16 @@ export default function CourseManagerPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <Link
-                            href={`/admin/academy/${courseId}/edit`}
-                            className="px-4 py-2 bg-white border border-slate-200 text-slate-900 rounded-lg font-medium hover:bg-slate-50 transition"
+                        <button
+                            onClick={() => setIsCourseSettingsOpen(true)}
+                            className="px-4 py-2 bg-white border border-slate-200 text-slate-900 rounded-lg font-medium hover:bg-slate-50 transition flex items-center gap-2"
                         >
+                            <Settings className="w-4 h-4" />
                             Edit Details
-                        </Link>
-                        <button className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium shadow-lg shadow-primary/20 flex items-center gap-2 transition">
+                        </button>
+                        <button className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium shadow-lg shadow-primary/20 flex items-center gap-2 transition" onClick={() => toast.success("All changes automatically saved!")}>
                             <Save className="w-4 h-4" />
-                            Save Changes
+                            Saved
                         </button>
                     </div>
                 </div>
@@ -258,7 +316,10 @@ export default function CourseManagerPage() {
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <button onClick={() => handleDeleteModule(module.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-lg transition">
+                                    <button onClick={() => setEditingModule(module)} className="p-2 hover:bg-blue-100 text-blue-500 rounded-lg transition" title="Edit Module Name">
+                                        <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDeleteModule(module.id)} className="p-2 hover:bg-red-100 text-red-500 rounded-lg transition" title="Delete Module">
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                     <button onClick={() => toggleModule(module.id)} className="p-2 hover:bg-slate-200 rounded-lg transition text-sm font-medium">
@@ -330,6 +391,18 @@ export default function CourseManagerPage() {
                                     onChange={(e) => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, title: e.target.value } } : null)}
                                     className="w-full px-4 py-2 border rounded-lg"
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Lesson Type</label>
+                                <select
+                                    value={editingLesson.lesson.type || "video"}
+                                    onChange={(e) => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, type: e.target.value as "video" | "text" | "quiz" } } : null)}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                >
+                                    <option value="video">Video Lesson</option>
+                                    <option value="text">Text/Document Lesson</option>
+                                    <option value="quiz">Interactive Quiz</option>
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Duration (e.g., "10:00")</label>
@@ -429,6 +502,115 @@ export default function CourseManagerPage() {
                         </div>
                     </Modal>
                 )}
+
+                {/* Module Edit Modal */}
+                {editingModule && (
+                    <Modal
+                        isOpen={!!editingModule}
+                        onClose={() => setEditingModule(null)}
+                        title="Edit Module Details"
+                        maxWidth="md"
+                    >
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Module Title</label>
+                                <input
+                                    type="text"
+                                    value={editingModule.title}
+                                    onChange={(e) => setEditingModule({ ...editingModule, title: e.target.value })}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
+                                <textarea
+                                    value={editingModule.description || ""}
+                                    onChange={(e) => setEditingModule({ ...editingModule, description: e.target.value })}
+                                    className="w-full px-4 py-2 border rounded-lg h-24"
+                                />
+                            </div>
+                            <div className="pt-4 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setEditingModule(null)}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveModuleEdit}
+                                    className="px-6 py-2 bg-primary text-white rounded-lg font-medium shadow shadow-primary/20 hover:bg-primary/90 transition"
+                                >
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+                )}
+
+                {/* Course Settings Modal */}
+                <Modal
+                    isOpen={isCourseSettingsOpen}
+                    onClose={() => setIsCourseSettingsOpen(false)}
+                    title="Edit Course Details"
+                    maxWidth="md"
+                >
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Course Title</label>
+                            <input
+                                type="text"
+                                value={courseDetailsForm.title}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, title: e.target.value })}
+                                className="w-full px-4 py-2 border rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Instructor</label>
+                            <input
+                                type="text"
+                                value={courseDetailsForm.instructor}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, instructor: e.target.value })}
+                                className="w-full px-4 py-2 border rounded-lg"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                            <textarea
+                                value={courseDetailsForm.description}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, description: e.target.value })}
+                                className="w-full px-4 py-2 border rounded-lg h-24"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Tier Access</label>
+                            <select
+                                value={courseDetailsForm.tier}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, tier: e.target.value as "free" | "foundation" | "standard" | "elite" })}
+                                className="w-full px-4 py-2 border rounded-lg"
+                            >
+                                <option value="free">Free (Open to All)</option>
+                                <option value="foundation">Foundation</option>
+                                <option value="standard">Standard</option>
+                                <option value="elite">Elite</option>
+                            </select>
+                        </div>
+                        <div className="pt-4 flex justify-end gap-3 border-t">
+                            <button
+                                onClick={() => setIsCourseSettingsOpen(false)}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveCourseDetails}
+                                disabled={isLoading}
+                                className="px-6 py-2 bg-primary text-white rounded-lg font-medium shadow shadow-primary/20 hover:bg-primary/90 transition flex items-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Details"}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
             </div>
         </div>
     );
