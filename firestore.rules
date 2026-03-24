@@ -435,8 +435,8 @@ service cloud.firestore {
     
     match /course_enrollments/{enrollmentId} {
       allow read: if isOwner(resource.data.userId) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if false;
+      allow update: if false;
       allow delete: if isAdmin();
     }
     

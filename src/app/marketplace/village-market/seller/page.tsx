@@ -50,7 +50,7 @@ function AddProductModal({
         availableQuantity: "",
     });
 
-    const handle = async () => {
+    async function handle() {
         if (!form.title || !form.price) return showToast("Title and price are required", "error");
         setLoading(true);
         const res = await addFlashSaleProductAction({
@@ -159,13 +159,14 @@ export default function VillageMarketSellerHubPage() {
         if (status === "unauthenticated") router.push("/auth/signin");
     }, [status, router]);
 
-    const load = async () => {
+    async function load() {
         setLoading(true);
         const data = await getActiveVillageMarketEventsAction();
         setEvents(data);
         setLoading(false);
     };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { load(); }, []);
 
     const handleJoin = async (eventId: string) => {

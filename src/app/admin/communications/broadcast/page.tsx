@@ -17,7 +17,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-    Megaphone, Users, MapPin, Mail, Eye, Send, Loader2,
+    Megaphone, Users, MapPin, Mail, Eye, Send, Loader2, Upload,
     ChevronLeft, AlertTriangle, CheckCircle, Info,
 } from "lucide-react";
 import {
@@ -37,6 +37,7 @@ const AUDIENCE_OPTIONS: { value: BroadcastAudience; label: string; desc: string 
     { value: "cooperative_members", label: "Cooperative Members", desc: "Active cooperative members" },
     { value: "wave_applicants", label: "WAVE Applicants", desc: "WAVE program registrants" },
     { value: "wave_briefing_registrants", label: "WAVE Briefing Registrants", desc: "Users registered for WAVE briefing sessions" },
+    { value: "csv_upload", label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },
 ];
 
 const SELLER_STATUS_OPTIONS = [
@@ -85,6 +86,8 @@ export default function BroadcastComposePage() {
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
     const [showPreview, setShowPreview] = useState(false);
+    const [csvEmails, setCsvEmails] = useState<string[]>([]);
+    const [csvName, setCsvName] = useState("");
 
     const [estimating, setEstimating] = useState(false);
     const [recipientCount, setRecipientCount] = useState<number | null>(null);
@@ -100,6 +103,7 @@ export default function BroadcastComposePage() {
         audience,
         state: stateFilter || undefined,
         sellerStatus: isSellerAudience ? sellerStatus : undefined,
+        csvEmails: audience === "csv_upload" ? csvEmails : undefined,
     });
 
     const handleEstimate = async () => {
@@ -137,7 +141,7 @@ export default function BroadcastComposePage() {
         setSending(false);
     };
 
-    const canProceed = subject.trim().length > 0 && body.trim().length > 3;
+    const canProceed = subject.trim().length > 0 && body.trim().length > 3 && (audience !== "csv_upload" || csvEmails.length > 0);
 
     if (step === "done" && result) {
         return (
@@ -226,32 +230,72 @@ export default function BroadcastComposePage() {
                             </div>
                         </div>
 
-                        {/* Filters */}
-                        <div className="bg-white border border-slate-200 rounded-2xl p-6">
-                            <div className="flex items-center gap-2 mb-4">
-                                <MapPin className="w-5 h-5 text-slate-600" />
-                                <h2 className="font-bold text-slate-900">Optional Filters</h2>
-                            </div>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">State (leave blank for all states)</label>
-                                    <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setRecipientCount(null); }}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
-                                        <option value="">All States</option>
-                                        {NIGERIAN_STATES.map((s) => <option key={s}>{s}</option>)}
-                                    </select>
+                        {/* Filters or CSV Upload */}
+                        {audience === "csv_upload" ? (
+                            <div className="bg-white border border-slate-200 rounded-2xl p-6">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Upload className="w-5 h-5 text-slate-600" />
+                                    <h2 className="font-bold text-slate-900">Upload CSV</h2>
                                 </div>
-                                {isSellerAudience && (
+                                <div>
+                                    <input 
+                                        type="file" 
+                                        accept=".csv,.txt"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) {
+                                                setCsvEmails([]);
+                                                setCsvName("");
+                                                return;
+                                            }
+                                            setCsvName(file.name);
+                                            const reader = new FileReader();
+                                            reader.onload = (event) => {
+                                                const text = event.target?.result as string;
+                                                const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi;
+                                                const matches = text.match(emailRegex) || [];
+                                                const uniqueEmails = Array.from(new Set(matches.map(m => m.toLowerCase())));
+                                                setCsvEmails(uniqueEmails);
+                                                setRecipientCount(null);
+                                            };
+                                            reader.readAsText(file);
+                                        }}
+                                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border file:border-slate-200 file:text-sm file:font-semibold file:bg-slate-50 file:text-slate-700 hover:file:bg-slate-100 cursor-pointer"
+                                    />
+                                    {csvName && (
+                                        <p className="mt-3 text-sm text-slate-600">
+                                            Found <span className="font-bold text-green-700">{csvEmails.length}</span> valid email {csvEmails.length === 1 ? "address" : "addresses"}.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-white border border-slate-200 rounded-2xl p-6">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <MapPin className="w-5 h-5 text-slate-600" />
+                                    <h2 className="font-bold text-slate-900">Optional Filters</h2>
+                                </div>
+                                <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Seller Status</label>
-                                        <select value={sellerStatus} onChange={(e) => { setSellerStatus(e.target.value as any); setRecipientCount(null); }}
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">State (leave blank for all states)</label>
+                                        <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setRecipientCount(null); }}
                                             className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
-                                            {SELLER_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                            <option value="">All States</option>
+                                            {NIGERIAN_STATES.map((s) => <option key={s}>{s}</option>)}
                                         </select>
                                     </div>
-                                )}
+                                    {isSellerAudience && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Seller Status</label>
+                                            <select value={sellerStatus} onChange={(e) => { setSellerStatus(e.target.value as any); setRecipientCount(null); }}
+                                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                                {SELLER_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Compose */}
                         <div className="bg-white border border-slate-200 rounded-2xl p-6">

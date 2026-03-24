@@ -45,9 +45,10 @@ export default function SellerDashboardPage() {
         } else if (status === "authenticated") {
             loadSellerData();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status]);
 
-    const loadSellerData = async () => {
+    async function loadSellerData() {
         setLoading(true);
         const [productsRes, verificationRes] = await Promise.all([
             getSellerProductsAction(),

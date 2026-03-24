@@ -20,11 +20,11 @@ const db = getFirestore();
 async function main() {
   try {
     const membersSnap = await db.collection("cooperative_members").get();
-    let totalDocs = membersSnap.size;
+    const totalDocs = membersSnap.size;
     let paidMembers = 0;
     
     const usersSnap = await db.collection("users").where("roles", "array-contains", "cooperative_member").get();
-    let approvedMembers = usersSnap.size;
+    const approvedMembers = usersSnap.size;
 
     console.log(`Total cooperative_member docs: ${totalDocs}`);
     

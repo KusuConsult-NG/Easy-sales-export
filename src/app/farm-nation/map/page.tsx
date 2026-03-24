@@ -80,9 +80,10 @@ export default function FarmNationMapPage() {
 
     useEffect(() => {
         applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [listings, filters, searchQuery]);
 
-    const fetchListings = async () => {
+    async function fetchListings() {
         setIsLoading(true);
         try {
             const response = await fetch("/api/farm-nation/listings");
@@ -102,7 +103,7 @@ export default function FarmNationMapPage() {
         }
     };
 
-    const applyFilters = () => {
+    function applyFilters() {
         let filtered = listings;
 
         if (filters.state) {
@@ -141,7 +142,7 @@ export default function FarmNationMapPage() {
         setFilteredListings(filtered);
     };
 
-    const resetFilters = () => {
+    function resetFilters() {
         setFilters({
             state: "",
             category: "",

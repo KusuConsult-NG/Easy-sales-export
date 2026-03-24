@@ -50,7 +50,7 @@ export default function VillageMarketEventPage() {
     const [addingProduct, setAddingProduct] = useState(false);
     const [productForm, setProductForm] = useState({ title: "", price: "", flashPrice: "", unit: "", availableQuantity: "" });
 
-    const loadEvent = async () => {
+    async function loadEvent() {
         setLoading(true);
         const res = await getVillageMarketEventAction(eventId);
         setEvent(res.event);
@@ -58,9 +58,10 @@ export default function VillageMarketEventPage() {
         setLoading(false);
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { loadEvent(); }, [eventId]);
 
-    const handleJoin = async () => {
+    async function handleJoin() {
         setJoining(true);
         const res = await joinVillageMarketEventAction(eventId);
         setJoining(false);
@@ -72,7 +73,7 @@ export default function VillageMarketEventPage() {
         }
     };
 
-    const handleAddProduct = async () => {
+    async function handleAddProduct() {
         if (!productForm.title || !productForm.price) return showToast("Title and price are required", "error");
         setAddingProduct(true);
         const res = await addFlashSaleProductAction({

@@ -25,12 +25,14 @@ export type BroadcastAudience =
     | "wave_applicants"
     | "wave_briefing_registrants"
     | "wholesale_sellers"
-    | "retail_sellers";
+    | "retail_sellers"
+    | "csv_upload";
 
 export interface BroadcastFilters {
     audience: BroadcastAudience;
     state?: string; // e.g. 'Lagos'
     sellerStatus?: "pending" | "approved" | "suspended"; // only for seller audiences
+    csvEmails?: string[]; // Array of emails extracted from CSV upload
 }
 
 export interface BroadcastLog {
@@ -105,6 +107,14 @@ async function collectRecipients(
     };
 
     switch (filters.audience) {
+        case "csv_upload": {
+            if (filters.csvEmails && filters.csvEmails.length > 0) {
+                for (const email of filters.csvEmails) {
+                    add(email.trim(), "CSV User");
+                }
+            }
+            break;
+        }
         case "all": {
             console.log(`[Broadcast] Querying collection: '${COLLECTIONS.USERS}'`);
             const snap = await db.collection(COLLECTIONS.USERS).get();
@@ -256,7 +266,7 @@ export async function sendBroadcastAction(
 
         let successCount = 0;
         let failCount = 0;
-        let excludedCount = recipients.length - validRecipients.length;
+        const excludedCount = recipients.length - validRecipients.length;
 
         // Chunk into batches of 100 (Resend batch API limit is 100 emails per request)
         const BATCH = 100;
@@ -294,12 +304,17 @@ export async function sendBroadcastAction(
         const status: BroadcastLog["status"] =
             failCount === 0 ? "done" : successCount === 0 ? "partial" : "partial";
 
-        // Persist to Firestore
+        // Persist to Firestore (omit csvEmails from filters to avoid massive documents)
+        const logFilters = { ...filters };
+        if (logFilters.csvEmails) {
+            delete logFilters.csvEmails;
+        }
+
         const logRef = await getAdminDb().collection(COLLECTIONS.BROADCAST_LOGS).add({
             subject,
             body,
             audience: filters.audience,
-            filters,
+            filters: logFilters,
             sentBy: "admin",
             sentByName: "Admin",
             sentAt: FieldValue.serverTimestamp(),

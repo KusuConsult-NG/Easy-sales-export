@@ -123,6 +123,7 @@ export default function LoginForm() {
             if (errorParam !== "CredentialsSignin") {
                 setTimeout(() => showToast(message, "error"), 500);
             } else {
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setError(message);
             }
         }

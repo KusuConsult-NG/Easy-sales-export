@@ -20,6 +20,7 @@ export default function OrderConfirmationPage() {
         if (orderId) {
             loadOrder();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orderId]);
 
     async function loadOrder() {

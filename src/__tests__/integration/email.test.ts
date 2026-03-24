@@ -70,7 +70,7 @@ describe('Email Notifications', () => {
             const { Resend } = await import('resend');
             const mockSend = jest.fn<any>().mockResolvedValue({ data: { id: '123' } } as any);
 
-            // @ts-ignore
+            // @ts-expect-error TODO: fix
             Resend.mockImplementation(() => ({
                 emails: { send: mockSend }
             }));

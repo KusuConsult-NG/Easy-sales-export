@@ -26,7 +26,7 @@ async function cleanupAbandonedMembers() {
         let failedDeletes = 0;
 
         const batchSize = 400;
-        let batches = [];
+        const batches = [];
         let currentBatch = db.batch();
         let currentBatchCount = 0;
 

@@ -12,7 +12,7 @@ async function extractAbandonedUsers() {
     let lastDoc = null;
     let hasMore = true;
     let totalScanned = 0;
-    let validTargets: Array<{ id: string, email: string, name: string }> = [];
+    const validTargets: Array<{ id: string, email: string, name: string }> = [];
 
     while (hasMore) {
         let query = db.collection('users').orderBy("__name__").limit(USERS_BATCH_SIZE);

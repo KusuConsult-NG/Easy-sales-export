@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download } from "lucide-react";
-import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction } from "@/app/actions/admin";
+import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
 import AdminDataTable from "@/components/admin/AdminDataTable";
@@ -59,6 +59,8 @@ export default function AdminUsersPage() {
     const [bulkProcessing, setBulkProcessing] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [isEnrollingAcademy, setIsEnrollingAcademy] = useState(false);
+    const [academyPlan, setAcademyPlan] = useState<"foundation" | "standard" | "elite">("foundation");
 
     // Use standardized hook
     const {
@@ -140,6 +142,25 @@ export default function AdminUsersPage() {
             showToast(result.error || "Failed to update roles", "error");
         }
         setIsUpdatingRoles(false);
+    };
+
+    const handleAcademyEnrollment = async () => {
+        if (!selectedUserForModal) return;
+        setIsEnrollingAcademy(true);
+        const result = await manualAcademyEnrollmentAction(selectedUserForModal.id, academyPlan);
+        if (result.success) {
+            showToast(`Successfully enrolled user into ${academyPlan} academy plan`, "success");
+            // Optionally auto-add the role in local state to reflect UI change instantly
+            setData(prev => prev.map(u => 
+                u.id === selectedUserForModal.id 
+                    ? { ...u, roles: Array.from(new Set([...(u.roles || []), "academy_participant"])) } 
+                    : u
+            ));
+            setIsModalOpen(false);
+        } else {
+            showToast(result.error || "Failed to enroll user", "error");
+        }
+        setIsEnrollingAcademy(false);
     };
 
     const formatDate = (date: Date) => {
@@ -633,6 +654,33 @@ export default function AdminUsersPage() {
                                 </button>
                             </div>
                         </form>
+
+                        <div className="pt-6 border-t border-slate-200">
+                            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Manual Academy Enrollment</h4>
+                            <div className="bg-slate-50 p-4 rounded-xl space-y-3">
+                                <p className="text-sm text-slate-600">Enroll this user into an Academy Tier manually. This bypasses the payment gateway.</p>
+                                <div className="flex items-center gap-3">
+                                    <select
+                                        value={academyPlan}
+                                        onChange={(e) => setAcademyPlan(e.target.value as any)}
+                                        className="flex-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                                    >
+                                        <option value="foundation">Foundation</option>
+                                        <option value="standard">Standard</option>
+                                        <option value="elite">Elite</option>
+                                    </select>
+                                    <button
+                                        onClick={handleAcademyEnrollment}
+                                        disabled={isEnrollingAcademy}
+                                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold rounded-lg flex items-center gap-2 text-sm shrink-0"
+                                    >
+                                        {isEnrollingAcademy && <Loader2 className="w-4 h-4 animate-spin" />}
+                                        Enroll Now
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 )}
             </Modal>

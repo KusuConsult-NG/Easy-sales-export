@@ -47,7 +47,7 @@ function CreateEventModal({ onClose, onCreated }: { onClose: () => void; onCreat
         maxSellers: "50", maxProductsPerSeller: "10",
     });
 
-    const handleCreate = async () => {
+    async function handleCreate() {
         if (!form.title || !form.location || !form.startTime || !form.endTime)
             return showToast("All required fields must be filled", "error");
 
@@ -169,7 +169,7 @@ function AddMerchantModal({ eventId, onClose, onAdded }: { eventId: string; onCl
     const [loading, setLoading] = useState(false);
     const [form, setForm] = useState({ name: "", products: "", phoneNumber: "", description: "" });
 
-    const handle = async () => {
+    async function handle() {
         if (!form.name) return showToast("Merchant name is required", "error");
         setLoading(true);
         const res = await addExternalMerchantAction(eventId, { displayName: form.name, productsDescription: form.products || undefined, phone: form.phoneNumber || undefined, businessName: form.description || undefined });
@@ -217,13 +217,14 @@ export default function AdminVillageMarketPage() {
     const [addMerchantEventId, setAddMerchantEventId] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    const load = async () => {
+    async function load() {
         setLoading(true);
         const data = await getActiveVillageMarketEventsAction();
         setEvents(data);
         setLoading(false);
     };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { load(); }, []);
 
     const handleStatus = async (eventId: string, status: "active" | "ended" | "cancelled") => {

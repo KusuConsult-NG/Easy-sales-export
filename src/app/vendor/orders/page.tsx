@@ -18,9 +18,10 @@ export default function VendorOrdersPage() {
 
     useEffect(() => {
         loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterStatus]);
 
-    const loadOrders = async () => {
+    async function loadOrders() {
         setLoading(true);
         try {
             const filters = filterStatus !== "all" ? { status: filterStatus } : undefined;

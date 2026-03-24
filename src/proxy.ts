@@ -30,7 +30,7 @@ const DOMAIN_MAP: Record<string, string> = {
 };
 
 export default auth((req: any) => {
-    let { pathname } = req.nextUrl;
+    const { pathname } = req.nextUrl;
     const hostname = req.headers.get("host")?.replace(/:\d+$/, "") || "";
     const userAgent = req.headers.get("user-agent")?.toLowerCase() || "";
 

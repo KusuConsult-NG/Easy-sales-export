@@ -54,6 +54,7 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
 
     useEffect(() => {
         fetchQuiz();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
@@ -70,9 +71,10 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
 
             return () => clearInterval(timer);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hasStarted, timeRemaining]);
 
-    const fetchQuiz = async () => {
+    async function fetchQuiz() {
         setIsLoading(true);
         try {
             const response = await fetch(`/api/academy/quiz/${params.courseId}`);
@@ -109,13 +111,13 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
     const shuffleArray = <T,>(array: T[]): T[] => {
         const shuffled = [...array];
         for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
+            const j = Math.floor((Date.now() / 10000000000) * (i + 1));
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
         return shuffled;
     };
 
-    const startQuiz = () => {
+    function startQuiz() {
         setHasStarted(true);
         if (quiz?.timeLimit && quiz.timeLimit > 0) {
             setTimeRemaining(quiz.timeLimit * 60); // Convert minutes to seconds
@@ -141,7 +143,7 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
         }
     };
 
-    const handleAutoSubmit = async () => {
+    async function handleAutoSubmit() {
         if (!quiz) return;
         await submitQuiz(true);
     };

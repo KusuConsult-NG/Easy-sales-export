@@ -68,6 +68,7 @@ export default function WalletPage() {
         if (res.success && res.wallet) setWallet(res.wallet);
         else showToast(res.error || "Failed to load wallet", "error");
         setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadTransactions = useCallback(async (reset = false) => {
@@ -83,9 +84,10 @@ export default function WalletPage() {
         setTxLoading(false);
     }, [lastId]);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { loadWallet(); loadTransactions(true); }, []);
 
-    const handleFund = async () => {
+    async function handleFund() {
         const amount = Number(fundAmount);
         if (!amount || amount < 100) return showToast("Minimum ₦100", "error");
         setFundLoading(true);
@@ -99,7 +101,7 @@ export default function WalletPage() {
         }
     };
 
-    const handleWithdraw = async () => {
+    async function handleWithdraw() {
         const amount = Number(wdAmount);
         if (!amount || amount < 5000) return showToast("Minimum withdrawal is ₦5,000", "error");
         if (!wdBank.accountNumber || !wdBank.bankName || !wdBank.accountName)

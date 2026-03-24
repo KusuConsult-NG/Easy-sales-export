@@ -50,6 +50,7 @@ export default function PlatformStats() {
         }, interval);
 
         return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const displayValues = [counts.users, counts.exports, counts.products, counts.courses];

@@ -24,7 +24,7 @@ export default function DigitalIDCard({
 }: DigitalIDCardProps) {
     const [downloading, setDownloading] = useState(false);
 
-    const downloadAsPNG = async () => {
+    async function downloadAsPNG() {
         setDownloading(true);
         try {
             const cardElement = document.getElementById("digital-id-card");
@@ -49,7 +49,7 @@ export default function DigitalIDCard({
         }
     };
 
-    const downloadAsPDF = async () => {
+    async function downloadAsPDF() {
         setDownloading(true);
         try {
             const cardElement = document.getElementById("digital-id-card");

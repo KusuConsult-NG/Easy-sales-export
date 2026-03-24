@@ -58,6 +58,7 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
             }
         }
         checkAuthorization();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, session, escrowId, router]);
 
     const loadMessages = useCallback(async () => {

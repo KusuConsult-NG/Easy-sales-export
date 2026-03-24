@@ -38,6 +38,7 @@ export default function CheckoutPage() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsClient(true);
         if (session?.user?.email) setEmail(session.user.email);
 
@@ -55,7 +56,7 @@ export default function CheckoutPage() {
     const subtotal = cart.reduce((sum, item) => sum + (item.pricingTiers[0]?.price || 0) * item.quantity, 0);
     const deliveryFee = 5000;
 
-    const handlePaystackCheckout = async () => {
+    async function handlePaystackCheckout() {
         if (!session) {
             router.push("/auth/login?redirect=/marketplace/checkout");
             return;

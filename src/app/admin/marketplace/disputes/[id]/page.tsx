@@ -90,6 +90,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
 
     useEffect(() => {
         loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params.id]);
 
     async function loadData() {

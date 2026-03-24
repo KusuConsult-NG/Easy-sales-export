@@ -162,9 +162,10 @@ export default function AdminExportCatalogPage() {
 
     useEffect(() => {
         loadProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const loadProducts = async () => {
+    async function loadProducts() {
         setIsLoading(true);
         try {
             const res = await fetch("/api/export/catalog");

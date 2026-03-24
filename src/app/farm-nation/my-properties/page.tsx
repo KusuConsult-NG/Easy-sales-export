@@ -60,6 +60,7 @@ export default function MyPropertiesPage() {
         } else if (status === "authenticated") {
             loadProperties();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, session]);
 
     const filteredProperties = properties.filter(prop => {

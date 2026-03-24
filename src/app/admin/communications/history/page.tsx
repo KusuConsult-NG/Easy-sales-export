@@ -26,6 +26,7 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     cooperative_members: "Cooperative Members",
     wave_applicants: "WAVE Applicants",
     wave_briefing_registrants: "WAVE Briefing Registrants",
+    csv_upload: "CSV Upload",
 };
 
 function formatDate(d: Date | string) {
@@ -129,7 +130,7 @@ export default function BroadcastHistoryPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const load = async () => {
+    async function load() {
         setLoading(true);
         setError(null);
         const res = await getBroadcastHistoryAction();
@@ -138,6 +139,7 @@ export default function BroadcastHistoryPage() {
         setLogs(res.logs);
     };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { load(); }, []);
 
     return (

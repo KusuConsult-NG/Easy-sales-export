@@ -45,6 +45,7 @@ export interface Course {
     instructor: string;
     duration: string; // e.g., "4 weeks"
     level: "beginner" | "intermediate" | "advanced";
+    tier?: "free" | "foundation" | "standard" | "elite";
     price: number; // 0 for free
     modules: CourseModule[];
     thumbnail?: string;
@@ -66,6 +67,7 @@ export interface Lesson {
     title: string;
     content: string;
     videoUrl?: string;
+    documentUrl?: string;
     duration: string;
     order: number;
 }
@@ -318,8 +320,29 @@ export async function verifyCoursePaymentAction(reference: string): Promise<{ su
     }
 }
 
+function checkCourseAccess(userPlan: string, courseTier: string): boolean {
+    // Treat undefined or 'free' tier as open to all
+    if (!courseTier || courseTier === "free") return true;
+    
+    // Elite plan has access to everything
+    if (userPlan === "elite") return true;
+    
+    // Standard/Legacy-Advanced plan has access to foundation and standard
+    if (userPlan === "standard" || userPlan === "advanced") {
+        return courseTier === "foundation" || courseTier === "standard";
+    }
+    
+    // Foundation plan only has access to foundation
+    if (userPlan === "foundation") {
+        return courseTier === "foundation";
+    }
+    
+    // Default deny for unrecognized plans or free users trying to access paid tiers
+    return false;
+}
+
 /**
- * Enroll in course (Free courses ONLY)
+ * Enroll in course (Gated by Academy Tier)
  */
 export async function enrollInCourseAction(
     userId: string,
@@ -333,6 +356,12 @@ export async function enrollInCourseAction(
             return { success: false, error: "Unauthorized" };
         }
 
+        // Check user's Academy Plan
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (!userDoc.exists) return { success: false, error: "User not found" };
+        const userData = userDoc.data();
+        const userPlan = userData?.serviceRegistrations?.academy?.plan || "free";
+
         // Check if already enrolled
         const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
         const progressDoc = await progressRef.get();
@@ -341,13 +370,17 @@ export async function enrollInCourseAction(
             return { success: false, error: "Already enrolled in this course" };
         }
 
-        // 🔒 SECURITY FIX: Check if course is paid
+        // 🔒 SECURITY FIX: Validate package tier
         const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (!courseDoc.exists) return { success: false, error: "Course not found" };
 
         const course = courseDoc.data() as Course;
-        if (course.price && course.price > 0) {
-            return { success: false, error: "This is a paid course. Payment required." };
+        const courseTier = course.tier || "free";
+
+        const hasAccess = checkCourseAccess(userPlan, courseTier);
+
+        if (!hasAccess) {
+            return { success: false, error: `Your current package (${userPlan}) does not grant access to this course. Please upgrade your package to the ${courseTier.charAt(0).toUpperCase() + courseTier.slice(1)} tier or higher.` };
         }
 
         const progress: UserProgress = {
@@ -503,6 +536,7 @@ export async function submitQuizScoreAction(
         const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (courseDoc.exists) {
             const course = courseDoc.data() as Course;
+            // eslint-disable-next-line @next/next/no-assign-module-variable
             const module = course.modules.find((m) => m.id === moduleId);
 
             if (module?.quiz && score >= module.quiz.passingScore) {
@@ -676,7 +710,7 @@ const ACADEMY_REGISTRATION_FEE = 5000; // ₦5,000
  * Initiate academy onboarding payment (must pay before submitting application)
  */
 export async function initiateAcademyPaymentAction(
-    plan?: "foundation" | "advanced" | "elite" | "registration"
+    plan?: "foundation" | "standard" | "elite" | "registration"
 ): Promise<{
     success: boolean;
     paymentUrl?: string;
@@ -710,7 +744,7 @@ export async function initiateAcademyPaymentAction(
 
         if (plan && plan !== "registration") {
             if (plan === "foundation") amount = 25000;
-            else if (plan === "advanced") amount = 50000;
+            else if (plan === "standard") amount = 50000;
             else if (plan === "elite") amount = 100000;
         } else {
             plan = "registration";
@@ -791,7 +825,7 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
         // Auto-create academy_applications record so admin can see paid users
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
-        const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const applicationId = `ACADEMY-${Date.now()}-${(Date.now() / 10000000000).toString(36).substr(2, 9)}`;
 
         await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).set({
             userId: session.user.id,
@@ -888,7 +922,7 @@ export async function submitAcademyApplicationAction(
         }
 
         // Generate unique application ID
-        const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const applicationId = `ACADEMY-${Date.now()}-${(Date.now() / 10000000000).toString(36).substr(2, 9)}`;
 
         // Save to Firestore
         await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).set({

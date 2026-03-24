@@ -19,9 +19,10 @@ export default function VendorProductsPage() {
 
     useEffect(() => {
         loadProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterStatus]);
 
-    const loadProducts = async () => {
+    async function loadProducts() {
         setLoading(true);
         try {
             const filters = filterStatus !== "all" ? { status: filterStatus } : undefined;

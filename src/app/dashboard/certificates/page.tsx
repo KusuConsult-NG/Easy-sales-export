@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { Upload, Download, Trash2, FileText, Loader2, Plus, Award, GraduationCap, ExternalLink } from "lucide-react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 
 interface Certificate {
@@ -40,7 +41,7 @@ export default function CertificatesPage() {
         fetchAll();
     }, []);
 
-    const fetchAll = async () => {
+    async function fetchAll() {
         setIsLoading(true);
         try {
             const [certsRes, acRes] = await Promise.all([
@@ -59,7 +60,7 @@ export default function CertificatesPage() {
         }
     };
 
-    const fetchCertificates = async () => {
+    async function fetchCertificates() {
         try {
             const response = await fetch("/api/certificates");
             const data = await response.json();
@@ -190,12 +191,12 @@ export default function CertificatesPage() {
                                 <Award className="w-5 h-5 text-amber-500" />
                                 Academy Certificates ({academyCerts.length})
                             </h2>
-                            <a
+                            <Link
                                 href="/academy/dashboard"
                                 className="text-sm text-blue-600 hover:underline flex items-center gap-1"
                             >
                                 Go to Academy <ExternalLink className="w-3 h-3" />
-                            </a>
+                            </Link>
                         </div>
 
                         {academyCerts.length === 0 ? (
@@ -205,12 +206,12 @@ export default function CertificatesPage() {
                                 <p className="text-sm text-slate-400 mb-6">
                                     Complete courses in the Academy to earn verifiable certificates
                                 </p>
-                                <a
+                                <Link
                                     href="/academy/courses"
                                     className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition text-sm"
                                 >
                                     Browse Courses
-                                </a>
+                                </Link>
                             </div>
                         ) : (
                             <div className="space-y-4">

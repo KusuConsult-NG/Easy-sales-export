@@ -17,6 +17,7 @@ export function usePushPermissionState() {
 
     useEffect(() => {
         if (typeof window === "undefined" || !("Notification" in window)) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPermissionState("unsupported");
             return;
         }

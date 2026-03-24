@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save, Plus, GripVertical, Trash2, Edit2, PlayCircle, FileText, HelpCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Plus, GripVertical, Trash2, Edit2, PlayCircle, FileText, HelpCircle, Loader2, UploadCloud } from "lucide-react";
 import Link from "next/link";
 import { getCourseByIdAction, updateCourseAction, updateCourseModulesAction, type Course, type CourseModule, type Lesson, type Quiz } from "@/app/actions/academy";
 import { toast } from "sonner";
+import Modal from "@/components/ui/Modal";
+import { uploadFile, type UploadProgress } from "@/lib/storage-upload";
 
 
 // Local interface for UI state
@@ -28,8 +30,13 @@ export default function CourseManagerPage() {
     const [course, setCourse] = useState<Course | null>(null);
     const [modules, setModules] = useState<CourseModuleWithState[]>([]);
 
+    const [editingLesson, setEditingLesson] = useState<{ moduleId: string; lesson: LessonWithState } | null>(null);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+
     useEffect(() => {
         loadCourse();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [courseId]);
 
     async function loadCourse() {
@@ -56,7 +63,7 @@ export default function CourseManagerPage() {
         ));
     };
 
-    const handleAddModule = () => {
+    function handleAddModule() {
         const title = prompt("Enter Module Title:");
         if (!title) return;
 
@@ -112,6 +119,56 @@ export default function CourseManagerPage() {
         });
         setModules(newModules);
         saveModules(newModules);
+    };
+
+    const handleEditLesson = (moduleId: string, lesson: LessonWithState) => {
+        setEditingLesson({ moduleId, lesson: { ...lesson } });
+        setIsUploadModalOpen(true);
+    };
+
+    async function handleSaveLessonEdit() {
+        if (!editingLesson) return;
+        const newModules = modules.map(m => {
+            if (m.id === editingLesson.moduleId) {
+                return {
+                    ...m,
+                    lessons: m.lessons.map(l => l.id === editingLesson.lesson.id ? editingLesson.lesson : l)
+                };
+            }
+            return m;
+        });
+        setModules(newModules);
+        await saveModules(newModules);
+        setIsUploadModalOpen(false);
+        setEditingLesson(null);
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'document') => {
+        const file = e.target.files?.[0];
+        if (!file || !editingLesson) return;
+
+        try {
+            const path = `academy/courses/${courseId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            const url = await uploadFile(file, path, (progress) => {
+                setUploadProgress(progress);
+            });
+            
+            setEditingLesson(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    lesson: {
+                        ...prev.lesson,
+                        ...(type === 'video' ? { videoUrl: url } : { documentUrl: url, content: url })
+                    }
+                };
+            });
+            toast.success(`${type} uploaded successfully`);
+        } catch (error: any) {
+            toast.error(`Failed to upload ${type}: ${error.message}`);
+        } finally {
+            setUploadProgress(null);
+        }
     };
 
     const saveModules = async (updatedModules: CourseModuleWithState[]) => {
@@ -211,7 +268,6 @@ export default function CourseManagerPage() {
                             </div>
 
                             {/* Lessons List */}
-                            {/* @ts-ignore - Local UI state */}
                             {module.isExpanded !== false && (
                                 <div className="p-2 space-y-2">
                                     {module.lessons.map((lesson, lIndex) => (
@@ -230,7 +286,7 @@ export default function CourseManagerPage() {
 
 
                                             <div className="hidden group-hover:flex items-center gap-2">
-                                                <button className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition" title="Edit Content">
+                                                <button onClick={() => handleEditLesson(module.id, lesson)} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition" title="Edit Content">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
                                                 {lesson.type === "quiz" && (
@@ -257,6 +313,123 @@ export default function CourseManagerPage() {
                         </div>
                     ))}
                 </div>
+
+                {/* Lesson Edit/Upload Modal */}
+                {editingLesson && (
+                    <Modal
+                        isOpen={isUploadModalOpen}
+                        onClose={() => setIsUploadModalOpen(false)}
+                        title="Edit Lesson Content"
+                        maxWidth="lg"
+                    >
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
+                                <input
+                                    type="text"
+                                    value={editingLesson.lesson.title}
+                                    onChange={(e) => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, title: e.target.value } } : null)}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Duration (e.g., "10:00")</label>
+                                <input
+                                    type="text"
+                                    value={editingLesson.lesson.duration}
+                                    onChange={(e) => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, duration: e.target.value } } : null)}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Content (Text/Description)</label>
+                                <textarea
+                                    value={editingLesson.lesson.content}
+                                    onChange={(e) => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, content: e.target.value } } : null)}
+                                    className="w-full px-4 py-2 border rounded-lg h-24"
+                                />
+                            </div>
+
+                            {/* Video Upload */}
+                            <div className="border p-4 rounded-xl space-y-3 bg-slate-50">
+                                <label className="block text-sm font-bold text-slate-700">Video Content</label>
+                                {editingLesson.lesson.videoUrl ? (
+                                    <div className="flex items-center justify-between bg-green-50 text-green-700 p-3 rounded-lg border border-green-200">
+                                        <span className="text-sm">Video uploaded and attached</span>
+                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, videoUrl: undefined } } : null)}>Remove</button>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <input
+                                            type="file"
+                                            accept="video/*"
+                                            onChange={(e) => handleFileUpload(e, 'video')}
+                                            className="hidden"
+                                            id="video-upload"
+                                        />
+                                        <label htmlFor="video-upload" className="w-full py-2 border border-slate-300 rounded-lg text-slate-700 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer">
+                                            <UploadCloud className="w-5 h-5" />
+                                            Upload Video
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Document Upload */}
+                            <div className="border p-4 rounded-xl space-y-3 bg-slate-50">
+                                <label className="block text-sm font-bold text-slate-700">Document/PDF Content</label>
+                                {editingLesson.lesson.documentUrl ? (
+                                    <div className="flex items-center justify-between bg-blue-50 text-blue-700 p-3 rounded-lg border border-blue-200">
+                                        <span className="text-sm truncate mr-2" title={editingLesson.lesson.documentUrl}>Document uploaded</span>
+                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, documentUrl: undefined } } : null)}>Remove</button>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <input
+                                            type="file"
+                                            accept=".pdf,.doc,.docx"
+                                            onChange={(e) => handleFileUpload(e, 'document')}
+                                            className="hidden"
+                                            id="document-upload"
+                                        />
+                                        <label htmlFor="document-upload" className="w-full py-2 border border-slate-300 rounded-lg text-slate-700 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer">
+                                            <UploadCloud className="w-5 h-5" />
+                                            Upload Document
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
+
+                            {uploadProgress && (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-xs font-medium text-slate-500">
+                                        <span>Uploading...</span>
+                                        <span>{Math.round(uploadProgress.progress)}%</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress.progress}%` }} />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="pt-4 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setIsUploadModalOpen(false)}
+                                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveLessonEdit}
+                                    disabled={!!uploadProgress && uploadProgress.status === 'uploading'}
+                                    className="px-6 py-2 bg-primary text-white rounded-lg font-medium shadow shadow-primary/20 hover:bg-primary/90 transition disabled:opacity-50"
+                                >
+                                    Save Lesson
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+                )}
             </div>
         </div>
     );

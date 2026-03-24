@@ -93,7 +93,7 @@ export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions
             setLoading(false);
         }
         // fetchData has no external deps — it reads everything from latestRef at call-time.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, []);
 
 

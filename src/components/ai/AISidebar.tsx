@@ -32,6 +32,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
             loadChatHistory();
             loadSuggestions();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, pathname]);
 
     // Auto-scroll to bottom when new messages arrive

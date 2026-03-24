@@ -552,14 +552,14 @@ export async function seedAll() {
 }
 
 // Run if executed directly
-// @ts-ignore — Node globals available at runtime via ts-node
+// @ts-expect-error — Node globals available at runtime via ts-node
 if (require.main === module) {
     seedAll()
-        // @ts-ignore
+        // @ts-expect-error TODO: fix
         .then(() => process.exit(0))
         .catch((error: unknown) => {
             console.error(error);
-            // @ts-ignore
+            // @ts-expect-error TODO: fix
             process.exit(1);
         });
 }

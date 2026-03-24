@@ -53,6 +53,7 @@ export default function PropertyDetailsPage() {
 
     useEffect(() => {
         loadProperty();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [propertyId]);
 
     useEffect(() => {
@@ -75,7 +76,7 @@ export default function PropertyDetailsPage() {
         }
     }, [status, session]);
 
-    const handleContactSeller = () => {
+    function handleContactSeller() {
         if (status === "unauthenticated") {
             localStorage.setItem("pendingPropertyInquiry", params.id as string);
             router.push("/auth/login?callbackUrl=/farm-nation");
@@ -114,7 +115,7 @@ export default function PropertyDetailsPage() {
         }
     };
 
-    const handleShare = async () => {
+    async function handleShare() {
         const url = window.location.href;
         if (navigator.share) {
             await navigator.share({

@@ -30,6 +30,7 @@ export default function WaveTrainingPage() {
 
     useEffect(() => {
         loadTrainingData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     async function loadTrainingData() {

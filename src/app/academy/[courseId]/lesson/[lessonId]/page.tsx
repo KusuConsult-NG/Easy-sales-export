@@ -336,13 +336,37 @@ export default function LessonPage(props: LessonPageProps) {
                     </div>
                 )}
 
-                {/* Lesson Content */}
-                <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
-                    <div
-                        className="prose max-w-none"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(currentLesson.content) }}
-                    />
-                </div>
+                {/* Document Viewer (if document exists) */}
+                {currentLesson.documentUrl && (
+                    <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-6 flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                <BookOpen className="w-6 h-6 text-blue-600" />
+                                Course Document
+                            </h3>
+                            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                                Read Only
+                            </span>
+                        </div>
+                        <div className="w-full h-[600px] md:h-[800px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative" onContextMenu={(e) => e.preventDefault()}>
+                            <iframe 
+                                src={`${currentLesson.documentUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                                className="w-full h-full border-0"
+                                title="Lesson Document"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Lesson Content Text */}
+                {currentLesson.content && currentLesson.content.trim() !== '<p></p>' && currentLesson.content.trim() !== '' && (
+                    <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
+                        <div
+                            className="prose max-w-none"
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(currentLesson.content) }}
+                        />
+                    </div>
+                )}
 
                 {/* Quiz Section - Render if module has quiz and lesson is completed */}
                 {currentModule.quiz && isCompleted && (

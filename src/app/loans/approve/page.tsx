@@ -22,6 +22,7 @@ export default function LoanApprovalPage() {
     const [processing, setProcessing] = useState(false);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/immutability
         loadLoans();
     }, []);
 

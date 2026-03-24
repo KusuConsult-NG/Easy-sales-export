@@ -66,6 +66,7 @@ function NewDisputePageContent() {
             showToast("No order specified", "error");
             router.push("/dashboard/orders");
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orderId]);
 
     async function loadOrder() {

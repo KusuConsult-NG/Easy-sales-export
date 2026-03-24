@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { TrendingUp, Award, Clock, Target, CheckCircle, BookOpen, Trophy, Loader2 } from "lucide-react";
 import { getUserAggregateProgressAction, calculateStreakAction } from "@/app/actions/academy";
 import BackButton from "@/components/ui/BackButton";
@@ -154,13 +155,13 @@ export default function ProgressPage() {
                     <p className="text-slate-600 mb-6 max-w-md mx-auto">
                         Start your learning journey by enrolling in courses from our Academy catalog
                     </p>
-                    <a
+                    <Link
                         href="/academy"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
                     >
                         <BookOpen className="w-5 h-5" />
                         Browse Courses
-                    </a>
+                    </Link>
                 </div>
             ) : (
                 <>

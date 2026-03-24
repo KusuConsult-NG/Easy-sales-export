@@ -673,3 +673,47 @@ export async function sendSellerRejectionEmail(
         metadata: { type: "seller_rejection", reason },
     });
 }
+
+/**
+ * Send Academy Manual Enrollment Onboarding Email
+ * For users added to the Academy by an admin bypassing the Paystack gateway.
+ */
+export async function sendAcademyEnrollmentEmail(
+    userEmail: string,
+    userName: string,
+    tier: string
+) {
+    const formattedTier = tier.charAt(0).toUpperCase() + tier.slice(1);
+    
+    return sendEmailNotification({
+        to: userEmail,
+        subject: `Welcome to the Academy (${formattedTier} Package)`,
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <div style="background: gradient(linear, left top, right bottom, from(#16a34a), to(#15803d)); background-color: #16a34a; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Welcome to the Academy!</h1>
+                </div>
+                <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName}</strong>,</p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
+                        Great news! An administrator has manually enrolled you into the Academy under the <strong>${formattedTier} Package</strong>.
+                    </p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
+                        Your account has been fully configured and you can bypass the payment step to access all your courses and resources immediately.
+                    </p>
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/academy/dashboard"
+                           style="background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+                            Go to My Academy Dashboard &rarr;
+                        </a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">
+                        Easy Sales Export &mdash; Nigeria's Premier Agricultural Export Platform
+                    </p>
+                </div>
+            </div>
+        `,
+        metadata: { type: "academy_enrollment", tier },
+    });
+}

@@ -16,6 +16,7 @@ export default function CreateCoursePage() {
         description: "",
         instructor: "",
         category: "export-basics",
+        tier: "free",
         thumbnail: "",
     });
 
@@ -29,6 +30,7 @@ export default function CreateCoursePage() {
                 description: formData.description,
                 instructor: formData.instructor,
                 thumbnail: formData.thumbnail,
+                tier: formData.tier,
                 level: "beginner",
                 duration: "4 weeks",
                 createdAt: new Date(),
@@ -126,6 +128,23 @@ export default function CreateCoursePage() {
                                     <option value="logistics">Logistics & Shipping</option>
                                     <option value="market-entry">Market Entry Strategies</option>
                                     <option value="finance">Finance & Payment</option>
+                                </select>
+                            </div>
+
+                            {/* Course Tier */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-900 mb-2">
+                                    Course Tier Access
+                                </label>
+                                <select
+                                    value={formData.tier}
+                                    onChange={(e) => setFormData({ ...formData, tier: e.target.value })}
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                >
+                                    <option value="free">Free (Open to All)</option>
+                                    <option value="foundation">Foundation</option>
+                                    <option value="standard">Standard</option>
+                                    <option value="elite">Elite</option>
                                 </select>
                             </div>
                         </div>

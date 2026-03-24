@@ -74,6 +74,14 @@ export async function POST(req: NextRequest) {
         };
 
         switch (filters.audience) {
+            case "csv_upload": {
+                if (filters.csvEmails && filters.csvEmails.length > 0) {
+                    for (const email of filters.csvEmails) {
+                        add(email.trim(), "CSV User");
+                    }
+                }
+                break;
+            }
             case "all": {
                 const snap = await db.collection(COLLECTIONS.USERS).get();
                 snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
@@ -195,12 +203,18 @@ export async function POST(req: NextRequest) {
             if (i + BATCH < validRecipients.length) await sleep(500);
         }
 
+        // Omit csvEmails to avoid huge Firestore documents
+        const logFilters = { ...filters };
+        if (logFilters.csvEmails) {
+            delete logFilters.csvEmails;
+        }
+
         // Log to Firestore
         const logRef = await db.collection(COLLECTIONS.BROADCAST_LOGS).add({
             subject,
             body,
             audience: filters.audience,
-            filters,
+            filters: logFilters,
             sentBy: session.user.id,
             sentByName: userData?.fullName || userData?.name || "Admin",
             sentAt: FieldValue.serverTimestamp(),

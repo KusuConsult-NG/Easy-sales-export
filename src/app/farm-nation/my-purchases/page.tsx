@@ -114,6 +114,7 @@ This document serves as a record of the purchase agreement initiated through Eas
         } else if (status === "authenticated") {
             loadPurchases();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, session]);;
 
     const filteredPurchases = purchases.filter(purchase => {

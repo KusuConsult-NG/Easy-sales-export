@@ -50,6 +50,7 @@ export default function QuizPage(props: QuizPageProps) {
         if (status === "authenticated" && session?.user) {
             loadQuiz();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, session, courseId, moduleId]);
 
     async function loadQuiz() {
@@ -63,6 +64,7 @@ export default function QuizPage(props: QuizPageProps) {
         }
 
         // Find module and quiz
+        // eslint-disable-next-line @next/next/no-assign-module-variable
         const module = courseData.modules.find(m => m.id === moduleId);
 
         setCourse(courseData);

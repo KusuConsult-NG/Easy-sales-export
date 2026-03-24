@@ -157,11 +157,12 @@ export default function AdminFinancePage() {
     const toggleSelect = (id: string) => {
         setSelectedRefs(prev => {
             const next = new Set(prev);
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             next.has(id) ? next.delete(id) : next.add(id);
             return next;
         });
     };
-    const toggleSelectAll = () => {
+    function toggleSelectAll() {
         if (selectedRefs.size === visibleTx.length) {
             setSelectedRefs(new Set());
         } else {
@@ -170,7 +171,7 @@ export default function AdminFinancePage() {
     };
 
     // ── Recovery email handler ───────────────────────────────────────────────
-    const sendRecoveryEmails = async () => {
+    async function sendRecoveryEmails() {
         if (selectedRefs.size === 0 || isSending) return;
         setIsSending(true);
         setSendResult(null);

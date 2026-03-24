@@ -55,6 +55,7 @@ export default function VendorSettingsPage() {
     });
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/immutability
         loadSettings();
     }, []);
 

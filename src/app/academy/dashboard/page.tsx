@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
-import { Award, BookOpen, Clock, TrendingUp, Calendar, Download } from "lucide-react";
+import { Award, BookOpen, Clock, TrendingUp, Calendar, Download, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 type CourseProgress = {
     courseId: string;
@@ -26,6 +28,8 @@ type Certificate = {
 };
 
 export default function AcademyDashboardPage() {
+    const { status } = useSession();
+    const router = useRouter();
     const [courses, setCourses] = useState<CourseProgress[]>([]);
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -39,10 +43,17 @@ export default function AcademyDashboardPage() {
     });
 
     useEffect(() => {
-        fetchDashboardData();
-    }, []);
+        if (status === "unauthenticated") {
+            router.push("/auth/login?callbackUrl=/academy/dashboard");
+            return;
+        }
+        if (status === "authenticated") {
+            fetchDashboardData();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status, router]);
 
-    const fetchDashboardData = async () => {
+    async function fetchDashboardData() {
         setIsLoading(true);
         try {
             const response = await fetch("/api/academy/dashboard");

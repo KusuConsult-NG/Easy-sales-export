@@ -37,7 +37,7 @@ export default function AdminWaveWithdrawalsPage() {
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    const fetchWithdrawals = async () => {
+    async function fetchWithdrawals() {
         setIsLoading(true);
         setError(null);
         try {
@@ -52,6 +52,7 @@ export default function AdminWaveWithdrawalsPage() {
         }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { fetchWithdrawals(); }, [statusFilter]);
 
     const handleAction = async (withdrawalId: string, action: "approve" | "reject" | "complete") => {

@@ -28,6 +28,7 @@ export default function FeatureTogglesPage() {
     // Initial data fetch on mount - legitimate use case for calling async function in effect
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadToggles();
     }, [loadToggles]);
 

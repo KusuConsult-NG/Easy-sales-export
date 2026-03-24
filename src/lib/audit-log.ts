@@ -74,7 +74,8 @@ export type AuditAction =
     | 'academy_reject'
     | 'academy_application_created'
     | 'export_investment'
-    | 'system_cleanup';
+    | 'system_cleanup'
+    | 'academy_manual_enroll';
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 

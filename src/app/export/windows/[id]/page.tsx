@@ -33,11 +33,12 @@ export default function ExportWindowDetailPage() {
 
     useEffect(() => {
         if (windowId) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             loadWindow();
         }
     }, [windowId, loadWindow]);
 
-    const handleInvest = async () => {
+    async function handleInvest() {
         if (!session) {
             router.push("/auth/login?redirect=/export/windows/" + windowId);
             return;

@@ -238,6 +238,7 @@ export default function WaveApplicationPage() {
 
             checkApplicationStatus(isEditParam);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [session, router, showToast]);
 
     const checkApplicationStatus = async (isEditParam: boolean) => {
@@ -315,19 +316,19 @@ export default function WaveApplicationPage() {
 
     };
 
-    const nextStep = () => {
+    function nextStep() {
         if (currentStep < STEPS.length - 1) {
             goToStep(currentStep + 1);
         }
     };
 
-    const prevStep = () => {
+    function prevStep() {
         if (currentStep > 0) {
             goToStep(currentStep - 1);
         }
     };
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         setSubmitting(true);
         try {
             const result = (isRevisionMode || isEditMode)

@@ -17,27 +17,27 @@ const data: CommodityData[] = [
 
 const COLORS = ["#10b981", "#f59e0b", "#ef4444"];
 
+const CustomTooltip = ({ active, payload, total }: any) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        const percentage = ((data.value / total) * 100).toFixed(1);
+        return (
+            <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-lg">
+                <p className="font-semibold text-slate-900 flex items-center gap-2">
+                    <span className="text-xl">{data.icon}</span>
+                    {data.name}
+                </p>
+                <p className="text-sm text-slate-600 mt-1">
+                    {formatCurrency(data.value)} ({percentage}%)
+                </p>
+            </div>
+        );
+    }
+    return null;
+};
+
 export default function CommodityPieChart() {
     const total = data.reduce((sum, item) => sum + item.value, 0);
-
-    const CustomTooltip = ({ active, payload }: any) => {
-        if (active && payload && payload.length) {
-            const data = payload[0].payload;
-            const percentage = ((data.value / total) * 100).toFixed(1);
-            return (
-                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-lg">
-                    <p className="font-semibold text-slate-900 flex items-center gap-2">
-                        <span className="text-xl">{data.icon}</span>
-                        {data.name}
-                    </p>
-                    <p className="text-sm text-slate-600 mt-1">
-                        {formatCurrency(data.value)} ({percentage}%)
-                    </p>
-                </div>
-            );
-        }
-        return null;
-    };
 
     const renderCustomLabel = (entry: any) => {
         const percentage = ((entry.value / total) * 100).toFixed(0);
@@ -65,7 +65,7 @@ export default function CommodityPieChart() {
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                     </Pie>
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip total={total} />} />
                 </PieChart>
             </ResponsiveContainer>
             <div className="mt-4 space-y-2">

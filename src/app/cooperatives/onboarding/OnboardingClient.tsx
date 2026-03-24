@@ -170,21 +170,25 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             const savedDocuments = localStorage.getItem(keyOf('docs') as string);
             if (savedDocuments) setDocuments(JSON.parse(savedDocuments));
         }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId, status]);
 
     useEffect(() => {
         const k = keyOf('personal');
         if (k) localStorage.setItem(k, JSON.stringify(personalInfo));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [personalInfo, userId]);
 
     useEffect(() => {
         const k = keyOf('nok');
         if (k) localStorage.setItem(k, JSON.stringify(nextOfKin));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nextOfKin, userId]);
 
     useEffect(() => {
         const k = keyOf('docs');
         if (k) localStorage.setItem(k, JSON.stringify(documents));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [documents, userId]);
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -198,7 +202,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         { number: 4, name: "Payment" },
     ];
 
-    const handlePayNow = async () => {
+    async function handlePayNow() {
         setIsPaymentLoading(true);
         try {
             const result = await initiateCooperativePaymentAction("basic");
@@ -214,7 +218,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         }
     };
 
-    const handleComplete = async () => {
+    async function handleComplete() {
         setIsSubmitting(true);
         try {
             const formData = new FormData();

@@ -28,7 +28,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
         const query = db.collection(COLLECTIONS.USERS);
         let snapshot;
 
-        let emails: string[] = [];
+        const emails: string[] = [];
 
         if (segment === 'cooperative') {
             const coopQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where('paymentStatus', '==', 'completed');

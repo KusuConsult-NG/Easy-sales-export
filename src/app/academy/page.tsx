@@ -15,7 +15,7 @@ export default function AcademyLandingPage() {
             highlight: false
         },
         {
-            title: "Advanced Program",
+            title: "Standard Program",
             price: "₦50,000",
             description: "Deep dive into strategies, compliance, and scaling your operations.",
             features: ["Advanced export strategies", "Comprehensive compliance training", "Cooperative opportunity positioning"],

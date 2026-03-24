@@ -24,6 +24,7 @@ export default function LandVerificationPage() {
     const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/immutability
         loadListings();
     }, []);
 

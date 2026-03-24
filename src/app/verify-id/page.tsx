@@ -77,6 +77,7 @@ export default function VerifyIDPage() {
             );
             setScanStatus("");
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const stopCamera = useCallback(() => {

@@ -181,6 +181,8 @@ export function VideoPlayer({
                 onPause={() => setIsPlaying(false)}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={handleLoadedMetadata}
+                controlsList="nodownload"
+                onContextMenu={(e) => e.preventDefault()}
             />
 
             {/* Play/Pause Overlay */}

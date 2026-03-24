@@ -13,7 +13,7 @@ async function fetchPaystackAbandoned() {
 
     // We are looking for cooperative membership registrations
     // Note: Paystack pagination might be needed if there are more than 50
-    let allAbandoned: any[] = [];
+    const allAbandoned: any[] = [];
     let page = 1;
     let hasMore = true;
 

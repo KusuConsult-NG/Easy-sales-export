@@ -16,7 +16,7 @@ function PaymentCallbackContent() {
     const [orderId, setOrderId] = useState<string | null>(null);
 
     useEffect(() => {
-        const verifyPayment = async () => {
+        async function verifyPayment() {
             const reference = searchParams.get("reference");
 
             if (!reference) {
@@ -50,6 +50,7 @@ function PaymentCallbackContent() {
         };
 
         verifyPayment();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
     return (

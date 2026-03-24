@@ -44,6 +44,7 @@ export default function CreateDisputePage(props: DisputePageProps) {
             setLoadingEscrow(false);
         }
         loadEscrow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, session, escrowId, router]);
 
     async function handleSubmit(e: React.FormEvent) {

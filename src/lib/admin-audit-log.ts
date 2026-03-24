@@ -76,7 +76,8 @@ export type AuditAction =
     | 'session_expired'
     | 'suspicious_activity'
     | 'failed_login_attempt'
-    | 'data_export';
+    | 'data_export'
+    | 'academy_manual_enroll';
 
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';

@@ -6,14 +6,14 @@
 
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { CheckCircle, ArrowRight, Home, Wallet, TrendingUp, Users, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 function CooperativeSuccessContent() {
     const searchParams = useSearchParams();
-    const membershipId = searchParams.get("ref") || "COOP-2026-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+    const membershipId = searchParams.get("ref") || "COOP-2026-PENDING";
     const tier = searchParams.get("tier") || "Standard";
 
     return (

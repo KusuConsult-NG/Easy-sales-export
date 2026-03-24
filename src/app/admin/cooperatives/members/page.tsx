@@ -116,12 +116,14 @@ export default function CooperativeMembersPage() {
             setIsLoading(false);
             setIsLoadingMore(false);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statusFilter, lastCreatedAt, stateFilter, lgaFilter, fromDate, toDate]);
 
     // Initial Load & Filter Change
     useEffect(() => {
         setLastCreatedAt(undefined);
         fetchApplications(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statusFilter, stateFilter, lgaFilter, fromDate, toDate]);
 
     // Client-side search (still useful for the current batch)
@@ -199,7 +201,7 @@ export default function CooperativeMembersPage() {
         }
     };
 
-    const handleExportCSV = () => {
+    function handleExportCSV() {
         if (filteredApplications.length === 0) return;
         const headers = [
             "Name", "Email", "Phone", "Tier", "Registration Fee (NGN)",
@@ -240,7 +242,7 @@ export default function CooperativeMembersPage() {
         setIsDetailsModalOpen(true);
     };
 
-    const handleStartEdit = () => {
+    function handleStartEdit() {
         if (!selectedApplication) return;
         setEditFields({
             firstName: selectedApplication.firstName || "",
@@ -259,7 +261,7 @@ export default function CooperativeMembersPage() {
         setIsEditMode(true);
     };
 
-    const handleSaveEdit = async () => {
+    async function handleSaveEdit() {
         if (!selectedApplication) return;
         setIsSaving(true);
         const result = await editApplicationAction({

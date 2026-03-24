@@ -29,9 +29,10 @@ export default function WaveEarningsPage() {
         } else if (status === "authenticated" && session?.user?.id) {
             loadEarnings();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, session]);
 
-    const loadEarnings = async () => {
+    async function loadEarnings() {
         if (!session?.user?.id) return;
 
         setLoading(true);
@@ -46,7 +47,7 @@ export default function WaveEarningsPage() {
         }
     };
 
-    const handleWithdraw = async () => {
+    async function handleWithdraw() {
         const amount = parseFloat(withdrawalAmount);
         if (isNaN(amount) || amount < 5000) {
             showToast("Minimum withdrawal is ₦5,000", "error");

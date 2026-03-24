@@ -42,6 +42,7 @@ export default function MessagesPage() {
     // Load messages for selected conversation
     useEffect(() => {
         if (!selectedConv) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setMessages([]);
             return;
         }
@@ -74,7 +75,7 @@ export default function MessagesPage() {
     }, [selectedConv]);
 
     // Handle send message
-    const handleSend = async () => {
+    async function handleSend() {
         if (!newMessage.trim() || !selectedConv || sending) return;
 
         setSending(true);

@@ -2612,3 +2612,82 @@ export async function toggleVerifiedBadgeAction(
     }
 }
 
+// ============================================
+// Manual Academy Enrollment (Admin)
+// ============================================
+
+export async function manualAcademyEnrollmentAction(
+    userId: string,
+    plan: "foundation" | "standard" | "elite"
+): Promise<ActionState> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        
+        // Check if admin has user update permissions (or a specific academy permission)
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            return { error: "Unauthorized: Permission required - users:update", success: false };
+        }
+
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
+
+        if (!userDoc.exists) {
+            return { error: "User not found", success: false };
+        }
+
+        await userRef.update({
+            "serviceRegistrations.academy.status": "active",
+            "serviceRegistrations.academy.plan": plan,
+            "serviceRegistrations.academy.enrolledAt": FieldValue.serverTimestamp(),
+            // Ensure they have the academy role
+            roles: FieldValue.arrayUnion("academy_participant"),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // CLEAR CACHE
+        try {
+            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+            await invalidateServiceCache(userId, 'academy');
+            logger.info(`[Academy Manual Enrollment] Cache cleared for user: ${userId}`);
+        } catch (cacheError) {
+            logger.error('[Academy Manual Enrollment] Cache clear error:', cacheError);
+        }
+
+        // Send Email Notification
+        try {
+            const userData = userDoc.data();
+            const userEmail = userData?.email || userData?.emailAddress;
+            const userName = userData?.name || userData?.fullName || userData?.displayName || "Student";
+            
+            if (userEmail) {
+                const { sendAcademyEnrollmentEmail } = await import('@/lib/email-notifications');
+                await sendAcademyEnrollmentEmail(userEmail, userName, plan);
+                logger.info(`[Academy Manual Enrollment] Email sent to: ${userEmail}`);
+            } else {
+                logger.warn(`[Academy Manual Enrollment] Skip email: No email address for user: ${userId}`);
+            }
+        } catch (emailError: any) {
+            logger.error(`[Academy Manual Enrollment] Failed to send email:`, emailError);
+            // Non-blocking error
+        }
+
+        // Log audit
+        await logAuditAction(
+            "academy_manual_enroll",
+            userId,
+            "user",
+            { adminId: session.user.id, plan }
+        );
+
+        return {
+            error: null,
+            success: true,
+            message: `User successfully enrolled in Academy (${plan} package)`,
+        };
+    } catch (error: any) {
+        logger.error("Manual academy enrollment error:", error);
+        return { error: "Failed to enroll user: " + error.message, success: false };
+    }
+}

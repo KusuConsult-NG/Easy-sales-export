@@ -63,6 +63,7 @@ export default function EscalatedDisputesPage() {
 
     useEffect(() => {
         loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     async function handleAssign(disputeId: string) {

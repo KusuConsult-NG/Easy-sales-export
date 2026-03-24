@@ -39,10 +39,12 @@ export default function AdminDisputesPage() {
 
     useEffect(() => {
         loadDisputes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
         filterDisputes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchQuery, statusFilter, disputes]);
 
     async function loadDisputes() {

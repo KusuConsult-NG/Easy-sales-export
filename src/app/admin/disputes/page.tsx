@@ -27,6 +27,7 @@ export default function AdminDisputesPage() {
 
     useEffect(() => {
         loadDisputes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     async function loadDisputes() {

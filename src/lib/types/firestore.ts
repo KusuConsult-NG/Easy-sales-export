@@ -134,7 +134,7 @@ export interface User {
             applicationId?: string;
             submittedAt?: Date;
             paymentStatus?: "pending" | "completed" | "failed";
-            plan?: string;
+            plan?: "foundation" | "standard" | "elite" | "advanced";
         };
     };
 
@@ -217,6 +217,7 @@ export interface Course {
     instructor: string;
     duration: string;
     level: "beginner" | "intermediate" | "advanced";
+    tier?: "free" | "foundation" | "standard" | "elite";
     price: number;
     thumbnail?: string;
     enrolledCount: number;

@@ -42,6 +42,7 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
 
     useEffect(() => {
         if (isOpen) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setIsVisible(true);
         }
     }, [isOpen]);
@@ -51,7 +52,7 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
     const step = tourSteps[currentStep];
     const isLastStep = currentStep === tourSteps.length - 1;
 
-    const handleNext = () => {
+    function handleNext() {
         if (isLastStep) {
             handleClose();
         } else {
@@ -59,13 +60,13 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
         }
     };
 
-    const handlePrevious = () => {
+    function handlePrevious() {
         if (currentStep > 0) {
             setCurrentStep((prev) => prev - 1);
         }
     };
 
-    const handleClose = () => {
+    function handleClose() {
         setIsVisible(false);
         onComplete();
     };

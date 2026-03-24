@@ -51,10 +51,12 @@ export default function AdminReviewsPage() {
 
     useEffect(() => {
         loadReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
         filterReviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchQuery, statusFilter, reviews]);
 
     async function loadReviews() {

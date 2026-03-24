@@ -33,6 +33,7 @@ export default function NotificationCenter() {
     // Real-time Firestore listener
     useEffect(() => {
         if (!session?.user?.id) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setLoading(false);
             return;
         }
@@ -91,7 +92,7 @@ export default function NotificationCenter() {
         }
     };
 
-    const markAllAsRead = async () => {
+    async function markAllAsRead() {
         if (!session?.user?.id) return;
 
         try {

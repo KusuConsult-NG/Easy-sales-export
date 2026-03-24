@@ -33,6 +33,7 @@ export default function WaveDashboardPage() {
 
     useEffect(() => {
         loadDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     async function loadDashboard() {

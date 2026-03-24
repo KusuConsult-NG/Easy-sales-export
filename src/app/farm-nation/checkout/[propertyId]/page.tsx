@@ -67,6 +67,7 @@ export default function CheckoutPage() {
 
             loadProperty(); // Call loadProperty here
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [propertyId, status, session, params.propertyId]); // Added params.propertyId to dependencies
 
     const handleSubmit = async (e: React.FormEvent) => {

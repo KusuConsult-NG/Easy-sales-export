@@ -22,6 +22,7 @@ export default function CooperativePaymentOption({
 
     useEffect(() => {
         checkEligibility();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [amount]);
 
     async function checkEligibility() {

@@ -39,7 +39,7 @@ export default function AdminWalletWithdrawalsPage() {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchWithdrawals = async () => {
+    async function fetchWithdrawals() {
         setLoading(true);
         setError(null);
         try {
@@ -54,6 +54,7 @@ export default function AdminWalletWithdrawalsPage() {
         }
     };
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { fetchWithdrawals(); }, [statusFilter]);
 
     const handleAction = async (withdrawalId: string, action: "approve" | "reject") => {

@@ -196,7 +196,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // 1. Run base Edge mapping
             let token = params.token;
             if (authConfig.callbacks?.jwt) {
-                // @ts-ignore
                 token = (await authConfig.callbacks.jwt(params)) || token;
             }
 
@@ -215,7 +214,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             const { token } = params;
 
             if (authConfig.callbacks?.session) {
-                // @ts-ignore
                 session = (await authConfig.callbacks.session(params)) || session;
             }
 

@@ -23,7 +23,16 @@ const ACTIVITY_DEBOUNCE_MS = 30 * 1000;       // Update activity timestamp max o
 export default function SessionActivityTracker() {
     const [showWarning, setShowWarning] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState(0);
-    const [lastActivityTime, setLastActivityTime] = useState(Date.now());
+    const [lastActivityTime, setLastActivityTime] = useState(() => Date.now());
+
+    async function handleLogout() {
+        localStorage.removeItem("lastActivity");
+        // Preserve current path so user resumes from where they left off
+        const returnUrl = typeof window !== "undefined"
+            ? window.location.pathname + window.location.search
+            : "/dashboard";
+        await signOut({ callbackUrl: `/auth/login?callbackUrl=${encodeURIComponent(returnUrl)}` });
+    }
 
     // Update activity timestamp
     const updateActivity = useCallback(() => {
@@ -40,7 +49,7 @@ export default function SessionActivityTracker() {
 
     // Check session timeout
     useEffect(() => {
-        const checkTimeout = () => {
+        function checkTimeout() {
             const lastActivity = parseInt(localStorage.getItem("lastActivity") || Date.now().toString(), 10);
             const timeSinceActivity = Date.now() - lastActivity;
             const remaining = SESSION_TIMEOUT_MS - timeSinceActivity;
@@ -62,7 +71,7 @@ export default function SessionActivityTracker() {
         // a previous session triggering an immediate warning for a new login.
         const freshTimestamp = Date.now().toString();
         localStorage.setItem("lastActivity", freshTimestamp);
-        setLastActivityTime(Date.now());
+        setTimeout(() => setLastActivityTime(Date.now()), 0);
 
         // Check every second
         const interval = setInterval(checkTimeout, 1000);
@@ -98,16 +107,7 @@ export default function SessionActivityTracker() {
         return () => window.removeEventListener("storage", handleStorageChange);
     }, []);
 
-    const handleLogout = async () => {
-        localStorage.removeItem("lastActivity");
-        // Preserve current path so user resumes from where they left off
-        const returnUrl = typeof window !== "undefined"
-            ? window.location.pathname + window.location.search
-            : "/dashboard";
-        await signOut({ callbackUrl: `/auth/login?callbackUrl=${encodeURIComponent(returnUrl)}` });
-    };
-
-    const handleExtendSession = () => {
+    function handleExtendSession() {
         updateActivity();
         setShowWarning(false);
     };

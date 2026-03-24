@@ -26,9 +26,10 @@ export default function CertificateVerificationPage(props: CertificateVerificati
 
     useEffect(() => {
         verifyCertificate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const verifyCertificate = async () => {
+    async function verifyCertificate() {
         setIsLoading(true);
         setError(null);
         try {

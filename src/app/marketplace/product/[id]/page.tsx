@@ -41,6 +41,7 @@ export default function ProductDetailPage() {
 
     useEffect(() => {
         loadProduct();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [productId]);
 
     async function loadProduct() {
@@ -59,7 +60,7 @@ export default function ProductDetailPage() {
         }
     }
 
-    const addToCart = () => {
+    function addToCart() {
         if (!product) return;
         const userId = session?.user?.id;
         const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
@@ -78,7 +79,7 @@ export default function ProductDetailPage() {
         router.push("/marketplace");
     };
 
-    const handleContactSeller = async () => {
+    async function handleContactSeller() {
         if (!product) return;
 
         try {

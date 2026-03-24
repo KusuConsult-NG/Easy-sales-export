@@ -98,7 +98,21 @@ export default function AdminDataTable<T extends Record<string, any>>({
                     )}
                 </div>
 
-                <div className="flex gap-2 w-full sm:w-auto justify-end">
+                <div className="flex gap-2 w-full sm:w-auto justify-end items-center flex-wrap">
+                    {selectable && onSelectAll && data.length > 0 && (
+                        <button
+                            onClick={onSelectAll}
+                            className="hidden sm:inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 font-medium hover:bg-slate-50 transition text-sm whitespace-nowrap"
+                        >
+                            <input
+                                type="checkbox"
+                                className="rounded border-slate-300 pointer-events-none"
+                                checked={Math.max(0, data.length) > 0 && selectedIds?.size === data.length}
+                                readOnly
+                            />
+                            {selectedIds?.size === data.length ? "Deselect Page" : "Select Page"}
+                        </button>
+                    )}
                     {actionButtons}
                 </div>
             </div>
@@ -186,6 +200,21 @@ export default function AdminDataTable<T extends Record<string, any>>({
 
                 {/* Mobile List View */}
                 <div className="md:hidden divide-y divide-slate-100">
+                    {/* Mobile Select All Header */}
+                    {selectable && onSelectAll && data.length > 0 && (
+                        <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                            <label className="flex items-center gap-3 w-full cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="rounded border-slate-300 w-4 h-4 text-blue-600 focus:ring-blue-600"
+                                    checked={selectedIds?.size === data.length}
+                                    onChange={onSelectAll}
+                                />
+                                <span className="text-sm font-medium text-slate-700">Select All ({data.length})</span>
+                            </label>
+                        </div>
+                    )}
+                    
                     {loading && data.length === 0 ? (
                         <div className="p-12 text-center">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />

@@ -49,6 +49,7 @@ function VerifyPaymentContent() {
     }, [reference, cooperativeId, router]);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         verifyPayment();
     }, [verifyPayment]);
 

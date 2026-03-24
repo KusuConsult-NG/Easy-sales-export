@@ -36,9 +36,10 @@ export default function NotificationsPage() {
         } else if (status === "authenticated") {
             loadNotifications();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status]);
 
-    const loadNotifications = async () => {
+    async function loadNotifications() {
         if (!session?.user?.id) return;
         setLoading(true);
         try {
@@ -85,7 +86,7 @@ export default function NotificationsPage() {
         }
     };
 
-    const handleMarkAllAsRead = async () => {
+    async function handleMarkAllAsRead() {
         if (!session?.user?.id) return;
 
         // Optimistic update

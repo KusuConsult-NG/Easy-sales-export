@@ -30,9 +30,10 @@ export default function WAVECompliancePage() {
 
     useEffect(() => {
         fetchComplianceData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timeframe]);
 
-    const fetchComplianceData = async () => {
+    async function fetchComplianceData() {
         setIsLoading(true);
         try {
             const response = await fetch(`/api/admin/wave/compliance?timeframe=${timeframe}`);

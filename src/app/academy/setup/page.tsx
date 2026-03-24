@@ -78,7 +78,7 @@ export default function AcademyOnboardingPage() {
         checkStatus();
     }, [sessionStatus, router]);
 
-    const handlePayNow = async (planName: "foundation" | "advanced" | "elite") => {
+    const handlePayNow = async (planName: "foundation" | "standard" | "elite") => {
         setIsPaymentLoading(true);
         try {
             const result = await initiateAcademyPaymentAction(planName);
@@ -177,7 +177,7 @@ export default function AcademyOnboardingPage() {
                 highlight: false,
             },
             {
-                name: "Advanced",
+                name: "Standard",
                 price: "₦50,000",
                 amount: 50000,
                 description: "Deep dive into strategies, compliance, and scaling your operations.",
@@ -258,7 +258,7 @@ export default function AcademyOnboardingPage() {
                                         ))}
                                     </ul>
                                     <button
-                                        onClick={() => handlePayNow(plan.name.toLowerCase() as "foundation" | "advanced" | "elite")}
+                                        onClick={() => handlePayNow(plan.name.toLowerCase() as "foundation" | "standard" | "elite")}
                                         disabled={isPaymentLoading}
                                         className={`w-full py-3 rounded-xl font-bold text-center transition-all flex items-center justify-center gap-2 ${plan.highlight
                                             ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200'

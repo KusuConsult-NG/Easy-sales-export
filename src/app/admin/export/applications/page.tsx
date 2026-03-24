@@ -121,6 +121,7 @@ export default function AdminExportApplicationsPage() {
     useEffect(() => {
         if (unsubscribeRef.current) unsubscribeRef.current();
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsLoading(true);
         setError(null);
 
@@ -201,7 +202,7 @@ export default function AdminExportApplicationsPage() {
         setRevisionNote(app.revisionNote || "");
     };
 
-    const handleSaveRevision = async () => {
+    async function handleSaveRevision() {
         if (!editingApp || !revisionNote.trim()) {
             showToast("Please enter a revision note for the applicant.", "error");
             return;
@@ -219,7 +220,7 @@ export default function AdminExportApplicationsPage() {
         setEditSaving(false);
     };
 
-    const handleExportCSV = () => {
+    function handleExportCSV() {
         if (!applications.length) return;
         const rows = applications.map((a) => [
             getDisplayName(a),

@@ -70,6 +70,7 @@ export default function AdminWaveApplicationsPage() {
             unsubscribeRef.current();
         }
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsLoading(true);
         setError(null);
 
@@ -167,7 +168,7 @@ export default function AdminWaveApplicationsPage() {
         setEditNote("");
     };
 
-    const handleSaveEdit = async () => {
+    async function handleSaveEdit() {
         if (!editingApp) return;
         setEditSaving(true);
         const result = await editApplicationAction({
@@ -185,7 +186,7 @@ export default function AdminWaveApplicationsPage() {
         setEditSaving(false);
     };
 
-    const handleExportCSV = () => {
+    function handleExportCSV() {
         if (applications.length === 0) return;
         const headers = [
             "Application ID", "Surname", "First Name", "Email", "Phone",

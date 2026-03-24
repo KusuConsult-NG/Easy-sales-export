@@ -27,9 +27,10 @@ export default function WaveShipmentsPage() {
         } else if (status === "authenticated" && session?.user?.id) {
             loadShipments();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, session]);
 
-    const loadShipments = async () => {
+    async function loadShipments() {
         if (!session?.user?.id) return;
 
         setLoading(true);
