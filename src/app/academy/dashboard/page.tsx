@@ -161,7 +161,7 @@ export default function AcademyDashboardPage() {
                             {courses.map((course) => (
                                 <Link
                                     key={course.courseId}
-                                    href={`/academy/courses/${course.courseId}`}
+                                    href={`/academy/${course.courseId}`}
                                     className="block"
                                 >
                                     <div className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all border border-slate-200">

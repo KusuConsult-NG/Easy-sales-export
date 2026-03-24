@@ -13,6 +13,7 @@ import {
 } from "@/app/actions/admin";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, limit, where } from "firebase/firestore";
+import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -97,6 +98,7 @@ export default function AdminAcademyApplicationsPage() {
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
     const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
 
     // ── Real-time listener 1: academy_applications (form/review flow)
     useEffect(() => {
@@ -228,9 +230,17 @@ export default function AdminAcademyApplicationsPage() {
                     <h1 className="text-3xl font-bold text-slate-900 mb-1">Academy Applications</h1>
                     <p className="text-slate-600">Live — {applications.length} total applications</p>
                 </div>
-                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-2">
-                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="text-sm font-semibold text-green-700">Live</span>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={() => setIsEnrollModalOpen(true)}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition shadow-sm border border-blue-500"
+                    >
+                        + Add Student
+                    </button>
+                    <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-2">
+                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        <span className="text-sm font-semibold text-green-700">Live</span>
+                    </div>
                 </div>
             </div>
 
@@ -393,6 +403,12 @@ export default function AdminAcademyApplicationsPage() {
                     )}
                 </div>
             )}
+
+            {/* Enroll Student Modal */}
+            <EnrollStudentModal 
+                isOpen={isEnrollModalOpen} 
+                onClose={() => setIsEnrollModalOpen(false)} 
+            />
         </div>
     );
 }

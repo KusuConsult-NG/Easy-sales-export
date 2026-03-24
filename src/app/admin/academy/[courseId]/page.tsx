@@ -148,7 +148,7 @@ export default function CourseManagerPage() {
         if (!file || !editingLesson) return;
 
         try {
-            const path = `academy/courses/${courseId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            const path = `academy/courses/${courseId}/materials/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
             const url = await uploadFile(file, path, (progress) => {
                 setUploadProgress(progress);
             });
