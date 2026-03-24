@@ -72,6 +72,7 @@ export default function AdminFinancePage() {
     const [sendResult, setSendResult] = useState<string | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncResult, setSyncResult] = useState<string | null>(null);
+    const [lastSynced, setLastSynced] = useState<string | null>(null);
 
     // Reset pagination + selection when switching tabs
     useEffect(() => {
@@ -80,7 +81,14 @@ export default function AdminFinancePage() {
         setSendResult(null);
     }, [activeTab]);
 
-    // ── Real-time listener: processedPayments (all successful Paystack payments)
+    // ── Auto-sync on page load — silently back-fills any Paystack txs missing from Firestore
+    // The Firestore real-time listeners above pick up the new docs automatically.
+    useEffect(() => {
+        handlePaystackSync(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ── Real-time listener: processedPayments
     useEffect(() => {
         // No orderBy — sorting in-memory to avoid dropping docs without that field index
         const q = query(
@@ -193,20 +201,24 @@ export default function AdminFinancePage() {
         }
     };
 
-    async function handlePaystackSync() {
+    async function handlePaystackSync(silent = false) {
         if (isSyncing) return;
         setIsSyncing(true);
-        setSyncResult(null);
+        if (!silent) setSyncResult(null);
         try {
             const res = await fetch("/api/admin/finance/paystack-sync");
             const data = await res.json();
             if (!res.ok || !data.success) throw new Error(data.error || "Sync failed");
-            const msg = data.synced > 0
-                ? `✓ Synced ${data.synced} new transaction${data.synced !== 1 ? 's' : ''} from Paystack (${data.skipped} already present)`
-                : `✓ All ${data.skipped} Paystack transactions are already up to date`;
-            setSyncResult(msg);
+            const now = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
+            setLastSynced(now);
+            if (!silent) {
+                const msg = data.synced > 0
+                    ? `✓ Synced ${data.synced} new transaction${data.synced !== 1 ? 's' : ''} from Paystack (success: ${data.breakdown?.success ?? "?"}, failed: ${data.breakdown?.failed ?? "?"}, abandoned: ${data.breakdown?.abandoned ?? "?"})`
+                    : `✓ All Paystack transactions are up to date`;
+                setSyncResult(msg);
+            }
         } catch (err: any) {
-            setSyncResult(`✗ Sync error: ${err.message}`);
+            if (!silent) setSyncResult(`✗ Sync error: ${err.message}`);
         } finally {
             setIsSyncing(false);
         }
@@ -338,16 +350,21 @@ export default function AdminFinancePage() {
                             <Download className="w-4 h-4" />
                             Export CSV
                         </button>
-                        <button
-                            onClick={handlePaystackSync}
-                            disabled={isSyncing}
-                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl font-semibold transition"
-                            title="Fetch all transactions from Paystack and back-fill any missing ones"
-                        >
-                            {isSyncing
-                                ? <><Loader2 className="w-4 h-4 animate-spin" /> Syncing…</>
-                                : <><RefreshCw className="w-4 h-4" /> Sync from Paystack</>}
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {lastSynced && !isSyncing && (
+                                <span className="text-xs text-slate-400">Synced {lastSynced}</span>
+                            )}
+                            <button
+                                onClick={() => handlePaystackSync(false)}
+                                disabled={isSyncing}
+                                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl font-semibold transition"
+                                title="Re-fetch all transactions from Paystack"
+                            >
+                                {isSyncing
+                                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Syncing…</>
+                                    : <><RefreshCw className="w-4 h-4" /> Refresh</>}
+                            </button>
+                        </div>
                     </div>
 
                     {/* Recovery Email Action Bar */}
