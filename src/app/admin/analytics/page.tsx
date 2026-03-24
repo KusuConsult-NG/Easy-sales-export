@@ -129,10 +129,14 @@ export default function AdminAnalyticsPage() {
     ];
 
     const tooltipStyle = {
-        backgroundColor: "#1e293b",
-        border: "none",
-        borderRadius: "8px",
-        color: "#f8fafc",
+        backgroundColor: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "10px",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
+        color: "#0f172a",
+        fontSize: "13px",
+        fontWeight: 500,
+        padding: "8px 14px",
     };
 
     return (
