@@ -16,6 +16,7 @@ import {
     ChevronDown,
     Mail,
     Loader2,
+    RefreshCw,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase";
@@ -69,6 +70,8 @@ export default function AdminFinancePage() {
     const [selectedRefs, setSelectedRefs] = useState<Set<string>>(new Set());
     const [isSending, setIsSending] = useState(false);
     const [sendResult, setSendResult] = useState<string | null>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncResult, setSyncResult] = useState<string | null>(null);
 
     // Reset pagination + selection when switching tabs
     useEffect(() => {
@@ -191,6 +194,25 @@ export default function AdminFinancePage() {
             setIsSending(false);
         }
     };
+
+    async function handlePaystackSync() {
+        if (isSyncing) return;
+        setIsSyncing(true);
+        setSyncResult(null);
+        try {
+            const res = await fetch("/api/admin/finance/paystack-sync");
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || "Sync failed");
+            const msg = data.synced > 0
+                ? `✓ Synced ${data.synced} new transaction${data.synced !== 1 ? 's' : ''} from Paystack (${data.skipped} already present)`
+                : `✓ All ${data.skipped} Paystack transactions are already up to date`;
+            setSyncResult(msg);
+        } catch (err: any) {
+            setSyncResult(`✗ Sync error: ${err.message}`);
+        } finally {
+            setIsSyncing(false);
+        }
+    }
 
     function exportCsv() {
         const rows = displayedTx.map(t => [
@@ -318,6 +340,16 @@ export default function AdminFinancePage() {
                             <Download className="w-4 h-4" />
                             Export CSV
                         </button>
+                        <button
+                            onClick={handlePaystackSync}
+                            disabled={isSyncing}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl font-semibold transition"
+                            title="Fetch all transactions from Paystack and back-fill any missing ones"
+                        >
+                            {isSyncing
+                                ? <><Loader2 className="w-4 h-4 animate-spin" /> Syncing…</>
+                                : <><RefreshCw className="w-4 h-4" /> Sync from Paystack</>}
+                        </button>
                     </div>
 
                     {/* Recovery Email Action Bar */}
@@ -342,6 +374,25 @@ export default function AdminFinancePage() {
                                         : <><Mail className="w-4 h-4" /> Send Recovery Email</>}
                                 </button>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Paystack Sync Result Banner */}
+                    {syncResult && (
+                        <div className={`px-6 py-3 border-b flex items-center justify-between gap-4 flex-wrap ${
+                            syncResult.startsWith("✓")
+                                ? "bg-emerald-50 border-emerald-100"
+                                : "bg-red-50 border-red-100"
+                        }`}>
+                            <p className={`text-sm font-semibold ${
+                                syncResult.startsWith("✓") ? "text-emerald-800" : "text-red-700"
+                            }`}>{syncResult}</p>
+                            <button
+                                onClick={() => setSyncResult(null)}
+                                className="text-xs text-slate-500 hover:text-slate-700 transition"
+                            >
+                                Dismiss
+                            </button>
                         </div>
                     )}
 
