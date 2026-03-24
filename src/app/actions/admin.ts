@@ -913,8 +913,8 @@ export async function getAllExportRequestsAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
+        if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
+            return { error: "Unauthorized: Permission required - finance:read", success: false };
         }
 
         let query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
@@ -1384,7 +1384,12 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
-            return { error: "Unauthorized: Permission required - users:read", success: false };
+            const roles = session?.user?.roles ?? [];
+            logger.warn(`[getUsersAction] Permission denied. Session roles: ${roles.join(", ") || "none (session may be stale — user must re-login)"}`);
+            return {
+                error: `Unauthorized: your session does not have the 'users:read' permission. Current roles: [${roles.join(", ") || "none"}]. Please sign out and sign back in to refresh your session.`,
+                success: false,
+            };
         }
 
         const pageSize = options.limit || 50;
@@ -1802,7 +1807,7 @@ export async function approveExportOnboardingAction(
             userId: userId,
         });
 
-        return {
+            return {
             error: null,
             success: true,
             message: "Export application approved successfully",
@@ -1813,7 +1818,111 @@ export async function approveExportOnboardingAction(
     }
 }
 
+/**
+ * Request revision / correction from an export applicant.
+ * Sets status to "revision_required" and stores the admin's note.
+ */
+export async function requestExportApplicationRevisionAction(
+    applicationId: string,
+    revisionNote: string
+): Promise<ActionState> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
+                return { error: "Unauthorized: admin or users:update role required", success: false };
+            }
+        }
+
+        if (!revisionNote?.trim()) {
+            return { error: "Revision note is required", success: false };
+        }
+
+        // Find the application — may be passed either as the Firestore doc ID or applicationId field
+        let appDocRef: FirebaseFirestore.DocumentReference;
+        let appData: FirebaseFirestore.DocumentData;
+
+        // First try exact doc ID
+        const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId).get();
+        if (directDoc.exists) {
+            appDocRef = directDoc.ref;
+            appData = directDoc.data()!;
+        } else {
+            // Fallback: query by applicationId field
+            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .where("applicationId", "==", applicationId)
+                .limit(1)
+                .get();
+            if (snap.empty) {
+                return { error: "Application not found", success: false };
+            }
+            appDocRef = snap.docs[0].ref;
+            appData = snap.docs[0].data();
+        }
+
+        const userId = appData.userId;
+        if (!userId) {
+            return { error: "Invalid application: Missing User ID", success: false };
+        }
+
+        // Update application status
+        await appDocRef.update({
+            status: "revision_required",
+            revisionNote: revisionNote.trim(),
+            reviewedBy: session.user.id,
+            reviewedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // Send email notification to applicant
+        if (process.env.RESEND_API_KEY && appData.userEmail) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                await resend.emails.send({
+                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    to: appData.userEmail,
+                    subject: "Action Required: Correction Needed on Your Export Application",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #ea580c;">Action Required: Correction Needed</h2>
+                            <p>Dear ${appData.profile?.fullName || appData.userEmail},</p>
+                            <p>Your Export Services application has been reviewed and requires some corrections before it can proceed.</p>
+                            
+                            <div style="background: #fff7ed; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #ffedd5;">
+                                <p style="margin: 0; color: #9a3412; font-weight: bold;">Correction Required:</p>
+                                <p style="margin: 10px 0 0; color: #7c2d12; font-style: italic;">&ldquo;${revisionNote.trim()}&rdquo;</p>
+                            </div>
+
+                            <p>Please log in to your dashboard, update the indicated information, and re-submit your application.</p>
+
+                            <div style="text-align: center; margin-top: 30px;">
+                                <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/export"
+                                   style="background-color: #ea580c; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+                                    Update My Application
+                                </a>
+                            </div>
+                            <p style="color: #6b7280; font-size: 12px; margin-top: 30px;">Easy Sales Export Team</p>
+                        </div>
+                    `,
+                });
+            } catch (emailErr) {
+                logger.error("[Export Revision] Email send failed:", emailErr);
+            }
+        }
+
+        logger.info(`[Export Revision] Application ${applicationId} marked revision_required by admin ${session.user.id}`);
+        return { error: null, success: true, message: "Revision note sent to applicant" };
+    } catch (error: any) {
+        logger.error("Request export revision error:", error);
+        return { error: "Failed to send revision request", success: false };
+    }
+}
+
 export async function rejectExportApplicationAction(
+
     applicationId: string,
     reason: string
 ): Promise<ActionState> {

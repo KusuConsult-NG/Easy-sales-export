@@ -342,6 +342,24 @@ export default function AdminUsersPage() {
                 </p>
             </div>
 
+            {/* Specific access/session error with actionable guidance */}
+            {error && (error.includes("Unauthorized") || error.includes("session") || error.includes("expired")) && (
+                <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1">
+                        <p className="font-semibold text-amber-800">Access Error: {error}</p>
+                        <p className="text-sm text-amber-700 mt-1">
+                            Your session may not have the correct admin roles. Please <strong>sign out and sign back in</strong> to refresh your permissions.
+                        </p>
+                    </div>
+                    <a
+                        href="/auth/signout"
+                        className="shrink-0 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition text-center"
+                    >
+                        Sign Out &amp; Refresh
+                    </a>
+                </div>
+            )}
+
             <AdminDataTable
                 columns={columns}
                 data={users}

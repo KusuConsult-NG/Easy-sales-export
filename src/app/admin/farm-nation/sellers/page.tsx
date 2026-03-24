@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { getUsersAction, updateUserRolesAction } from "@/app/actions/admin"; // We reuse getUsersAction but filter for seller roles
+import { updateUserRolesAction } from "@/app/actions/admin";
+import { getFarmNationRegistrantsAction } from "@/app/actions/farm-nation-admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useToast } from "@/contexts/ToastContext";
@@ -9,7 +10,6 @@ import { Users, CheckCircle, XCircle, Shield, Loader2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 
 interface SellerProfile {
-    // This maps to the user object but we focus on farm nation profile details
     id: string;
     name: string;
     email: string;
@@ -25,7 +25,7 @@ interface SellerProfile {
             status: string;
             role: string;
             submittedAt: any;
-        }
+        };
     };
     isVerified: boolean;
     createdAt: Date;
@@ -52,15 +52,7 @@ export default function FarmNationSellersPage() {
         setData,
         refresh
     } = useAdminData<SellerProfile>({
-        fetchAction: async (params) => {
-            // Fetch users with farm-nation-seller role or pending farm nation requests
-            // For now, we fetch 'all' and filter by role in UI or backend if backend supports custom query
-            // Ideally we add a 'service' filter to getUsersAction
-            return await getUsersAction({
-                ...params,
-                role: "farm-nation-seller" // Assuming this role exists or we filter for it
-            });
-        },
+        fetchAction: getFarmNationRegistrantsAction,
         limit: 20
     });
 
@@ -107,6 +99,16 @@ export default function FarmNationSellersPage() {
         setProcessingId(null);
     };
 
+    const getStatusBadge = (status: string) => {
+        const map: Record<string, string> = {
+            approved: "bg-green-100 text-green-700",
+            pending: "bg-yellow-100 text-yellow-700",
+            rejected: "bg-red-100 text-red-700",
+            revision_required: "bg-orange-100 text-orange-700",
+        };
+        return map[status] || "bg-slate-100 text-slate-700";
+    };
+
     const columns = [
         {
             header: "Seller",
@@ -123,23 +125,32 @@ export default function FarmNationSellersPage() {
             )
         },
         {
+            header: "Role",
+            accessor: (item: SellerProfile) => (
+                <span className="text-sm text-slate-700 capitalize">
+                    {item.serviceRegistrations?.farmNation?.role?.replace(/_/g, " ") || "—"}
+                </span>
+            ),
+            hideOnMobile: true
+        },
+        {
             header: "Location",
             accessor: (item: SellerProfile) => (
                 <div className="text-sm text-slate-600">
-                    {item.farmNation?.profile?.state || "N/A"}, {item.farmNation?.profile?.lga || ""}
+                    {item.farmNation?.profile?.state
+                        ? `${item.farmNation.profile.state}${item.farmNation.profile.lga ? `, ${item.farmNation.profile.lga}` : ""}`
+                        : "—"}
                 </div>
-            )
+            ),
+            hideOnMobile: true
         },
         {
             header: "Status",
             accessor: (item: SellerProfile) => {
                 const status = item.serviceRegistrations?.farmNation?.status || "unknown";
                 return (
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${status === "approved" ? "bg-green-100 text-green-700" :
-                        status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                            "bg-slate-100 text-slate-700"
-                        }`}>
-                        {status}
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(status)}`}>
+                        {status.replace(/_/g, " ")}
                     </span>
                 );
             }
@@ -147,9 +158,8 @@ export default function FarmNationSellersPage() {
         {
             header: "Submitted",
             accessor: (item: SellerProfile) => {
-                const date = item.serviceRegistrations?.farmNation?.submittedAt
-                    ? new Date(item.serviceRegistrations.farmNation.submittedAt.seconds * 1000)
-                    : item.createdAt;
+                const ts = item.serviceRegistrations?.farmNation?.submittedAt;
+                const date = ts?.seconds ? new Date(ts.seconds * 1000) : item.createdAt;
                 return (
                     <span className="text-sm text-slate-500">
                         {new Intl.DateTimeFormat("en-NG", { dateStyle: "medium" }).format(date)}
@@ -238,41 +248,105 @@ export default function FarmNationSellersPage() {
             >
                 {selectedSeller && (
                     <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs text-slate-500 uppercase">Name</label>
-                                <p className="font-medium">{selectedSeller.name}</p>
+                        {/* Basic Info */}
+                        <div>
+                            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Basic Information</h4>
+                            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl text-sm">
+                                <div>
+                                    <span className="text-slate-500 block text-xs mb-0.5">Name</span>
+                                    <p className="font-medium text-slate-900">{selectedSeller.name}</p>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500 block text-xs mb-0.5">Email</span>
+                                    <p className="font-medium text-slate-900">{selectedSeller.email}</p>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500 block text-xs mb-0.5">Phone</span>
+                                    <p className="font-medium text-slate-900">
+                                        {selectedSeller.farmNation?.profile?.phone || selectedSeller.phone || "—"}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className="text-slate-500 block text-xs mb-0.5">Location</span>
+                                    <p className="font-medium text-slate-900">
+                                        {selectedSeller.farmNation?.profile?.state
+                                            ? `${selectedSeller.farmNation.profile.state}, ${selectedSeller.farmNation.profile.lga || ""}`
+                                            : "—"}
+                                    </p>
+                                </div>
+                                {selectedSeller.farmNation?.profile?.address && (
+                                    <div className="col-span-2">
+                                        <span className="text-slate-500 block text-xs mb-0.5">Address</span>
+                                        <p className="font-medium text-slate-900">{selectedSeller.farmNation.profile.address}</p>
+                                    </div>
+                                )}
                             </div>
-                            <div>
-                                <label className="text-xs text-slate-500 uppercase">Email</label>
-                                <p className="font-medium">{selectedSeller.email}</p>
-                            </div>
-                            <div>
-                                <label className="text-xs text-slate-500 uppercase">Phone</label>
-                                <p className="font-medium">{selectedSeller.farmNation?.profile?.phone || selectedSeller.phone}</p>
-                            </div>
-                            <div>
-                                <label className="text-xs text-slate-500 uppercase">Location</label>
-                                <p className="font-medium">{selectedSeller.farmNation?.profile?.state}, {selectedSeller.farmNation?.profile?.lga}</p>
-                            </div>
-                            <div className="col-span-2">
-                                <label className="text-xs text-slate-500 uppercase">Address</label>
-                                <p className="font-medium">{selectedSeller.farmNation?.profile?.address}</p>
-                            </div>
-                            <div className="col-span-2">
-                                <label className="text-xs text-slate-500 uppercase">Interests</label>
-                                <div className="bg-slate-50 p-2 rounded text-sm mt-1">
-                                    <pre className="whitespace-pre-wrap font-sans text-slate-600">
-                                        {JSON.stringify(selectedSeller.farmNation?.interests, null, 2)}
-                                    </pre>
+                        </div>
+
+                        {/* Registration Status */}
+                        <div>
+                            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Registration</h4>
+                            <div className="bg-slate-50 p-4 rounded-xl text-sm space-y-2">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Role Applied For</span>
+                                    <span className="font-medium capitalize">
+                                        {selectedSeller.serviceRegistrations?.farmNation?.role?.replace(/_/g, " ") || "—"}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Status</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${getStatusBadge(selectedSeller.serviceRegistrations?.farmNation?.status || "unknown")}`}>
+                                        {(selectedSeller.serviceRegistrations?.farmNation?.status || "unknown").replace(/_/g, " ")}
+                                    </span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex justify-end pt-4 border-t border-slate-200">
+                        {/* Interests — shown as readable tags, not raw JSON */}
+                        {selectedSeller.farmNation?.interests && (
+                            <div>
+                                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Farm Interests</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {Array.isArray(selectedSeller.farmNation.interests)
+                                        ? selectedSeller.farmNation.interests.map((interest: string, i: number) => (
+                                            <span key={i} className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-medium">
+                                                {interest}
+                                            </span>
+                                        ))
+                                        : typeof selectedSeller.farmNation.interests === "object"
+                                            ? Object.entries(selectedSeller.farmNation.interests).map(([k, v]) => (
+                                                <span key={k} className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-medium capitalize">
+                                                    {k.replace(/_/g, " ")}: {String(v)}
+                                                </span>
+                                            ))
+                                            : <span className="text-sm text-slate-600">{String(selectedSeller.farmNation.interests)}</span>
+                                    }
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+                            {selectedSeller.serviceRegistrations?.farmNation?.status === "pending" && (
+                                <>
+                                    <button
+                                        onClick={() => { handleRejectSeller(selectedSeller); setIsDetailOpen(false); }}
+                                        disabled={!!processingId}
+                                        className="px-4 py-2 bg-red-50 text-red-700 hover:bg-red-100 font-semibold rounded-lg text-sm disabled:opacity-50"
+                                    >
+                                        Reject
+                                    </button>
+                                    <button
+                                        onClick={() => { handleApproveSeller(selectedSeller); setIsDetailOpen(false); }}
+                                        disabled={!!processingId}
+                                        className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 font-semibold rounded-lg text-sm disabled:opacity-50"
+                                    >
+                                        Approve
+                                    </button>
+                                </>
+                            )}
                             <button
                                 onClick={() => setIsDetailOpen(false)}
-                                className="px-4 py-2 text-slate-600 hover:text-slate-800"
+                                className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium"
                             >
                                 Close
                             </button>
