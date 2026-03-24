@@ -16,7 +16,7 @@ export default function CreateCoursePage() {
         description: "",
         instructor: "",
         category: "export-basics",
-        tier: "free",
+        tier: "foundation",
         thumbnail: "",
     });
 
@@ -141,7 +141,6 @@ export default function CreateCoursePage() {
                                     onChange={(e) => setFormData({ ...formData, tier: e.target.value })}
                                     className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/50"
                                 >
-                                    <option value="free">Free (Open to All)</option>
                                     <option value="foundation">Foundation</option>
                                     <option value="standard">Standard</option>
                                     <option value="elite">Elite</option>

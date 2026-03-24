@@ -34,18 +34,31 @@ export default function CourseManagerPage() {
     const [editingModule, setEditingModule] = useState<CourseModuleWithState | null>(null);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isCourseSettingsOpen, setIsCourseSettingsOpen] = useState(false);
+    const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
+    const [newModuleForm, setNewModuleForm] = useState<{
+        title: string;
+        description: string;
+        contentType: 'video' | 'document';
+        videoUrl?: string;
+        documentUrl?: string;
+    }>({
+        title: '',
+        description: '',
+        contentType: 'video',
+    });
     const [courseDetailsForm, setCourseDetailsForm] = useState<{
         title: string;
         description: string;
         instructor: string;
-        tier: "free" | "foundation" | "standard" | "elite";
+        tier: "foundation" | "standard" | "elite";
     }>({
         title: "",
         description: "",
         instructor: "",
-        tier: "free",
+        tier: "foundation",
     });
     const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+    const [uploadContext, setUploadContext] = useState<'lesson' | 'newModule'>('lesson');
 
     useEffect(() => {
         loadCourse();
@@ -64,7 +77,7 @@ export default function CourseManagerPage() {
                     title: data.title || "",
                     description: data.description || "",
                     instructor: data.instructor || "",
-                    tier: (data.tier || "free") as "free" | "foundation" | "standard" | "elite"
+                    tier: (data.tier as "foundation" | "standard" | "elite") || "foundation"
                 });
             } else {
                 toast.error("Course not found");
@@ -84,17 +97,40 @@ export default function CourseManagerPage() {
     };
 
     function handleAddModule() {
-        const newModule: CourseModule = {
+        setNewModuleForm({ title: '', description: '', contentType: 'video' });
+        setUploadContext('newModule');
+        setIsAddModuleOpen(true);
+    };
+
+    async function handleCreateModule() {
+        if (!newModuleForm.title.trim()) {
+            toast.error("Please enter a module title.");
+            return;
+        }
+        const firstLessonId = `l-${Date.now()}`;
+        const newModule: CourseModuleWithState = {
             id: `m-${Date.now()}`,
-            title: "New Module (Click Edit to Rename)",
-            description: "",
-            lessons: [],
+            title: newModuleForm.title.trim(),
+            description: newModuleForm.description,
+            lessons: newModuleForm.videoUrl || newModuleForm.documentUrl ? [{
+                id: firstLessonId,
+                title: `${newModuleForm.title} — Lesson 1`,
+                content: newModuleForm.documentUrl || '',
+                duration: '00:00',
+                order: 0,
+                type: newModuleForm.contentType === 'video' ? 'video' : 'text',
+                ...(newModuleForm.videoUrl && { videoUrl: newModuleForm.videoUrl }),
+                ...(newModuleForm.documentUrl && { documentUrl: newModuleForm.documentUrl }),
+            } as LessonWithState] : [],
             order: modules.length,
+            isExpanded: true,
         };
         const newModules = [...modules, newModule];
         setModules(newModules);
-        saveModules(newModules, true); // silent — toast shown below
-        toast.success("Module added. Click the edit icon to rename it.");
+        await saveModules(newModules, true);
+        setIsAddModuleOpen(false);
+        setUploadContext('lesson');
+        toast.success(`Module "${newModule.title}" created successfully.`);
     };
 
     const handleAddLesson = (moduleId: string) => {
@@ -179,8 +215,9 @@ export default function CourseManagerPage() {
         if (!editingModule) return;
         const newModules = modules.map(m => m.id === editingModule.id ? editingModule : m);
         setModules(newModules);
-        await saveModules(newModules);
+        await saveModules(newModules, true);
         setEditingModule(null);
+        toast.success("Module updated.");
     }
 
     async function handleSaveCourseDetails() {
@@ -204,25 +241,34 @@ export default function CourseManagerPage() {
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'document') => {
         const file = e.target.files?.[0];
-        if (!file || !editingLesson) return;
+        if (!file) return;
 
         try {
             const path = `academy/courses/${courseId}/materials/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
             const url = await uploadFile(file, path, (progress) => {
                 setUploadProgress(progress);
             });
-            
-            setEditingLesson(prev => {
-                if (!prev) return prev;
-                return {
+
+            if (uploadContext === 'newModule') {
+                // Uploading for the Add Module modal
+                setNewModuleForm(prev => ({
                     ...prev,
-                    lesson: {
-                        ...prev.lesson,
-                        ...(type === 'video' ? { videoUrl: url } : { documentUrl: url, content: url })
-                    }
-                };
-            });
-            toast.success(`${type} uploaded successfully`);
+                    ...(type === 'video' ? { videoUrl: url } : { documentUrl: url }),
+                }));
+            } else if (editingLesson) {
+                // Uploading for an existing lesson
+                setEditingLesson(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        lesson: {
+                            ...prev.lesson,
+                            ...(type === 'video' ? { videoUrl: url } : { documentUrl: url, content: url })
+                        }
+                    };
+                });
+            }
+            toast.success(`${type === 'video' ? 'Video' : 'Document'} uploaded successfully`);
         } catch (error: any) {
             toast.error(`Failed to upload ${type}: ${error.message}`);
         } finally {
@@ -376,6 +422,129 @@ export default function CourseManagerPage() {
                         </div>
                     ))}
                 </div>
+
+                {/* Add New Module Modal */}
+                <Modal
+                    isOpen={isAddModuleOpen}
+                    onClose={() => setIsAddModuleOpen(false)}
+                    title="Add New Module"
+                    maxWidth="lg"
+                >
+                    <div className="space-y-5">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Module Title <span className="text-red-500">*</span></label>
+                            <input
+                                type="text"
+                                placeholder="e.g., Introduction to Export Basics"
+                                value={newModuleForm.title}
+                                onChange={(e) => setNewModuleForm({ ...newModuleForm, title: e.target.value })}
+                                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
+                            <textarea
+                                placeholder="Brief overview of what this module covers..."
+                                value={newModuleForm.description}
+                                onChange={(e) => setNewModuleForm({ ...newModuleForm, description: e.target.value })}
+                                className="w-full px-4 py-2 border rounded-lg h-20 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            />
+                        </div>
+
+                        {/* Content Type Selector */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Content Type for First Lesson</label>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setNewModuleForm({ ...newModuleForm, contentType: 'video', documentUrl: undefined })}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-medium text-sm transition ${newModuleForm.contentType === 'video' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                                >
+                                    <PlayCircle className="w-5 h-5" />
+                                    Video Lesson
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNewModuleForm({ ...newModuleForm, contentType: 'document', videoUrl: undefined })}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-medium text-sm transition ${newModuleForm.contentType === 'document' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                                >
+                                    <FileText className="w-5 h-5" />
+                                    Document / PDF
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Upload Field */}
+                        <div className="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50 space-y-3">
+                            <p className="text-sm font-semibold text-slate-700">
+                                {newModuleForm.contentType === 'video' ? 'Upload Video' : 'Upload Document / PDF'}
+                                <span className="text-slate-400 font-normal ml-1">(optional — you can add content later)</span>
+                            </p>
+
+                            {newModuleForm.contentType === 'video' ? (
+                                newModuleForm.videoUrl ? (
+                                    <div className="flex items-center justify-between bg-green-50 text-green-700 p-3 rounded-lg border border-green-200">
+                                        <span className="text-sm">✓ Video uploaded and ready</span>
+                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setNewModuleForm(p => ({ ...p, videoUrl: undefined }))}>Remove</button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <input type="file" accept="video/*" onChange={(e) => handleFileUpload(e, 'video')} className="hidden" id="new-module-video-upload" />
+                                        <label htmlFor="new-module-video-upload" className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-600 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer text-sm">
+                                            <UploadCloud className="w-5 h-5" />
+                                            Choose Video File
+                                        </label>
+                                    </>
+                                )
+                            ) : (
+                                newModuleForm.documentUrl ? (
+                                    <div className="flex items-center justify-between bg-blue-50 text-blue-700 p-3 rounded-lg border border-blue-200">
+                                        <span className="text-sm">✓ Document uploaded and ready</span>
+                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setNewModuleForm(p => ({ ...p, documentUrl: undefined }))}>Remove</button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => handleFileUpload(e, 'document')} className="hidden" id="new-module-doc-upload" />
+                                        <label htmlFor="new-module-doc-upload" className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-600 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer text-sm">
+                                            <UploadCloud className="w-5 h-5" />
+                                            Choose PDF / Document
+                                        </label>
+                                    </>
+                                )
+                            )}
+
+                            {uploadProgress && (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-xs font-medium text-slate-500">
+                                        <span>Uploading...</span>
+                                        <span>{Math.round(uploadProgress.progress)}%</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress.progress}%` }} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="pt-2 flex justify-end gap-3 border-t">
+                            <button
+                                type="button"
+                                onClick={() => setIsAddModuleOpen(false)}
+                                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCreateModule}
+                                disabled={!!uploadProgress}
+                                className="px-6 py-2 bg-primary text-white rounded-lg font-medium shadow shadow-primary/20 hover:bg-primary/90 transition disabled:opacity-50"
+                            >
+                                Create Module
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
 
                 {/* Lesson Edit/Upload Modal */}
                 {editingLesson && (
@@ -588,10 +757,9 @@ export default function CourseManagerPage() {
                             <label className="block text-sm font-medium text-slate-700 mb-1">Tier Access</label>
                             <select
                                 value={courseDetailsForm.tier}
-                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, tier: e.target.value as "free" | "foundation" | "standard" | "elite" })}
+                                onChange={(e) => setCourseDetailsForm({ ...courseDetailsForm, tier: e.target.value as "foundation" | "standard" | "elite" })}
                                 className="w-full px-4 py-2 border rounded-lg"
                             >
-                                <option value="free">Free (Open to All)</option>
                                 <option value="foundation">Foundation</option>
                                 <option value="standard">Standard</option>
                                 <option value="elite">Elite</option>
