@@ -93,8 +93,8 @@ export default function CourseManagerPage() {
         };
         const newModules = [...modules, newModule];
         setModules(newModules);
-        saveModules(newModules);
-        toast.success("Module added. You can now edit its title.");
+        saveModules(newModules, true); // silent — toast shown below
+        toast.success("Module added. Click the edit icon to rename it.");
     };
 
     const handleAddLesson = (moduleId: string) => {
@@ -114,8 +114,8 @@ export default function CourseManagerPage() {
             return m;
         });
         setModules(newModules);
-        saveModules(newModules);
-        toast.success("Lesson added. You can now edit its content.");
+        saveModules(newModules, true); // silent — toast shown below
+        toast.success("Lesson added. Click the edit icon to set its content.");
     };
 
     const handleDeleteModule = (moduleId: string) => {
@@ -125,7 +125,8 @@ export default function CourseManagerPage() {
                 onClick: () => {
                     const newModules = modules.filter(m => m.id !== moduleId);
                     setModules(newModules);
-                    saveModules(newModules);
+                    saveModules(newModules, true);
+                    toast.success("Module deleted.");
                 }
             },
             cancel: { label: "Cancel", onClick: () => {} }
@@ -144,7 +145,8 @@ export default function CourseManagerPage() {
                         return m;
                     });
                     setModules(newModules);
-                    saveModules(newModules);
+                    saveModules(newModules, true);
+                    toast.success("Lesson deleted.");
                 }
             },
             cancel: { label: "Cancel", onClick: () => {} }
@@ -228,7 +230,7 @@ export default function CourseManagerPage() {
         }
     };
 
-    const saveModules = async (updatedModules: CourseModuleWithState[]) => {
+    const saveModules = async (updatedModules: CourseModuleWithState[], silent = false) => {
         // Remove UI state before saving
         const modulesToSave = updatedModules.map(({ isExpanded, lessons, ...m }) => ({
             ...m,
@@ -237,11 +239,12 @@ export default function CourseManagerPage() {
 
         const result = await updateCourseModulesAction(courseId, modulesToSave);
         if (result.success) {
-            toast.success("Changes saved");
+            if (!silent) toast.success("Changes saved");
         } else {
             toast.error("Failed to save changes");
         }
     };
+
 
     const getIcon = (type: string) => {
         switch (type) {
