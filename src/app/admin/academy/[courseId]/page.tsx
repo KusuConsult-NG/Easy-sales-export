@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save, Plus, GripVertical, Trash2, Edit2, PlayCircle, FileText, HelpCircle, Loader2, UploadCloud } from "lucide-react";
 import Link from "next/link";
+import { ArrowLeft, Save, Plus, GripVertical, Trash2, Edit2, PlayCircle, FileText, HelpCircle, Loader2, UploadCloud, Eye } from "lucide-react";
+import { VideoPlayer } from "@/components/lms/VideoPlayer";
 import { getCourseByIdAction, updateCourseAction, updateCourseModulesAction, type Course, type CourseModule, type Lesson, type Quiz } from "@/app/actions/academy";
 import { toast } from "sonner";
 import Modal from "@/components/ui/Modal";
@@ -31,6 +32,7 @@ export default function CourseManagerPage() {
     const [modules, setModules] = useState<CourseModuleWithState[]>([]);
 
     const [editingLesson, setEditingLesson] = useState<{ moduleId: string; lesson: LessonWithState } | null>(null);
+    const [previewLesson, setPreviewLesson] = useState<LessonWithState | null>(null);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
@@ -273,9 +275,13 @@ export default function CourseManagerPage() {
                                     {module.lessons.map((lesson, lIndex) => (
                                         <div key={lesson.id} className="flex items-center justify-between p-3 hover:bg-slate-50 transition rounded-lg group">
                                             <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-slate-100 rounded-lg">
+                                                <button 
+                                                    onClick={() => (lesson.videoUrl || lesson.documentUrl) ? setPreviewLesson(lesson) : undefined}
+                                                    className={`p-2 rounded-lg transition ${lesson.videoUrl || lesson.documentUrl ? 'bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer' : 'bg-slate-100 text-slate-400 cursor-default'}`}
+                                                    title={lesson.videoUrl || lesson.documentUrl ? "Preview Content" : "No Media Content"}
+                                                >
                                                     {getIcon("video")}
-                                                </div>
+                                                </button>
                                                 <div>
                                                     <p className="font-medium text-slate-900 text-sm">{lesson.title}</p>
                                                     <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -286,6 +292,11 @@ export default function CourseManagerPage() {
 
 
                                             <div className="hidden group-hover:flex items-center gap-2">
+                                                {(lesson.videoUrl || lesson.documentUrl) && (
+                                                    <button onClick={() => setPreviewLesson(lesson)} className="p-2 hover:bg-slate-200 text-slate-700 rounded-lg transition" title="Preview Content">
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                                 <button onClick={() => handleEditLesson(module.id, lesson)} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition" title="Edit Content">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
@@ -427,6 +438,44 @@ export default function CourseManagerPage() {
                                     Save Lesson
                                 </button>
                             </div>
+                        </div>
+                    </Modal>
+                )}
+
+                {/* Preview Content Modal */}
+                {previewLesson && (
+                    <Modal
+                        isOpen={!!previewLesson}
+                        onClose={() => setPreviewLesson(null)}
+                        title={`Preview: ${previewLesson.title}`}
+                        maxWidth="2xl"
+                    >
+                        <div className="space-y-4">
+                            {previewLesson.videoUrl && (
+                                <div className="bg-black rounded-2xl overflow-hidden mb-6" style={{ aspectRatio: "16/9" }}>
+                                    <VideoPlayer
+                                        courseId={courseId}
+                                        videoUrl={previewLesson.videoUrl}
+                                        initialProgress={0}
+                                        onProgressUpdate={async (p, t) => {}}
+                                        onComplete={async () => {}}
+                                    />
+                                </div>
+                            )}
+                            {previewLesson.documentUrl && (
+                                <div className="w-full h-[600px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative">
+                                    <iframe 
+                                        src={`${previewLesson.documentUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                                        className="w-full h-full border-0"
+                                        title="Lesson Document Preview"
+                                    />
+                                </div>
+                            )}
+                            {!previewLesson.videoUrl && !previewLesson.documentUrl && (
+                                <div className="p-8 text-center text-slate-500 font-medium">
+                                    No media uploaded for this lesson yet.
+                                </div>
+                            )}
                         </div>
                     </Modal>
                 )}
