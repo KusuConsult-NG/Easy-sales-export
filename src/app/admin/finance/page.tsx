@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, limit, Timestamp } from "firebase/firestore";
+import { collection, onSnapshot, query, Timestamp } from "firebase/firestore";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -84,8 +84,7 @@ export default function AdminFinancePage() {
     useEffect(() => {
         // No orderBy — sorting in-memory to avoid dropping docs without that field index
         const q = query(
-            collection(db, "processedPayments"),
-            limit(2000) // raised from 500 — we only have ~50 docs, but future-proofed
+            collection(db, "processedPayments")
         );
         const unsub = onSnapshot(q, (snap) => {
             const txs: Transaction[] = snap.docs.map(doc => {
@@ -116,8 +115,7 @@ export default function AdminFinancePage() {
     // ── Real-time listener: failedPayments (failed + abandoned)
     useEffect(() => {
         const q = query(
-            collection(db, "failedPayments"),
-            limit(5000) // raised from 500 — we have 1940+ docs, need to show all
+            collection(db, "failedPayments")
         );
         const unsub = onSnapshot(q, (snap) => {
             const txs: FailedTransaction[] = snap.docs.map(doc => {

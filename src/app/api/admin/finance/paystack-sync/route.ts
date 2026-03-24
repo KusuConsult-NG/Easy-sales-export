@@ -26,29 +26,37 @@ interface PaystackTx {
 }
 
 /**
- * Fetch one page of transactions from Paystack.
- * perPage capped at 100 (Paystack limit).
+ * Fetch ALL pages for a given Paystack status bucket.
+ * status param: 'success' | 'failed' | 'abandoned'
+ * perPage is capped at 100 by Paystack.
  */
-async function fetchPaystackPage(page: number): Promise<{ data: PaystackTx[]; meta: { total: number; pages: number } }> {
-    const url = `${PAYSTACK_BASE_URL}/transaction?perPage=100&page=${page}`;
-    const res = await fetch(url, {
-        headers: {
-            Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-            "Content-Type": "application/json",
-        },
-        cache: "no-store",
-    });
-    if (!res.ok) {
-        throw new Error(`Paystack API error: ${res.status} ${res.statusText}`);
+async function fetchAllPaystackByStatus(status: string): Promise<PaystackTx[]> {
+    const all: PaystackTx[] = [];
+    let page = 1;
+
+    while (true) {
+        const url = `${PAYSTACK_BASE_URL}/transaction?perPage=100&page=${page}&status=${status}`;
+        const res = await fetch(url, {
+            headers: {
+                Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+                "Content-Type": "application/json",
+            },
+            cache: "no-store",
+        });
+        if (!res.ok) {
+            throw new Error(`Paystack API error (status=${status}, page=${page}): ${res.status} ${res.statusText}`);
+        }
+        const json = await res.json();
+        const data: PaystackTx[] = json.data ?? [];
+        all.push(...data);
+
+        const totalPages: number = json.meta?.pageCount ?? 1;
+        logger.info(`[PaystackSync] ${status} page ${page}/${totalPages} — ${data.length} txs`);
+        if (page >= totalPages || data.length === 0) break;
+        page++;
     }
-    const json = await res.json();
-    return {
-        data: json.data ?? [],
-        meta: {
-            total: json.meta?.total ?? 0,
-            pages: json.meta?.pageCount ?? 1,
-        },
-    };
+
+    return all;
 }
 
 /**
@@ -71,23 +79,30 @@ async function paystackSyncHandler(_req: NextRequest) {
             return NextResponse.json({ success: false, error: "PAYSTACK_SECRET_KEY not configured" }, { status: 500 });
         }
 
-        // ── Fetch all pages ────────────────────────────────────────────────────
-        let allTxs: PaystackTx[] = [];
-        const firstPage = await fetchPaystackPage(1);
-        allTxs = firstPage.data;
-        const totalPages = firstPage.meta.pages;
+        // ── Fetch all pages from Paystack — one pass per status bucket ──────────
+        // Paystack's /transaction endpoint without a status filter does NOT reliably
+        // return all abandoned transactions. We must query each status explicitly.
+        logger.info("[PaystackSync] Fetching success, failed, and abandoned transactions from Paystack...");
 
-        logger.info(`[PaystackSync] Total pages: ${totalPages}, Total transactions: ${firstPage.meta.total}`);
+        const [successTxs, failedTxs, abandonedTxs] = await Promise.all([
+            fetchAllPaystackByStatus("success"),
+            fetchAllPaystackByStatus("failed"),
+            fetchAllPaystackByStatus("abandoned"),
+        ]);
 
-        // Fetch remaining pages (start from 2)
-        for (let page = 2; page <= totalPages; page++) {
-            const { data } = await fetchPaystackPage(page);
-            allTxs = allTxs.concat(data);
+        // Deduplicate by reference (a tx should only appear in one bucket, but just in case)
+        const seen = new Set<string>();
+        const allTxs: PaystackTx[] = [];
+        for (const tx of [...successTxs, ...failedTxs, ...abandonedTxs]) {
+            if (!seen.has(tx.reference)) {
+                seen.add(tx.reference);
+                allTxs.push(tx);
+            }
         }
 
-        logger.info(`[PaystackSync] Fetched ${allTxs.length} total transactions from Paystack`);
+        logger.info(`[PaystackSync] Fetched ${allTxs.length} total (success: ${successTxs.length}, failed: ${failedTxs.length}, abandoned: ${abandonedTxs.length})`);
 
-        // ── Check existing Firestore docs in parallel batches ─────────────────
+        // ── Back-fill missing docs into Firestore ──────────────────────────────
         let synced = 0;
         let skipped = 0;
         let errors = 0;
@@ -178,6 +193,11 @@ async function paystackSyncHandler(_req: NextRequest) {
         return NextResponse.json({
             success: true,
             total: allTxs.length,
+            breakdown: {
+                success: successTxs.length,
+                failed: failedTxs.length,
+                abandoned: abandonedTxs.length,
+            },
             synced,
             skipped,
             errors,
