@@ -77,9 +77,11 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             newErrors.accountNumber = "Valid 10-digit account number required";
         }
 
-        // BVN is REQUIRED on WAVE (collected, not API-verified)
+        // BVN is REQUIRED on WAVE and must be API-verified
         if (!data.bvn || data.bvn.length !== 11) {
             newErrors.bvn = "BVN is required — enter your 11-digit Bank Verification Number";
+        } else if (!bvnVerified) {
+            newErrors.bvn = "Please click 'Verify' to validate your BVN before continuing";
         }
 
         if (data.isMemberOfCooperative && !data.cooperativeName?.trim()) {
@@ -182,12 +184,20 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                         setBvnVerified(false);
                                         setBvnError("");
                                     }}
-                                    disabled={bvnVerified}
+                                    disabled={bvnVerified || verifyingBvn}
                                     maxLength={11}
                                     className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 ${errors.bvn ? 'border-red-400' : 'border-slate-300'}`}
                                     placeholder="11-digit BVN"
                                 />
                             </div>
+                            <button
+                                type="button"
+                                onClick={handleVerifyBvn}
+                                disabled={bvnVerified || verifyingBvn || data.bvn?.length !== 11}
+                                className="px-6 py-3 bg-emerald-100 text-emerald-800 font-semibold rounded-xl hover:bg-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {verifyingBvn ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify"}
+                            </button>
                         </div>
                         {errors.bvn && !bvnError && (
                             <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
