@@ -232,9 +232,27 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             };
         }
 
-        // 🔒 LOGIC FIX: Prevent Duplicate Applications
-        // 🔒 LOGIC FIX: Prevent Duplicate Applications
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        // 🔒 STRICT DEDUPLICATION: Check per-user status AND collection-level uniqueness
+        const applicantEmail = (session.user.email || validatedData.email || '').toLowerCase().trim();
+        const applicantPhone = validatedData.phone.replace(/\s+/g, '').trim();
+        const applicantNin   = validatedData.nin.trim();
+
+        const [userDoc, emailSnap, phoneSnap, ninSnap] = await Promise.all([
+            db.collection(COLLECTIONS.USERS).doc(session.user.id).get(),
+            db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("userEmail", "==", applicantEmail)
+                .limit(1)
+                .get(),
+            db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("phone", "==", applicantPhone)
+                .limit(1)
+                .get(),
+            db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("nin", "==", applicantNin)
+                .limit(1)
+                .get(),
+        ]);
+
         const existingStatus = userDoc.data()?.serviceRegistrations?.wave?.status;
 
         if (existingStatus === 'pending' || existingStatus === 'under_review') {
@@ -249,6 +267,27 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
                 error: "You are already enrolled in the WAVE program."
             };
         }
+
+        // 🔒 Collection-level uniqueness checks (catches multi-account fraud)
+        if (!emailSnap.empty) {
+            return {
+                success: false,
+                error: "An application with this email address already exists in the WAVE program."
+            };
+        }
+        if (!phoneSnap.empty) {
+            return {
+                success: false,
+                error: "An application with this phone number already exists in the WAVE program."
+            };
+        }
+        if (!ninSnap.empty) {
+            return {
+                success: false,
+                error: "An application with this NIN already exists in the WAVE program."
+            };
+        }
+
         // Allow users with revision_required status to resubmit — handled below
 
         // Generate application ID

@@ -224,6 +224,30 @@ export async function registerCooperativeMemberAction(
 
         const validatedData = validationResult.data;
 
+        // 🔒 DEDUP GUARD: Collection-level phone & email check
+        // Catches cross-account duplicates (same phone/email, different account)
+        const [coopPhoneExists, coopEmailExists] = await Promise.all([
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("phone", "==", validatedData.phone)
+                .limit(1)
+                .get(),
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("email", "==", validatedData.email)
+                .limit(1)
+                .get(),
+        ]);
+
+        // Allow only if the match is for the SAME user (edit path)
+        const phoneDoc = (coopPhoneExists as any).docs?.[0];
+        const emailDoc = (coopEmailExists as any).docs?.[0];
+
+        if (!coopPhoneExists.empty && phoneDoc?.id !== userId) {
+            return { error: "A cooperative member with this phone number already exists.", success: false };
+        }
+        if (!coopEmailExists.empty && emailDoc?.id !== userId) {
+            return { error: "A cooperative member with this email address already exists.", success: false };
+        }
+
         // Update membership record with profile data
         const updatedData = {
             firstName: validatedData.firstName,

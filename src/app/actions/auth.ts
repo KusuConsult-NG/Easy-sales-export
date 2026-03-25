@@ -205,6 +205,22 @@ export async function registerAction(prevState: any, formData: FormData) {
             phone: formData.get("phone") as string,
         });
 
+        // 🔒 DEDUP GUARD: Check phone uniqueness before touching Firebase Auth
+        // Prevents multi-account fraud (same phone, different email addresses)
+        if (validatedData.phone) {
+            const phoneCheck = await db.collection(COLLECTIONS.USERS)
+                .where("phone", "==", validatedData.phone)
+                .limit(1)
+                .get();
+            if (!phoneCheck.empty) {
+                return {
+                    error: "An account with this phone number already exists. Please log in instead.",
+                    success: false,
+                    redirectUrl: "",
+                };
+            }
+        }
+
         // Create Firebase Auth user via Admin SDK
         const userRecord = await adminAuth.createUser({
             email: validatedData.email,

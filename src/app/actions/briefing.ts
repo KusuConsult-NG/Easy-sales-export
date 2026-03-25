@@ -55,15 +55,23 @@ export const registerForBriefingAction = withSafeAction(
             const emailToStore = validData.email;
             const phoneToStore = validData.phoneNumber;
 
-            // Check for duplicate registration
-            const existingSnapshot = await db
-                .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
-                .where("email", "==", emailToStore)
-                .limit(1)
-                .get();
+            // 🔒 STRICT DEDUPLICATION: Check email AND phone in parallel
+            const [existingByEmail, existingByPhone] = await Promise.all([
+                db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
+                    .where("email", "==", emailToStore)
+                    .limit(1)
+                    .get(),
+                db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
+                    .where("phoneNumber", "==", phoneToStore)
+                    .limit(1)
+                    .get(),
+            ]);
 
-            if (!existingSnapshot.empty) {
-                return { success: false, error: "This email is already registered for the briefing" };
+            if (!existingByEmail.empty) {
+                return { success: false, error: "This email address is already registered for the briefing." };
+            }
+            if (!existingByPhone.empty) {
+                return { success: false, error: "This phone number is already registered for the briefing." };
             }
 
             // ... (existing helper functions if any)

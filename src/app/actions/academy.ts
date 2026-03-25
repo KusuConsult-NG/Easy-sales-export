@@ -921,6 +921,32 @@ export async function submitAcademyApplicationAction(
             };
         }
 
+        // 🔒 DEDUP GUARD: Collection-level phone check
+        // Catches cross-account duplicates (same phone, different account)
+        const phone = applicationData.personalInfo.phone;
+        const email = applicationData.personalInfo.email;
+        const [phoneExists, emailExists] = await Promise.all([
+            phone
+                ? db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where("personalInfo.phone", "==", phone)
+                    .limit(1)
+                    .get()
+                : Promise.resolve({ empty: true }),
+            email
+                ? db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where("personalInfo.email", "==", email)
+                    .limit(1)
+                    .get()
+                : Promise.resolve({ empty: true }),
+        ]);
+
+        if (!(phoneExists as any).empty) {
+            return { success: false, error: "An Academy application with this phone number already exists." };
+        }
+        if (!(emailExists as any).empty) {
+            return { success: false, error: "An Academy application with this email already exists." };
+        }
+
         // Generate unique application ID
         const applicationId = `ACADEMY-${Date.now()}-${(Date.now() / 10000000000).toString(36).substr(2, 9)}`;
 
