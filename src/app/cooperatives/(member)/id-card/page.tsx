@@ -154,10 +154,12 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                     </div>
                 </div>
                 <div className="flex flex-col items-end">
-                    <div className={`px-2 py-0.5 rounded-full text-[10px] tracking-wide font-bold shadow-sm ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-purple-300 text-purple-900"}`}>
-                        {isPremium ? "★ PREMIUM" : "BASIC"}
-                    </div>
-                    <Shield className="w-5 h-5 text-white/40 mt-1" />
+                    {isPremium && (
+                        <div className="px-2 py-0.5 rounded-full text-[10px] tracking-wide font-bold shadow-sm bg-yellow-300 text-yellow-900 mb-1">
+                            ★ PREMIUM
+                        </div>
+                    )}
+                    <Shield className="w-5 h-5 text-white/40" />
                 </div>
             </div>
 
