@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Package, Shield, TrendingUp, Clock, Globe, CheckCircle, DollarSign, Home, ShoppingBag, Truck, FileCheck, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import BackToHub from "@/components/common/BackToHub";
@@ -42,42 +43,20 @@ export default function ExportWindowsLandingPage() {
 
 
             {/* Hero Section */}
-            <div className="relative overflow-hidden bg-linear-to-br from-orange-600 via-amber-600 to-yellow-600 text-white">
-                <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
-                <div className="absolute inset-0 bg-black/10"></div>
-                <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
-                    <div className="max-w-3xl">
-                        <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-semibold mb-4 md:mb-6">
-                            <Globe className="w-3 h-3 md:w-4 md:h-4" />
-                            Export Investment Platform
-                        </div>
-                        <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold mb-4 md:mb-6 leading-tight">
-                            Export Windows
-                        </h1>
-                        <p className="text-lg md:text-xl lg:text-2xl mb-3 md:mb-4 text-orange-50">
-                            Invest in Global Trade & Source Quality Products
-                        </p>
-                        <p className="text-base md:text-lg mb-6 md:mb-8 text-orange-100 max-w-2xl">
-                            Fund verified agricultural export contracts and earn attractive returns — or source premium Nigerian agricultural products directly from verified suppliers.
-                        </p>
-                        <div className="flex flex-col sm:flex-row flex-wrap gap-3 md:gap-4">
-                            <Link
-                                href="/export/onboarding"
-                                className="group inline-flex items-center justify-center w-full sm:w-auto gap-2 md:gap-3 bg-white text-orange-600 px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg shadow-2xl hover:shadow-orange-500/50 transition-all hover:scale-105"
-                            >
-                                Start Investing
-                                <ArrowRight className="w-4 h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform" />
-                            </Link>
-                            <Link
-                                href="/export/buyer"
-                                className="group inline-flex items-center justify-center w-full sm:w-auto gap-2 md:gap-3 bg-white/10 backdrop-blur-sm border-2 border-white text-white px-6 py-3 md:px-8 md:py-4 rounded-xl font-bold text-base md:text-lg hover:bg-white/20 transition-all"
-                            >
-                                <ShoppingBag className="w-4 h-4 md:w-5 md:h-5" />
-                                Buy Nigerian Products
-                            </Link>
-                        </div>
-                    </div>
+            <div className="relative overflow-hidden text-white min-h-[50vh] md:min-h-[60vh]">
+                {/* Hero Background Image */}
+                <div className="absolute inset-0">
+                    <Image
+                        src="/images/hero/hero-export.jpeg"
+                        alt="Export Windows"
+                        fill
+                        className="object-cover object-center"
+                        priority
+                        quality={90}
+                    />
                 </div>
+                <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
+                <div className="absolute inset-0 bg-black/20"></div>
                 {/* Wave SVG */}
                 <div className="absolute bottom-0 left-0 right-0">
                     <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">

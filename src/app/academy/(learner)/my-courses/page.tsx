@@ -171,7 +171,7 @@ export default function MyCoursesPage() {
                                             Certificate earned!
                                         </div>
                                         <Link
-                                            href="/academy/certificate"
+                                            href={`/academy/certificate/${course.courseId}`}
                                             className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition"
                                         >
                                             <Award className="w-4 h-4" />

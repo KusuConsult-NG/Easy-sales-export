@@ -1151,3 +1151,41 @@ export async function getCooperativeMemberIdCardAction(): Promise<{
         return { success: false, error: "Failed to load ID card data. Please try again." };
     }
 }
+
+/**
+ * Update passport photo for existing cooperative members
+ * Works for members at any status (pending, active) who need to add/replace their passport
+ */
+export async function updatePassportPhotoAction(
+    passportUrl: string,
+    passportName: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Not authenticated" };
+        const { session } = sessionResult;
+
+        const userId = session.user.id;
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        const memberDoc = await memberRef.get();
+
+        if (!memberDoc.exists) {
+            return { success: false, error: "No cooperative membership found. Please register first." };
+        }
+
+        await memberRef.update({
+            "documents.passportPhoto": {
+                name: passportName,
+                url: passportUrl,
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        revalidatePath("/cooperatives/id-card");
+
+        return { success: true };
+    } catch (error) {
+        logger.error("updatePassportPhotoAction error:", error);
+        return { success: false, error: "Failed to update passport photo. Please try again." };
+    }
+}

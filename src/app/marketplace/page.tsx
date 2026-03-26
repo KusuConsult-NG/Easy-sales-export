@@ -38,7 +38,20 @@ export default async function MarketplaceLandingPage() {
 
 
             {/* Hero Section */}
-            <div className="relative overflow-hidden bg-linear-to-br from-green-600 via-emerald-600 to-teal-600 text-white">
+            <div className="relative overflow-hidden text-white">
+                {/* Hero Background Image */}
+                <div className="absolute inset-0">
+                    <Image
+                        src="/images/hero/hero-market.jpeg"
+                        alt="Easy Market Nigeria"
+                        fill
+                        className="object-cover object-center"
+                        priority
+                        quality={90}
+                    />
+                    {/* Brand-tinted overlay */}
+                    <div className="absolute inset-0 bg-linear-to-br from-green-900/80 via-emerald-900/75 to-teal-900/80" />
+                </div>
                 <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
                 <div className="absolute inset-0 bg-black/10"></div>
                 <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">

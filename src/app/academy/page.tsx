@@ -63,7 +63,20 @@ export default function AcademyLandingPage() {
 
 
             {/* Hero Section */}
-            <div className="relative overflow-hidden bg-linear-to-br from-blue-700 via-indigo-700 to-purple-800 text-white">
+            <div className="relative overflow-hidden text-white">
+                {/* Hero Background Image */}
+                <div className="absolute inset-0">
+                    <Image
+                        src="/images/hero/hero-academy.jpeg"
+                        alt="Easy Sales Export Academy"
+                        fill
+                        className="object-cover object-center"
+                        priority
+                        quality={90}
+                    />
+                    {/* Dark gradient overlay for text readability */}
+                    <div className="absolute inset-0 bg-linear-to-br from-blue-900/85 via-indigo-900/80 to-purple-900/85" />
+                </div>
                 <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
                 <div className="absolute inset-0 bg-black/10"></div>
                 <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-20 md:py-32 text-center">

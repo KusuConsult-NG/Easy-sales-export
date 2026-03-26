@@ -40,6 +40,11 @@ export async function GET(
         const studentName = session.user.name || "Valued Student";
         const { searchParams } = new URL(req.url);
         const date = searchParams.get("date") || new Date().toISOString().split('T')[0];
+        
+        // Construct base URL for fetching assets (like logo.jpg) in the PDF renderer
+        const protocol = req.headers.get("x-forwarded-proto") || "http";
+        const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
+        const baseUrl = `${protocol}://${host}`;
 
         // 2. Generate PDF Stream
         const stream = await renderToStream(
@@ -47,9 +52,9 @@ export async function GET(
                 studentName={studentName}
                 courseTitle={courseData?.title || "Export Mastery Course"}
                 completionDate={date}
-                certificateId={`CRT-${courseId.substring(0, 6).toUpperCase()}-${Date.now().toString().substring(9)}`
-                }
+                certificateId={`CRT-${courseId.substring(0, 6).toUpperCase()}-${Date.now().toString().substring(9)}`}
                 instructor={courseData?.instructor || "Easy Sales Academy"}
+                baseUrl={baseUrl}
             />
         );
 

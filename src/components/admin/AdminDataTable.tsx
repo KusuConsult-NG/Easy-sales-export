@@ -99,20 +99,6 @@ export default function AdminDataTable<T extends Record<string, any>>({
                 </div>
 
                 <div className="flex gap-2 w-full sm:w-auto justify-end items-center flex-wrap">
-                    {selectable && onSelectAll && data.length > 0 && (
-                        <button
-                            onClick={onSelectAll}
-                            className="hidden sm:inline-flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 font-medium hover:bg-slate-50 transition text-sm whitespace-nowrap"
-                        >
-                            <input
-                                type="checkbox"
-                                className="rounded border-slate-300 pointer-events-none"
-                                checked={Math.max(0, data.length) > 0 && selectedIds?.size === data.length}
-                                readOnly
-                            />
-                            {selectedIds?.size === data.length ? "Deselect Page" : "Select Page"}
-                        </button>
-                    )}
                     {actionButtons}
                 </div>
             </div>

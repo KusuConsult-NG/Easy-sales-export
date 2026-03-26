@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, BookOpen, Edit, Trash2, Users, Loader2, RefreshCw } from "lucide-react";
+import { Search, BookOpen, Edit, Trash2, Users, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { getCoursesAction, type Course } from "@/app/actions/academy";
@@ -106,13 +106,6 @@ export default function AcademyAdminPage() {
                         >
                             <Users className="w-5 h-5" />
                             Applications
-                        </Link>
-                        <Link
-                            href="/admin/academy/create"
-                            className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-medium flex items-center gap-2 transition-colors"
-                        >
-                            <Plus className="w-5 h-5" />
-                            Create New Course
                         </Link>
                     </div>
                 </div>

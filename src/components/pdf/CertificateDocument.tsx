@@ -1,96 +1,140 @@
 
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Image, Font } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet, Image } from '@react-pdf/renderer';
 
-// Register fonts (using standard fonts for now to avoid loading external files in edge)
-// In a real app, you'd register custom fonts here.
-
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
     page: {
         flexDirection: 'column',
         backgroundColor: '#FFFFFF',
-        padding: 40,
+        padding: 36,
         alignItems: 'center',
+        fontFamily: 'Helvetica',
     },
-    border: {
-        border: '4px solid #166534', // Green-800
+    // Outer gold border
+    outerBorder: {
+        border: '3px solid #7C3AED',
         width: '100%',
         height: '100%',
-        padding: 20,
+        padding: 16,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
+        position: 'relative',
     },
-    header: {
-        marginBottom: 20,
-        textAlign: 'center',
+    // Accent top stripe
+    topStripe: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 8,
+        backgroundColor: '#7C3AED',
+    },
+    bottomStripe: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 8,
+        backgroundColor: '#7C3AED',
+    },
+    logo: {
+        width: 72,
+        height: 44,
+        marginBottom: 6,
+        objectFit: 'contain',
+    },
+    orgName: {
+        fontSize: 11,
+        color: '#6D28D9',
+        letterSpacing: 2,
+        textTransform: 'uppercase',
+        fontFamily: 'Helvetica-Bold',
+        marginBottom: 12,
     },
     title: {
-        fontSize: 36,
-        fontWeight: 'bold',
-        color: '#166534',
-        marginBottom: 10,
+        fontSize: 34,
+        fontFamily: 'Helvetica-Bold',
+        color: '#1E1B4B',
+        marginBottom: 4,
         textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
+    divider: {
+        width: 120,
+        height: 2,
+        backgroundColor: '#7C3AED',
+        marginBottom: 16,
     },
     subtitle: {
-        fontSize: 14,
-        color: '#4b5563',
-        marginBottom: 30,
+        fontSize: 13,
+        color: '#6B7280',
+        marginBottom: 8,
     },
     recipient: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#000000',
-        marginBottom: 10,
+        fontSize: 30,
+        fontFamily: 'Helvetica-Bold',
+        color: '#111827',
+        marginBottom: 8,
         textAlign: 'center',
-        borderBottom: '1px solid #9ca3af',
-        paddingBottom: 5,
-        minWidth: 300,
+        borderBottom: '1.5px solid #D1D5DB',
+        paddingBottom: 4,
+        minWidth: 320,
     },
     text: {
-        fontSize: 14,
+        fontSize: 13,
         color: '#374151',
-        marginBottom: 10,
+        marginBottom: 8,
         textAlign: 'center',
     },
     courseTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#15803d', // Green-700
+        fontSize: 22,
+        fontFamily: 'Helvetica-Bold',
+        color: '#7C3AED',
         marginBottom: 20,
         textAlign: 'center',
     },
     metadata: {
-        marginTop: 40,
+        marginTop: 20,
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        width: '80%',
+        justifyContent: 'space-around',
+        width: '85%',
+        borderTop: '1px solid #E5E7EB',
+        paddingTop: 16,
     },
     col: {
         alignItems: 'center',
     },
-    label: {
-        fontSize: 10,
-        color: '#6b7280',
+    sigLine: {
+        width: 130,
+        height: 1,
+        backgroundColor: '#9CA3AF',
         marginBottom: 4,
     },
+    label: {
+        fontSize: 9,
+        color: '#6B7280',
+        marginBottom: 3,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+    },
     value: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#1f2937',
+        fontSize: 11,
+        fontFamily: 'Helvetica-Bold',
+        color: '#1F2937',
     },
     footer: {
-        position: 'absolute',
-        bottom: 30,
-        fontSize: 10,
-        color: '#9ca3af',
+        marginTop: 12,
+        fontSize: 9,
+        color: '#9CA3AF',
         textAlign: 'center',
     },
-    id: {
-        fontSize: 10,
-        color: '#9ca3af',
-        marginTop: 10,
+    certId: {
+        fontSize: 9,
+        color: '#9CA3AF',
+        marginTop: 2,
+        fontFamily: 'Helvetica-Oblique',
     }
 });
 
@@ -100,37 +144,65 @@ interface CertificateProps {
     completionDate: string;
     certificateId: string;
     instructor: string;
+    baseUrl: string;
 }
 
-export const CertificateDocument = ({ studentName, courseTitle, completionDate, certificateId, instructor }: CertificateProps) => (
+export const CertificateDocument = ({
+    studentName,
+    courseTitle,
+    completionDate,
+    certificateId,
+    instructor,
+    baseUrl
+}: CertificateProps) => (
     <Document>
         <Page size="A4" orientation="landscape" style={styles.page}>
-            <View style={styles.border}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Certificate of Completion</Text>
-                    <Text style={styles.subtitle}>Easy Sales Export Academy</Text>
-                </View>
+            <View style={styles.outerBorder}>
+                {/* Accent stripes */}
+                <View style={styles.topStripe} />
+                <View style={styles.bottomStripe} />
 
-                <Text style={styles.text}>This is to certify that</Text>
+                {/* Logo */}
+                <Image src={`${baseUrl}/images/logo.jpg`} style={styles.logo} />
+                
+                <Text style={styles.orgName}>Easy Sales Export Academy</Text>
+
+                {/* Title */}
+                <Text style={styles.title}>Certificate of Completion</Text>
+                <View style={styles.divider} />
+
+                {/* Body */}
+                <Text style={styles.subtitle}>This is to certify that</Text>
                 <Text style={styles.recipient}>{studentName}</Text>
                 <Text style={styles.text}>has successfully completed the course</Text>
                 <Text style={styles.courseTitle}>{courseTitle}</Text>
 
+                {/* Meta row */}
                 <View style={styles.metadata}>
                     <View style={styles.col}>
+                        <View style={styles.sigLine} />
                         <Text style={styles.label}>Instructor</Text>
                         <Text style={styles.value}>{instructor}</Text>
                     </View>
                     <View style={styles.col}>
+                        <View style={styles.sigLine} />
                         <Text style={styles.label}>Date Completed</Text>
                         <Text style={styles.value}>{completionDate}</Text>
                     </View>
+                    <View style={styles.col}>
+                        <View style={styles.sigLine} />
+                        <Text style={styles.label}>Certificate ID</Text>
+                        <Text style={styles.value}>{certificateId}</Text>
+                    </View>
                 </View>
 
-                <View style={styles.footer}>
-                    <Text>Verify at: https://easysalesexport.com/verify/{certificateId}</Text>
-                    <Text style={styles.id}>ID: {certificateId}</Text>
-                </View>
+                {/* Footer */}
+                <Text style={styles.footer}>
+                    Easy Sales Export Academy  •  easysalesexport.com
+                </Text>
+                <Text style={styles.certId}>
+                    Verify at: https://easysalesexport.com/verify/{certificateId}
+                </Text>
             </View>
         </Page>
     </Document>

@@ -117,6 +117,8 @@ async function main() {
         const d = doc.data();
         briefingRecords.push({
             fullName: (d.fullName || '').trim(),
+            email: (d.email || d.userEmail || '').trim(),
+            phoneNumber: (d.phoneNumber || d.phone || '').trim(),
             state: (d.state || '').trim(),
             lga: '',
             role: d.role || '',
@@ -141,6 +143,8 @@ async function main() {
 
         appRecords.push({
             fullName,
+            email: email,
+            phoneNumber: (d.phoneNumber || d.phone || '').trim(),
             state: (d.stateOfResidence || '').trim(),
             lga: (d.lgaOfResidence || '').trim(),
             role: 'wave_participant',
@@ -178,39 +182,33 @@ async function main() {
         }
     }
 
-    // ─── 5. Build CSV ───
-    const lines = [];
-
-    // Section 1: Female Registrants
-    lines.push('=== SECTION 1: FEMALE REGISTRANTS ===');
-    lines.push(['Full Name', 'State', 'LGA', 'Source', 'State Total Registrations', 'LGA Total Registrations'].join(','));
+    // ─── 5. Build CSVs ───
+    
+    // File 1: Female Registrants (Raw List)
+    const linesFull = [];
+    linesFull.push(['Full Name', 'Email', 'Phone Number', 'State', 'LGA', 'Source'].join(','));
     for (const r of femaleRecords) {
-        const stateTotal = stateTotals[r.state || 'Unknown'] || 0;
-        const lgaKey = r.lga ? `${r.state}||${r.lga}` : null;
-        const lgaTotal = lgaKey ? (lgaTotals[lgaKey] || '') : '';
-        lines.push([
+        linesFull.push([
             csvCell(r.fullName),
+            csvCell(r.email),
+            csvCell(r.phoneNumber),
             csvCell(r.state),
             csvCell(r.lga),
             csvCell(r.source),
-            stateTotal,
-            lgaTotal,
         ].join(','));
     }
 
-    // Section 2: State Summary (all registrations)
-    lines.push('');
-    lines.push('=== SECTION 2: TOTAL REGISTRATIONS PER STATE (ALL REGISTRANTS) ===');
-    lines.push(['State', 'Total Registrations'].join(','));
+    // File 2: State Summary (all registrations)
+    const linesStates = [];
+    linesStates.push(['State', 'Total Registrations'].join(','));
     const sortedStates = Object.entries(stateTotals).sort((a, b) => b[1] - a[1]);
     for (const [state, count] of sortedStates) {
-        lines.push(`${csvCell(state)},${count}`);
+        linesStates.push(`${csvCell(state)},${count}`);
     }
 
-    // Section 3: LGA Summary
-    lines.push('');
-    lines.push('=== SECTION 3: TOTAL REGISTRATIONS PER LGA (WAVE APPLICATIONS) ===');
-    lines.push(['State', 'LGA', 'Total Registrations'].join(','));
+    // File 3: LGA Summary
+    const linesLGAs = [];
+    linesLGAs.push(['State', 'LGA', 'Total Registrations'].join(','));
     const sortedLGAs = Object.entries(lgaTotals)
         .map(([key, count]) => {
             const [state, lga] = key.split('||');
@@ -218,15 +216,22 @@ async function main() {
         })
         .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state));
     for (const { state, lga, count } of sortedLGAs) {
-        lines.push(`${csvCell(state)},${csvCell(lga)},${count}`);
+        linesLGAs.push(`${csvCell(state)},${csvCell(lga)},${count}`);
     }
 
-    // ─── 6. Write file ───
-    const outputPath = '/Users/mac/Easy sales Export/wave_registration_export.csv';
-    fs.writeFileSync(outputPath, lines.join('\n'), 'utf8');
+    // ─── 6. Write files ───
+    const basePath = '/Users/mac/Easy sales Export';
+    
+    const outFull = path.join(basePath, 'wave_registration_export.csv');
+    const outStates = path.join(basePath, 'wave_state_summary.csv');
+    const outLGAs = path.join(basePath, 'wave_lga_summary.csv');
 
-    console.log(`\n✅ CSV written to: ${outputPath}`);
-    console.log(`   Female records: ${femaleRecords.length}`);
+    fs.writeFileSync(outFull, linesFull.join('\n'), 'utf8');
+    fs.writeFileSync(outStates, linesStates.join('\n'), 'utf8');
+    fs.writeFileSync(outLGAs, linesLGAs.join('\n'), 'utf8');
+
+    console.log(`\n✅ CSVs written to: ${basePath}`);
+    console.log(`   Female records -> wave_registration_export.csv`);
     console.log(`   States: ${sortedStates.length}`);
     console.log(`   LGAs: ${sortedLGAs.length}`);
 

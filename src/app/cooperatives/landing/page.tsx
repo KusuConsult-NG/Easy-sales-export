@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
@@ -252,26 +253,32 @@ export default function CooperativeLandingPage() {
             </nav>
 
             {/* Hero Section */}
-            <section id="home" className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 via-white to-purple-50 overflow-hidden pt-16">
-                {/* Background Pattern */}
-                <div className="absolute inset-0 opacity-5">
-                    <div className="absolute inset-0" style={{
-                        backgroundImage: `radial-gradient(circle at 2px 2px, #10b981 1px, transparent 0)`,
-                        backgroundSize: '40px 40px'
-                    }} />
+            <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+                {/* Hero Background Image */}
+                <div className="absolute inset-0">
+                    <Image
+                        src="/images/hero/hero-cooperative.jpeg"
+                        alt="Easy Sales Cooperative"
+                        fill
+                        className="object-cover object-center"
+                        priority
+                        quality={90}
+                    />
+                    {/* Purple brand overlay */}
+                    <div className="absolute inset-0 bg-linear-to-br from-purple-900/85 via-indigo-900/80 to-purple-900/90" />
                 </div>
 
                 <div className="relative max-w-5xl mx-auto px-6 py-20 text-center">
-                    <h1 className="text-4xl md:text-6xl font-bold text-slate-900 mb-6 leading-tight">
-                        Join the Easy Sales Export Cooperative and Position Yourself for <span className="text-purple-600">Structured Agro and Export Opportunities</span>
+                    <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight">
+                        Join the Easy Sales Export Cooperative and Position Yourself for <span className="text-purple-300">Structured Agro and Export Opportunities</span>
                     </h1>
-                    <h2 className="text-xl md:text-2xl text-slate-600 mb-8 max-w-3xl mx-auto font-normal">
+                    <h2 className="text-xl md:text-2xl text-purple-100 mb-8 max-w-3xl mx-auto font-normal">
                         Cooperative membership provides the structure through which members receive coordination, education, and opportunity access.
                     </h2>
 
                     <Link
                         href="/cooperatives/onboarding"
-                        className="inline-flex items-center gap-3 bg-linear-to-r from-purple-600 to-indigo-600 text-white px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-purple-500/50 transition-all hover:scale-105"
+                        className="inline-flex items-center gap-3 bg-white text-purple-700 px-10 py-5 rounded-xl text-lg font-bold shadow-2xl hover:shadow-purple-500/50 transition-all hover:scale-105"
                     >
                         <span>Become a Cooperative Member Now</span>
                         <ArrowRight className="w-6 h-6" />

@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
     ArrowLeft, Download, Loader2, Lock, Clock, CreditCard,
-    CheckCircle, IdCard, Shield, Star,
+    CheckCircle, IdCard, Shield, Camera, Upload, RefreshCw,
 } from "lucide-react";
-import { getCooperativeMemberIdCardAction, type MemberIdCardData } from "@/app/actions/cooperative";
+import { getCooperativeMemberIdCardAction, updatePassportPhotoAction, type MemberIdCardData } from "@/app/actions/cooperative";
+import { uploadDocumentAction } from "@/app/actions/upload";
+import { useToast } from "@/contexts/ToastContext";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +21,92 @@ function fmt(iso: string) {
 function fmtShort(iso: string) {
     if (!iso) return "—";
     return new Intl.DateTimeFormat("en-NG", { year: "numeric", month: "short" }).format(new Date(iso));
+}
+
+// ── Passport Upload Widget ────────────────────────────────────────────────────
+
+function PassportUploadWidget({ onUploaded }: { onUploaded: (url: string, name: string) => void }) {
+    const { showToast } = useToast();
+    const [uploading, setUploading] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const ALLOWED = ["image/jpeg", "image/jpg", "image/png"];
+
+    const handleFile = async (file: File | null) => {
+        if (!file) return;
+        if (!ALLOWED.includes(file.type)) {
+            showToast("Only JPG or PNG images allowed for passport photos.", "error");
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            showToast("Photo too large — max 5 MB.", "error");
+            return;
+        }
+
+        setUploading(true);
+        try {
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = () => reject(new Error("Failed to read file"));
+                reader.readAsDataURL(file);
+            });
+
+            const result = await uploadDocumentAction(base64, file.name, file.type, "passportPhoto");
+            if (!result.success || !result.url) {
+                showToast(result.error || "Upload failed. Please try again.", "error");
+                return;
+            }
+
+            // Save to Firestore member record
+            const save = await updatePassportPhotoAction(result.url, file.name);
+            if (!save.success) {
+                showToast(save.error || "Failed to save photo.", "error");
+                return;
+            }
+
+            showToast("Passport photo uploaded successfully! Refreshing your ID card…", "success");
+            onUploaded(result.url, file.name);
+        } catch {
+            showToast("Unexpected error — please try again.", "error");
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6">
+            <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                    <Camera className="w-6 h-6 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                    <h3 className="font-bold text-amber-900 mb-1">Passport Photo Required</h3>
+                    <p className="text-sm text-amber-700 mb-4">
+                        Upload a clear, passport-style photograph to appear on your ID card. JPG or PNG only, max 5 MB.
+                    </p>
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png"
+                        className="hidden"
+                        onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+                    />
+                    <button
+                        onClick={() => inputRef.current?.click()}
+                        disabled={uploading}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl transition disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        {uploading ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
+                        ) : (
+                            <><Upload className="w-4 h-4" /> Upload Passport Photo</>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 // ── ID Card Component ─────────────────────────────────────────────────────────
@@ -50,12 +138,23 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
 
             {/* Header */}
             <div className="relative px-5 pt-4 pb-2 flex items-center justify-between border-b border-white/20">
-                <div>
-                    <p className="text-white font-black text-sm tracking-wider uppercase">Easy Sales Export</p>
-                    <p className="text-white/70 text-xs">Cooperative Membership</p>
+                <div className="flex items-center gap-2">
+                    <div className="bg-white p-0.5 rounded shadow-sm flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src="/images/logo.jpg"
+                            alt="Easy Sales Export"
+                            className="h-6 w-auto object-contain"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                    </div>
+                    <div>
+                        <p className="text-white font-black text-sm tracking-wider uppercase leading-tight">Easy Sales</p>
+                        <p className="text-white/70 text-[10px] leading-tight font-semibold uppercase tracking-widest">Cooperative</p>
+                    </div>
                 </div>
                 <div className="flex flex-col items-end">
-                    <div className={`px-2 py-0.5 rounded-full text-xs font-bold ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-purple-300 text-purple-900"}`}>
+                    <div className={`px-2 py-0.5 rounded-full text-[10px] tracking-wide font-bold shadow-sm ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-purple-300 text-purple-900"}`}>
                         {isPremium ? "★ PREMIUM" : "BASIC"}
                     </div>
                     <Shield className="w-5 h-5 text-white/40 mt-1" />
@@ -142,20 +241,32 @@ function PaymentRequiredGate() {
     );
 }
 
-function PendingApprovalGate({ data }: { data?: MemberIdCardData }) {
+function PendingApprovalGate({ data, onPhotoUploaded }: { data?: MemberIdCardData; onPhotoUploaded: (url: string, name: string) => void }) {
+    const hasPhoto = !!data?.passportPhotoUrl;
     return (
-        <div className="bg-white rounded-2xl shadow-lg p-10 flex flex-col items-center text-center max-w-sm w-full">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                <Clock className="w-8 h-8 text-blue-600" />
+        <div className="w-full max-w-lg space-y-6">
+            <div className="bg-white rounded-2xl shadow-lg p-8 flex flex-col items-center text-center">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                    <Clock className="w-8 h-8 text-blue-600" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 mb-2">Awaiting Admin Approval</h2>
+                {data?.fullName && (
+                    <p className="text-slate-700 font-semibold mb-1">{data.fullName}</p>
+                )}
+                <p className="text-slate-500 text-sm mb-2">
+                    Your payment has been verified ✅. Your ID card will be ready once an admin approves your membership.
+                </p>
+                <p className="text-xs text-slate-400">This usually takes 1–2 business days.</p>
             </div>
-            <h2 className="text-xl font-bold text-slate-900 mb-2">Awaiting Approval</h2>
-            {data?.fullName && (
-                <p className="text-slate-700 font-semibold mb-1">{data.fullName}</p>
+            {!hasPhoto && (
+                <PassportUploadWidget onUploaded={onPhotoUploaded} />
             )}
-            <p className="text-slate-500 text-sm mb-2">
-                Your payment has been verified ✅. Your ID card will be ready once an admin approves your membership.
-            </p>
-            <p className="text-xs text-slate-400">This usually takes 1–2 business days.</p>
+            {hasPhoto && (
+                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
+                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
+                    <p className="text-sm text-green-700 font-medium">Passport photo uploaded ✓ — your ID will be ready after approval.</p>
+                </div>
+            )}
         </div>
     );
 }
@@ -183,16 +294,25 @@ function NotMemberGate() {
 export default function CooperativeIdCardPage() {
     const router = useRouter();
     const cardRef = useRef<HTMLDivElement>(null);
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
     const [downloading, setDownloading] = useState(false);
     const [result, setResult] = useState<Awaited<ReturnType<typeof getCooperativeMemberIdCardAction>> | null>(null);
 
-    useEffect(() => {
+    const fetchData = () => {
+        setLoading(true);
         getCooperativeMemberIdCardAction().then((res) => {
             setResult(res);
             setLoading(false);
         });
-    }, []);
+    };
+
+    useEffect(() => { fetchData(); }, []);
+
+    // Called after a successful passport upload — refresh card data
+    const handlePhotoUploaded = (_url: string, _name: string) => {
+        fetchData();
+    };
 
     const handleDownload = async () => {
         setDownloading(true);
@@ -204,8 +324,8 @@ export default function CooperativeIdCardPage() {
             if (!el) return;
 
             const canvas = await html2canvas(el, {
-                scale: 3,           // high-res for print
-                useCORS: true,      // allow passport photo from Firebase Storage
+                scale: 3,
+                useCORS: true,
                 backgroundColor: null,
                 logging: false,
             });
@@ -218,8 +338,10 @@ export default function CooperativeIdCardPage() {
 
             const fileName = `ESE-CoopID-${result?.data?.memberNumber || "card"}.pdf`;
             pdf.save(fileName);
+            showToast("ID card downloaded!", "success");
         } catch (e) {
             console.error("Download failed:", e);
+            showToast("Download failed — please try again.", "error");
         } finally {
             setDownloading(false);
         }
@@ -256,7 +378,9 @@ export default function CooperativeIdCardPage() {
                     <div className="flex justify-center"><PaymentRequiredGate /></div>
                 )}
                 {result?.reason === "pending_approval" && (
-                    <div className="flex justify-center"><PendingApprovalGate data={result.data} /></div>
+                    <div className="flex justify-center">
+                        <PendingApprovalGate data={result.data} onPhotoUploaded={handlePhotoUploaded} />
+                    </div>
                 )}
 
                 {/* Active member — show card */}
@@ -272,6 +396,27 @@ export default function CooperativeIdCardPage() {
                                 </p>
                             </div>
                         </div>
+
+                        {/* Passport upload prompt if missing */}
+                        {!result.data.passportPhotoUrl && (
+                            <PassportUploadWidget onUploaded={handlePhotoUploaded} />
+                        )}
+
+                        {/* Replace photo option if they have one */}
+                        {result.data.passportPhotoUrl && (
+                            <div className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl">
+                                <p className="text-sm text-slate-600 font-medium">Passport photo on file ✓</p>
+                                <button
+                                    onClick={() => {
+                                        setResult((prev) => prev ? { ...prev, data: prev.data ? { ...prev.data, passportPhotoUrl: null } : prev.data } : prev);
+                                    }}
+                                    className="inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-semibold transition"
+                                >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                    Replace photo
+                                </button>
+                            </div>
+                        )}
 
                         {/* Card preview */}
                         <div className="flex flex-col items-center gap-6">
