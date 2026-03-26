@@ -117,47 +117,53 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
     return (
         <div
             id="cooperative-id-card"
-            style={{ fontFamily: "'Arial', sans-serif", width: "500px" }}
+            style={{ fontFamily: "'Arial', sans-serif", width: "340px", minHeight: "210px" }}
             className={`relative overflow-hidden rounded-2xl shadow-2xl select-none
                 ${isPremium
                     ? "bg-linear-to-br from-amber-700 via-yellow-600 to-amber-800"
-                    : "bg-linear-to-br from-purple-900 via-purple-800 to-indigo-900"
+                    : "bg-linear-to-br from-purple-800 via-purple-700 to-indigo-800"
                 }`}
         >
-            {/* Holographic rainbow strip */}
-            <div style={{ background: "linear-gradient(90deg, #ff0000, #ff7700, #ffff00, #00ff00, #0000ff, #8b00ff)", height: "6px" }} />
+            {/* Decorative circles */}
+            <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/5" />
+            <div className="absolute -bottom-10 -left-10 w-48 h-48 rounded-full bg-white/5" />
+
+            {/* Holographic shimmer strip */}
+            <div
+                className="absolute top-0 left-0 right-0 h-1"
+                style={{
+                    background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.6), rgba(200,180,255,0.4), rgba(255,255,255,0.6), transparent)",
+                }}
+            />
 
             {/* Header */}
-            <div className="flex items-center gap-4 px-5 py-4">
-                {/* Large logo square */}
-                <div className="bg-white rounded-xl shadow-lg flex items-center justify-center shrink-0" style={{ width: "90px", height: "90px", padding: "6px" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src="/images/logo.jpg"
-                        alt="Easy Sales Export"
-                        className="w-full h-full object-contain"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
+            <div className="relative px-5 pt-4 pb-2 flex items-center justify-between border-b border-white/20">
+                <div className="flex items-center gap-2">
+                    <div className="bg-white p-0.5 rounded shadow-sm flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src="/images/logo.jpg"
+                            alt="Easy Sales Export"
+                            className="h-6 w-auto object-contain"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                    </div>
+                    <div>
+                        <p className="text-white font-black text-sm tracking-wider uppercase leading-tight">Easy Sales</p>
+                        <p className="text-white/70 text-[10px] leading-tight font-semibold uppercase tracking-widest">Cooperative</p>
+                    </div>
                 </div>
-
-                {/* Title */}
-                <div className="flex-1">
-                    <p className="text-white font-black text-2xl leading-tight uppercase">Easy Sales</p>
-                    <p className="text-white font-black text-2xl leading-tight uppercase">Export</p>
-                </div>
-
-                {/* Badge */}
-                <div className={`self-start mt-2 px-4 py-1.5 rounded-full text-sm font-black shadow ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-white text-purple-900"}`}>
-                    {isPremium ? "★ PREMIUM" : "BASIC"}
+                <div className="flex flex-col items-end">
+                    <div className={`px-2 py-0.5 rounded-full text-[10px] tracking-wide font-bold shadow-sm ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-purple-300 text-purple-900"}`}>
+                        {isPremium ? "★ PREMIUM" : "BASIC"}
+                    </div>
+                    <Shield className="w-5 h-5 text-white/40 mt-1" />
                 </div>
             </div>
 
-            {/* Divider */}
-            <div className="mx-5 border-t border-white/20" />
-
             {/* Body */}
-            <div className="flex items-start gap-5 px-5 py-4">
-                {/* Large passport photo */}
+            <div className="relative px-5 pt-3 pb-4 flex items-start gap-4">
+                {/* Passport photo */}
                 <div className="shrink-0">
                     {data.passportPhotoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -165,45 +171,49 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                             src={data.passportPhotoUrl}
                             alt="Passport"
                             crossOrigin="anonymous"
-                            className="object-cover rounded-xl border-2 border-white/40 shadow-lg"
-                            style={{ width: "110px", height: "130px" }}
+                            className="w-20 h-24 object-cover rounded-lg border-2 border-white/40 shadow-lg"
                         />
                     ) : (
-                        <div className="rounded-xl border-2 border-white/30 bg-white/10 flex items-center justify-center" style={{ width: "110px", height: "130px" }}>
-                            <IdCard className="w-10 h-10 text-white/40" />
+                        <div className="w-20 h-24 rounded-lg border-2 border-white/30 bg-white/10 flex items-center justify-center">
+                            <IdCard className="w-8 h-8 text-white/40" />
                         </div>
                     )}
                 </div>
 
                 {/* Details */}
-                <div className="flex-1 min-w-0 pt-1">
-                    <p className="text-white font-black text-xl leading-tight mb-1 uppercase">{data.fullName}</p>
-                    <p className="text-white/50 text-xs font-mono uppercase tracking-widest mb-3">{data.memberNumber}</p>
+                <div className="flex-1 min-w-0">
+                    <p className="text-white font-black text-base leading-tight mb-1 truncate">{data.fullName}</p>
+                    <p className="text-white/60 text-xs uppercase tracking-widest mb-2">{data.memberNumber}</p>
 
-                    <div className="space-y-1.5">
-                        <div className="flex gap-4 text-sm">
-                            <span className="text-yellow-300 font-bold w-24 shrink-0">Gender</span>
-                            <span className="text-white capitalize">{data.gender}</span>
+                    <div className="space-y-0.5">
+                        <div className="flex justify-between text-xs">
+                            <span className="text-white/60">Gender</span>
+                            <span className="text-white font-semibold capitalize">{data.gender}</span>
                         </div>
-                        <div className="flex gap-4 text-sm">
-                            <span className="text-yellow-300 font-bold w-24 shrink-0">State</span>
-                            <span className="text-white">{data.stateOfOrigin}</span>
+                        <div className="flex justify-between text-xs">
+                            <span className="text-white/60">State</span>
+                            <span className="text-white font-semibold">{data.stateOfOrigin}</span>
                         </div>
-                        <div className="flex gap-4 text-sm">
-                            <span className="text-yellow-300 font-bold w-24 shrink-0">Issued</span>
-                            <span className="text-white">{fmtShort(data.joinedAt)}</span>
+                        <div className="flex justify-between text-xs">
+                            <span className="text-white/60">Issued</span>
+                            <span className="text-white font-semibold">{fmtShort(data.joinedAt)}</span>
                         </div>
-                        <div className="flex gap-4 text-sm">
-                            <span className="text-yellow-300 font-bold w-24 shrink-0">Valid Until</span>
-                            <span className="text-white font-bold">{fmtShort(data.validUntil)}</span>
+                        <div className="flex justify-between text-xs">
+                            <span className="text-white/60">Valid Until</span>
+                            <span className={`font-bold ${isPremium ? "text-yellow-300" : "text-purple-200"}`}>{fmtShort(data.validUntil)}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Footer — solid dark strip */}
-            <div className="bg-black/30 py-2.5 text-center">
-                <p className="text-white/70 text-sm tracking-widest">easysalesexport.com</p>
+            {/* Footer */}
+            <div className="relative px-5 py-2 border-t border-white/20 flex items-center justify-between">
+                <div className="flex gap-0.5">
+                    {Array.from({ length: 20 }).map((_, i) => (
+                        <div key={i} className="w-1 h-1 rounded-full bg-white/20" />
+                    ))}
+                </div>
+                <p className="text-white/40 text-xs">easysalesexport.com</p>
             </div>
         </div>
     );
