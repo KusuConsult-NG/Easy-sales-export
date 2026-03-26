@@ -138,13 +138,13 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
 
             {/* Header */}
             <div className="relative px-5 pt-4 pb-2 flex items-center justify-between border-b border-white/20">
-                <div className="flex items-center gap-2">
-                    <div className="bg-white p-0.5 rounded shadow-sm flex items-center justify-center">
+                <div className="flex items-center gap-2.5">
+                    <div className="bg-white px-2 py-1 rounded-lg shadow flex items-center justify-center">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                             src="/images/logo.jpg"
                             alt="Easy Sales Export"
-                            className="h-6 w-auto object-contain"
+                            className="h-10 w-auto object-contain"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                     </div>
