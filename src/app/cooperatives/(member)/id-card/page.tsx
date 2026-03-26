@@ -117,7 +117,7 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
     return (
         <div
             id="cooperative-id-card"
-            style={{ fontFamily: "'Arial', sans-serif", width: "340px", minHeight: "210px" }}
+            style={{ fontFamily: "'Arial', sans-serif", width: "380px", minHeight: "220px" }}
             className={`relative overflow-hidden rounded-2xl shadow-2xl select-none
                 ${isPremium
                     ? "bg-linear-to-br from-amber-700 via-yellow-600 to-amber-800"
@@ -202,20 +202,15 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                         </div>
                         <div className="flex justify-between text-xs">
                             <span className="text-white/60">Valid Until</span>
-                            <span className={`font-bold ${isPremium ? "text-yellow-300" : "text-purple-200"}`}>{fmtShort(data.validUntil)}</span>
+                            <span className="font-bold text-yellow-300">{fmtShort(data.validUntil)}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Footer */}
-            <div className="relative px-5 py-2 border-t border-white/20 flex items-center justify-between">
-                <div className="flex gap-0.5">
-                    {Array.from({ length: 20 }).map((_, i) => (
-                        <div key={i} className="w-1 h-1 rounded-full bg-white/20" />
-                    ))}
-                </div>
-                <p className="text-white/40 text-xs">easysalesexport.com</p>
+            {/* Footer — solid dark strip matching mockup */}
+            <div className="relative px-5 py-2.5 bg-black/30 flex items-center justify-center">
+                <p className="text-white/70 text-xs font-semibold tracking-wider">easysalesexport.com</p>
             </div>
         </div>
     );
