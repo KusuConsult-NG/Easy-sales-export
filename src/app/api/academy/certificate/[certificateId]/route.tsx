@@ -23,8 +23,8 @@ export async function GET(
         // Let's assume the ID passed is the COURSE ID for now (as per the Page implementation).
         const courseId = certificateId;
 
-        // Fetch course
-        const courseDoc = await db.collection(COLLECTIONS.COURSES).doc(courseId).get();
+        // Fetch course — must use ACADEMY_COURSES collection, not COURSES
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         if (!courseDoc.exists) {
             return NextResponse.json({ error: "Course not found" }, { status: 404 });
         }

@@ -167,9 +167,16 @@ export default function CertificatePage() {
                     <div className="p-12 md:p-16">
                         {/* Logo & Title */}
                         <div className="text-center mb-12">
-                            <div className="inline-block mb-4">
-                                <Award className="w-24 h-24 text-yellow-500" />
+                            <div className="inline-block mb-6 bg-white rounded-xl shadow-md p-3 border border-slate-100">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src="/images/logo.jpg"
+                                    alt="Easy Sales Export Academy"
+                                    className="h-16 w-auto object-contain mx-auto"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
                             </div>
+                            <p className="text-sm font-bold tracking-widest uppercase text-blue-600 mb-2">Easy Sales Export Academy</p>
                             <h1 className="text-5xl font-bold text-slate-900 mb-2">
                                 Certificate of Completion
                             </h1>
