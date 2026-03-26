@@ -139,15 +139,13 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
             {/* Header */}
             <div className="relative px-5 pt-4 pb-2 flex items-center justify-between border-b border-white/20">
                 <div className="flex items-center gap-3">
-                    <div className="bg-white p-1 rounded-lg shadow-sm flex items-center justify-center shrink-0 w-10 h-10">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src="/images/logo.jpg"
-                            alt="Easy Sales Export"
-                            className="w-full h-full object-contain"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
-                    </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src="/images/logo.jpg"
+                        alt="Logo"
+                        className="h-8 w-auto brightness-0 invert object-contain"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
                     <div>
                         <p className="text-white font-black text-sm tracking-wider uppercase">Easy Sales Export</p>
                         <p className="text-white/70 text-xs">Cooperative Membership</p>
