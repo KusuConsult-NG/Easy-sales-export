@@ -138,23 +138,23 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
 
             {/* Header */}
             <div className="relative px-5 pt-4 pb-2 flex items-center justify-between border-b border-white/20">
-                <div className="flex items-center gap-2">
-                    <div className="bg-white p-0.5 rounded shadow-sm flex items-center justify-center">
+                <div className="flex items-center gap-3">
+                    <div className="bg-white p-1 rounded-lg shadow-sm flex items-center justify-center shrink-0 w-10 h-10">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                             src="/images/logo.jpg"
                             alt="Easy Sales Export"
-                            className="h-6 w-auto object-contain"
+                            className="w-full h-full object-contain"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                     </div>
                     <div>
-                        <p className="text-white font-black text-sm tracking-wider uppercase leading-tight">Easy Sales</p>
-                        <p className="text-white/70 text-[10px] leading-tight font-semibold uppercase tracking-widest">Cooperative</p>
+                        <p className="text-white font-black text-sm tracking-wider uppercase">Easy Sales Export</p>
+                        <p className="text-white/70 text-xs">Cooperative Membership</p>
                     </div>
                 </div>
-                <div className="flex flex-col items-end">
-                    <div className={`px-2 py-0.5 rounded-full text-[10px] tracking-wide font-bold shadow-sm ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-purple-300 text-purple-900"}`}>
+                <div className="flex flex-col items-end shrink-0 pl-2">
+                    <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-purple-300 text-purple-900"}`}>
                         {isPremium ? "★ PREMIUM" : "BASIC"}
                     </div>
                     <Shield className="w-5 h-5 text-white/40 mt-1" />
@@ -181,7 +181,7 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                 </div>
 
                 {/* Details */}
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 pt-0.5">
                     <p className="text-white font-black text-base leading-tight mb-1 truncate">{data.fullName}</p>
                     <p className="text-white/60 text-xs uppercase tracking-widest mb-2">{data.memberNumber}</p>
 
@@ -200,7 +200,7 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                         </div>
                         <div className="flex justify-between text-xs">
                             <span className="text-white/60">Valid Until</span>
-                            <span className={`font-bold ${isPremium ? "text-yellow-300" : "text-purple-200"}`}>{fmtShort(data.validUntil)}</span>
+                            <span className={`font-bold ${isPremium ? "text-yellow-300" : "text-white"}`}>{fmtShort(data.validUntil)}</span>
                         </div>
                     </div>
                 </div>
@@ -213,7 +213,7 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                         <div key={i} className="w-1 h-1 rounded-full bg-white/20" />
                     ))}
                 </div>
-                <p className="text-white/40 text-xs">easysalesexport.com</p>
+                <p className="text-white/40 text-[10px] tracking-wider">easysalesexport.com</p>
             </div>
         </div>
     );
