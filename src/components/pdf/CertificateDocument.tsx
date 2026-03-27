@@ -40,13 +40,13 @@ const styles = StyleSheet.create({
         backgroundColor: '#7C3AED',
     },
     logo: {
-        width: 72,
-        height: 44,
-        marginBottom: 6,
+        width: 140,
+        height: 60,
+        marginBottom: 10,
         objectFit: 'contain',
     },
     orgName: {
-        fontSize: 11,
+        fontSize: 12,
         color: '#6D28D9',
         letterSpacing: 2,
         textTransform: 'uppercase',
@@ -165,7 +165,7 @@ export const CertificateDocument = ({
                 {/* Logo */}
                 <Image src={`${baseUrl}/images/logo.jpg`} style={styles.logo} />
                 
-                <Text style={styles.orgName}>Easy Sales Export Academy</Text>
+                <Text style={styles.orgName}>EASY SALES EXPORT LTD</Text>
 
                 {/* Title */}
                 <Text style={styles.title}>Certificate of Completion</Text>

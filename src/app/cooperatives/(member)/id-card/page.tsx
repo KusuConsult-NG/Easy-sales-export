@@ -138,18 +138,9 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
 
             {/* Header */}
             <div className="relative px-5 pt-4 pb-2 flex items-center justify-between border-b border-white/20">
-                <div className="flex items-center gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src="/images/logo.jpg"
-                        alt="Logo"
-                        className="h-8 w-auto brightness-0 invert object-contain"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                    <div>
-                        <p className="text-white font-black text-sm tracking-wider uppercase">Easy Sales Export</p>
-                        <p className="text-white/70 text-xs">Cooperative Membership</p>
-                    </div>
+                <div>
+                    <p className="text-white font-black text-sm tracking-wider uppercase">Easy Sales Export LTD</p>
+                    <p className="text-white/70 text-[10px] font-semibold uppercase tracking-widest leading-tight">Cooperative Membership</p>
                 </div>
                 <div className="flex flex-col items-end shrink-0 pl-2">
                     <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-purple-300 text-purple-900"}`}>
