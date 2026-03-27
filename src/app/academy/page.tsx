@@ -1,11 +1,40 @@
 "use client";
 
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, CheckCircle, Home, Zap, Star } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import BackToHub from "@/components/common/BackToHub";
+import { checkAcademyStatusAction } from "@/app/actions/academy";
 
 export default function AcademyLandingPage() {
+    const { status: sessionStatus } = useSession();
+    const router = useRouter();
+
+    // ── Redirect logged-in users to the right page ────────────────────────
+    useEffect(() => {
+        if (sessionStatus === "loading") return; // wait for session
+        if (sessionStatus !== "authenticated") return; // let unauthenticated users see the public page
+
+        // Authenticated user — check their module status and route accordingly
+        (async () => {
+            try {
+                const appStatus = await checkAcademyStatusAction();
+                if (appStatus === "approved") {
+                    router.replace("/academy/dashboard");
+                } else {
+                    // pending / rejected / no application — send to setup
+                    router.replace("/academy/setup");
+                }
+            } catch {
+                // On any error, fall through to setup — safe default
+                router.replace("/academy/setup");
+            }
+        })();
+    }, [sessionStatus, router]);
+
     const programTiers = [
         {
             title: "Foundation Program",

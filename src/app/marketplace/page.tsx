@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getRecommendedProductsAction } from "@/app/actions/marketplace";
 import BackToHub from "@/components/common/BackToHub";
+import MarketplaceRouteGuard from "@/components/marketplace/MarketplaceRouteGuard";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default async function MarketplaceLandingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
+            <MarketplaceRouteGuard />
 
 
             {/* Hero Section */}

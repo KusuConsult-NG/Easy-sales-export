@@ -1,17 +1,40 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
     Shield, Users, TrendingUp, Award, Target, Briefcase,
     CheckCircle2, ArrowRight, Menu, X, ChevronDown, ChevronUp,
     Mail, Phone, MapPin, Clock, Send, Sparkles, Zap, Globe, Home
 } from 'lucide-react';
+import { checkCooperativeStatusAction } from '@/app/actions/cooperative';
 
 export default function CooperativeLandingPage() {
+    const { status: sessionStatus } = useSession();
+    const router = useRouter();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeSection, setActiveSection] = useState('home');
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+
+    // ── Redirect logged-in members to the right page ──────────────────────
+    useEffect(() => {
+        if (sessionStatus === 'loading') return;
+        if (sessionStatus !== 'authenticated') return;
+        (async () => {
+            try {
+                const appStatus = await checkCooperativeStatusAction();
+                if (appStatus === 'approved') {
+                    router.replace('/cooperatives/dashboard');
+                } else {
+                    router.replace('/cooperatives/onboarding');
+                }
+            } catch {
+                router.replace('/cooperatives/onboarding');
+            }
+        })();
+    }, [sessionStatus, router]);
 
     // Smooth scroll handler
     const scrollToSection = (sectionId: string) => {

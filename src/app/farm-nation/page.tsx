@@ -5,7 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import BackToHub from "@/components/common/BackToHub";
 import { useState, useEffect } from "react";
-import { getPropertiesAction } from "@/app/actions/farm-nation";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { getPropertiesAction, checkFarmNationStatusAction } from "@/app/actions/farm-nation";
 
 const categories = [
     { name: "Arable Land", icon: "🌾" },
@@ -17,10 +19,30 @@ const categories = [
 ];
 
 export default function FarmNationLandingPage() {
+    const { status: sessionStatus } = useSession();
+    const router = useRouter();
     const [featuredProperties, setFeaturedProperties] = useState<any[]>([]);
     const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
     const [totalCount, setTotalCount] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // ── Redirect logged-in users to their dashboard ──────────────────────
+    useEffect(() => {
+        if (sessionStatus === 'loading') return;
+        if (sessionStatus !== 'authenticated') return;
+        (async () => {
+            try {
+                const appStatus = await checkFarmNationStatusAction();
+                if (appStatus === 'approved') {
+                    router.replace('/farm-nation/dashboard');
+                } else {
+                    router.replace('/farm-nation/onboarding');
+                }
+            } catch {
+                router.replace('/farm-nation/onboarding');
+            }
+        })();
+    }, [sessionStatus, router]);
 
     useEffect(() => {
         async function loadData() {

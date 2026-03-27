@@ -7,10 +7,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, Users, TrendingUp, Globe, Shield, Sparkles, CheckCircle, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import BackToHub from "@/components/common/BackToHub";
+import { checkWaveStatusAction } from "@/app/actions/wave";
 
 function ClickToPlayVideo({ videoId }: { videoId: string }) {
     const [playing, setPlaying] = useState(false);
@@ -53,6 +56,27 @@ function ClickToPlayVideo({ videoId }: { videoId: string }) {
 }
 
 export default function WaveLandingPage() {
+    const { status: sessionStatus } = useSession();
+    const router = useRouter();
+
+    // ── Redirect logged-in users to their dashboard ──────────────────────
+    useEffect(() => {
+        if (sessionStatus === 'loading') return;
+        if (sessionStatus !== 'authenticated') return;
+        (async () => {
+            try {
+                const appStatus = await checkWaveStatusAction();
+                if (appStatus === 'approved') {
+                    router.replace('/wave/dashboard');
+                } else {
+                    router.replace('/wave/application');
+                }
+            } catch {
+                router.replace('/wave/application');
+            }
+        })();
+    }, [sessionStatus, router]);
+
     // Image Slider State
     const images = [
         "/images/wave/photo_2026-02-14 12.47.29.jpeg", // 4th image moved to 1st

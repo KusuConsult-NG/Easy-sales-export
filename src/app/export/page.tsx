@@ -1,12 +1,34 @@
 "use client";
 
+import { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ArrowRight, Package, Shield, TrendingUp, Clock, Globe, CheckCircle, DollarSign, Home, ShoppingBag, Truck, FileCheck, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import BackToHub from "@/components/common/BackToHub";
+import { checkExportStatusAction } from "@/app/actions/export";
 
 export default function ExportWindowsLandingPage() {
+    const { status: sessionStatus } = useSession();
     const router = useRouter();
+
+    // ── Redirect logged-in users to their dashboard ──────────────────────
+    useEffect(() => {
+        if (sessionStatus === 'loading') return;
+        if (sessionStatus !== 'authenticated') return;
+        (async () => {
+            try {
+                const appStatus = await checkExportStatusAction();
+                if (appStatus === 'approved') {
+                    router.replace('/export/dashboard');
+                } else {
+                    router.replace('/export/onboarding');
+                }
+            } catch {
+                router.replace('/export/onboarding');
+            }
+        })();
+    }, [sessionStatus, router]);
 
 
 
