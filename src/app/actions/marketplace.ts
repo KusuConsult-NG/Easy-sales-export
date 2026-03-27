@@ -27,7 +27,7 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
 
-        // Check user document for service registration
+        // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
@@ -38,6 +38,46 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
                 status: registration.status,
                 accountType: registration.accountType
             };
+        }
+
+        // ── FALLBACK: Returning user whose marketplace data predates V2 schema ──
+        // Marketplace stores seller data in MARKETPLACE_SELLERS by userId
+        const legacySellerSnap = await db.collection(COLLECTIONS.MARKETPLACE_SELLERS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        if (!legacySellerSnap.empty) {
+            const legacyData = legacySellerSnap.docs[0].data();
+            const legacyStatus = legacyData?.status ?? 'pending';
+            const legacyAccountType = legacyData?.accountType;
+
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
+                {
+                    serviceRegistrations: {
+                        marketplace: {
+                            status: legacyStatus,
+                            accountType: legacyAccountType,
+                            syncedFromLegacy: true,
+                            syncedAt: new Date().toISOString()
+                        }
+                    }
+                },
+                { merge: true }
+            );
+
+            logger.info(`[checkMarketplaceStatus] Backfilled legacy marketplace status '${legacyStatus}' for user ${session.user.id}`);
+            return { status: legacyStatus, accountType: legacyAccountType };
+        }
+
+        // Also check legacy sellerVerificationStatus field on the user doc itself
+        if (userData?.sellerVerificationStatus) {
+            const legacyStatus = userData.sellerVerificationStatus;
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
+                { serviceRegistrations: { marketplace: { status: legacyStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
+                { merge: true }
+            );
+            return { status: legacyStatus };
         }
 
         return null;

@@ -799,7 +799,7 @@ export async function checkFarmNationStatusAction(): Promise<string | null> {
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
 
-        // Check user document for service registration
+        // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
@@ -807,6 +807,30 @@ export async function checkFarmNationStatusAction(): Promise<string | null> {
 
         if (registration?.status) {
             return registration.status;
+        }
+
+        // ── FALLBACK: Farm Nation data was stored directly in userData.farmNation ──
+        // This was the V1 data structure before serviceRegistrations was introduced.
+        const legacyFarmNation = userData?.farmNation;
+        if (legacyFarmNation?.role || legacyFarmNation?.onboardingCompletedAt) {
+            const legacyStatus = 'pending'; // V1 data = completed onboarding = pending review
+
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
+                {
+                    serviceRegistrations: {
+                        farmNation: {
+                            status: legacyStatus,
+                            role: legacyFarmNation.role,
+                            syncedFromLegacy: true,
+                            syncedAt: new Date().toISOString()
+                        }
+                    }
+                },
+                { merge: true }
+            );
+
+            logger.info(`[checkFarmNationStatus] Backfilled legacy farmNation status '${legacyStatus}' for user ${session.user.id}`);
+            return legacyStatus;
         }
 
         return null;

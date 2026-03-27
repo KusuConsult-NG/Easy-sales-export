@@ -616,7 +616,7 @@ export async function checkCooperativeStatusAction(): Promise<string | null> {
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
 
-        // Check user document for service registration
+        // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
@@ -624,6 +624,25 @@ export async function checkCooperativeStatusAction(): Promise<string | null> {
 
         if (registration?.status) {
             return registration.status;
+        }
+
+        // ── FALLBACK: Returning member whose data predates V2 schema ──────
+        const legacySnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        if (!legacySnap.empty) {
+            const legacyData = legacySnap.docs[0].data();
+            const legacyStatus = legacyData?.status ?? 'pending';
+
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
+                { serviceRegistrations: { cooperatives: { status: legacyStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
+                { merge: true }
+            );
+
+            logger.info(`[checkCooperativeStatus] Backfilled legacy cooperative status '${legacyStatus}' for user ${session.user.id}`);
+            return legacyStatus;
         }
 
         return null;

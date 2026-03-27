@@ -59,20 +59,7 @@ export default function FarmNationLandingPage() {
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Hero Section */}
-            <div className="relative overflow-hidden text-white">
-                {/* Hero Background Image */}
-                <div className="absolute inset-0">
-                    <Image
-                        src="/images/hero/hero-farmnation.jpeg"
-                        alt="Farm Nation Agricultural Properties"
-                        fill
-                        className="object-cover object-center"
-                        priority
-                        quality={90}
-                    />
-                    {/* Brand-tinted overlay */}
-                    <div className="absolute inset-0 bg-linear-to-br from-teal-900/80 via-cyan-900/75 to-blue-900/80" />
-                </div>
+            <div className="relative overflow-hidden bg-linear-to-br from-teal-600 via-cyan-600 to-blue-600 text-white">
                 <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
                 <div className="absolute inset-0 bg-black/10"></div>
                 <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">

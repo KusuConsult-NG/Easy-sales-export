@@ -55,7 +55,7 @@ function ClickToPlayVideo({ videoId }: { videoId: string }) {
 export default function WaveLandingPage() {
     // Image Slider State
     const images = [
-        "/images/wave/photo_2026-02-14 12.47.29.jpeg", // first slide
+        "/images/wave/photo_2026-02-14 12.47.29.jpeg", // 4th image moved to 1st
         "/images/wave/photo_2026-02-14 12.47.22.jpeg",
         "/images/wave/photo_2026-02-14 12.47.24.jpeg",
         // 5th image removed
@@ -99,21 +99,10 @@ export default function WaveLandingPage() {
     return (
         <div className="min-h-screen">
 
-            {/* Full-width Hero Banner — placed above the main hero section */}
-            <div className="relative w-full h-[60vh] md:h-[70vh] overflow-hidden">
-                <Image
-                    src="/images/hero/hero-wave.jpeg"
-                    alt="RH-WAVE 774 Women Agro-Value Expansion Programme"
-                    fill
-                    className="object-cover object-center"
-                    priority
-                    quality={90}
-                />
-                <BackToHub className="top-4 left-4" />
-            </div>
 
             {/* Hero Section — 2-column: text left, slider right */}
-            <section className="relative flex items-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
+            <section className="relative min-h-screen flex items-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
+                <BackToHub className="top-4 left-4" />
                 {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-5">
                     <div className="absolute inset-0" style={{
