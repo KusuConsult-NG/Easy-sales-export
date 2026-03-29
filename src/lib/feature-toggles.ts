@@ -33,7 +33,8 @@ export const DEFAULT_TOGGLES: Record<string, boolean> = {
     academy_courses: true,
 
     // Beta features (disabled by default)
-    ai_assistant: false,
+    ai_assistant: true,         // Phase 13: Enabled — module-aware chatbot deployed
+    chatbot_persistence: true,  // Phase 13: Save conversations to Firestore
     advanced_analytics: false,
     social_features: false,
     mobile_app_integration: false,

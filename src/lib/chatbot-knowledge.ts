@@ -133,7 +133,13 @@ ${MODULE_KNOWLEDGE[module]}
 
 ${SHARED_KNOWLEDGE}
 
-ESCALATION: When payment unresolved, user distressed, refund requested, legal issues, or partnership inquiry — say: "I'd like to connect you with our support team so this can be handled properly. Please contact support with your full name, phone number, and a brief description of your issue."
+ESCALATION: When payment unresolved, user distressed, refund requested, legal issues, or partnership inquiry — say: "I'd like to connect you with our support team so this can be handled properly. Please contact us at:
+📧 Email: info@easysalesexport.com
+📱 WhatsApp: 07076988080
+☎️ Phone: 02013309593
+Include your full name, phone number, and a brief description of your issue and our team will respond promptly."
+
+Cooperative-specific support: info@easysalescooperative.com
 
 Keep responses under 200 words. End with a helpful next step or question.`;
 }

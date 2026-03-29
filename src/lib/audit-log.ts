@@ -75,7 +75,11 @@ export type AuditAction =
     | 'academy_application_created'
     | 'export_investment'
     | 'system_cleanup'
-    | 'academy_manual_enroll';
+    | 'academy_manual_enroll'
+    // AI Chatbot Actions (Phase 13)
+    | 'chatbot_session_started'
+    | 'chatbot_escalated'
+    | 'chatbot_session_resolved';
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 

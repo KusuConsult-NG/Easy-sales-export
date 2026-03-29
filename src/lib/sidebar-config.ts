@@ -33,6 +33,7 @@ import {
     Waves,
     Building2,
     Container,
+    MessageCircle,
 } from "lucide-react";
 import type { AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
@@ -157,5 +158,7 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
         // ── Finance & Settings ────────────────────────────────────────────
         { name: "Finance", href: "/admin/finance", icon: Wallet },
         { name: "Settings", href: "/admin/settings", icon: Settings },
+        // ── AI Tools ─────────────────────────────────────────────────────
+        { name: "AI Chatbot", href: "/admin/chatbot", icon: MessageCircle },
     ],
 };

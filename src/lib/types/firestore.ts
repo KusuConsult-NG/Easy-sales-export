@@ -868,6 +868,10 @@ export const COLLECTIONS = {
     FEATURE_TOGGLES: "feature_toggles",
     IMPERSONATION_TOKENS: "impersonation_tokens",
 
+    // AI Chatbot (Phase 13)
+    CHATBOT_SESSIONS: "chatbot_sessions",
+    CHATBOT_MESSAGES: "chatbot_messages",
+
     // AI & Chat
     AI_CHAT_HISTORY: "ai_chat_history",
 
@@ -979,6 +983,35 @@ export const COLLECTIONS = {
     // Payment Instructions (escrow payment/refund records)
     PAYMENT_INSTRUCTIONS: "paymentInstructions",
 } as const;
+
+// ─── AI Chatbot Types (Phase 13) ──────────────────────────────────────────
+import type { ChatbotModule } from "@/lib/chatbot-knowledge";
+
+export interface ChatbotSession {
+    id: string;
+    userId: string;
+    userEmail: string;
+    module: ChatbotModule;
+    startedAt: FirebaseFirestore.Timestamp;
+    lastMessageAt: FirebaseFirestore.Timestamp;
+    messageCount: number;
+    escalated: boolean;           // true if user triggered support escalation
+    resolved: boolean;            // admin marks resolved
+    resolvedBy: string | null;    // admin userId
+    resolvedAt: FirebaseFirestore.Timestamp | null;
+    tags: string[];               // e.g. ["payment_issue", "registration"]
+}
+
+export interface ChatbotMessage {
+    id: string;
+    sessionId: string;
+    userId: string;
+    role: "user" | "assistant";
+    content: string;
+    module: ChatbotModule;
+    timestamp: FirebaseFirestore.Timestamp;
+    isEscalation: boolean;        // true if this message triggered escalation
+}
 
 
 

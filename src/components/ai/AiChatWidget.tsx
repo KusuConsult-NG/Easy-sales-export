@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { MessageCircle, X, Send, Loader2, Sparkles, User, Bot, ChevronDown } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,8 @@ interface Message {
     role: "user" | "assistant";
     content: string;
     timestamp: Date;
+    isEscalation?: boolean;
+    isRateLimited?: boolean;
 }
 
 interface AiChatWidgetProps {
@@ -38,14 +40,29 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
     const [inputValue, setInputValue] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [hasInteracted, setHasInteracted] = useState(false);
+    const [isEscalated, setIsEscalated] = useState(false);
+    const [isRateLimited, setIsRateLimited] = useState(false);
+    // sessionId persists for the lifetime of the widget mount (one conversation)
+    const sessionIdRef = useRef<string | undefined>(undefined);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // Generate a stable session ID once on mount
+    const initSession = useMemo(() => {
+        return () => {
+            if (!sessionIdRef.current) {
+                sessionIdRef.current = crypto.randomUUID();
+            }
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Hide on admin routes
     const isHidden = pathname?.startsWith("/admin") || pathname?.startsWith("/auth");
 
     // Initialise greeting on open
     useEffect(() => {
+        initSession(); // ensure sessionId is ready
         if (isOpen && messages.length === 0) {
             setMessages([{
                 id: "greeting",
@@ -57,11 +74,15 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
         if (isOpen) {
             setTimeout(() => inputRef.current?.focus(), 100);
         }
-    }, [isOpen, config.greeting, messages.length]);
+    }, [isOpen, config.greeting, messages.length, initSession]);
 
-    // Re-greet when module changes and chat is open
+    // Re-greet when module changes and chat is open (new session)
     useEffect(() => {
         if (isOpen) {
+            // Reset session so a new one is created in Firestore for the new module
+            sessionIdRef.current = crypto.randomUUID();
+            setIsEscalated(false);
+            setIsRateLimited(false);
             setMessages([{
                 id: "greeting-" + module,
                 role: "assistant",
@@ -101,7 +122,7 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
         setHasInteracted(true);
 
         try {
-            // Build history for context (exclude greeting)
+            // Build history for context (exclude greeting messages)
             const history = messages
                 .filter(m => m.id !== "greeting" && !m.id.startsWith("greeting-"))
                 .map(m => ({ role: m.role, content: m.content }));
@@ -113,6 +134,7 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
                     message: userMessage.content,
                     module,
                     history,
+                    sessionId: sessionIdRef.current,
                 }),
             });
 
@@ -120,11 +142,28 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
 
             if (!response.ok) throw new Error(data.error || "Failed to get response");
 
+            // Sync sessionId from server (server may have assigned one)
+            if (data.sessionId && !sessionIdRef.current) {
+                sessionIdRef.current = data.sessionId;
+            }
+
+            // Handle escalation
+            if (data.escalated) {
+                setIsEscalated(true);
+            }
+
+            // Handle rate limit (server returns 200 with rateLimited flag)
+            if (data.rateLimited) {
+                setIsRateLimited(true);
+            }
+
             const botMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 role: "assistant",
                 content: data.reply || "I'm having trouble connecting right now. Please try again or contact support.",
                 timestamp: new Date(),
+                isEscalation: !!data.escalated,
+                isRateLimited: !!data.rateLimited,
             };
 
             setMessages(prev => [...prev, botMessage]);
@@ -238,6 +277,34 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
                     )}
                     <div ref={messagesEndRef} />
                 </div>
+
+                {/* Escalation Card — shown when user asked for human support */}
+                {isEscalated && (
+                    <div className="px-4 pb-3 bg-amber-50 border-t border-amber-200">
+                        <div className="flex items-start gap-2 pt-3">
+                            <span className="text-amber-500 text-lg leading-none">⚡</span>
+                            <div>
+                                <p className="text-xs font-semibold text-amber-800">Support handoff</p>
+                                <p className="text-xs text-amber-700 mt-0.5">
+                                    📧 <a href="mailto:info@easysalesexport.com" className="underline">info@easysalesexport.com</a>
+                                    {" · "}📱 <a href="https://wa.me/2347076988080" target="_blank" rel="noreferrer" className="underline">WhatsApp</a>
+                                    {" · "}☎️ 02013309593
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Rate Limit Banner */}
+                {isRateLimited && (
+                    <div className="px-4 pb-3 bg-red-50 border-t border-red-100">
+                        <p className="text-xs text-red-700 pt-3">
+                            ⏳ Chat limit reached for this hour. For urgent help:
+                            📧 <a href="mailto:info@easysalesexport.com" className="underline">info@easysalesexport.com</a>
+                            {" or "}📱 <a href="https://wa.me/2347076988080" target="_blank" rel="noreferrer" className="underline">WhatsApp</a>
+                        </p>
+                    </div>
+                )}
 
                 {/* Quick Actions */}
                 {showQuickActions && (

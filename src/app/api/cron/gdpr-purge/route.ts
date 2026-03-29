@@ -6,6 +6,7 @@ import { auth } from "firebase-admin";
 import { logger } from "@/lib/logger";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp } from "firebase-admin/firestore";
+import { purgeChatbotDataOlderThan } from "@/lib/chatbot-db";
 
 // The maximum number of documents to delete in one invocation (Firestore limit is 500 per batch)
 const BATCH_LIMIT = 400;
@@ -95,6 +96,11 @@ export async function GET(request: NextRequest) {
         );
 
         logger.info(`GDPR Sweep Complete: Eradicated ${deletedUids.length} accounts (${failedAuthDeletions} Auth failures).`);
+
+        // Phase 13: Purge chatbot sessions/messages older than 90 days (non-blocking)
+        purgeChatbotDataOlderThan(90)
+            .then(count => logger.info(`GDPR Chatbot Purge: Removed ${count} old sessions.`))
+            .catch(err => logger.error("GDPR Chatbot Purge failed (non-fatal):", err));
 
         return NextResponse.json({
             status: "success",
