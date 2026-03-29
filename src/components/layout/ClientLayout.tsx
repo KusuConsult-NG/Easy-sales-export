@@ -11,6 +11,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { FirebaseAuthProvider } from "@/components/providers/FirebaseAuthProvider";
 import { useFCMRegistration } from "@/hooks/useFCMRegistration";
 import { PushNotificationBanner } from "@/components/notifications/PushNotificationBanner";
+import { AiChatWidget } from "@/components/ai/AiChatWidget";
 
 interface ClientLayoutProps {
     children: ReactNode;
@@ -100,6 +101,8 @@ function LayoutContent({ children }: ClientLayoutProps) {
             {/* Push notification permission banner — only shows to authenticated users
                 who haven't yet granted or denied push permission */}
             {isAuthenticated && <PushNotificationBanner />}
+            {/* Module-aware AI chatbot — self-hides on admin/auth routes */}
+            <AiChatWidget />
         </ToastProvider>
     );
 }
