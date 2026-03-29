@@ -1,0 +1,15 @@
+Dockerfile
+.dockerignore
+node_modules
+npm-debug.log
+README.md
+.next
+.git
+.env*
+scripts
+.cache
+.pytest_cache
+tests
+docs
+playwright-report
+test-results

@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.vscode
+.cache
+coverage
+docs
+playwright-report
+test-results
+tmp
+npm-debug.log
