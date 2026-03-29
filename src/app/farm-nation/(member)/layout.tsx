@@ -6,7 +6,7 @@
 
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
-import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import FarmNationSidebar from "./FarmNationSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -20,10 +20,9 @@ async function FarmNationLayoutContent({ children }: { children: React.ReactNode
         redirect("/auth/login?module=farm-nation");
     }
 
-    // Verify session and check access
+    // Verify session and check access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
     try {
-        // Check service access
-        const hasAccess = hasAppAccess(session.user.roles || [], "farm-nation");
+        const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "farm-nation");
 
         if (!hasAccess) {
             redirect("/farm-nation/onboarding");

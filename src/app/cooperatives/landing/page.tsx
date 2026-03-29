@@ -10,6 +10,8 @@ import {
     Mail, Phone, MapPin, Clock, Send, Sparkles, Zap, Globe, Home
 } from 'lucide-react';
 import { checkCooperativeStatusAction } from '@/app/actions/cooperative';
+import { COMPANY_INFO } from '@/lib/constants';
+import { toast } from 'sonner';
 
 export default function CooperativeLandingPage() {
     const { status: sessionStatus } = useSession();
@@ -17,6 +19,31 @@ export default function CooperativeLandingPage() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [activeSection, setActiveSection] = useState('home');
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+    const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
+    const [isSending, setIsSending] = useState(false);
+
+    const handleContactSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSending(true);
+        try {
+            const res = await fetch('/api/contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...contactForm, subject: 'Cooperative Inquiry' }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                toast.success("Message sent! We'll get back to you shortly.");
+                setContactForm({ name: '', email: '', message: '' });
+            } else {
+                toast.error(data.error || 'Failed to send. Please try again.');
+            }
+        } catch {
+            toast.error('Failed to send. Please email us directly.');
+        } finally {
+            setIsSending(false);
+        }
+    };
 
     // ── Redirect logged-in members to the right page ──────────────────────
     useEffect(() => {
@@ -744,7 +771,7 @@ export default function CooperativeLandingPage() {
                                 </div>
                                 <div>
                                     <h4 className="font-semibold text-slate-900 mb-1">Phone</h4>
-                                    <p className="text-slate-600">+234 800 000 0000</p>
+                                    <p className="text-slate-600">{COMPANY_INFO.contact.general.phone}</p>
                                 </div>
                             </div>
 
@@ -775,11 +802,14 @@ export default function CooperativeLandingPage() {
                             <p className="text-slate-600 mb-6">
                                 Our team is ready to help you understand how Easy Sales Cooperative can position you for success.
                             </p>
-                            <form className="space-y-4">
+                            <form className="space-y-4" onSubmit={handleContactSubmit}>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-900 mb-2">Name</label>
                                     <input
                                         type="text"
+                                        required
+                                        value={contactForm.name}
+                                        onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
                                         className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"
                                         placeholder="Your full name"
                                     />
@@ -788,6 +818,9 @@ export default function CooperativeLandingPage() {
                                     <label className="block text-sm font-medium text-slate-900 mb-2">Email</label>
                                     <input
                                         type="email"
+                                        required
+                                        value={contactForm.email}
+                                        onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
                                         className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"
                                         placeholder="your@email.com"
                                     />
@@ -796,16 +829,20 @@ export default function CooperativeLandingPage() {
                                     <label className="block text-sm font-medium text-slate-900 mb-2">Message</label>
                                     <textarea
                                         rows={4}
+                                        required
+                                        value={contactForm.message}
+                                        onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
                                         className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-purple-500 focus:outline-none transition"
                                         placeholder="How can we help you?"
                                     />
                                 </div>
                                 <button
                                     type="submit"
-                                    className="w-full bg-linear-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:shadow-xl transition"
+                                    disabled={isSending}
+                                    className="w-full bg-linear-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:shadow-xl transition disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
                                     <Send className="w-5 h-5" />
-                                    <span>Send Message</span>
+                                    <span>{isSending ? 'Sending...' : 'Send Message'}</span>
                                 </button>
                             </form>
                         </div>

@@ -36,17 +36,6 @@ const landingPages = [
     '/wave/landing'
 ];
 
-// Module prefixes that require an approved role before showing the sidebar
-// Maps route prefix → required role(s)
-const MODULE_ROLE_MAP: Record<string, string[]> = {
-    '/cooperatives': ['cooperative_member'],
-    '/wave': ['wave_participant'],
-    '/export': ['export_participant'],
-    '/marketplace': ['buyer', 'seller'],
-    '/farm-nation': ['farmer', 'land_owner', 'investor'],
-    '/academy': ['academy_participant'],
-};
-
 function LayoutContent({ children }: ClientLayoutProps) {
     const pathname = usePathname();
     const { data: session, status } = useSession();
@@ -80,22 +69,16 @@ function LayoutContent({ children }: ClientLayoutProps) {
         pathname.includes('/setup') ||          // Academy setup
         pathname.includes('/access-denied');    // Access denied pages
 
-    // Role-awareness: hide sidebar if user has no approved role for this module
-    const userRoles: string[] = (session?.user?.roles as string[]) || [];
-    const moduleEntry = Object.entries(MODULE_ROLE_MAP).find(([prefix]) =>
-        pathname.startsWith(prefix)
-    );
-    const lacksModuleRole = moduleEntry
-        ? !moduleEntry[1].some(role => userRoles.includes(role))
-        : false;
-
+    // NOTE: We intentionally do NOT gate the sidebar on JWT roles here.
+    // Module layouts already enforce access via a two-layer check (JWT + Firestore fallback).
+    // If a user has passed the layout guard, they are approved — the sidebar should show.
+    // A JWT role-gate here would hide the sidebar for valid approved users with stale JWTs.
     const shouldShowSidebar =
         status === "authenticated" &&
         session &&
         !noSidebarRoutes.some(route => pathname.startsWith(route)) &&
         !landingPages.includes(pathname) &&
-        !isExcludedFlow &&
-        !lacksModuleRole;
+        !isExcludedFlow;
 
     return (
         <ToastProvider>

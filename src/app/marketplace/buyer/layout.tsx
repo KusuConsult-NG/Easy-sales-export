@@ -6,7 +6,7 @@
 
 import { redirect } from "next/navigation";
 import { logger } from '@/lib/logger';
-import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -32,11 +32,8 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
     }
 
     try {
-        const userId = session.user.id;
-
-        // Check service access
-        // Check service access
-        const hasAccess = hasAppAccess(session.user.roles || [], "marketplace");
+        // Check service access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
+        const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "marketplace");
 
         if (!hasAccess) {
             redirect("/marketplace/onboarding");

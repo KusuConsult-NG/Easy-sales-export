@@ -1,87 +1,379 @@
 /**
- * Farm Nation Dashboard
+ * Farm Nation Member Dashboard
+ * Live Firestore data — stats, listings, and transactions
  */
 
-import { Metadata } from "next";
+"use client";
+
+import { useState, useEffect } from "react";
+import { logger } from "@/lib/logger";
+import Link from "next/link";
 import {
-    LayoutDashboard,
     Sprout,
     MapPin,
     TrendingUp,
-    ArrowRight
+    ArrowRight,
+    CheckCircle,
+    Clock,
+    DollarSign,
+    Loader2,
+    Home,
+    ShieldCheck,
+    AlertCircle,
+    Plus,
+    Eye,
 } from "lucide-react";
-import Link from "next/link";
-import { auth } from "@/lib/auth";
+import {
+    getFarmNationDashboardStatsAction,
+    type FarmNationDashboardStats,
+} from "@/app/actions/farm-nation";
 
-export const metadata: Metadata = {
-    title: "Dashboard | Farm Nation",
-    description: "Manage your farm investments and properties",
-};
+function formatCurrency(amount: number) {
+    return new Intl.NumberFormat("en-NG", {
+        style: "currency",
+        currency: "NGN",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+    }).format(amount);
+}
 
-export default async function FarmNationDashboard() {
-    const session = await auth();
-    const user = session?.user;
+function StatusBadge({ status }: { status: string }) {
+    const map: Record<string, { label: string; cls: string }> = {
+        available:         { label: "Available",         cls: "bg-green-100 text-green-700" },
+        pending:           { label: "Pending Review",    cls: "bg-yellow-100 text-yellow-700" },
+        sold:              { label: "Sold",              cls: "bg-blue-100 text-blue-700" },
+        leased:            { label: "Leased",            cls: "bg-purple-100 text-purple-700" },
+        deleted:           { label: "Removed",           cls: "bg-red-100 text-red-700" },
+        pending_payment:   { label: "Awaiting Payment",  cls: "bg-yellow-100 text-yellow-700" },
+        payment_confirmed: { label: "Payment Confirmed", cls: "bg-blue-100 text-blue-700" },
+        completed:         { label: "Completed",         cls: "bg-green-100 text-green-700" },
+        cancelled:         { label: "Cancelled",         cls: "bg-red-100 text-red-700" },
+    };
+    const { label, cls } = map[status] ?? { label: status, cls: "bg-slate-100 text-slate-700" };
+    return (
+        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${cls}`}>
+            {label}
+        </span>
+    );
+}
+
+export default function FarmNationDashboard() {
+    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState<FarmNationDashboardStats | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        getFarmNationDashboardStatsAction()
+            .then((result) => {
+                if (result.success && result.stats) {
+                    setStats(result.stats);
+                } else {
+                    setError(result.error ?? "Failed to load dashboard");
+                }
+            })
+            .catch((err) => {
+                logger.error("Dashboard load error:", err);
+                setError("Failed to load dashboard data");
+            })
+            .finally(() => setLoading(false));
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <Loader2 className="w-12 h-12 animate-spin text-emerald-600 mx-auto mb-3" />
+                    <p className="text-slate-500 text-sm">Loading your dashboard…</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !stats) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
+                <AlertCircle className="w-12 h-12 text-red-400" />
+                <p className="text-slate-600">{error ?? "Something went wrong."}</p>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
+    const isSeller = stats.role === "seller" || stats.role === "both";
 
     return (
-        <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-slate-900">
-                Welcome back, {user?.name?.split(" ")[0] || "Partner"}!
-            </h1>
+        <div className="space-y-8">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 mb-1">
+                        Farm Nation Dashboard
+                    </h1>
+                    <p className="text-slate-500">
+                        Manage your land acquisitions and track agricultural investments
+                        <span className="ml-2 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full capitalize">
+                            {stats.role}
+                        </span>
+                    </p>
+                </div>
+                {isSeller && (
+                    <Link
+                        href="/farm-nation/list-land"
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition"
+                    >
+                        <Plus className="w-4 h-4" />
+                        List Property
+                    </Link>
+                )}
+            </div>
 
-            <p className="text-slate-600">
-                Manage your land acquisitions and track your agricultural investments.
-            </p>
-
-            {/* Quick Stats Placeholder */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Total Hectares */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                     <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
                             <Sprout className="w-6 h-6 text-emerald-600" />
                         </div>
-                        <div>
-                            <p className="text-sm text-slate-500 font-medium">Total Land</p>
-                            <h3 className="text-2xl font-bold text-slate-900">0 Hectares</h3>
-                        </div>
                     </div>
+                    <p className="text-sm text-slate-500 font-medium">Total Land Listed</p>
+                    <h3 className="text-2xl font-bold text-slate-900">
+                        {stats.totalHectares > 0
+                            ? `${stats.totalHectares.toLocaleString()} Ha`
+                            : "0 Hectares"}
+                    </h3>
                 </div>
 
+                {/* Active Listings */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                     <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
                             <MapPin className="w-6 h-6 text-blue-600" />
                         </div>
-                        <div>
-                            <p className="text-sm text-slate-500 font-medium">Active Properties</p>
-                            <h3 className="text-2xl font-bold text-slate-900">0 Sites</h3>
-                        </div>
                     </div>
+                    <p className="text-sm text-slate-500 font-medium">Active Listings</p>
+                    <h3 className="text-2xl font-bold text-slate-900">
+                        {stats.activeListings} {stats.activeListings === 1 ? "Site" : "Sites"}
+                    </h3>
                 </div>
 
+                {/* Portfolio Value */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                     <div className="flex items-center gap-4 mb-4">
                         <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
                             <TrendingUp className="w-6 h-6 text-purple-600" />
                         </div>
-                        <div>
-                            <p className="text-sm text-slate-500 font-medium">Portfolio Value</p>
-                            <h3 className="text-2xl font-bold text-slate-900">₦0.00</h3>
+                    </div>
+                    <p className="text-sm text-slate-500 font-medium">Portfolio Value</p>
+                    <h3 className="text-2xl font-bold text-slate-900">
+                        {stats.portfolioValue > 0 ? formatCurrency(stats.portfolioValue) : "₦0"}
+                    </h3>
+                </div>
+
+                {/* Completed Deals */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                            <CheckCircle className="w-6 h-6 text-orange-500" />
                         </div>
                     </div>
+                    <p className="text-sm text-slate-500 font-medium">Completed Deals</p>
+                    <h3 className="text-2xl font-bold text-slate-900">
+                        {stats.completedDeals}
+                    </h3>
                 </div>
             </div>
 
-            {/* Quick Actions */}
-            <h2 className="text-lg font-bold text-slate-900 mt-8 mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-                <Link href="/farm-nation/list-land" className="group p-4 bg-emerald-600 text-white rounded-xl flex items-center justify-between hover:bg-emerald-700 transition">
-                    <span className="font-semibold">List New Property</span>
-                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Link>
-                <Link href="/farm-nation/properties" className="group p-4 bg-white border border-slate-200 rounded-xl flex items-center justify-between hover:bg-slate-50 transition">
-                    <span className="font-semibold text-slate-900">Browse Listings</span>
-                    <ArrowRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform" />
-                </Link>
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                {/* Recent Listings */}
+                <div className="lg:col-span-2">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-slate-900">My Listings</h2>
+                        <Link
+                            href="/farm-nation/my-properties"
+                            className="text-emerald-600 hover:text-emerald-700 font-semibold text-sm"
+                        >
+                            View All →
+                        </Link>
+                    </div>
+
+                    {stats.recentListings.length === 0 ? (
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 text-center">
+                            <Home className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                            <h3 className="font-semibold text-slate-800 mb-1">No properties listed yet</h3>
+                            <p className="text-slate-500 text-sm mb-4">
+                                List your first agricultural property to get started.
+                            </p>
+                            {isSeller && (
+                                <Link
+                                    href="/farm-nation/list-land"
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    List a Property
+                                </Link>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {stats.recentListings.map((prop) => (
+                                <div
+                                    key={prop.id}
+                                    className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex items-start justify-between gap-4 hover:shadow-md transition"
+                                >
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+                                            <MapPin className="w-5 h-5 text-emerald-600" />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h3 className="font-semibold text-slate-900 text-sm">{prop.name}</h3>
+                                                {prop.verified && (
+                                                    <span title="Verified">
+                                                        <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-slate-500 mb-2">
+                                                {prop.location}, {prop.state} · {prop.size} Ha ·{" "}
+                                                <span className="capitalize">{prop.type}</span>
+                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <StatusBadge status={prop.status} />
+                                                <span className="text-xs text-slate-400">
+                                                    {new Date(prop.createdAt).toLocaleDateString("en-NG", {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                        year: "numeric",
+                                                    })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-sm font-bold text-emerald-700">
+                                            {formatCurrency(prop.price)}
+                                        </p>
+                                        <Link
+                                            href={`/farm-nation/properties/${prop.id}`}
+                                            className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline mt-1"
+                                        >
+                                            <Eye className="w-3 h-3" />
+                                            View
+                                        </Link>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Sidebar: Quick Actions + Recent Transactions */}
+                <div className="space-y-6">
+                    {/* Quick Actions */}
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
+                        <div className="space-y-3">
+                            {isSeller && (
+                                <Link
+                                    href="/farm-nation/list-land"
+                                    className="group flex items-center justify-between p-4 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <Plus className="w-5 h-5" />
+                                        <span className="font-semibold text-sm">List New Property</span>
+                                    </div>
+                                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                </Link>
+                            )}
+                            <Link
+                                href="/farm-nation/properties"
+                                className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <MapPin className="w-5 h-5 text-blue-600" />
+                                    <span className="font-semibold text-sm text-slate-900">Browse Listings</span>
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                            <Link
+                                href="/farm-nation/my-properties"
+                                className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Home className="w-5 h-5 text-emerald-600" />
+                                    <span className="font-semibold text-sm text-slate-900">My Properties</span>
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                            <Link
+                                href="/farm-nation/my-transactions"
+                                className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <DollarSign className="w-5 h-5 text-purple-600" />
+                                    <span className="font-semibold text-sm text-slate-900">My Transactions</span>
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* Recent Transactions */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-lg font-bold text-slate-900">
+                                Recent Transactions
+                            </h2>
+                            {stats.pendingTransactions > 0 && (
+                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded-full">
+                                    {stats.pendingTransactions} Pending
+                                </span>
+                            )}
+                        </div>
+
+                        {stats.recentTransactions.length === 0 ? (
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 text-center">
+                                <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                                <p className="text-sm text-slate-500">No transactions yet</p>
+                            </div>
+                        ) : (
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 divide-y divide-slate-100">
+                                {stats.recentTransactions.map((tx) => (
+                                    <div key={tx.id} className="p-4">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-900 truncate">
+                                                    {tx.propertyName}
+                                                </p>
+                                                <p className="text-xs text-slate-500 capitalize">
+                                                    {tx.propertyType} ·{" "}
+                                                    {new Date(tx.createdAt).toLocaleDateString("en-NG", {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                    })}
+                                                </p>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-sm font-bold text-emerald-700">
+                                                    {formatCurrency(tx.amount)}
+                                                </p>
+                                                <StatusBadge status={tx.status} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );

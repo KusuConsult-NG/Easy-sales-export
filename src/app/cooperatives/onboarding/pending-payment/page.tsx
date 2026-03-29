@@ -10,6 +10,7 @@ import { useState, useEffect, Suspense } from "react";
 import { Clock, Building2, Upload, CheckCircle, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { COMPANY_INFO } from "@/lib/constants";
 
 function PendingPaymentContent() {
     const searchParams = useSearchParams();
@@ -167,12 +168,12 @@ function PendingPaymentContent() {
                         Need help with your payment?
                     </p>
                     <div className="flex flex-wrap items-center justify-center gap-4">
-                        <a href="mailto:support@easysales.ng" className="text-purple-600 hover:text-purple-700 font-semibold">
-                            support@easysales.ng
+                        <a href={`mailto:${COMPANY_INFO.contact.general.email}`} className="text-purple-600 hover:text-purple-700 font-semibold">
+                            {COMPANY_INFO.contact.general.email}
                         </a>
                         <span className="text-slate-400">•</span>
-                        <a href="tel:+2348012345678" className="text-purple-600 hover:text-purple-700 font-semibold">
-                            +234 801 234 5678
+                        <a href={`tel:${COMPANY_INFO.contact.general.phone}`} className="text-purple-600 hover:text-purple-700 font-semibold">
+                            {COMPANY_INFO.contact.general.phone}
                         </a>
                     </div>
                 </div>

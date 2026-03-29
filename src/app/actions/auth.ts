@@ -120,18 +120,39 @@ export async function getPostLoginRedirect(email: string) {
             // CRITICAL: Check application status and redirect accordingly
             // Priority: Approved > Pending > No Applications
 
+            // ── MODULE-TO-DASHBOARD MAP ──────────────────────────────────────
+            // Route approved users DIRECTLY to their module dashboard.
+            // This bypasses getPrimaryApp(userRoles) which relies on the JWT
+            // session roles — those can be stale for hours after admin approval.
+            const approvedDashboardMap: Record<string, string> = {
+                'academy': '/academy/dashboard',
+                'wave': '/wave/dashboard',
+                'export': '/export/dashboard',
+                'marketplace': '/marketplace/buyer/dashboard',
+                'cooperatives': '/cooperatives/dashboard',
+                'farmNation': '/farm-nation/dashboard',
+                'farm_nation': '/farm-nation/dashboard',
+            };
+
             // 1. Check for approved modules
             const approvedModules = Object.entries(serviceRegistrations)
                 .filter(([_, reg]: [string, any]) => reg?.status === 'approved');
 
             if (approvedModules.length > 0) {
-                // User has approved modules - redirect to primary app
+                // Prefer the first approved module's direct dashboard URL.
+                // This avoids relying on session-cached roles that may be stale.
+                const [firstApprovedKey] = approvedModules[0];
+                const directDashboard = approvedDashboardMap[firstApprovedKey];
+
+                if (directDashboard) {
+                    logger.info(`[getPostLoginRedirect] User ${email} approved for '${firstApprovedKey}', direct redirect to: ${directDashboard}`);
+                    return { success: true, redirectUrl: directDashboard };
+                }
+
+                // Fallback for unknown modules: use role-based primary app
                 const primaryApp = getPrimaryApp(userRoles);
-                logger.info(`User ${email} has approved modules, redirecting to: ${primaryApp}`);
-                return {
-                    success: true,
-                    redirectUrl: primaryApp
-                };
+                logger.info(`[getPostLoginRedirect] User ${email} has approved modules, role-based redirect to: ${primaryApp}`);
+                return { success: true, redirectUrl: primaryApp };
             }
 
             // 2. Check for pending applications
@@ -143,8 +164,8 @@ export async function getPostLoginRedirect(email: string) {
                 );
 
             if (pendingModules.length > 0) {
-                // User has pending applications - show them the review page
-                const [moduleKey, _] = pendingModules[0]; // Get first pending module
+                // User has pending applications — show them the review page
+                const [moduleKey] = pendingModules[0];
 
                 // Map module keys to their pending pages
                 const pendingPageMap: Record<string, string> = {
@@ -152,18 +173,15 @@ export async function getPostLoginRedirect(email: string) {
                     'export': '/export/onboarding/pending',
                     'marketplace': '/marketplace/onboarding/pending',
                     'cooperatives': '/cooperatives/onboarding/pending',
-                    'farmNation': '/farm-nation/onboarding/pending',  // camelCase — matches Firestore writes
-                    'farm_nation': '/farm-nation/onboarding/pending', // snake_case alias for safety
-                    'academy': '/academy/application/pending',
+                    'farmNation': '/farm-nation/onboarding/pending',
+                    'farm_nation': '/farm-nation/onboarding/pending',
+                    'academy': '/academy/setup',
                 };
 
                 const pendingPage = pendingPageMap[moduleKey] || '/auth/get-started';
-                logger.info(`User ${email} has pending application for ${moduleKey}, redirecting to: ${pendingPage}`);
+                logger.info(`[getPostLoginRedirect] User ${email} has pending application for '${moduleKey}', redirecting to: ${pendingPage}`);
 
-                return {
-                    success: true,
-                    redirectUrl: pendingPage
-                };
+                return { success: true, redirectUrl: pendingPage };
             }
         }
 

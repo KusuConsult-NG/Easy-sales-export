@@ -4,17 +4,18 @@ import { useEffect, useState, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
+import { getPostLoginRedirect } from "@/app/actions/auth";
 import type { UserRole } from "@/lib/types/roles";
 
 /**
  * Smart Dashboard Redirect
- * 
- * This component redirects users to their primary app's dashboard
- * based on their role priority (Export > Marketplace > Farm Nation > etc.)
- * 
- * SAFETY:
- * - Checks for ?error query param to prevent infinite redirect loops
- * - Redirects are blocked if middleware denied access and sent user back here
+ *
+ * Redirects users to their primary app's dashboard using a two-step strategy:
+ *   1. Instant: getPrimaryApp(jwtRoles) for immediate redirect — covers 99% of cases.
+ *   2. Authoritative: getPostLoginRedirect reads Firestore serviceRegistrations
+ *      to catch the stale-JWT case where a user was approved but cookie hasn't refreshed.
+ *
+ * SAFETY: Checks for ?error query param to prevent infinite redirect loops.
  */
 function DashboardRedirectContent() {
     const { data: session, status } = useSession();
@@ -38,7 +39,7 @@ function DashboardRedirectContent() {
     useEffect(() => {
         if (status === "loading") return;
 
-        // STOP: If there's an error (e.g., from middleware redirect loop protection), 
+        // STOP: If there's an error (e.g., from middleware redirect loop protection),
         // DO NOT attempt to redirect again. Show the error.
         if (error) return;
 
@@ -48,13 +49,26 @@ function DashboardRedirectContent() {
             return;
         }
 
-        // Get user roles
         const userRoles = (session?.user?.roles as UserRole[]) || [];
+        const userEmail = session?.user?.email || "";
 
-        // Determine primary app and defer state update to satisfy React's effect constraints
-        const primaryApp = getPrimaryApp(userRoles);
-        setTimeout(() => setTargetRoute(primaryApp), 0);
-        router.replace(primaryApp);
+        // STEP 1: Instant JWT-based redirect (no DB, immediate UX)
+        const jwtPrimaryApp = getPrimaryApp(userRoles);
+        setTargetRoute(jwtPrimaryApp);
+        router.replace(jwtPrimaryApp);
+
+        // STEP 2: Authoritative Firestore check (handles stale JWT after admin approval).
+        // If Firestore confirms a different approved module, override the step-1 redirect.
+        if (userEmail) {
+            getPostLoginRedirect(userEmail).then((result) => {
+                if (result.success && result.redirectUrl && result.redirectUrl !== jwtPrimaryApp) {
+                    setTargetRoute(result.redirectUrl);
+                    router.replace(result.redirectUrl);
+                }
+            }).catch(() => {
+                // Silently ignore — step 1 redirect already navigated the user
+            });
+        }
     }, [session, status, router, error]);
 
     // Error State

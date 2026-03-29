@@ -15,8 +15,8 @@ export default function ApplicationSuccessPage() {
     // Determine the correct activation link based on auth status
     const isLoggedIn = status === "authenticated" && !!session;
     const activationHref = isLoggedIn
-        ? "/cooperatives/onboarding"  // Already logged in, go straight to onboarding form
-        : "/auth/login?callbackUrl=/cooperatives/onboarding";  // Not logged in, login first
+        ? "/wave/dashboard"  // Already logged in, go straight to WAVE dashboard
+        : "/auth/login?callbackUrl=/wave/dashboard";  // Not logged in, login first
 
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50 flex items-center justify-center px-4 py-12">

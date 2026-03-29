@@ -7,7 +7,7 @@
 import { cookies } from "next/headers";
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
-import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 // import WaveSidebar from "./WaveSidebar"; // Removed in favor of global Sidebar
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -21,10 +21,9 @@ async function WaveLayoutContent({ children }: { children: React.ReactNode }) {
         redirect("/auth/login?module=wave");
     }
 
-    // Verify session and check access
+    // Verify session and check access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
     try {
-        // Check service access using roles
-        const hasAccess = hasAppAccess(session.user.roles || [], "wave");
+        const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "wave");
 
         if (!hasAccess) {
             redirect("/wave/application");

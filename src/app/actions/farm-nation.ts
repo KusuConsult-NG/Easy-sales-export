@@ -1037,3 +1037,132 @@ export async function resubmitFarmNationApplicationAction(
         return { success: false, error: 'Failed to resubmit application' };
     }
 }
+
+// ============================================================================
+// DASHBOARD STATS — Farm Nation Member Dashboard
+// ============================================================================
+
+export interface FarmNationDashboardStats {
+    /** Total size (hectares) of all properties the user has listed */
+    totalHectares: number;
+    /** Count of properties with status "available" */
+    activeListings: number;
+    /** Count of properties with status "sold" or "leased" */
+    completedDeals: number;
+    /** Total value of all listed properties */
+    portfolioValue: number;
+    /** Count of pending purchase/lease transactions (as buyer) */
+    pendingTransactions: number;
+    /** Recent transactions (last 5 as buyer) */
+    recentTransactions: Array<{
+        id: string;
+        propertyName: string;
+        propertyType: string;
+        amount: number;
+        status: string;
+        createdAt: Date;
+    }>;
+    /** Recent listings (last 4 by this user) */
+    recentListings: Array<{
+        id: string;
+        name: string;
+        location: string;
+        state: string;
+        size: number;
+        price: number;
+        status: string;
+        verified: boolean;
+        type: string;
+        createdAt: Date;
+    }>;
+    /** User's registered role in Farm Nation (buyer | seller | both) */
+    role: string;
+}
+
+export async function getFarmNationDashboardStatsAction(): Promise<{
+    success: boolean;
+    stats?: FarmNationDashboardStats;
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: 'Unauthorized' };
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+
+        const userId = session.user.id;
+
+        // Fetch in parallel: user's listings + purchase transactions as buyer
+        const [listingsSnap, transactionsSnap, userDoc] = await Promise.all([
+            db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+                .where('ownerId', '==', userId)
+                .orderBy('createdAt', 'desc')
+                .get(),
+            db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                .where('buyerId', '==', userId)
+                .orderBy('createdAt', 'desc')
+                .limit(10)
+                .get(),
+            db.collection(COLLECTIONS.USERS).doc(userId).get(),
+        ]);
+
+        const properties = listingsSnap.docs.map(doc => {
+            const d = doc.data();
+            return {
+                id: doc.id,
+                size: d.size || 0,
+                price: d.price || 0,
+                status: d.status || 'available',
+                verified: d.verified || false,
+                name: d.name || 'Unnamed Property',
+                location: d.location || '',
+                state: d.state || '',
+                type: d.type || 'sale',
+                createdAt: (d.createdAt as Timestamp)?.toDate() || new Date(),
+            };
+        });
+
+        const transactions = transactionsSnap.docs.map(doc => {
+            const d = doc.data();
+            return {
+                id: doc.id,
+                propertyName: d.propertyName || 'Unknown Property',
+                propertyType: d.propertyType || 'sale',
+                amount: d.propertyPrice || d.escrowAmount || 0,
+                status: d.status || 'pending',
+                createdAt: (d.createdAt as Timestamp)?.toDate() || new Date(),
+            };
+        });
+
+        // Derive stats from listings
+        const activeListings = properties.filter(p => p.status === 'available').length;
+        const completedDeals = properties.filter(p => p.status === 'sold' || p.status === 'leased').length;
+        const totalHectares = properties.reduce((sum, p) => sum + p.size, 0);
+        const portfolioValue = properties.reduce((sum, p) => sum + p.price, 0);
+        const pendingTransactions = transactions.filter(
+            t => t.status === 'pending_payment' || t.status === 'payment_confirmed'
+        ).length;
+
+        // User role
+        const role = userDoc.data()?.serviceRegistrations?.farmNation?.role
+            || userDoc.data()?.farmNation?.role
+            || 'buyer';
+
+        return {
+            success: true,
+            stats: {
+                totalHectares,
+                activeListings,
+                completedDeals,
+                portfolioValue,
+                pendingTransactions,
+                recentTransactions: transactions.slice(0, 5),
+                recentListings: properties.slice(0, 4),
+                role,
+            },
+        };
+    } catch (error: any) {
+        logger.error('getFarmNationDashboardStatsAction error:', error);
+        return { success: false, error: error.message };
+    }
+}

@@ -7,7 +7,7 @@
 
 import { redirect } from "next/navigation";
 import { logger } from '@/lib/logger';
-import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -26,10 +26,8 @@ export default async function ExportAppLayout({
     }
 
     try {
-        const userId = session.user.id;
-
-        // Check service access using roles
-        const hasAccess = hasAppAccess(session.user.roles || [], "export");
+        // Check service access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
+        const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "export");
 
         if (!hasAccess) {
             redirect("/export/onboarding");

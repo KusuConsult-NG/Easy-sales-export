@@ -6,7 +6,7 @@
 
 import { redirect } from "next/navigation";
 import { logger } from '@/lib/logger';
-import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import MarketplaceSidebar from "./MarketplaceSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -40,8 +40,8 @@ export default async function SellerLayout({ children }: { children: React.React
     try {
         const userId = session.user.id;
 
-        // Check marketplace access (seller        // Check service access
-        const hasAccess = hasAppAccess(session.user.roles || [], "marketplace");
+        // Check service access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
+        const hasAccess = await checkModuleAccess(userId, session.user.roles || [], "marketplace");
 
         if (!hasAccess) {
             redirect("/marketplace/onboarding");

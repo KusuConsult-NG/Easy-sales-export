@@ -147,10 +147,15 @@ export function canAccessEscrow(userRoles: UserRole[]): boolean {
 /**
  * Get user's primary app based on their first/main role
  * This determines where /dashboard should redirect
- * Priority: Admin > Export > Marketplace > Farm Nation > Cooperatives > WAVE > Academy
+ *
+ * PRIORITY ORDER (most to least specific):
+ * Module roles ALWAYS take precedence over admin roles.
+ * Admin/super_admin is only the destination if the user has NO module role.
+ * This prevents a user who is both an admin and a wave_participant from
+ * being sent to /admin when they should be in their module dashboard.
  */
 export function getPrimaryApp(userRoles: UserRole[]): string {
-    // Role priority mapping (most important first)
+    // Role priority mapping
     const rolePriorityMap: Record<UserRole, string> = {
         export_participant: "/export/dashboard",
         buyer: "/marketplace/buyer/dashboard",
@@ -167,28 +172,38 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         super_admin: "/admin",
     };
 
-    // Find first matching role in priority order
-    const priorityOrder: UserRole[] = [
-        "super_admin", "admin", "field_officer",
+    // MODULE ROLES FIRST — Check specific program memberships before admin.
+    // A user who enrolled in WAVE (and also has admin) must reach /wave/dashboard.
+    const modulePriorityOrder: UserRole[] = [
         "export_participant",
-        "seller", "buyer", // Seller priority over buyer
+        "seller", "buyer",
         "farmer", "land_owner", "investor",
         "cooperative_member",
         "wave_participant",
         "academy_participant",
-        "general_user"
+        "general_user",
     ];
 
-    for (const role of priorityOrder) {
+    for (const role of modulePriorityOrder) {
         if (userRoles.includes(role)) {
             return rolePriorityMap[role];
         }
     }
 
-    // FIXED FALLBACK: Use first accessible app instead of root
+    // ADMIN FALLBACK — Only reached when user has no module-specific role.
+    const adminPriorityOrder: UserRole[] = [
+        "super_admin", "admin", "field_officer",
+    ];
+
+    for (const role of adminPriorityOrder) {
+        if (userRoles.includes(role)) {
+            return rolePriorityMap[role];
+        }
+    }
+
+    // FINAL FALLBACK: Scan accessible apps if roles are somehow unrecognised
     const accessibleApps = getUserAccessibleApps(userRoles);
 
-    // Priority order for fallback
     const fallbackPriority: AppIdentifier[] = [
         "marketplace", "export", "farm-nation",
         "cooperatives", "wave", "academy"
@@ -196,17 +211,16 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
 
     for (const app of fallbackPriority) {
         if (accessibleApps.includes(app)) {
-            // Handle specific dashboard paths
             if (app === "cooperatives") return "/cooperatives/dashboard";
             if (app === "wave") return "/wave/dashboard";
             if (app === "export") return "/export/dashboard";
             if (app === "farm-nation") return "/farm-nation/dashboard";
             if (app === "academy") return "/academy/dashboard";
-            if (app === "marketplace") return "/marketplace/buyer/dashboard"; // Default to buyer
+            if (app === "marketplace") return "/marketplace/buyer/dashboard";
             return `/${app}`;
         }
     }
 
-    // Absolute fallback to Get Started if no apps (ensure user lands on a selection page)
+    // Absolute fallback — no apps at all
     return "/";
 }

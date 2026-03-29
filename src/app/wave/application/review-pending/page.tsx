@@ -12,6 +12,7 @@ import { Clock, Mail, Phone, ArrowLeft, FileText, CheckCircle, XCircle, Loader2 
 import { useSession } from "next-auth/react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, limit, Unsubscribe } from "firebase/firestore";
+import { COMPANY_INFO } from "@/lib/constants";
 
 export default function ReviewPendingPage() {
     const { data: session } = useSession();
@@ -301,7 +302,7 @@ export default function ReviewPendingPage() {
                             Email Support
                         </a>
                         <a
-                            href="tel:+2348012345678"
+                            href={`tel:${COMPANY_INFO.contact.general.phone}`}
                             className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 hover:bg-slate-50 text-slate-900 rounded-xl font-semibold transition-all"
                         >
                             <Phone className="w-4 h-4" />

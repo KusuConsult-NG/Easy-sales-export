@@ -7,7 +7,7 @@
 import { cookies } from "next/headers";
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
-import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -32,8 +32,8 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
     // Verify session and check access
     try {
         const userId = session.user.id;
-        // Check service access
-        const hasAccess = hasAppAccess(session.user.roles || [], "cooperatives");
+        // Check service access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
+        const hasAccess = await checkModuleAccess(userId, session.user.roles || [], "cooperatives");
 
         if (!hasAccess) {
             redirect("/cooperatives/onboarding");

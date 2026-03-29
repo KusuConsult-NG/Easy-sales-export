@@ -5,7 +5,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { hasAppAccess } from "@/lib/role-app-mapping";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { auth } from "@/lib/auth"; // Use NextAuth session
 import { logger } from '@/lib/logger';
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -21,10 +21,9 @@ async function AcademyLayoutContent({ children }: { children: React.ReactNode })
         redirect("/auth/login?module=academy");
     }
 
-    // Verify session and check access
+    // Verify session and check access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
     try {
-        // Check service access
-        const hasAccess = hasAppAccess(session.user.roles || [], "academy");
+        const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "academy");
 
         if (!hasAccess) {
             redirect("/academy/setup");
