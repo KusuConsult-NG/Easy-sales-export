@@ -10,7 +10,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # Install ALL dependencies (including devDeps needed for build)
-RUN npm install
+# --legacy-peer-deps matches Vercel's build behaviour for the nodemailer<->next-auth peer dep mismatch
+RUN npm install --legacy-peer-deps
 
 
 # ---- Stage 2: Build ----
