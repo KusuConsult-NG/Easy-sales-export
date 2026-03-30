@@ -46,14 +46,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs \
  && adduser  --system --uid 1001 nextjs
 
-# Copy built standalone output
-COPY --from=builder /app/.next/standalone ./
+# Copy built standalone output (chown so nextjs user can write cache)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 
 # Copy static assets
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Copy public folder
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Pre-create the image cache directory so Next.js can write to it at runtime
+RUN mkdir -p .next/cache && chown -R nextjs:nodejs .next
 
 USER nextjs
 
