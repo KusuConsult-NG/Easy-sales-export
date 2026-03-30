@@ -1,0 +1,29 @@
+# Dependencies (installed fresh in Docker)
+node_modules
+npm-debug.log*
+
+# Build output (built inside Docker)
+.next
+
+# Environment files (injected by Railway at runtime)
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Dev / local tooling
+.node-version
+.npmrc
+*.md
+*.test.*
+__tests__
+coverage
+.nyc_output
+
+# Misc
+.DS_Store
+*.log
+Thumbs.db
