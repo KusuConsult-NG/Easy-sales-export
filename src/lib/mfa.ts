@@ -3,7 +3,8 @@ import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, upd
 import app from './firebase';
 import { generateOTP, isOTPExpired, encryptData, decryptData } from './security';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy Resend factory — env var only available at request time, not build time
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const db = getFirestore(app);
 const MFA_COLLECTION = 'mfa_codes';
 
@@ -57,7 +58,7 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
         });
 
         // Send email via Resend
-        const { error } = await resend.emails.send({
+        const { error } = await getResend().emails.send({
             from: 'Easy Sales Export <noreply@easysalesexport.com>',
             to: email,
             subject: 'Your Verification Code',

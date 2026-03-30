@@ -5,7 +5,8 @@ import { Resend } from "resend";
 
 export const dynamic = "force-dynamic";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy factory — RESEND_API_KEY is a runtime secret, not available during Docker build
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL = "Easy Sales Export <noreply@easysalesexport.com>";
 const MAX_BATCH = 200;
 
@@ -187,7 +188,7 @@ export async function POST(req: NextRequest) {
 
                 // 3. Send via Resend
                 const { label } = paymentTypeInfo(type);
-                await resend.emails.send({
+                await getResend().emails.send({
                     from: FROM_EMAIL,
                     to: email,
                     subject: `Complete your ${label} — ${formatAmount(amount)}`,
