@@ -148,6 +148,7 @@ export async function initializePaystackPayment(
             body: JSON.stringify({
                 email,
                 amount,
+                channels: ["bank_transfer"],
                 metadata,
                 callback_url: callbackUrl || `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
             }),

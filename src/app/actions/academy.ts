@@ -780,6 +780,7 @@ export async function initiateAcademyPaymentAction(
             body: JSON.stringify({
                 email: session.user.email,
                 amount: amount * 100, // Kobo
+                channels: ["bank_transfer"],
                 metadata: {
                     userId,
                     type: "academy_registration", // Required for webhook routing

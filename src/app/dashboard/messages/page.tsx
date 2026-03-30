@@ -23,12 +23,12 @@ import {
     Timestamp,
 } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import type { Conversation, Message } from "@/lib/types/marketplace";
+import type { Conversation, Message } from "@/lib/types/messages";
 import {
     sendMessageAction,
-    markMessagesAsReadAction,
+    markAsReadAction,
     getConversationsAction,
-} from "@/app/actions/messaging";
+} from "@/app/actions/messages";
 import { useToast } from "@/contexts/ToastContext";
 
 function MessagesPageContent() {
@@ -69,7 +69,7 @@ function MessagesPageContent() {
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS),
             where("participants", "array-contains", userId),
-            orderBy("lastMessageAt", "desc"),
+            orderBy("updatedAt", "desc"),
             limit(50)
         );
 
@@ -77,10 +77,8 @@ function MessagesPageContent() {
             const convs = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
-                createdAt: doc.data().createdAt?.toDate(),
                 updatedAt: doc.data().updatedAt?.toDate(),
-                lastMessageAt: doc.data().lastMessageAt?.toDate(),
-            })) as Conversation[];
+            })) as unknown as Conversation[];
 
             setConversations(convs);
             setLoading(false);
@@ -95,31 +93,30 @@ function MessagesPageContent() {
 
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS, activeConversationId, "messages"),
-            orderBy("createdAt", "desc"),
-            limit(50)
+            orderBy("timestamp", "asc"),
+            limit(100)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const msgs = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
-                createdAt: doc.data().createdAt?.toDate(),
-                readAt: doc.data().readAt?.toDate(),
+                timestamp: doc.data().timestamp?.toDate(),
             })) as Message[];
 
-            setMessages(msgs.reverse()); // Oldest first
+            setMessages(msgs);
             scrollToBottom();
         });
 
         // Mark messages as read when opening conversation
-        markMessagesAsReadAction(activeConversationId);
+        markAsReadAction(activeConversationId);
 
         return () => unsubscribe();
     }, [activeConversationId]);
 
     async function loadConversations() {
         const result = await getConversationsAction();
-        if (result.success) {
+        if (result && "conversations" in result) {
             setConversations(result.conversations || []);
         }
         setLoading(false);
@@ -137,11 +134,11 @@ function MessagesPageContent() {
         setSending(true);
         try {
             const result = await sendMessageAction(activeConversationId, messageInput.trim());
-            if (result.success) {
+            if (result && "success" in result && result.success) {
                 setMessageInput("");
                 scrollToBottom();
             } else {
-                showToast(result.error || "Failed to send message", "error");
+                showToast((result as any)?.error || "Failed to send message", "error");
             }
         } catch (error) {
             showToast("Failed to send message", "error");
@@ -168,8 +165,26 @@ function MessagesPageContent() {
     const activeConversation = conversations.find(c => c.id === activeConversationId);
     const recipientId = activeConversation?.participants.find(id => id !== userId);
 
+    function getLastMessageText(conv: Conversation): string {
+        if (!conv.lastMessage) return "No messages yet";
+        if (typeof conv.lastMessage === "string") return conv.lastMessage;
+        if (typeof conv.lastMessage === "object" && "text" in conv.lastMessage) {
+            return (conv.lastMessage as any).text || "No messages yet";
+        }
+        return "No messages yet";
+    }
+
+    function getConversationLabel(conv: Conversation, currentUserId: string): string {
+        const details = conv.participantDetails;
+        if (!details) return "Support Conversation";
+        return Object.values(details)
+            .filter(p => p.uid !== currentUserId)
+            .map(p => p.name || p.email || "User")
+            .join(", ") || "Support";
+    }
+
     const filteredConversations = conversations.filter(conv =>
-        conv.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
+        getLastMessageText(conv).toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (!userId) {
@@ -215,7 +230,6 @@ function MessagesPageContent() {
                             </div>
                         ) : filteredConversations.length > 0 ? (
                             filteredConversations.map((conversation) => {
-                                const unreadCount = conversation.unreadCount?.[userId] || 0;
                                 const isActive = conversation.id === activeConversationId;
 
                                 return (
@@ -232,19 +246,16 @@ function MessagesPageContent() {
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-1">
                                                     <p className="font-semibold text-gray-900 truncate">
-                                                        {conversation.productId ? "Product Inquiry" : "Order Support"}
+                                                        {getConversationLabel(conversation, userId)}
                                                     </p>
-                                                    {unreadCount > 0 && (
-                                                        <span className="ml-2 px-2 py-0.5 bg-primary text-white text-xs font-bold rounded-full">
-                                                            {unreadCount}
-                                                        </span>
-                                                    )}
                                                 </div>
                                                 <p className="text-sm text-gray-600 truncate mb-1">
-                                                    {conversation.lastMessage || "No messages yet"}
+                                                    {getLastMessageText(conversation)}
                                                 </p>
                                                 <p className="text-xs text-gray-500">
-                                                    {formatTimestamp(conversation.lastMessageAt)}
+                                                    {conversation.updatedAt
+                                                        ? formatTimestamp(conversation.updatedAt instanceof Date ? conversation.updatedAt : (conversation.updatedAt as any)?.toDate?.())
+                                                        : ""}
                                                 </p>
                                             </div>
                                         </div>
@@ -271,20 +282,8 @@ function MessagesPageContent() {
                                 </div>
                                 <div className="flex-1">
                                     <h2 className="font-bold text-gray-900">
-                                        {activeConversation?.productId ? "Product Inquiry" : "Order Support"}
+                                        {activeConversation ? getConversationLabel(activeConversation, userId) : "Conversation"}
                                     </h2>
-                                    {activeConversation?.productId && (
-                                        <p className="text-sm text-gray-500 flex items-center gap-1">
-                                            <Package className="w-3 h-3" />
-                                            Product conversation
-                                        </p>
-                                    )}
-                                    {activeConversation?.orderId && (
-                                        <p className="text-sm text-gray-500 flex items-center gap-1">
-                                            <ShoppingCart className="w-3 h-3" />
-                                            Order conversation
-                                        </p>
-                                    )}
                                 </div>
                             </div>
 
@@ -303,12 +302,14 @@ function MessagesPageContent() {
                                                     : "bg-gray-100 text-gray-900"
                                                     }`}
                                             >
-                                                <p className="whitespace-pre-wrap wrap-break-word">{message.content}</p>
+                                                <p className="whitespace-pre-wrap wrap-break-word">{message.text}</p>
                                                 <p
                                                     className={`text-xs mt-1 ${isOwnMessage ? "text-primary-100" : "text-gray-500"
                                                         }`}
                                                 >
-                                                    {formatTimestamp(message.createdAt)}
+                                                    {message.timestamp
+                                                        ? formatTimestamp(message.timestamp instanceof Date ? message.timestamp : (message.timestamp as any)?.toDate?.())
+                                                        : ""}
                                                     {isOwnMessage && message.read && " • Read"}
                                                 </p>
                                             </div>

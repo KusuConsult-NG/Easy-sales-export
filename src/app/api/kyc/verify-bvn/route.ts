@@ -30,12 +30,10 @@ async function verifyBVNHandler(req: NextRequest) {
             );
         }
 
-        // --- MOCK: return success if QoreID credentials not configured ---
         if (!process.env.QOREID_CLIENT_ID || !process.env.QOREID_SECRET_KEY) {
-            logger.warn('QOREID keys not found. Returning MOCK success for BVN verification.');
-            return NextResponse.json({ success: true, isMatch: true, mock: true });
+            logger.error('QOREID keys not found. Cannot verify BVN in production.');
+            return NextResponse.json({ error: 'KYC service is currently unavailable.' }, { status: 503 });
         }
-        // --- END MOCK ---
 
         const result = await qoreIdService.verifyBVN(bvn, firstName, lastName);
         return NextResponse.json(result);

@@ -102,6 +102,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
                 email: userEmail,
                 amount: amountKobo,
                 reference,
+                channels: ["bank_transfer"],
                 callback_url: `${process.env.NEXTAUTH_URL}/api/wallet/verify?ref=${reference}`,
                 metadata: {
                     userId,

@@ -85,7 +85,7 @@ function PaymentCallbackContent() {
                         We couldn&apos;t verify your payment. Please try again or contact support.
                     </p>
                     {errorDetail && (
-                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4 font-mono break-words">
+                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4 font-mono wrap-break-word">
                             {errorDetail}
                         </p>
                     )}

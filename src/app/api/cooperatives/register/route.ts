@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
                 email: session.user.email,
                 amount: registrationFee * 100,
                 reference: paymentReference,
+                channels: ["bank_transfer"],
                 callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment?reference=${paymentReference}&type=registration`,
                 metadata: {
                     membershipId,

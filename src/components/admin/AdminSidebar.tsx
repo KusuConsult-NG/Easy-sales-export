@@ -26,6 +26,7 @@ import {
     BadgeCheck,
     ToggleLeft,
     ShieldCheck,
+    Headphones,
 } from "lucide-react";
 import { useState } from "react";
 import { logoutAction } from "@/app/actions/auth";
@@ -38,6 +39,7 @@ const NAV_ITEMS = [
     { label: "User Management", href: "/admin/users", icon: Users, section: "platform" },
     { label: "Content Approval", href: "/admin/content-approval", icon: ClipboardCheck, section: "platform" },
     { label: "Communications", href: "/admin/communications", icon: MessageSquare, section: "platform" },
+    { label: "Support Inbox", href: "/admin/messages", icon: Headphones, section: "platform" },
     { label: "Disputes", href: "/admin/disputes", icon: ShieldAlert, section: "platform" },
     { label: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText, section: "platform" },
     { label: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX, section: "platform" },

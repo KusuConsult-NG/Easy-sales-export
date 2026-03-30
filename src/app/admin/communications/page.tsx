@@ -6,12 +6,12 @@
  */
 
 import Link from "next/link";
-import { Mail, History, Megaphone, Users, BarChart3 } from "lucide-react";
+import { Mail, History, Megaphone, BarChart3, MessageSquare, Bell } from "lucide-react";
 
 export default function AdminCommunicationsPage() {
     const cards = [
         {
-            title: "Send Broadcast",
+            title: "Email Broadcast",
             description: "Compose and send an email to selected user groups with audience filters",
             icon: Megaphone,
             href: "/admin/communications/broadcast",
@@ -21,8 +21,28 @@ export default function AdminCommunicationsPage() {
             badgeColor: "bg-green-600",
         },
         {
+            title: "SMS Broadcast",
+            description: "Send a text message to selected users by audience — powered by Termii",
+            icon: MessageSquare,
+            href: "/admin/communications/sms",
+            color: "text-blue-600",
+            bg: "bg-blue-100",
+            badge: "SMS",
+            badgeColor: "bg-blue-600",
+        },
+        {
+            title: "In-App Notification",
+            description: "Push a notification directly into users' notification bell, even if they're offline",
+            icon: Bell,
+            href: "/admin/communications/in-app",
+            color: "text-purple-600",
+            bg: "bg-purple-100",
+            badge: "In-App",
+            badgeColor: "bg-purple-600",
+        },
+        {
             title: "Broadcast History",
-            description: "View all past broadcasts, recipient counts, and delivery stats",
+            description: "View all past email broadcasts, recipient counts, and delivery stats",
             icon: History,
             href: "/admin/communications/history",
             color: "text-slate-600",
@@ -39,6 +59,8 @@ export default function AdminCommunicationsPage() {
         { label: "Wholesale / Retail", desc: "Filter sellers by category" },
         { label: "Cooperative Members", desc: "Active cooperative members" },
         { label: "WAVE Applicants", desc: "WAVE program registrants" },
+        { label: "WAVE Briefing Registrants", desc: "Users registered for briefing sessions" },
+        { label: "Marketplace Onboarded", desc: "All buyers and sellers combined" },
     ];
 
     return (
@@ -52,7 +74,7 @@ export default function AdminCommunicationsPage() {
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold text-slate-900">Communications</h1>
-                            <p className="text-slate-500 mt-0.5">Send email broadcasts to your platform users</p>
+                            <p className="text-slate-500 mt-0.5">Send email, SMS, and in-app notifications to your platform users</p>
                         </div>
                     </div>
                 </div>
@@ -61,7 +83,7 @@ export default function AdminCommunicationsPage() {
             <div className="max-w-6xl mx-auto px-8 py-10 space-y-10">
                 {/* Action Cards */}
                 <div>
-                    <h2 className="text-lg font-bold text-slate-800 mb-4">Actions</h2>
+                    <h2 className="text-lg font-bold text-slate-800 mb-4">Broadcast Channels</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         {cards.map((card) => {
                             const Icon = card.icon;
@@ -92,7 +114,8 @@ export default function AdminCommunicationsPage() {
                 {/* Audience overview */}
                 <div>
                     <h2 className="text-lg font-bold text-slate-800 mb-4">Available Audience Segments</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <p className="text-slate-500 text-sm mb-4">All three broadcast channels support filtering by the same audience segments below.</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {audienceCards.map((a) => (
                             <div key={a.label} className="bg-white border border-slate-200 rounded-xl p-4">
                                 <p className="font-semibold text-slate-900 text-sm">{a.label}</p>
@@ -106,8 +129,12 @@ export default function AdminCommunicationsPage() {
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex gap-3">
                     <BarChart3 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                     <div className="text-sm text-blue-800">
-                        <p className="font-semibold mb-1">How broadcasts work</p>
-                        <p>Emails are sent in batches of 50 via Resend. Each send is logged in the broadcast history with delivery counts. Large broadcasts may take a few minutes to complete.</p>
+                        <p className="font-semibold mb-1">How each channel works</p>
+                        <ul className="space-y-1 text-blue-700">
+                            <li>📧 <strong>Email:</strong> Sent in batches via Resend. Each send is logged in Broadcast History.</li>
+                            <li>📱 <strong>SMS:</strong> Sent via Termii in batches of 10. Consumes Termii credits per recipient.</li>
+                            <li>🔔 <strong>In-App:</strong> Written directly to Firestore. Users see it instantly if online, or on next login if offline.</li>
+                        </ul>
                     </div>
                 </div>
             </div>

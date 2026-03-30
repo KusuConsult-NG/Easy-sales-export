@@ -11,15 +11,9 @@ import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { markNotificationAsReadAction, markAllAsReadAction } from "@/app/actions/notifications";
 
-export interface Notification {
-    id: string;
-    userId: string;
-    type: "loan" | "wave" | "withdrawal" | "land" | "payment" | "info" | "success" | "warning" | "error";
-    title: string;
-    message: string;
-    link?: string;
-    linkText?: string;
-    read: boolean;
+import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
+
+export interface Notification extends Omit<FirestoreNotification, "createdAt" | "readAt"> {
     createdAt: Timestamp;
     readAt?: Timestamp;
 }
@@ -108,12 +102,19 @@ export default function NotificationCenter() {
             case "payment":
                 return <DollarSign className="w-5 h-5" />;
             case "loan":
+            case "escrow":
+            case "payout":
                 return <Wallet className="w-5 h-5" />;
             case "wave":
                 return <TrendingUp className="w-5 h-5" />;
-            case "withdrawal":
+            case "academy":
+                return <GraduationCap className="w-5 h-5" />;
+            case "order":
+            case "transaction":
+            case "marketplace":
                 return <Package className="w-5 h-5" />;
-            case "land":
+            case "cooperative":
+            case "farm_nation":
                 return <Users className="w-5 h-5" />;
             default:
                 return <Bell className="w-5 h-5" />;
@@ -127,16 +128,23 @@ export default function NotificationCenter() {
                 return "bg-green-100 text-green-600";
             case "loan":
             case "info":
+            case "system":
+            case "general":
                 return "bg-blue-100 text-blue-600";
             case "wave":
             case "warning":
                 return "bg-yellow-100 text-yellow-600";
-            case "withdrawal":
+            case "payout":
+            case "escrow":
                 return "bg-purple-100 text-purple-600";
-            case "land":
+            case "farm_nation":
+            case "cooperative":
                 return "bg-emerald-100 text-emerald-600";
-            case "error":
-                return "bg-red-100 text-red-600";
+            case "order":
+            case "transaction":
+            case "marketplace":
+            case "event":
+                return "bg-indigo-100 text-indigo-600";
             default:
                 return "bg-slate-100 text-slate-600";
         }

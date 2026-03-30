@@ -103,6 +103,7 @@ export async function initiateCooperativePaymentAction(
             body: JSON.stringify({
                 email: session.user.email,
                 amount: registrationFee * 100,
+                channels: ["bank_transfer"],
                 metadata: {
                     userId,
                     membershipId: userId,

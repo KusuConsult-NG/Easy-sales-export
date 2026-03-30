@@ -1,0 +1,259 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+    previewSmsBroadcastAction,
+    sendSmsBroadcastAction,
+    type SmsAudience,
+    type SmsFilters,
+} from "@/app/actions/sms-broadcast";
+
+// ── Constants ──────────────────────────────────────────────────────────────
+
+const AUDIENCES: { value: SmsAudience; label: string; description: string }[] = [
+    { value: "all", label: "All Users", description: "Every registered user on the platform" },
+    { value: "buyers", label: "Buyers", description: "Users with a buyer marketplace account" },
+    { value: "sellers", label: "All Sellers", description: "Approved sellers (wholesale + retail)" },
+    { value: "wholesale_sellers", label: "Wholesale Sellers", description: "Approved wholesale sellers only" },
+    { value: "retail_sellers", label: "Retail Sellers", description: "Approved retail sellers only" },
+    { value: "marketplace_onboarded", label: "Marketplace Users", description: "All marketplace-onboarded users (buyers + sellers)" },
+    { value: "cooperative_members", label: "Cooperative Members", description: "Active cooperative members" },
+    { value: "wave_applicants", label: "WAVE Applicants", description: "Users who applied to the WAVE program" },
+    { value: "wave_briefing_registrants", label: "WAVE Briefing Registrants", description: "Users registered for WAVE briefings" },
+];
+
+const NIGERIAN_STATES = [
+    "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
+    "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT", "Gombe", "Imo",
+    "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa",
+    "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba",
+    "Yobe", "Zamfara",
+];
+
+const SMS_MAX_LENGTH = 160;
+
+// ── Component ──────────────────────────────────────────────────────────────
+
+export default function SmsBroadcastPage() {
+    const router = useRouter();
+
+    const [audience, setAudience] = useState<SmsAudience>("all");
+    const [state, setState] = useState("");
+    const [sellerStatus, setSellerStatus] = useState<"approved" | "pending" | "suspended">("approved");
+    const [message, setMessage] = useState("");
+
+    const [preview, setPreview] = useState<{ count: number; sample: { name: string; phone: string }[] } | null>(null);
+    const [loadingPreview, setLoadingPreview] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [result, setResult] = useState<{ success: boolean; sent: number; failed: number; skipped: number; error?: string } | null>(null);
+
+    const isSellerAudience = ["sellers", "wholesale_sellers", "retail_sellers"].includes(audience);
+    const charCount = message.length;
+    const smsCount = Math.ceil(charCount / SMS_MAX_LENGTH) || 1;
+
+    const buildFilters = (): SmsFilters => ({
+        audience,
+        state: state || undefined,
+        sellerStatus: isSellerAudience ? sellerStatus : undefined,
+    });
+
+    const handlePreview = async () => {
+        setLoadingPreview(true);
+        setPreview(null);
+        setResult(null);
+        const res = await previewSmsBroadcastAction(buildFilters());
+        setPreview(res);
+        setLoadingPreview(false);
+    };
+
+    const handleSend = async () => {
+        if (!message.trim()) return;
+        if (!preview || preview.count === 0) {
+            alert("Please run a preview first and ensure there are recipients.");
+            return;
+        }
+        const confirmed = confirm(
+            `You are about to send an SMS to ${preview.count.toLocaleString()} recipients. This cannot be undone. Continue?`
+        );
+        if (!confirmed) return;
+
+        setSending(true);
+        setResult(null);
+        const res = await sendSmsBroadcastAction(buildFilters(), message.trim());
+        setResult(res);
+        setSending(false);
+    };
+
+    return (
+        <div className="min-h-screen" style={{ background: "var(--bg-primary, #0f1117)" }}>
+            {/* Header */}
+            <div className="border-b border-white/10" style={{ background: "rgba(255,255,255,0.03)" }}>
+                <div className="max-w-5xl mx-auto px-6 py-5 flex items-center gap-4">
+                    <Link href="/admin/communications" className="text-sm text-white/50 hover:text-white transition-colors">
+                        ← Communications
+                    </Link>
+                    <span className="text-white/20">/</span>
+                    <h1 className="text-lg font-semibold text-white">SMS Broadcast</h1>
+                </div>
+            </div>
+
+            <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+
+                {/* Audience Picker */}
+                <div className="rounded-2xl border border-white/10 p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
+                    <h2 className="text-white font-semibold text-base mb-4 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">1</span>
+                        Select Audience
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {AUDIENCES.map((a) => (
+                            <button
+                                key={a.value}
+                                onClick={() => { setAudience(a.value); setPreview(null); }}
+                                className={`text-left p-3 rounded-xl border transition-all ${
+                                    audience === a.value
+                                        ? "border-emerald-500 bg-emerald-500/10"
+                                        : "border-white/10 hover:border-white/20"
+                                }`}
+                            >
+                                <p className={`font-medium text-sm ${audience === a.value ? "text-emerald-400" : "text-white"}`}>
+                                    {a.label}
+                                </p>
+                                <p className="text-white/50 text-xs mt-0.5 leading-snug">{a.description}</p>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Optional Filters */}
+                    <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-white/60 text-xs font-medium mb-1.5">Filter by State (Optional)</label>
+                            <select
+                                value={state}
+                                onChange={(e) => { setState(e.target.value); setPreview(null); }}
+                                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-emerald-500"
+                            >
+                                <option value="">All States</option>
+                                {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        {isSellerAudience && (
+                            <div>
+                                <label className="block text-white/60 text-xs font-medium mb-1.5">Seller Status</label>
+                                <select
+                                    value={sellerStatus}
+                                    onChange={(e) => { setSellerStatus(e.target.value as any); setPreview(null); }}
+                                    className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-emerald-500"
+                                >
+                                    <option value="approved">Approved</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="suspended">Suspended</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Message Composer */}
+                <div className="rounded-2xl border border-white/10 p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
+                    <h2 className="text-white font-semibold text-base mb-4 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">2</span>
+                        Compose Message
+                    </h2>
+                    <textarea
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="Type your SMS message here... Keep it concise and clear."
+                        rows={5}
+                        maxLength={480}
+                        className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-emerald-500 resize-none"
+                    />
+                    <div className="flex items-center justify-between mt-2">
+                        <p className="text-white/40 text-xs">
+                            {charCount} characters · {smsCount} SMS credit{smsCount > 1 ? "s" : ""} per recipient
+                        </p>
+                        <p className={`text-xs font-medium ${charCount > SMS_MAX_LENGTH ? "text-amber-400" : "text-white/40"}`}>
+                            {charCount}/480
+                        </p>
+                    </div>
+                    {charCount > SMS_MAX_LENGTH && (
+                        <p className="text-amber-400/80 text-xs mt-1">
+                            ⚠️ Messages over 160 characters count as multiple SMS credits.
+                        </p>
+                    )}
+                </div>
+
+                {/* Preview & Send */}
+                <div className="rounded-2xl border border-white/10 p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
+                    <h2 className="text-white font-semibold text-base mb-4 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">3</span>
+                        Preview &amp; Send
+                    </h2>
+
+                    <button
+                        onClick={handlePreview}
+                        disabled={loadingPreview || sending}
+                        className="px-5 py-2.5 rounded-xl border border-white/20 text-white text-sm font-medium hover:bg-white/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        {loadingPreview ? "Estimating..." : "Estimate Recipients"}
+                    </button>
+
+                    {preview && (
+                        <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                            <p className="text-white font-semibold text-sm">
+                                ~{preview.count.toLocaleString()} recipients with phone numbers
+                            </p>
+                            {preview.sample.length > 0 && (
+                                <div className="mt-2 space-y-1">
+                                    {preview.sample.map((r, i) => (
+                                        <p key={i} className="text-white/50 text-xs">
+                                            {r.name} · +{r.phone}
+                                        </p>
+                                    ))}
+                                    {preview.count > 3 && (
+                                        <p className="text-white/30 text-xs">...and {preview.count - 3} more</p>
+                                    )}
+                                </div>
+                            )}
+                            {preview.count === 0 && (
+                                <p className="text-amber-400 text-xs mt-1">No users with valid phone numbers found for this filter.</p>
+                            )}
+                        </div>
+                    )}
+
+                    {preview && preview.count > 0 && (
+                        <button
+                            onClick={handleSend}
+                            disabled={sending || !message.trim()}
+                            className="mt-4 px-6 py-2.5 rounded-xl font-medium text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+                        >
+                            {sending ? `Sending to ${preview.count.toLocaleString()} recipients...` : `Send SMS to ${preview.count.toLocaleString()} Recipients`}
+                        </button>
+                    )}
+
+                    {result && (
+                        <div className={`mt-4 p-4 rounded-xl border ${result.success ? "border-emerald-500/30 bg-emerald-500/10" : "border-red-500/30 bg-red-500/10"}`}>
+                            {result.success ? (
+                                <div>
+                                    <p className="text-emerald-400 font-semibold text-sm">✅ Broadcast Complete</p>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        Sent: {result.sent.toLocaleString()} · Failed: {result.failed.toLocaleString()} · Skipped: {result.skipped.toLocaleString()}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <p className="text-red-400 font-semibold text-sm">❌ Broadcast Failed</p>
+                                    <p className="text-white/60 text-xs mt-1">{result.error}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+            </div>
+        </div>
+    );
+}

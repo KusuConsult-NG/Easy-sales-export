@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
                 email: session.user.email,
                 amount: amount * 100, // Convert to kobo
+                channels: ["bank_transfer"],
                 metadata: {
                     userId,
                     purpose: 'cooperative_contribution',

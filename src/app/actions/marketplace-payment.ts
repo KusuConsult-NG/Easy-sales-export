@@ -153,7 +153,7 @@ export async function initializeOrderPaymentAction(
             totalAmount,
             paymentReference: reference,
             paymentStatus: "pending",
-            orderStatus: "pending_payment",
+            status: "pending_payment",
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -297,7 +297,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id);
             transaction.update(orderRef, {
                 paymentStatus: "escrow_held", // Funds are held, not yet paid to seller
-                orderStatus: "processing",
+                status: "processing",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
                 paidAmount: amountInNaira,
                 updatedAt: FieldValue.serverTimestamp(),
@@ -491,7 +491,7 @@ export async function createBankTransferOrderAction(
             paymentMethod: "bank_transfer",
             paymentReference: orderReference,
             paymentStatus: "pending_verification",
-            orderStatus: "pending_payment",
+            status: "pending_payment",
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -586,7 +586,7 @@ export async function createPaymentOnDeliveryOrderAction(
             totalAmount,
             paymentMethod: "payment_on_delivery",
             paymentStatus: "pending",
-            orderStatus: "processing",
+            status: "processing",
             deliveryAddress,
             buyerConfirmed: false,
             reviewSubmitted: false,

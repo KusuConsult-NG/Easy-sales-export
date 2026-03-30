@@ -1,12 +1,14 @@
 /**
  * Dashboard Layout
- * 
- * Server-side auth guard for the user dashboard.
- * Ensures unauthenticated users are redirected to login BEFORE the page renders.
+ *
+ * Server-side auth guard + shared navigation for the user dashboard.
+ * Renders a persistent left sidebar (desktop) / top bar (mobile) so users
+ * can navigate between all dashboard sub-pages without knowing the URLs.
  */
 
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import DashboardNav from "@/components/dashboard/DashboardNav";
 
 export default async function DashboardLayout({
     children,
@@ -19,5 +21,15 @@ export default async function DashboardLayout({
         redirect("/auth/login?callbackUrl=/dashboard");
     }
 
-    return <>{children}</>;
+    return (
+        <div className="min-h-screen bg-slate-50">
+            {/* Shared nav (sidebar on desktop / top bar + drawer on mobile) */}
+            <DashboardNav />
+
+            {/* Main content — offset by sidebar width on desktop, top bar height on mobile */}
+            <main className="lg:ml-60 pt-16 lg:pt-0 min-h-screen">
+                {children}
+            </main>
+        </div>
+    );
 }

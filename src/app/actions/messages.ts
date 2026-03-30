@@ -46,6 +46,43 @@ export async function getConversationsAction() {
 }
 
 /**
+ * Admin-only: Get ALL conversations across all users
+ * Used by the admin support inbox at /admin/messages
+ */
+export async function getAllConversationsAdminAction() {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { error: "Not authenticated", conversations: [] };
+        }
+
+        // Verify caller is admin
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const roles: string[] = userDoc.data()?.roles ?? [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+            return { error: "Access denied", conversations: [] };
+        }
+
+        const snapshot = await db.collection(COLLECTIONS.CONVERSATIONS)
+            .orderBy("updatedAt", "desc")
+            .limit(200)
+            .get();
+
+        const conversations = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as Conversation[];
+
+        return { conversations, error: null };
+    } catch (error) {
+        logger.error("Get all conversations (admin) error", error);
+        return { error: "Failed to load conversations", conversations: [] };
+    }
+}
+
+/**
  * Get messages for a specific conversation
  */
 export async function getMessagesAction(conversationId: string, limit = 50) {
@@ -57,21 +94,29 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
             return { error: "Not authenticated", messages: [] };
         }
 
-        // Verify user is participant
+        // Verify user is participant OR is admin
         const conversationDoc = await db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId).get();
         if (!conversationDoc.exists) {
             return { error: "Conversation not found", messages: [] };
         }
 
         const conversation = conversationDoc.data() as Conversation;
-        if (!conversation.participants.includes(session.user.id)) {
-            return { error: "Access denied", messages: [] };
+        const isParticipant = conversation.participants.includes(session.user.id);
+
+        if (!isParticipant) {
+            // Check if admin
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const roles: string[] = userDoc.data()?.roles ?? [];
+            const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+            if (!isAdmin) {
+                return { error: "Access denied", messages: [] };
+            }
         }
 
         // Get messages
         const messagesRef = conversationDoc.ref.collection(COLLECTIONS.MESSAGES);
         const snapshot = await messagesRef
-            .orderBy("timestamp", "desc")
+            .orderBy("timestamp", "asc")
             .limit(limit)
             .get();
 
@@ -80,7 +125,7 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
             ...doc.data()
         })) as Message[];
 
-        return { messages: messages.reverse(), error: null };
+        return { messages, error: null };
     } catch (error) {
         logger.error("Get messages error", error);
         return { error: "Failed to load messages", messages: [] };
@@ -113,8 +158,16 @@ export async function sendMessageAction(conversationId: string, text: string) {
         }
 
         const conversation = conversationDoc.data() as Conversation;
-        if (!conversation.participants.includes(session.user.id)) {
-            return { error: "Access denied", success: false };
+        const isParticipant = conversation.participants.includes(session.user.id);
+
+        if (!isParticipant) {
+            // Allow admins to reply to any conversation (support inbox)
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const roles: string[] = userDoc.data()?.roles ?? [];
+            const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+            if (!isAdmin) {
+                return { error: "Access denied", success: false };
+            }
         }
 
         // Add message
@@ -130,14 +183,16 @@ export async function sendMessageAction(conversationId: string, text: string) {
 
         await conversationRef.collection(COLLECTIONS.MESSAGES).add(messageData);
 
-        // Update conversation's lastMessage and updatedAt
+        // Update conversation's lastMessage, updatedAt, and lastMessageAt
         await conversationRef.update({
             lastMessage: {
                 text: trimmedText,
                 senderId: session.user.id,
+                senderName: session.user.name || "Support",
                 timestamp: FieldValue.serverTimestamp()
             },
-            updatedAt: FieldValue.serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp(),
+            lastMessageAt: FieldValue.serverTimestamp()
         });
 
         return { success: true, error: null };

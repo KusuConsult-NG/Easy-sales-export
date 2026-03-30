@@ -16,7 +16,7 @@ import {
     Star,
 } from "lucide-react";
 import { getBuyerOrdersAction, confirmDeliveryAction } from "@/app/actions/order-management";
-import { createConversationAction } from "@/app/actions/messaging";
+import { startConversationAction } from "@/app/actions/messages";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
@@ -77,16 +77,14 @@ export default function BuyerOrdersPage() {
     }
 
     async function handleContactSeller(order: Order) {
+        if (!order.sellerId) { showToast("No seller contact available", "error"); return; }
         try {
-            const result = await createConversationAction({
-                recipientId: order.sellerId,
-                orderId: order.id,
-            });
+            const result = await startConversationAction(order.sellerId);
 
-            if (result.success) {
+            if (result && "conversationId" in result && result.conversationId) {
                 router.push(`/dashboard/messages?conversation=${result.conversationId}`);
             } else {
-                showToast(result.error || "Failed to start conversation", "error");
+                showToast((result as any)?.error || "Failed to start conversation", "error");
             }
         } catch (error) {
             showToast("Failed to start conversation", "error");

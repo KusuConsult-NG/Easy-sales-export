@@ -50,6 +50,7 @@ export function usePaystack(config: PaystackConfig | null) {
             amount: config.amount,
             ref: config.reference,
             currency: config.currency || "NGN",
+            channels: ["bank_transfer"],
             metadata: config.metadata,
             onClose: config.onClose,
             callback: (response: any) => {

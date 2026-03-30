@@ -205,7 +205,7 @@ async function processMarketplaceOrder(reference: string, amount: number, userId
         // 1. Update Order
         transaction.update(orderRef, {
             paymentStatus: "escrow_held",
-            orderStatus: "processing",
+            status: "processing",
             paymentVerifiedAt: FieldValue.serverTimestamp(),
             paidAmount: amount,
             updatedAt: FieldValue.serverTimestamp(),
