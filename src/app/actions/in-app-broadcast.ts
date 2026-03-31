@@ -91,7 +91,8 @@ export async function collectRecipientUserIds(
             const snap = await db.collection(COLLECTIONS.USERS).get();
             snap.forEach((d) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 add(d.id, u.fullName || u.name || "User");
             });
             break;
@@ -103,7 +104,8 @@ export async function collectRecipientUserIds(
                 .get();
             snap.forEach((d) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 add(d.id, u.fullName || u.name || "User");
             });
             break;
@@ -133,7 +135,8 @@ export async function collectRecipientUserIds(
                 .get();
             snap.forEach((d) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 add(d.id, u.fullName || u.name || "User");
             });
             break;
@@ -216,7 +219,8 @@ export async function collectRecipientUserIds(
 
                 if (filters.state) {
                     const u = uMap.get(f.userId);
-                    if (!u || u.state !== filters.state) continue;
+                    const userState = u.stateOfOrigin || u.state || u.address?.state;
+                    if (!u || userState !== filters.state) continue;
                 }
 
                 add(f.userId, f.customerName || "User");

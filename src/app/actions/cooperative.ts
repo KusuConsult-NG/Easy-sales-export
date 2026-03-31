@@ -283,11 +283,20 @@ export async function registerCooperativeMemberAction(
         // Save to Firestore (Merge)
         await existingMemberRef.update(updatedData);
 
-        // Update user service registration (dot notation prevents cross-module data loss)
+        // Update user service registration and sync profile data for global modules (like Admin Communication Hub)
+        // Dot notation prevents cross-module data loss
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             "serviceRegistrations.cooperatives.status": "pending",
             "serviceRegistrations.cooperatives.membershipTier": validatedData.membershipTier,
             "serviceRegistrations.cooperatives.onboardingCompletedAt": FieldValue.serverTimestamp(),
+            
+            // Sync core PII backward to central user document for cross-module functionality
+            phone: validatedData.phone,
+            gender: validatedData.gender,
+            "address.state": validatedData.stateOfOrigin,
+            "address.lga": validatedData.lga,
+            "address.street": validatedData.residentialAddress,
+            
             updatedAt: FieldValue.serverTimestamp(),
         });
 

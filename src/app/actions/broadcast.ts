@@ -139,7 +139,8 @@ async function collectRecipients(
             console.log(`[Broadcast] 'all' audience: ${snap.size} docs found in '${COLLECTIONS.USERS}'`);
             snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 const resolvedEmail = u.email || u.emailAddress;
                 const resolvedName = u.fullName || u.name || u.displayName || "User";
                 if (!resolvedEmail) {
@@ -156,7 +157,8 @@ async function collectRecipients(
                 .get();
             snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
             });
             break;
@@ -186,7 +188,8 @@ async function collectRecipients(
                 .get();
             snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
             });
             break;
@@ -276,7 +279,8 @@ async function collectRecipients(
                 const u = f.userId ? uMap.get(f.userId) : null;
                 
                 if (filters.state) {
-                    if (!f.userId || !u || u.state !== filters.state) continue;
+                    const userState = u.stateOfOrigin || u.state || u.address?.state;
+                    if (!f.userId || !u || userState !== filters.state) continue;
                 }
                 
                 const email = f.customerEmail;

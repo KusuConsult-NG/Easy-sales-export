@@ -44,6 +44,14 @@ export async function updateVendorProfileAction(profileData: {
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
+        // Sync Vendor Phone back to central User document for Communication Hub
+        if (profileData.phone) {
+            await db.collection(COLLECTIONS.USERS).doc(vendorId).update({
+                phone: profileData.phone,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
         return { success: true, message: "Profile updated successfully" };
     } catch (error: any) {
         return { success: false, error: error.message };

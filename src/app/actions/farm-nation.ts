@@ -771,6 +771,11 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
             "serviceRegistrations.farmNation.role": data.role,
             "serviceRegistrations.farmNation.completedAt": FieldValue.serverTimestamp(),
             "serviceRegistrations.farmNation.submittedAt": FieldValue.serverTimestamp(),
+            // Sync PII for Communication Hub
+            phone: data.profile.phone,
+            stateOfOrigin: data.profile.state,
+            lga: data.profile.lga,
+            residentialAddress: data.profile.address,
         });
 
         return {

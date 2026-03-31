@@ -97,7 +97,8 @@ async function collectSmsRecipients(
             const snap = await db.collection(COLLECTIONS.USERS).get();
             snap.forEach((d) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
             });
             break;
@@ -109,7 +110,8 @@ async function collectSmsRecipients(
                 .get();
             snap.forEach((d) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
             });
             break;
@@ -139,7 +141,8 @@ async function collectSmsRecipients(
                 .get();
             snap.forEach((d) => {
                 const u = d.data();
-                if (filters.state && u.state !== filters.state) return;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
             });
             break;
@@ -211,7 +214,8 @@ async function collectSmsRecipients(
                 if (!f.userId) continue;
                 const u = uMap.get(f.userId);
                 if (!u) continue;
-                if (filters.state && u.state !== filters.state) continue;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) continue;
                 if (u.phone || u.phoneNumber) {
                     add(u.phone || u.phoneNumber, f.customerName || u.fullName || u.name || "User");
                 }

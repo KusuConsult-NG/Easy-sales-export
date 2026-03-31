@@ -193,6 +193,10 @@ export async function saveKYCProfileAction(payload: {
             'kyc.idType': payload.idType || null,
             'kyc.idNumber': payload.idNumber || null,
             'kyc.profileSavedAt': FieldValue.serverTimestamp(),
+            // Sync PII for Communication Hub
+            phone: payload.phoneNumber,
+            stateOfOrigin: payload.state,
+            residentialAddress: payload.address,
             updatedAt: FieldValue.serverTimestamp(),
         });
 

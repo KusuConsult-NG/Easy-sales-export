@@ -990,6 +990,11 @@ export async function submitAcademyApplicationAction(
             "serviceRegistrations.academy.status": "pending",
             "serviceRegistrations.academy.applicationId": applicationId,
             "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
+            // Sync PII for Communication Hub
+            phone: applicationData.personalInfo.phone,
+            gender: applicationData.personalInfo.gender,
+            stateOfOrigin: applicationData.personalInfo.state,
+            lga: applicationData.personalInfo.lga,
             "updatedAt": FieldValue.serverTimestamp(),
         });
 

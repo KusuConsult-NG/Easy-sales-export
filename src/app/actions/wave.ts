@@ -332,6 +332,12 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             "serviceRegistrations.wave.status": "pending",
             "serviceRegistrations.wave.applicationId": applicationId,
             "serviceRegistrations.wave.submittedAt": FieldValue.serverTimestamp(),
+            // Sync PII for Communication Hub
+            phone: applicantPhone,
+            gender: "female", // WAVE is exclusive to females
+            stateOfOrigin: validatedData.stateOfResidence,
+            lga: validatedData.lgaOfResidence,
+            residentialAddress: validatedData.residentialAddress,
             updatedAt: FieldValue.serverTimestamp(),
         });
 

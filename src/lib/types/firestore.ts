@@ -24,6 +24,9 @@ export interface User {
     email: string;
     phone?: string;
     gender?: "male" | "female"; // Required for WAVE participant validation
+    stateOfOrigin?: string; // Synced globally from onboarding hubs for Admin filtering
+    lga?: string;           // Synced globally for Admin filtering
+    residentialAddress?: string; // Synced globally for dispatch/delivery routing
     roles: UserRole[]; // Multi-role support (changed from single role)
     /** @deprecated Use `isVerified` instead. Kept for backward compatibility with old docs. */
     verified: boolean;
@@ -501,6 +504,7 @@ export interface CooperativeOnboardingApplication {
         gender: string;
         occupation: string;
         address: string;
+        phone?: string;    // Added: Schema sync to support communication hub
         state: string;
         lga: string;
     };
