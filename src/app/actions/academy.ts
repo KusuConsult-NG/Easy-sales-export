@@ -70,8 +70,9 @@ export interface Course {
     price: number; // 0 for free
     modules: CourseModule[];
     thumbnail?: string;
-    createdAt: FieldValue | Timestamp;
-    updatedAt: FieldValue | Timestamp;
+    // Serialized as ISO strings when returned from server actions
+    createdAt: FieldValue | Timestamp | string | null;
+    updatedAt: FieldValue | Timestamp | string | null;
 }
 
 export interface CourseModule {
@@ -157,10 +158,17 @@ export async function getCoursesAction(
 
                 const snapshot = await q.get();
 
-                const courses = snapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                })) as Course[];
+                const courses = snapshot.docs.map((doc) => {
+                    const d = doc.data();
+                    return {
+                        id: doc.id,
+                        ...d,
+                        // Serialize Timestamps → ISO strings so Next.js can
+                        // safely pass them from Server Actions to Client Components
+                        createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
+                        updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
+                    };
+                }) as Course[];
 
                 const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
@@ -189,9 +197,13 @@ const getCachedCourseById = (courseId: string) => unstable_cache(
                 return null;
             }
 
+            const d = courseDoc.data()!;
             return {
                 id: courseDoc.id,
-                ...courseDoc.data(),
+                ...d,
+                // Serialize Timestamps → ISO strings
+                createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
+                updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
             } as Course;
         } catch (error) {
             logger.error("Failed to fetch course:", error);
@@ -687,10 +699,16 @@ export async function getLiveSessionsAction(courseId?: string): Promise<LiveSess
         const query = courseId ? ref.where("courseId", "==", courseId) : ref;
         const snapshot = await query.get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as LiveSession[];
+        return snapshot.docs.map((doc) => {
+            const d = doc.data();
+            return {
+                id: doc.id,
+                ...d,
+                // Serialize Timestamps → ISO strings
+                createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
+                scheduledAt: d.scheduledAt?.toDate?.() ?? d.scheduledAt ?? null,
+            };
+        }) as unknown as LiveSession[];
     } catch (error) {
         logger.error("Failed to fetch live sessions:", error);
         return [];

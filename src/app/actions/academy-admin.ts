@@ -273,11 +273,21 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
             .where("status", "==", "pending")
             .get();
 
-        const applications = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            submittedAt: doc.data().submittedAt?.toDate() || new Date(),
-        })).sort((a: any, b: any) => b.submittedAt.getTime() - a.submittedAt.getTime());
+        const applications = snapshot.docs.map(doc => {
+            const d = doc.data();
+            const submittedAtDate: Date = d.submittedAt?.toDate?.() || new Date();
+            return {
+                id: doc.id,
+                ...d,
+                // Serialize all Timestamps to ISO strings for Client Component compatibility
+                submittedAt: submittedAtDate.toISOString(),
+                reviewedAt: d.reviewedAt?.toDate?.()?.toISOString() ?? null,
+                createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
+                updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
+            };
+        }).sort((a: any, b: any) =>
+            new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+        );
 
         return {
             error: null,
