@@ -15,6 +15,7 @@ import { uploadFileToStorage } from "@/lib/storage-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SellerVerification, Product, CartItem, Order, ProductCategory, DeliveryMethod } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import { unstable_cache } from "next/cache";
 
 // ============================================
@@ -716,7 +717,7 @@ export async function getSellerOrdersAction(options: {
         query = query.limit(fetchLimit);
 
         const snapshot = await query.get();
-        let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
+        let orders = serializeDocs<Order>(snapshot.docs);
 
         // Server-assisted search: filter by order ID, buyer name, or product references
         if (search) {
@@ -881,7 +882,7 @@ export async function getBuyerOrdersAction(options: {
         query = query.limit(limit);
 
         const snapshot = await query.get();
-        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
+        const orders = serializeDocs<Order>(snapshot.docs);
 
         let newLastId = undefined;
         let hasMore = false;

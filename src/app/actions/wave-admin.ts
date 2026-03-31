@@ -7,6 +7,7 @@
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
+import { serializeDocs } from "@/lib/firestore-serialize";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -253,10 +254,7 @@ export async function getEventParticipantsAction(eventId: string): Promise<{
             .where("eventId", "==", eventId)
             .get();
 
-        const participants = snap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
+        const participants = serializeDocs(snap.docs);
 
         return { success: true, participants };
     } catch (error) {
@@ -289,10 +287,7 @@ export async function getWaveApplicationsAction(): Promise<{
         }
 
         const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(1000).get();
-        const applications = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
+        const applications = serializeDocs(snapshot.docs);
 
         return { success: true, applications };
     } catch (error) {

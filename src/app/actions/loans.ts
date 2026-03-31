@@ -8,6 +8,7 @@ import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { calculateRepaymentSchedule, isEligibleForLoan, getTierInterestRate } from "@/lib/cooperative-tiers";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 
 export interface LoanApplication {
     id?: string;
@@ -173,10 +174,7 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
             .where("userId", "==", userId)
             .get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as LoanApplication[];
+        return serializeDocs<LoanApplication>(snapshot.docs);
     } catch (error) {
         logger.error("Failed to fetch loan applications:", error);
         return [];
@@ -199,10 +197,7 @@ export async function getPendingLoanApplicationsAction(): Promise<LoanApplicatio
             .where("status", "==", "pending")
             .get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as LoanApplication[];
+        return serializeDocs<LoanApplication>(snapshot.docs);
     } catch (error) {
         logger.error("Failed to fetch pending applications:", error);
         return [];
@@ -466,11 +461,7 @@ export async function getRepaymentScheduleAction(
 
         if (!scheduleSnapshot.empty) {
             // Return existing schedule
-            const schedule = scheduleSnapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-                dueDate: (doc.data().dueDate as Timestamp).toDate(),
-            })) as RepaymentInstallment[];
+            const schedule = serializeDocs<RepaymentInstallment>(scheduleSnapshot.docs);
 
             return { success: true, schedule };
         }
@@ -722,11 +713,7 @@ export async function getRepaymentHistoryAction(
             .where("loanId", "==", loanId)
             .get();
 
-        const payments = paymentsSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            paidAt: (doc.data().paidAt as Timestamp).toDate(),
-        }));
+        const payments = serializeDocs(paymentsSnapshot.docs);
 
         return { success: true, payments };
     } catch (error) {

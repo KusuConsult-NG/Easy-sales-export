@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log-admin";
+import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 
 /**
  * Payment Tracking & Verification System
@@ -216,10 +217,7 @@ export async function getUserPaymentHistoryAction(userId: string): Promise<Payme
             .where("userId", "==", userId)
             .get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as PaymentRecord[];
+        return serializeDocs<PaymentRecord>(snapshot.docs);
     } catch (error) {
         logger.error("Failed to fetch payment history:", error);
         return [];
@@ -241,10 +239,7 @@ export async function getPaymentByReferenceAction(
             return null;
         }
 
-        return {
-            id: snapshot.docs[0].id,
-            ...snapshot.docs[0].data(),
-        } as PaymentRecord;
+        return serializeDoc<PaymentRecord>(snapshot.docs[0].id, snapshot.docs[0].data());
     } catch (error) {
         logger.error("Failed to fetch payment:", error);
         return null;

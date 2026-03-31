@@ -15,6 +15,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/termii";
 import { pushWithdrawalDecision } from "@/lib/fcm";
@@ -32,7 +33,7 @@ async function _getOrCreateWallet(userId: string): Promise<Wallet> {
     const snap = await ref.get();
 
     if (snap.exists) {
-        return { id: snap.id, ...snap.data() } as Wallet;
+        return serializeDoc<Wallet>(snap.id, snap.data());
     }
 
     const wallet: Omit<Wallet, "id"> = {
@@ -399,7 +400,7 @@ export async function getWalletTransactionsAction(options?: {
         const hasMore = snap.docs.length > pageSize;
         const docs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
 
-        const transactions = docs.map((d) => ({ id: d.id, ...d.data() } as WalletTransaction));
+        const transactions = serializeDocs<WalletTransaction>(docs);
         return { success: true, transactions, hasMore };
     } catch (err: any) {
         logger.error("getWalletTransactionsAction error:", err);

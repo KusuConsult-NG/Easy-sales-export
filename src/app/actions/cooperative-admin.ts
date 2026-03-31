@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { logAuditAction } from "@/lib/audit";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import {
     sendWithdrawalApprovedEmail,
     sendWithdrawalRejectedEmail
@@ -226,10 +227,7 @@ export async function getAllMembersAction(options?: {
         }
 
         const snapshot = await q.get();
-        const allMembers = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
+        const allMembers = serializeDocs(snapshot.docs);
 
         // 🐛 FIX: Only return paid members in the list
         const members = allMembers.filter((m: any) => m.paymentStatus === "completed");

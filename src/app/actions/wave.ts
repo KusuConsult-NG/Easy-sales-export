@@ -9,6 +9,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { Resend } from "resend";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * WAVE (Women in Agribusiness Ventures & Exports) Actions
@@ -507,10 +508,7 @@ export async function getWaveResourcesAction(category?: string): Promise<WaveRes
 
         const snapshot = await queryRef.get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as WaveResource[];
+        return serializeDocs<WaveResource>(snapshot.docs);
     } catch (error) {
         logger.error("Failed to fetch WAVE resources:", error);
         return [];
@@ -534,12 +532,7 @@ export async function getWaveTrainingEventsAction(): Promise<WaveTrainingEvent[]
             .where("status", "in", ["upcoming", "ongoing"])
             .get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            // Handle date conversion if needed, Firestore timestamps need .toDate()
-            date: doc.data().date?.toDate ? doc.data().date.toDate() : doc.data().date
-        })) as WaveTrainingEvent[];
+        return serializeDocs<WaveTrainingEvent>(snapshot.docs);
     } catch (error) {
         logger.error("Get training events error:", error);
         return [];
@@ -587,7 +580,7 @@ export async function getShipmentTrackingAction(userId: string): Promise<Shipmen
             .where("memberId", "==", userId)
             .get();
 
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ShipmentTracking[];
+        return serializeDocs<ShipmentTracking>(snapshot.docs);
     } catch (error) {
         logger.error("Get shipment tracking error:", error);
         return [];

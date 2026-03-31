@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import {
     WaveApplicationReviewSchema,
@@ -608,12 +609,8 @@ export async function getWaveApplicationsAction(
         }
 
         const snapshot = await query.get();
-        const applications = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            reviewedAt: doc.data().reviewedAt?.toDate(),
-        })).sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
+        const applications = serializeDocs(snapshot.docs)
+            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         return {
             error: null,
@@ -665,17 +662,13 @@ export async function getPendingWithdrawalsAction(
             buildQuery(COLLECTIONS.COOPERATIVE_WITHDRAWALS).get(),
         ]);
 
-        const toRecord = (doc: FirebaseFirestore.QueryDocumentSnapshot, source: string) => ({
-            id: doc.id,
-            ...doc.data(),
-            source,
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-        });
+        const toRecord = (doc: FirebaseFirestore.QueryDocumentSnapshot, source: string) =>
+            ({ ...serializeDoc(doc.id, doc.data()), source });
 
         const all = [
             ...stdSnap.docs.map(d => toRecord(d, "withdrawal")),
             ...coopSnap.docs.map(d => toRecord(d, "cooperative_withdrawal")),
-        ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, limit);
 
         return {
@@ -715,11 +708,7 @@ export async function getPendingLandListings(limit = 50): Promise<{
             .limit(limit)
             .get();
 
-        const listings = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-        }));
+        const listings = snapshot.docs.map(doc => serializeDoc(doc.id, doc.data()));
 
         return {
             error: null,
@@ -875,14 +864,7 @@ export async function getPendingLoanApplications(): Promise<{
             .orderBy("appliedAt", "desc")
             .get();
 
-        const applications = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                appliedAt: data.appliedAt?.toDate() || new Date(),
-            };
-        });
+        const applications = serializeDocs(snapshot.docs);
 
         return {
             error: null,
@@ -933,15 +915,8 @@ export async function getAllExportRequestsAction(
         }
 
         const snapshot = await query.get();
-        const exports = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            orderDate: doc.data().orderDate?.toDate() || new Date(),
-            deliveryDate: doc.data().deliveryDate?.toDate(),
-            escrowReleaseDate: doc.data().escrowReleaseDate?.toDate(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })).sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
+        const exports = serializeDocs(snapshot.docs)
+            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         return {
             error: null,
