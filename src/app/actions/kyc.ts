@@ -161,6 +161,66 @@ export async function verifyNINAction(payload: {
     }
 }
 
+// ─── Verify Voter's Card ─────────────────────────────────────────────────────
+
+/**
+ * Verify a single Voter's Card against QoreID and save the result to Firestore.
+ */
+export async function verifyVotersCardAction(payload: {
+    votersCardNumber: string;
+    firstName: string;
+    lastName: string;
+}): Promise<KYCVerificationResult> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: 'Not authenticated' };
+        const { session } = sessionResult;
+        const userId = session.user.id;
+
+        const { votersCardNumber, firstName, lastName } = payload;
+
+        if (!votersCardNumber) {
+            return { success: false, error: "Voter's Card number is required" };
+        }
+        if (!firstName || !lastName) {
+            return { success: false, error: "First name and last name are required for Voter's Card verification" };
+        }
+
+        logger.info("Voter's Card verification started", { userId, vin: votersCardNumber.slice(0, 4) + '***' });
+
+        const result = await qoreIdService.verifyVotersCard(votersCardNumber, firstName, lastName);
+
+        // Persist result to Firestore regardless of match outcome
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            'kyc.votersCard': votersCardNumber,
+            'kyc.votersCardVerified': result.success && result.isMatch,
+            'kyc.votersCardVerifiedAt': FieldValue.serverTimestamp(),
+            'kyc.votersCardStatus': result.success
+                ? (result.isMatch ? 'verified' : 'mismatch')
+                : 'failed',
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        if (!result.success) {
+            return { success: false, error: result.error || "Voter's Card verification failed" };
+        }
+
+        if (!result.isMatch) {
+            return {
+                success: true,
+                isMatch: false,
+                error: "Voter's Card name mismatch — the name on your card does not match the name you provided. Please check your name spelling and try again.",
+            };
+        }
+
+        logger.info("Voter's Card verified successfully", { userId });
+        return { success: true, isMatch: true };
+    } catch (error: any) {
+        logger.error("Voter's Card verification action error", error);
+        return { success: false, error: error?.message || 'An unexpected error occurred' };
+    }
+}
+
 // ─── Save KYC Profile (non-verified fields) ───────────────────────────────────
 
 /**
@@ -168,7 +228,9 @@ export async function verifyNINAction(payload: {
  * Called from the onboarding flow after the form is filled.
  */
 export async function saveKYCProfileAction(payload: {
-    fullName: string;
+    firstName: string;
+    lastName: string;
+    otherNames?: string;
     dateOfBirth: string;
     phoneNumber: string;
     address: string;
@@ -183,8 +245,15 @@ export async function saveKYCProfileAction(payload: {
         const { session } = sessionResult;
         const userId = session.user.id;
 
+        const computedFullName = [payload.firstName, payload.otherNames, payload.lastName]
+            .filter(Boolean)
+            .join(' ');
+
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
-            'kyc.fullName': payload.fullName,
+            'kyc.firstName': payload.firstName,
+            'kyc.lastName': payload.lastName,
+            'kyc.otherNames': payload.otherNames || null,
+            'kyc.fullName': computedFullName,
             'kyc.dateOfBirth': payload.dateOfBirth,
             'kyc.phoneNumber': payload.phoneNumber,
             'kyc.address': payload.address,

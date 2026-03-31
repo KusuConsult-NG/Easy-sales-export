@@ -9,10 +9,12 @@
 
 import { useState } from 'react';
 import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
-import { verifyBVNAction, verifyNINAction } from '@/app/actions/kyc';
+import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
 
 export interface KYCData {
-    fullName: string;
+    firstName: string;
+    lastName: string;
+    otherNames?: string;
     dateOfBirth: string;
     address: string;
     city: string;
@@ -20,8 +22,10 @@ export interface KYCData {
     phoneNumber: string;
     bvn?: string;
     nin?: string;
+    votersCard?: string;
     bvnVerified?: boolean;
     ninVerified?: boolean;
+    votersCardVerified?: boolean;
     idType?: 'nin' | 'drivers_license' | 'international_passport' | 'voters_card';
     idNumber?: string;
 }
@@ -71,8 +75,10 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
     const [formData, setFormData] = useState<Partial<KYCData>>(initialData || {});
     const [bvnState, setBvnState] = useState<VerifyState>(initialData?.bvnVerified ? 'verified' : 'idle');
     const [ninState, setNinState] = useState<VerifyState>(initialData?.ninVerified ? 'verified' : 'idle');
+    const [votersCardState, setVotersCardState] = useState<VerifyState>(initialData?.votersCardVerified ? 'verified' : 'idle');
     const [bvnError, setBvnError] = useState<string>('');
     const [ninError, setNinError] = useState<string>('');
+    const [votersCardError, setVotersCardError] = useState<string>('');
 
     const handleChange = (field: keyof KYCData, value: string | boolean) => {
         const updated = { ...formData, [field]: value };
@@ -87,27 +93,23 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             setNinError('');
             updated.ninVerified = false;
         }
+        if (field === 'votersCard') {
+            setVotersCardState('idle');
+            setVotersCardError('');
+            updated.votersCardVerified = false;
+        }
         setFormData(updated);
         onDataChange(updated);
     };
 
-    /** Extract first and last name from the fullName field */
-    const parseName = (fullName?: string) => {
-        const parts = (fullName || '').trim().split(/\s+/);
-        const firstName = parts[0] || '';
-        const lastName = parts.slice(1).join(' ') || parts[0] || '';
-        return { firstName, lastName };
-    };
-
     const handleVerifyBVN = async () => {
-        const { bvn } = formData;
+        const { bvn, firstName, lastName } = formData;
         if (!bvn || bvn.length !== 11) {
             setBvnError('Enter your full 11-digit BVN before verifying.');
             return;
         }
-        const { firstName, lastName } = parseName(formData.fullName);
         if (!firstName || !lastName) {
-            setBvnError('Enter your full name (first and last) before verifying BVN.');
+            setBvnError('Enter your first name and last name before verifying BVN.');
             return;
         }
 
@@ -131,14 +133,13 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
     };
 
     const handleVerifyNIN = async () => {
-        const { nin } = formData;
+        const { nin, firstName, lastName } = formData;
         if (!nin || nin.length !== 11) {
             setNinError('Enter your full 11-digit NIN before verifying.');
             return;
         }
-        const { firstName, lastName } = parseName(formData.fullName);
         if (!firstName || !lastName) {
-            setNinError('Enter your full name (first and last) before verifying NIN.');
+            setNinError('Enter your first name and last name before verifying NIN.');
             return;
         }
 
@@ -161,25 +162,91 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
     };
 
+    const handleVerifyVotersCard = async () => {
+        const { votersCard, firstName, lastName } = formData;
+        if (!votersCard) {
+            setVotersCardError("Enter your Voter's Card Number before verifying.");
+            return;
+        }
+        if (!firstName || !lastName) {
+            setVotersCardError("Enter your first name and last name before verifying Voter's Card.");
+            return;
+        }
+
+        setVotersCardState('loading');
+        setVotersCardError('');
+
+        const result = await verifyVotersCardAction({ votersCardNumber: votersCard, firstName, lastName });
+
+        if (result.success && result.isMatch) {
+            setVotersCardState('verified');
+            const updated = { ...formData, votersCardVerified: true };
+            setFormData(updated);
+            onDataChange(updated);
+        } else if (result.success && !result.isMatch) {
+            setVotersCardState('mismatch');
+            setVotersCardError(result.error || "Name mismatch. Please check the name on your Voter's Card record.");
+        } else {
+            setVotersCardState('error');
+            setVotersCardError(result.error || "Voter's Card verification failed. Please try again.");
+        }
+    };
+
     return (
         <div className="space-y-6">
 
-            {/* Full Name */}
+            {/* Names */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
+                        First Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            type="text"
+                            value={formData.firstName || ''}
+                            onChange={(e) => handleChange('firstName', e.target.value)}
+                            placeholder="e.g. John"
+                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        />
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-900 mb-2">
+                        Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            type="text"
+                            value={formData.lastName || ''}
+                            onChange={(e) => handleChange('lastName', e.target.value)}
+                            placeholder="e.g. Doe"
+                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        />
+                    </div>
+                </div>
+            </div>
+            
             <div>
                 <label className="block text-sm font-medium text-slate-900 mb-2">
-                    Full Name <span className="text-red-500">*</span>
+                    Other Names <span className="text-slate-500 font-normal">(Optional)</span>
                 </label>
                 <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                     <input
                         type="text"
-                        value={formData.fullName || ''}
-                        onChange={(e) => handleChange('fullName', e.target.value)}
-                        placeholder="Enter your full name as it appears on your ID"
+                        value={formData.otherNames || ''}
+                        onChange={(e) => handleChange('otherNames', e.target.value)}
+                        placeholder="e.g. Chukwudi"
                         className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                 </div>
-                <p className="mt-1 text-xs text-slate-400">Must match the name on your BVN / NIN record exactly.</p>
+                <p className="mt-2 text-sm text-slate-500">
+                    <AlertCircle className="inline w-4 h-4 mr-1 text-slate-400" />
+                    Important: Provide exact names as they appear on your NIN/BVN.
+                </p>
             </div>
 
             {/* Date of Birth */}
@@ -304,6 +371,46 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     </p>
                 )}
                 <p className="mt-1 text-xs text-slate-400">Dial *346# to retrieve your NIN.</p>
+            </div>
+
+            {/* ── Voter's Card — live verification (optional alternative) ── */}
+            <div className="pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-slate-900">
+                        Voter's Card (Optional)
+                    </label>
+                    <VerifyBadge state={votersCardState} />
+                </div>
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        value={formData.votersCard || ''}
+                        onChange={(e) => handleChange('votersCard', e.target.value)}
+                        placeholder="Enter Voter's Card Number (VIN)"
+                        disabled={votersCardState === 'verified'}
+                        className="flex-1 px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
+                    />
+                    <button
+                        type="button"
+                        onClick={handleVerifyVotersCard}
+                        disabled={votersCardState === 'loading' || votersCardState === 'verified' || !formData.votersCard}
+                        className="px-4 py-2.5 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 whitespace-nowrap"
+                    >
+                        {votersCardState === 'loading' ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
+                        ) : votersCardState === 'verified' ? (
+                            <><ShieldCheck className="w-4 h-4" /> Verified</>
+                        ) : (
+                            'Verify Card'
+                        )}
+                    </button>
+                </div>
+                {votersCardError && (
+                    <p className="mt-1.5 text-xs text-red-600 flex items-start gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        {votersCardError}
+                    </p>
+                )}
             </div>
 
             {/* ── BVN — live verification (optional, shown when includeBVN=true) ── */}

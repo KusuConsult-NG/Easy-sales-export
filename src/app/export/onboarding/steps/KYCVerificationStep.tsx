@@ -35,7 +35,8 @@ export function KYCVerificationStep({
     const handleSubmit = async () => {
         // Validate required personal info fields
         if (
-            !kycData.fullName ||
+            !kycData.firstName ||
+            !kycData.lastName ||
             !kycData.dateOfBirth ||
             !kycData.phoneNumber ||
             !kycData.address ||
@@ -75,7 +76,9 @@ export function KYCVerificationStep({
 
         // Persist KYC profile fields to Firestore
         const saveResult = await saveKYCProfileAction({
-            fullName: kycData.fullName!,
+            firstName: kycData.firstName!,
+            lastName: kycData.lastName!,
+            otherNames: kycData.otherNames,
             dateOfBirth: kycData.dateOfBirth!,
             phoneNumber: kycData.phoneNumber!,
             address: kycData.address!,
