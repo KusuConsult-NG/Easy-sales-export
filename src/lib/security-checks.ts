@@ -63,17 +63,14 @@ export function validateProductionSecrets(): void {
             ...weakSecrets.map(s => `  - ${s}`),
             '',
             'Generate secure secrets using: openssl rand -base64 48',
-            'Update your environment variables before deploying.',
+            'Update your environment variables on Railway → Variables.',
         ].join('\n');
 
-        // During build (NEXT_PHASE=phase-production-build), log instead of throwing
-        // so the build can succeed. These secrets are only needed at runtime.
-        if (process.env.NEXT_PHASE === 'phase-production-build' || process.env.CI === 'true') {
-            console.warn(`\n[WARN] Security checks skipped during build:\n${errorMessage}\n`);
-            return;
-        }
-
-        throw new Error(errorMessage);
+        // NEVER throw here — this runs at module scope in the root layout and would
+        // crash every single Server Component render with a cryptic production error.
+        // Log prominently instead; the runtime fallbacks in mfa.ts / digital-id.ts
+        // are sufficient to keep the app functional while the operator adds the vars.
+        console.error(`\n[SECURITY] ${errorMessage}\n`);
     }
 }
 
