@@ -32,12 +32,14 @@ export type SmsAudience =
     | "academy_users"
     | "export_users"
     | "farm_nation_users"
-    | "abandoned_failed_transactions";
+    | "abandoned_failed_transactions"
+    | "custom";
 
 export interface SmsFilters {
     audience: SmsAudience;
     state?: string;
     sellerStatus?: "pending" | "approved" | "suspended";
+    customRecipients?: string[];
 }
 
 export interface SmsBroadcastPreview {
@@ -346,6 +348,14 @@ async function collectSmsRecipients(
                 if (filters.state && r.state !== filters.state) return;
                 add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             });
+            break;
+        }
+        case "custom": {
+            if (filters.customRecipients && Array.isArray(filters.customRecipients)) {
+                filters.customRecipients.forEach(phone => {
+                    add(phone, "Custom User");
+                });
+            }
             break;
         }
     }

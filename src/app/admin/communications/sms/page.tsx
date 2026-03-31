@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -26,6 +26,7 @@ const AUDIENCES: { value: SmsAudience; label: string; description: string }[] = 
     { value: "export_users", label: "Export Users", description: "All Export onboarding applicants" },
     { value: "farm_nation_users", label: "Farm Nation Users", description: "All Farm Nation inquiries" },
     { value: "abandoned_failed_transactions", label: "Abandoned / Failed Transactions", description: "Users with failed or aborted payments" },
+    { value: "custom", label: "Custom Recipients", description: "Upload a CSV or manually enter numbers" },
 ];
 
 const NIGERIAN_STATES = [
@@ -46,6 +47,8 @@ export default function SmsBroadcastPage() {
     const [audience, setAudience] = useState<SmsAudience>("all");
     const [state, setState] = useState("");
     const [sellerStatus, setSellerStatus] = useState<"approved" | "pending" | "suspended">("approved");
+    const [customPhonesText, setCustomPhonesText] = useState("");
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [message, setMessage] = useState("");
 
     const [preview, setPreview] = useState<{ count: number; sample: { name: string; phone: string }[] } | null>(null);
@@ -57,11 +60,37 @@ export default function SmsBroadcastPage() {
     const charCount = message.length;
     const smsCount = Math.ceil(charCount / SMS_MAX_LENGTH) || 1;
 
+    const parseCustomPhones = (text: string): string[] => {
+        const matches = text.match(/\d{10,}/g) || [];
+        return Array.from(new Set(matches));
+    };
+
     const buildFilters = (): SmsFilters => ({
         audience,
         state: state || undefined,
         sellerStatus: isSellerAudience ? sellerStatus : undefined,
+        customRecipients: audience === "custom" ? parseCustomPhones(customPhonesText) : undefined,
     });
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            // Merge with existing text
+            const newText = customPhonesText ? customPhonesText + "\n" + text : text;
+            setCustomPhonesText(newText);
+            setPreview(null);
+            
+            // Reset file input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+        };
+        reader.readAsText(file);
+    };
 
     const handlePreview = async () => {
         setLoadingPreview(true);
@@ -130,34 +159,68 @@ export default function SmsBroadcastPage() {
                         ))}
                     </div>
 
-                    {/* Optional Filters */}
-                    <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-white/60 text-xs font-medium mb-1.5">Filter by State (Optional)</label>
-                            <select
-                                value={state}
-                                onChange={(e) => { setState(e.target.value); setPreview(null); }}
-                                className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-emerald-500"
-                            >
-                                <option value="">All States</option>
-                                {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
+                    {/* Optional Filters or Custom Recipients UI */}
+                    {audience === "custom" ? (
+                        <div className="mt-5">
+                            <label className="text-white/60 text-xs font-medium mb-1.5 flex justify-between items-center">
+                                <span>Phone Numbers (comma separated or line by line)</span>
+                                <span className="text-emerald-400 font-semibold">{parseCustomPhones(customPhonesText).length} valid numbers</span>
+                            </label>
+                            <textarea
+                                value={customPhonesText}
+                                onChange={(e) => { setCustomPhonesText(e.target.value); setPreview(null); }}
+                                placeholder="e.g. 08012345678, +2349012345678&#10;Or paste a whole column of numbers..."
+                                className="w-full px-3 py-3 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-emerald-500 h-32 resize-y"
+                            />
+                            <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+                                <span className="text-white/40 text-xs">You can also upload a CSV or TXT file to extract numbers.</span>
+                                <div>
+                                    <input 
+                                        type="file" 
+                                        accept=".csv,.txt" 
+                                        ref={fileInputRef} 
+                                        onChange={handleFileUpload} 
+                                        className="hidden" 
+                                        id="csv-upload" 
+                                    />
+                                    <label 
+                                        htmlFor="csv-upload" 
+                                        className="cursor-pointer px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors inline-block"
+                                    >
+                                        Upload File
+                                    </label>
+                                </div>
+                            </div>
                         </div>
-                        {isSellerAudience && (
+                    ) : (
+                        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-white/60 text-xs font-medium mb-1.5">Seller Status</label>
+                                <label className="block text-white/60 text-xs font-medium mb-1.5">Filter by State (Optional)</label>
                                 <select
-                                    value={sellerStatus}
-                                    onChange={(e) => { setSellerStatus(e.target.value as any); setPreview(null); }}
+                                    value={state}
+                                    onChange={(e) => { setState(e.target.value); setPreview(null); }}
                                     className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-emerald-500"
                                 >
-                                    <option value="approved">Approved</option>
-                                    <option value="pending">Pending</option>
-                                    <option value="suspended">Suspended</option>
+                                    <option value="">All States</option>
+                                    {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
-                        )}
-                    </div>
+                            {isSellerAudience && (
+                                <div>
+                                    <label className="block text-white/60 text-xs font-medium mb-1.5">Seller Status</label>
+                                    <select
+                                        value={sellerStatus}
+                                        onChange={(e) => { setSellerStatus(e.target.value as any); setPreview(null); }}
+                                        className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-emerald-500"
+                                    >
+                                        <option value="approved">Approved</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="suspended">Suspended</option>
+                                    </select>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Message Composer */}
