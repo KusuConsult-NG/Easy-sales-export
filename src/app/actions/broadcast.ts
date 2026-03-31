@@ -97,6 +97,20 @@ function buildEmailHtml(subject: string, body: string, recipientEmail?: string):
     </div>`;
 }
 
+async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
+    const compact = Array.from(new Set(userIds.filter(Boolean)));
+    const map = new Map<string, any>();
+    for (let i = 0; i < compact.length; i += 100) {
+        const batch = compact.slice(i, i + 100).map((id) => db.collection(COLLECTIONS.USERS).doc(id));
+        if (batch.length === 0) continue;
+        const snaps = await db.getAll(...batch);
+        for (const snap of snaps) {
+            if (snap.exists) map.set(snap.id, snap.data());
+        }
+    }
+    return map;
+}
+
 /** Collect recipients based on audience filter — returns unique email list */
 async function collectRecipients(
     filters: BroadcastFilters
@@ -156,12 +170,11 @@ async function collectRecipients(
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
             if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
             const snap = await q.get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const v = d.data();
                 if (filters.state && v.address?.state !== filters.state) continue;
-                // Resolve email from users collection
-                const userSnap = await db.collection(COLLECTIONS.USERS).doc(v.userId).get();
-                const u = userSnap.data();
+                const u = uMap.get(v.userId);
                 if (u) add(u.email || u.emailAddress, u.name || u.displayName || "Seller");
             }
             break;
@@ -183,16 +196,12 @@ async function collectRecipients(
                 .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("status", "==", "active")
                 .get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const m = d.data();
-                
                 let userState = m.state || (m.address && m.address.state);
-                let uData = null;
-                if (!userState && m.userId) {
-                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(m.userId).get();
-                    uData = userSnap.data();
-                    if (uData) userState = uData.state;
-                }
+                const uData = m.userId ? uMap.get(m.userId) : null;
+                if (!userState && uData) userState = uData.state;
 
                 if (filters.state && userState !== filters.state) continue;
 
@@ -261,24 +270,20 @@ async function collectRecipients(
         }
         case "abandoned_failed_transactions": {
             const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const f = d.data();
+                const u = f.userId ? uMap.get(f.userId) : null;
                 
                 if (filters.state) {
-                    if (!f.userId) continue; 
-                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(f.userId).get();
-                    if (!userSnap.exists) continue;
-                    const u = userSnap.data();
-                    if (u?.state !== filters.state) continue;
+                    if (!f.userId || !u || u.state !== filters.state) continue;
                 }
                 
                 const email = f.customerEmail;
                 if (email) {
                     add(email, f.customerName || "User");
-                } else if (f.userId) {
-                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(f.userId).get();
-                    const u = userSnap.data();
-                    if (u?.email) add(u.email, u.fullName || u.name || "User");
+                } else if (u && (u.email || u.emailAddress)) {
+                    add(u.email || u.emailAddress, u.fullName || u.name || "User");
                 }
             }
             break;

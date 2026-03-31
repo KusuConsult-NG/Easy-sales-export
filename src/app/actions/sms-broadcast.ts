@@ -60,11 +60,24 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function normalisePhone(raw: string | undefined | null): string | null {
     if (!raw) return null;
-    const str = String(raw).trim().replace(/\s+/g, "");
-    if (str.startsWith("+")) return str.slice(1); // +234... → 234...
-    if (str.startsWith("0")) return `234${str.slice(1)}`; // 0812... → 234812...
-    if (str.startsWith("234")) return str; // already E.164 without +
-    return null; // unrecognised format
+    let p = String(raw).replace(/\D/g, "");
+    if (p.startsWith("0")) p = "234" + p.slice(1);
+    if (p.length < 10) return null;
+    return p;
+}
+
+async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
+    const compact = Array.from(new Set(userIds.filter(Boolean)));
+    const map = new Map<string, any>();
+    for (let i = 0; i < compact.length; i += 100) {
+        const batch = compact.slice(i, i + 100).map((id) => db.collection(COLLECTIONS.USERS).doc(id));
+        if (batch.length === 0) continue;
+        const snaps = await db.getAll(...batch);
+        for (const snap of snaps) {
+            if (snap.exists) map.set(snap.id, snap.data());
+        }
+    }
+    return map;
 }
 
 /** Collect recipient phone numbers based on audience filter */
@@ -110,11 +123,11 @@ async function collectSmsRecipients(
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
             if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
             const snap = await q.get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const v = d.data();
                 if (filters.state && v.address?.state !== filters.state) continue;
-                const userSnap = await db.collection(COLLECTIONS.USERS).doc(v.userId).get();
-                const u = userSnap.data();
+                const u = uMap.get(v.userId);
                 if (u) add(u.phone || u.phoneNumber, u.fullName || u.name || "Seller");
             }
             break;
@@ -133,16 +146,13 @@ async function collectSmsRecipients(
         }
         case "cooperative_members": {
             const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const m = d.data();
                 let userState = m.state || (m.address && m.address.state);
-                let uData = null;
+                const uData = m.userId ? uMap.get(m.userId) : null;
                 
-                if (!userState && m.userId) {
-                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(m.userId).get();
-                    uData = userSnap.data();
-                    if (uData) userState = uData.state;
-                }
+                if (!userState && uData) userState = uData.state;
 
                 if (filters.state && userState !== filters.state) continue;
 
@@ -195,14 +205,14 @@ async function collectSmsRecipients(
         }
         case "abandoned_failed_transactions": {
             const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const f = d.data();
                 if (!f.userId) continue;
-                const userSnap = await db.collection(COLLECTIONS.USERS).doc(f.userId).get();
-                if (!userSnap.exists) continue;
-                const u = userSnap.data();
-                if (filters.state && u?.state !== filters.state) continue;
-                if (u?.phone || u?.phoneNumber) {
+                const u = uMap.get(f.userId);
+                if (!u) continue;
+                if (filters.state && u.state !== filters.state) continue;
+                if (u.phone || u.phoneNumber) {
                     add(u.phone || u.phoneNumber, f.customerName || u.fullName || u.name || "User");
                 }
             }

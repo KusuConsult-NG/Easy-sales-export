@@ -62,7 +62,21 @@ export interface InAppBroadcastResult {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Collect unique user IDs based on audience filter */
-async function collectRecipientUserIds(
+async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
+    const compact = Array.from(new Set(userIds.filter(Boolean)));
+    const map = new Map<string, any>();
+    for (let i = 0; i < compact.length; i += 100) {
+        const batch = compact.slice(i, i + 100).map((id) => db.collection(COLLECTIONS.USERS).doc(id));
+        if (batch.length === 0) continue;
+        const snaps = await db.getAll(...batch);
+        for (const snap of snaps) {
+            if (snap.exists) map.set(snap.id, snap.data());
+        }
+    }
+    return map;
+}
+
+export async function collectRecipientUserIds(
     filters: InAppBroadcastFilters
 ): Promise<{ userId: string; name: string }[]> {
     const db = getAdminDb();
@@ -103,11 +117,11 @@ async function collectRecipientUserIds(
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
             if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
             const snap = await q.get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const v = d.data();
                 if (filters.state && v.address?.state !== filters.state) continue;
-                const userSnap = await db.collection(COLLECTIONS.USERS).doc(v.userId).get();
-                const u = userSnap.data();
+                const u = uMap.get(v.userId);
                 if (u) add(v.userId, u.fullName || u.name || "Seller");
             }
             break;
@@ -126,16 +140,15 @@ async function collectRecipientUserIds(
         }
         case "cooperative_members": {
             const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const m = d.data();
                 const uid = m.userId || d.id;
                 
                 let userState = m.state || (m.address && m.address.state);
-                let uData = null;
-                if (!userState && uid) {
-                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(uid).get();
-                    uData = userSnap.data();
-                    if (uData) userState = uData.state;
+                const uData = uid ? uMap.get(uid) : null;
+                if (!userState && uData) {
+                    userState = uData.state;
                 }
 
                 if (filters.state && userState !== filters.state) continue;
@@ -196,15 +209,14 @@ async function collectRecipientUserIds(
         }
         case "abandoned_failed_transactions": {
             const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const f = d.data();
                 if (!f.userId) continue;
 
                 if (filters.state) {
-                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(f.userId).get();
-                    if (!userSnap.exists) continue;
-                    const u = userSnap.data();
-                    if (u?.state !== filters.state) continue;
+                    const u = uMap.get(f.userId);
+                    if (!u || u.state !== filters.state) continue;
                 }
 
                 add(f.userId, f.customerName || "User");
