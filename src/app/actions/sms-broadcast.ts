@@ -27,7 +27,11 @@ export type SmsAudience =
     | "wave_applicants"
     | "wave_briefing_registrants"
     | "wholesale_sellers"
-    | "retail_sellers";
+    | "retail_sellers"
+    | "academy_users"
+    | "export_users"
+    | "farm_nation_users"
+    | "abandoned_failed_transactions";
 
 export interface SmsFilters {
     audience: SmsAudience;
@@ -131,14 +135,22 @@ async function collectSmsRecipients(
             const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
             for (const d of snap.docs) {
                 const m = d.data();
-                // Try phone directly on member doc first, then look up user
+                let userState = m.state || (m.address && m.address.state);
+                let uData = null;
+                
+                if (!userState && m.userId) {
+                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(m.userId).get();
+                    uData = userSnap.data();
+                    if (uData) userState = uData.state;
+                }
+
+                if (filters.state && userState !== filters.state) continue;
+
                 const phone = m.phone;
                 if (phone) {
                     add(phone, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
-                } else if (m.userId) {
-                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(m.userId).get();
-                    const u = userSnap.data();
-                    if (u) add(u.phone || u.phoneNumber, u.fullName || u.name || "Member");
+                } else if (uData) {
+                    add(uData.phone || uData.phoneNumber, uData.fullName || uData.name || "Member");
                 }
             }
             break;
@@ -147,8 +159,53 @@ async function collectSmsRecipients(
             const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
             snap.forEach((d) => {
                 const a = d.data();
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
                 add(a.phone || a.alternativePhone, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
             });
+            break;
+        }
+        case "academy_users": {
+            const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
+            snap.forEach((d) => {
+                const a = d.data();
+                const userState = a.personalInfo?.state || a.state;
+                if (filters.state && userState !== filters.state) return;
+                add(a.personalInfo?.phone || a.phone, a.personalInfo?.fullName || "Academy User");
+            });
+            break;
+        }
+        case "export_users": {
+            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
+            snap.forEach((d) => {
+                const a = d.data();
+                const userState = a.profile?.state || a.companyInfo?.state || a.state;
+                if (filters.state && userState !== filters.state) return;
+                add(a.profile?.phone || a.phone, a.profile?.fullName || "Export User");
+            });
+            break;
+        }
+        case "farm_nation_users": {
+            const snap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
+            snap.forEach((d) => {
+                const a = d.data();
+                if (filters.state && a.state !== filters.state) return;
+                add(a.phone, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+            });
+            break;
+        }
+        case "abandoned_failed_transactions": {
+            const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+            for (const d of snap.docs) {
+                const f = d.data();
+                if (!f.userId) continue;
+                const userSnap = await db.collection(COLLECTIONS.USERS).doc(f.userId).get();
+                if (!userSnap.exists) continue;
+                const u = userSnap.data();
+                if (filters.state && u?.state !== filters.state) continue;
+                if (u?.phone || u?.phoneNumber) {
+                    add(u.phone || u.phoneNumber, f.customerName || u.fullName || u.name || "User");
+                }
+            }
             break;
         }
         case "wave_briefing_registrants": {
@@ -158,6 +215,7 @@ async function collectSmsRecipients(
                 .get();
             snap.forEach((d) => {
                 const r = d.data();
+                if (filters.state && r.state !== filters.state) return;
                 add(r.phone, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             });
             break;

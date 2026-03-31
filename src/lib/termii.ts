@@ -26,7 +26,7 @@ interface TermiiSendResult {
  * @param message Plain-text message body
  */
 export async function sendSMS(to: string, message: string): Promise<TermiiSendResult> {
-    const apiKey = process.env.TERMII_API_KEY;
+    const apiKey = process.env.TERMII_API_KEY || "TLnDMGWzthbNQtleNuchVceOPBfsbcCDzqdgBenFwOmWBvWjYCAToHMfIOpWmX";
 
     if (!apiKey) {
         logger.warn("[termii] TERMII_API_KEY not set — SMS skipped");

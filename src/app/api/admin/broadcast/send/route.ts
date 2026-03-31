@@ -146,6 +146,33 @@ export async function POST(req: NextRequest) {
                 }
                 break;
             }
+            case "academy_users": {
+                const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
+                for (const d of snap.docs) {
+                    const a = d.data();
+                    const email = a.personalInfo?.email || a.email || a.userEmail;
+                    if (email) add(email, a.personalInfo?.fullName || "Academy User");
+                }
+                break;
+            }
+            case "export_users": {
+                const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
+                for (const d of snap.docs) {
+                    const a = d.data();
+                    const email = a.userEmail || a.profile?.email || a.email;
+                    if (email) add(email, a.profile?.fullName || "Export User");
+                }
+                break;
+            }
+            case "farm_nation_users": {
+                const snap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
+                for (const d of snap.docs) {
+                    const a = d.data();
+                    const email = a.email;
+                    if (email) add(email, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+                }
+                break;
+            }
             case "wave_briefing_registrants": {
                 const snap = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
                     .where("status", "==", "registered").get();

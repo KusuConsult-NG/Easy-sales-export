@@ -30,7 +30,11 @@ export type InAppAudience =
     | "wave_applicants"
     | "wave_briefing_registrants"
     | "wholesale_sellers"
-    | "retail_sellers";
+    | "retail_sellers"
+    | "academy_users"
+    | "export_users"
+    | "farm_nation_users"
+    | "abandoned_failed_transactions";
 
 import type { Notification } from "@/lib/types/firestore";
 
@@ -122,18 +126,59 @@ async function collectRecipientUserIds(
         }
         case "cooperative_members": {
             const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
-            snap.forEach((d) => {
+            for (const d of snap.docs) {
                 const m = d.data();
                 const uid = m.userId || d.id;
+                
+                let userState = m.state || (m.address && m.address.state);
+                let uData = null;
+                if (!userState && uid) {
+                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+                    uData = userSnap.data();
+                    if (uData) userState = uData.state;
+                }
+
+                if (filters.state && userState !== filters.state) continue;
+
                 add(uid, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
-            });
+            }
             break;
         }
         case "wave_applicants": {
             const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
             snap.forEach((d) => {
                 const a = d.data();
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
+            });
+            break;
+        }
+        case "academy_users": {
+            const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
+            snap.forEach((d) => {
+                const a = d.data();
+                const userState = a.personalInfo?.state || a.state;
+                if (filters.state && userState !== filters.state) return;
+                if (a.userId) add(a.userId, a.personalInfo?.fullName || "Academy User");
+            });
+            break;
+        }
+        case "export_users": {
+            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
+            snap.forEach((d) => {
+                const a = d.data();
+                const userState = a.profile?.state || a.companyInfo?.state || a.state;
+                if (filters.state && userState !== filters.state) return;
+                if (a.userId) add(a.userId, a.profile?.fullName || "Export User");
+            });
+            break;
+        }
+        case "farm_nation_users": {
+            const snap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
+            snap.forEach((d) => {
+                const a = d.data();
+                if (filters.state && a.state !== filters.state) return;
+                if (a.userId) add(a.userId, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
             });
             break;
         }
@@ -144,8 +189,26 @@ async function collectRecipientUserIds(
                 .get();
             snap.forEach((d) => {
                 const r = d.data();
+                if (filters.state && r.state !== filters.state) return;
                 if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             });
+            break;
+        }
+        case "abandoned_failed_transactions": {
+            const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+            for (const d of snap.docs) {
+                const f = d.data();
+                if (!f.userId) continue;
+
+                if (filters.state) {
+                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(f.userId).get();
+                    if (!userSnap.exists) continue;
+                    const u = userSnap.data();
+                    if (u?.state !== filters.state) continue;
+                }
+
+                add(f.userId, f.customerName || "User");
+            }
             break;
         }
     }

@@ -26,6 +26,10 @@ export type BroadcastAudience =
     | "wave_briefing_registrants"
     | "wholesale_sellers"
     | "retail_sellers"
+    | "academy_users"
+    | "export_users"
+    | "farm_nation_users"
+    | "abandoned_failed_transactions"
     | "csv_upload";
 
 export interface BroadcastFilters {
@@ -181,7 +185,22 @@ async function collectRecipients(
                 .get();
             for (const d of snap.docs) {
                 const m = d.data();
-                if (m.email) add(m.email, m.name || "Member");
+                
+                let userState = m.state || (m.address && m.address.state);
+                let uData = null;
+                if (!userState && m.userId) {
+                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(m.userId).get();
+                    uData = userSnap.data();
+                    if (uData) userState = uData.state;
+                }
+
+                if (filters.state && userState !== filters.state) continue;
+
+                if (m.email) {
+                    add(m.email, m.name || "Member");
+                } else if (uData && (uData.email || uData.emailAddress)) {
+                    add(uData.email || uData.emailAddress, uData.fullName || uData.name || "Member");
+                }
             }
             break;
         }
@@ -189,6 +208,7 @@ async function collectRecipients(
             const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
             for (const d of snap.docs) {
                 const a = d.data();
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 const applicantEmail = a.email || a.userEmail;
                 if (applicantEmail) add(applicantEmail, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "Applicant");
             }
@@ -201,8 +221,65 @@ async function collectRecipients(
                 .get();
             for (const d of snap.docs) {
                 const r = d.data();
+                if (filters.state && r.state !== filters.state) continue;
                 const regEmail = r.email || r.userEmail;
                 if (regEmail) add(regEmail, r.name || `${r.firstName || ''} ${r.surname || ''}`.trim() || "Registrant");
+            }
+            break;
+        }
+        case "academy_users": {
+            const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
+            for (const d of snap.docs) {
+                const a = d.data();
+                const userState = a.personalInfo?.state || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                const email = a.personalInfo?.email || a.email || a.userEmail;
+                if (email) add(email, a.personalInfo?.fullName || "Academy User");
+            }
+            break;
+        }
+        case "export_users": {
+            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
+            for (const d of snap.docs) {
+                const a = d.data();
+                const userState = a.profile?.state || a.companyInfo?.state || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                const email = a.userEmail || a.profile?.email || a.email;
+                if (email) add(email, a.profile?.fullName || "Export User");
+            }
+            break;
+        }
+        case "farm_nation_users": {
+            const snap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
+            for (const d of snap.docs) {
+                const a = d.data();
+                if (filters.state && a.state !== filters.state) continue;
+                const email = a.email;
+                if (email) add(email, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+            }
+            break;
+        }
+        case "abandoned_failed_transactions": {
+            const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+            for (const d of snap.docs) {
+                const f = d.data();
+                
+                if (filters.state) {
+                    if (!f.userId) continue; 
+                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(f.userId).get();
+                    if (!userSnap.exists) continue;
+                    const u = userSnap.data();
+                    if (u?.state !== filters.state) continue;
+                }
+                
+                const email = f.customerEmail;
+                if (email) {
+                    add(email, f.customerName || "User");
+                } else if (f.userId) {
+                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(f.userId).get();
+                    const u = userSnap.data();
+                    if (u?.email) add(u.email, u.fullName || u.name || "User");
+                }
             }
             break;
         }

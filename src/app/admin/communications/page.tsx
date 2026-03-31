@@ -61,6 +61,9 @@ export default function AdminCommunicationsPage() {
         { label: "WAVE Applicants", desc: "WAVE program registrants" },
         { label: "WAVE Briefing Registrants", desc: "Users registered for briefing sessions" },
         { label: "Marketplace Onboarded", desc: "All buyers and sellers combined" },
+        { label: "Academy Users", desc: "Users who have applied to Academy" },
+        { label: "Export Users", desc: "Users applied for export onboarding" },
+        { label: "Farm Nation Users", desc: "Farm Nation inquiry applicants" },
     ];
 
     return (

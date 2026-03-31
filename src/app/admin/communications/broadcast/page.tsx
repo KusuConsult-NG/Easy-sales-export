@@ -37,6 +37,10 @@ const AUDIENCE_OPTIONS: { value: BroadcastAudience; label: string; desc: string 
     { value: "cooperative_members", label: "Cooperative Members", desc: "Active cooperative members" },
     { value: "wave_applicants", label: "WAVE Applicants", desc: "WAVE program registrants" },
     { value: "wave_briefing_registrants", label: "WAVE Briefing Registrants", desc: "Users registered for WAVE briefing sessions" },
+    { value: "academy_users", label: "Academy Users", desc: "All Academy applicants" },
+    { value: "export_users", label: "Export Users", desc: "All Export onboarding applicants" },
+    { value: "farm_nation_users", label: "Farm Nation Users", desc: "All Farm Nation inquiries" },
+    { value: "abandoned_failed_transactions", label: "Abandoned / Failed Transactions", desc: "Users with failed or aborted payments" },
     { value: "csv_upload", label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },
 ];
 

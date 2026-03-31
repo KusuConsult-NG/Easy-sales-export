@@ -22,6 +22,10 @@ const AUDIENCES: { value: InAppAudience; label: string; description: string }[] 
     { value: "cooperative_members", label: "Cooperative Members", description: "Active cooperative members" },
     { value: "wave_applicants", label: "WAVE Applicants", description: "Users who applied to WAVE" },
     { value: "wave_briefing_registrants", label: "WAVE Briefing Registrants", description: "Users registered for WAVE briefings" },
+    { value: "academy_users", label: "Academy Users", description: "All Academy applicants" },
+    { value: "export_users", label: "Export Users", description: "All Export onboarding applicants" },
+    { value: "farm_nation_users", label: "Farm Nation Users", description: "All Farm Nation inquiries" },
+    { value: "abandoned_failed_transactions", label: "Abandoned / Failed Transactions", description: "Users with failed or aborted payments" },
 ];
 
 const NIGERIAN_STATES = [

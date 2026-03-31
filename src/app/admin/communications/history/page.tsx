@@ -26,6 +26,10 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     cooperative_members: "Cooperative Members",
     wave_applicants: "WAVE Applicants",
     wave_briefing_registrants: "WAVE Briefing Registrants",
+    academy_users: "Academy Users",
+    export_users: "Export Users",
+    farm_nation_users: "Farm Nation Users",
+    abandoned_failed_transactions: "Abandoned / Failed Transactions",
     csv_upload: "CSV Upload",
 };
 
