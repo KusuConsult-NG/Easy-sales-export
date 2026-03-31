@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
     FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter,
-    Search, Eye, BookOpen, GraduationCap, DollarSign
+    Search, Eye, BookOpen, GraduationCap, DollarSign, Users
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -36,7 +36,7 @@ interface AcademyApplication {
     paymentStatus?: string;
     paymentAmount?: number;
     plan?: string;
-    paymentReference?: string;
+    paymentReference?: string | null;
     source?: string;
     // true = has a formal academy_applications doc (can be reviewed/approved)
     hasApplicationDoc?: boolean;
@@ -78,23 +78,41 @@ export default function AdminAcademyApplicationsPage() {
     const { showToast } = useToast();
     const [appDocs, setAppDocs] = useState<AcademyApplication[]>([]);
     const [paymentDocs, setPaymentDocs] = useState<AcademyApplication[]>([]);
+    const [enrolledUsers, setEnrolledUsers] = useState<AcademyApplication[]>([]);
     const [loaded, setLoaded] = useState(false);
+    const [loadedCount, setLoadedCount] = useState(0);
 
-    // Merge and deduplicate by paymentReference, preferring appDoc entry
-    const applications = (() => {
+    // Merge and deduplicate across all 3 sources:
+    // 1. academy_applications (formal application docs)
+    // 2. processedPayments with type=academy_registration
+    // 3. users with role=academy_participant (enrolled but no standalone application)
+    const applications = useMemo(() => {
         const merged = [...appDocs];
         const existingRefs = new Set(appDocs.map(a => a.paymentReference).filter(Boolean));
+        const existingIds = new Set(appDocs.map(a => a.id));
+
+        // Add payment docs not already covered by an application doc
         for (const p of paymentDocs) {
             if (!p.paymentReference || !existingRefs.has(p.paymentReference)) {
                 merged.push(p);
+                if (p.paymentReference) existingRefs.add(p.paymentReference);
+                existingIds.add(p.id);
             }
         }
+
+        // Add enrolled users without a standalone application or payment doc
+        for (const u of enrolledUsers) {
+            if (!existingIds.has(u.id)) {
+                merged.push(u);
+            }
+        }
+
         return merged.sort((a, b) => {
             const ta = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
             const tb = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
             return tb - ta;
         });
-    })();
+    }, [appDocs, paymentDocs, enrolledUsers]);
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
     const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -126,8 +144,8 @@ export default function AdminAcademyApplicationsPage() {
                 };
             });
             setAppDocs(apps);
-            setLoaded(true);
-        }, () => setLoaded(true));
+            setLoadedCount(c => c + 1);
+        }, () => setLoadedCount(c => c + 1));
         return () => unsub();
     }, []);
 
@@ -146,22 +164,62 @@ export default function AdminAcademyApplicationsPage() {
                     personalInfo: {
                         fullName: d.customerName ?? d.fullName ?? "—",
                         email: d.customerEmail ?? d.email ?? "—",
-                        phone: d.phone ?? "",
+                        phone: d.phone ?? d.customerPhone ?? "",
                     },
                     status: "pending" as ApplicationStatus,
                     submittedAt: toIso(d.processedAt ?? d.createdAt ?? null),
                     paymentStatus: "completed",
                     paymentAmount: d.amount ? Number(d.amount) : undefined,
                     plan: d.plan ?? d.metadata?.plan ?? null,
-                    paymentReference: d.reference ?? doc.id,
+                    paymentReference: d.reference ?? d.tx_ref ?? doc.id,
                     source: d.source ?? "webhook",
                     hasApplicationDoc: false,
                 };
             });
             setPaymentDocs(apps);
-        }, () => {});
+            setLoadedCount(c => c + 1);
+        }, () => setLoadedCount(c => c + 1));
         return () => unsub();
     }, []);
+
+    // ── Real-time listener 3: users with academy_participant role
+    // Catches enrolled users who never created a standalone academy_applications doc
+    useEffect(() => {
+        const q = query(
+            collection(db, "users"),
+            where("roles", "array-contains", "academy_participant"),
+            limit(500)
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            const apps: AcademyApplication[] = snap.docs.map(doc => {
+                const d = doc.data();
+                return {
+                    id: doc.id,
+                    personalInfo: {
+                        fullName: d.fullName ?? d.name ?? d.kyc?.fullName ?? "—",
+                        email: d.email ?? "—",
+                        phone: d.phone ?? d.phoneNumber ?? d.kyc?.phoneNumber ?? "",
+                    },
+                    status: (d.academyStatus ?? "approved") as ApplicationStatus,
+                    submittedAt: toIso(d.academyEnrolledAt ?? d.createdAt ?? null),
+                    paymentStatus: d.academyPaymentStatus ?? "completed",
+                    plan: d.academyPlan ?? null,
+                    paymentReference: null,
+                    source: "user_profile",
+                    hasApplicationDoc: false,
+                };
+            });
+            setEnrolledUsers(apps);
+            setLoadedCount(c => c + 1);
+        }, () => setLoadedCount(c => c + 1));
+        return () => unsub();
+    }, []);
+
+    // Loaded when any of the 3 listeners has fired — data shows immediately
+    // and subsequent listeners add to the view incrementally
+    useEffect(() => {
+        if (loadedCount >= 1) setLoaded(true);
+    }, [loadedCount]);
 
     const handleApprove = async (id: string) => {
         setProcessingId(id);

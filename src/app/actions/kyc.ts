@@ -249,7 +249,8 @@ export async function saveKYCProfileAction(payload: {
             .filter(Boolean)
             .join(' ');
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        // Build root user update
+        const rootUpdate: Record<string, any> = {
             'kyc.firstName': payload.firstName,
             'kyc.lastName': payload.lastName,
             'kyc.otherNames': payload.otherNames || null,
@@ -262,12 +263,101 @@ export async function saveKYCProfileAction(payload: {
             'kyc.idType': payload.idType || null,
             'kyc.idNumber': payload.idNumber || null,
             'kyc.profileSavedAt': FieldValue.serverTimestamp(),
-            // Sync PII for Communication Hub
+            // Sync PII to root user doc for Communication Hub queries
             phone: payload.phoneNumber,
+            fullName: computedFullName,
             stateOfOrigin: payload.state,
+            city: payload.city,
             residentialAddress: payload.address,
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        };
+
+        await db.collection(COLLECTIONS.USERS).doc(userId).update(rootUpdate);
+
+        // ── Cross-module PII sync ──────────────────────────────────────────────
+        // Propagate the latest phone / name / address to all module sub-collections
+        // so that queries against those collections (SMS broadcast, admin views) are
+        // always consistent. We use a Firestore batch for atomicity and efficiency.
+        try {
+            const batch = db.batch();
+
+            // 1. academy_applications — find by userId
+            const academySnap = await db
+                .collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where('userId', '==', userId)
+                .get();
+            for (const doc of academySnap.docs) {
+                batch.update(doc.ref, {
+                    'personalInfo.phone': payload.phoneNumber,
+                    'personalInfo.fullName': computedFullName,
+                    'personalInfo.state': payload.state,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+
+            // 2. cooperative_members — find by userId
+            const coopSnap = await db
+                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where('userId', '==', userId)
+                .get();
+            for (const doc of coopSnap.docs) {
+                batch.update(doc.ref, {
+                    phone: payload.phoneNumber,
+                    state: payload.state,
+                    address: payload.address,
+                    fullName: computedFullName,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+
+            // 3. wave_applications — find by userId
+            const waveSnap = await db
+                .collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where('userId', '==', userId)
+                .get();
+            for (const doc of waveSnap.docs) {
+                batch.update(doc.ref, {
+                    phone: payload.phoneNumber,
+                    stateOfOrigin: payload.state,
+                    residentialAddress: payload.address,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+
+            // 4. seller_verifications — find by userId
+            const sellerSnap = await db
+                .collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where('userId', '==', userId)
+                .get();
+            for (const doc of sellerSnap.docs) {
+                batch.update(doc.ref, {
+                    phone: payload.phoneNumber,
+                    'address.state': payload.state,
+                    'address.city': payload.city,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+
+            // 5. export_onboarding_applications — find by userId
+            const exportSnap = await db
+                .collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .where('userId', '==', userId)
+                .get();
+            for (const doc of exportSnap.docs) {
+                batch.update(doc.ref, {
+                    'profile.phone': payload.phoneNumber,
+                    'profile.fullName': computedFullName,
+                    'profile.state': payload.state,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+
+            await batch.commit();
+            logger.info('Cross-module PII sync completed', { userId });
+        } catch (syncError: any) {
+            // Non-fatal — root KYC data was already saved. Log and continue.
+            logger.warn('Cross-module PII sync partial failure', { userId, error: syncError?.message });
+        }
 
         return { success: true };
     } catch (error: any) {

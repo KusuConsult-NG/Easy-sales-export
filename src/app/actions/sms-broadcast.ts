@@ -3,7 +3,8 @@
  *
  * Sends bulk SMS messages to targeted audiences using the Termii client.
  * Phone numbers are extracted from the users collection, falling back to
- * phoneNumber if phone is not set.
+ * module sub-collections (academy_applications, cooperative_members,
+ * wave_applications) when no phone is found on the root user document.
  *
  * Rate: Messages are sent in batches of 10 with a 1-second pause between
  * batches to avoid overwhelming the Termii API.
@@ -93,14 +94,80 @@ async function collectSmsRecipients(
     };
 
     switch (filters.audience) {
+        // ─────────────────────────────────────────────────────────────────
+        // ALL USERS — harvest from main `users` collection PLUS supplement
+        // from every module sub-collection for users whose phone was never
+        // synced to their root profile (legacy data gap).
+        // ─────────────────────────────────────────────────────────────────
         case "all": {
-            const snap = await db.collection(COLLECTIONS.USERS).get();
-            snap.forEach((d) => {
+            // 1. Primary: root users collection
+            const usersSnap = await db.collection(COLLECTIONS.USERS).get();
+            const seenUserIds = new Set<string>();
+            usersSnap.forEach((d) => {
                 const u = d.data();
+                seenUserIds.add(d.id);
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && userState !== filters.state) return;
-                add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
+                add(u.phone || u.phoneNumber || u.kyc?.phoneNumber, u.fullName || u.name || "User");
             });
+
+            // 2. Supplement: cooperative_members (phone may be stored here only)
+            const cmSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
+            cmSnap.forEach((d) => {
+                const m = d.data();
+                const userState = m.state || m.address?.state;
+                if (filters.state && userState !== filters.state) return;
+                const phone = m.phone || m.phoneNumber;
+                const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || "Member";
+                add(phone, name);
+            });
+
+            // 3. Supplement: wave_applications
+            const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
+            waveSnap.forEach((d) => {
+                const a = d.data();
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
+                const phone = a.phone || a.alternativePhone || a.phoneNumber;
+                const name = [a.firstName, a.surname || a.lastName].filter(Boolean).join(" ") || "Applicant";
+                add(phone, name);
+            });
+
+            // 4. Supplement: academy_applications
+            const academySnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
+            academySnap.forEach((d) => {
+                const a = d.data();
+                const userState = a.personalInfo?.state || a.state;
+                if (filters.state && userState !== filters.state) return;
+                const phone = a.personalInfo?.phone || a.phone || a.phoneNumber;
+                const name = a.personalInfo?.fullName || [a.personalInfo?.firstName, a.personalInfo?.lastName].filter(Boolean).join(" ") || "Academy User";
+                add(phone, name);
+            });
+
+            // 5. Supplement: wave_briefing_registrations
+            const briefSnap = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).get();
+            briefSnap.forEach((d) => {
+                const r = d.data();
+                if (filters.state && r.state !== filters.state) return;
+                add(r.phone || r.phoneNumber, r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant");
+            });
+
+            // 6. Supplement: farm_nation_inquiries
+            const fnSnap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
+            fnSnap.forEach((d) => {
+                const a = d.data();
+                if (filters.state && a.state !== filters.state) return;
+                add(a.phone || a.phoneNumber, [a.firstName, a.lastName].filter(Boolean).join(" ") || "Farm Nation User");
+            });
+
+            // 7. Supplement: export_onboarding_applications
+            const exportSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
+            exportSnap.forEach((d) => {
+                const a = d.data();
+                const userState = a.profile?.state || a.companyInfo?.state || a.state;
+                if (filters.state && userState !== filters.state) return;
+                add(a.profile?.phone || a.phone || a.phoneNumber, a.profile?.fullName || "Export User");
+            });
+
             break;
         }
         case "buyers": {
@@ -159,12 +226,11 @@ async function collectSmsRecipients(
 
                 if (filters.state && userState !== filters.state) continue;
 
-                const phone = m.phone;
-                if (phone) {
-                    add(phone, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
-                } else if (uData) {
-                    add(uData.phone || uData.phoneNumber, uData.fullName || uData.name || "Member");
-                }
+                // Prefer phone from the member doc, fall back to user profile
+                const phone = m.phone || m.phoneNumber || (uData ? uData.phone || uData.phoneNumber : null);
+                const name = m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : (uData ? uData.fullName || uData.name : "Member") || "Member";
+
+                if (phone) add(phone, name);
             }
             break;
         }
@@ -173,17 +239,38 @@ async function collectSmsRecipients(
             snap.forEach((d) => {
                 const a = d.data();
                 if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
-                add(a.phone || a.alternativePhone, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
+                add(a.phone || a.alternativePhone || a.phoneNumber, `${a.firstName || ""} ${a.surname || a.lastName || ""}`.trim() || "Applicant");
             });
             break;
         }
         case "academy_users": {
+            // Primary: academy_applications collection
             const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
             snap.forEach((d) => {
                 const a = d.data();
                 const userState = a.personalInfo?.state || a.state;
                 if (filters.state && userState !== filters.state) return;
-                add(a.personalInfo?.phone || a.phone, a.personalInfo?.fullName || "Academy User");
+                add(a.personalInfo?.phone || a.phone || a.phoneNumber, a.personalInfo?.fullName || [a.personalInfo?.firstName, a.personalInfo?.lastName].filter(Boolean).join(" ") || "Academy User");
+            });
+
+            // Supplement: users with academy_participant role (enrolled but no standalone application doc)
+            const usersSnap = await db.collection(COLLECTIONS.USERS)
+                .where("roles", "array-contains", "academy_participant")
+                .get();
+            usersSnap.forEach((d) => {
+                const u = d.data();
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
+                add(u.phone || u.phoneNumber || u.kyc?.phoneNumber, u.fullName || u.name || "Academy User");
+            });
+
+            // Supplement: processedPayments for academy registration
+            const ppSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("type", "==", "academy_registration")
+                .get();
+            ppSnap.forEach((d) => {
+                const p = d.data();
+                add(p.phone || p.customerPhone, p.customerName || p.fullName || "Academy User");
             });
             break;
         }
@@ -193,7 +280,18 @@ async function collectSmsRecipients(
                 const a = d.data();
                 const userState = a.profile?.state || a.companyInfo?.state || a.state;
                 if (filters.state && userState !== filters.state) return;
-                add(a.profile?.phone || a.phone, a.profile?.fullName || "Export User");
+                add(a.profile?.phone || a.phone || a.phoneNumber, a.profile?.fullName || "Export User");
+            });
+
+            // Supplement: users with export roles
+            const usersSnap = await db.collection(COLLECTIONS.USERS)
+                .where("roles", "array-contains", "export_member")
+                .get();
+            usersSnap.forEach((d) => {
+                const u = d.data();
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) return;
+                add(u.phone || u.phoneNumber || u.kyc?.phoneNumber, u.fullName || u.name || "Export User");
             });
             break;
         }
@@ -202,7 +300,16 @@ async function collectSmsRecipients(
             snap.forEach((d) => {
                 const a = d.data();
                 if (filters.state && a.state !== filters.state) return;
-                add(a.phone, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+                add(a.phone || a.phoneNumber, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+            });
+
+            // Supplement: processedPayments for farm_nation
+            const ppSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("type", "==", "farm_nation")
+                .get();
+            ppSnap.forEach((d) => {
+                const p = d.data();
+                add(p.phone || p.customerPhone, p.customerName || "Farm Nation User");
             });
             break;
         }
@@ -211,6 +318,13 @@ async function collectSmsRecipients(
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const f = d.data();
+                // Handle records with and without userId
+                const phone = f.customerPhone || f.phone;
+                const name = f.customerName || "User";
+                if (phone) {
+                    add(phone, name);
+                    continue;
+                }
                 if (!f.userId) continue;
                 const u = uMap.get(f.userId);
                 if (!u) continue;
@@ -230,7 +344,7 @@ async function collectSmsRecipients(
             snap.forEach((d) => {
                 const r = d.data();
                 if (filters.state && r.state !== filters.state) return;
-                add(r.phone, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
+                add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             });
             break;
         }
