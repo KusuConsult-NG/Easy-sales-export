@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { uploadFileToStorage } from "@/lib/storage-admin";
 
@@ -107,10 +108,7 @@ export async function getUserCertificatesAction(userId: string): Promise<Certifi
         const q = db.collection(COLLECTIONS.CERTIFICATES).where("userId", "==", userId);
         const snapshot = await q.get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as Certificate[];
+        return serializeDocs(snapshot.docs) as unknown as Certificate[];
     } catch (error) {
         logger.error("Failed to fetch certificates:", error);
         return [];

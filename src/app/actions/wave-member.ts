@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 
@@ -211,10 +212,7 @@ export async function getUserTrainingRegistrationsAction(): Promise<{
             .where("userId", "==", session.user.id)
             .get();
 
-        const registrations = snap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
+        const registrations = serializeDocs(snap.docs);
 
         return { success: true, registrations };
     } catch (error) {

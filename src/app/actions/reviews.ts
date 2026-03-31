@@ -12,6 +12,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { ProductReview, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Create a product review
@@ -125,14 +126,7 @@ export async function getProductReviewsAction(
         }
 
         const snapshot = await query.get();
-        const reviews: ProductReview[] = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            };
-        }) as ProductReview[];
+        const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
         // Filter by verified if specified
         const filteredReviews = filters?.verified !== undefined
@@ -161,14 +155,7 @@ export async function getUserReviewsAction() {
             .orderBy("createdAt", "desc")
             .get();
 
-        const reviews: ProductReview[] = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            };
-        }) as ProductReview[];
+        const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
         return { success: true, reviews };
     } catch (error: any) {
@@ -371,14 +358,7 @@ export async function getAdminReviewsAction(statusFilter?: "pending" | "approved
         }
 
         const snapshot = await query.get();
-        const reviews: ProductReview[] = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            };
-        }) as ProductReview[];
+        const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
         return { success: true, reviews };
     } catch (error: any) {

@@ -12,6 +12,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
@@ -179,7 +180,7 @@ export async function getProductReviewsAction(
             .limit(pageSize)
             .get();
 
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductReview));
+        return serializeDocs(snap.docs) as unknown as ProductReview[];
     } catch (err) {
         logger.error("getProductReviewsAction error:", err);
         return [];
@@ -300,8 +301,8 @@ export async function getPendingReviewsAction(options?: {
         ]);
 
         return {
-            productReviews: prodSnap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductReview)),
-            sellerReviews: sellerSnap.docs.map((d) => ({ id: d.id, ...d.data() } as SellerReview)),
+            productReviews: serializeDocs(prodSnap.docs) as unknown as ProductReview[],
+            sellerReviews: serializeDocs(sellerSnap.docs) as unknown as SellerReview[],
         };
     } catch (err) {
         logger.error("getPendingReviewsAction error:", err);

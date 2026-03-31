@@ -11,6 +11,7 @@ import { createNotificationAction } from "@/app/actions/notifications";
 import { verifyPaystackPayment } from "@/lib/paystack-server";
 import { smsEscrowReleased, smsDisputeResolved } from "@/lib/termii";
 import { pushEscrowReleased, pushDisputeResolved } from "@/lib/fcm";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Marketplace Escrow System
@@ -763,10 +764,7 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<Message
             .orderBy("timestamp", "asc")
             .get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as Message[];
+        return serializeDocs(snapshot.docs) as unknown as Message[];
     } catch (error) {
         logger.error("Failed to fetch messages:", error);
         return [];

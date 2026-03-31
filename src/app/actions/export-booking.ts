@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 export interface CreateBookingData {
     exportWindowId: string;
@@ -103,10 +104,7 @@ export async function getUserBookingsAction(): Promise<{
             .orderBy('createdAt', 'desc')
             .get();
 
-        const bookings = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-        }));
+        const bookings = serializeDocs(snapshot.docs);
 
         return { success: true, bookings };
     } catch (error) {

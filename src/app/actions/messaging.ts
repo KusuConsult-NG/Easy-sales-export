@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import type { Conversation, Message } from "@/lib/types/marketplace";
 
 /**
@@ -239,13 +240,7 @@ export async function getConversationsAction() {
             .limit(50)
             .get();
 
-        const conversations: Conversation[] = snapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id,
-            createdAt: doc.data().createdAt?.toDate(),
-            updatedAt: doc.data().updatedAt?.toDate(),
-            lastMessageAt: doc.data().lastMessageAt?.toDate(),
-        })) as Conversation[];
+        const conversations = serializeDocs(snapshot.docs) as unknown as Conversation[];
 
         return { success: true, conversations };
     } catch (error: any) {
@@ -290,12 +285,7 @@ export async function getConversationMessagesAction(
             .limit(limitCount)
             .get();
 
-        const messages = snapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id,
-            createdAt: doc.data().createdAt?.toDate(),
-            readAt: doc.data().readAt?.toDate(),
-        })) as Message[];
+        const messages = serializeDocs(snapshot.docs) as unknown as Message[];
 
         return {
             success: true,

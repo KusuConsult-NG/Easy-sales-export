@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log";
 
 /**
@@ -64,10 +65,7 @@ export async function getAuditLogsAction(filters: {
 
         const snapshot = await q.get();
 
-        const logs = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as AuditLogEntry[];
+        const logs = serializeDocs(snapshot.docs) as unknown as AuditLogEntry[];
 
         // Apply limit if specified
         const limited = filters.limit ? logs.slice(0, filters.limit) : logs;
@@ -115,16 +113,23 @@ export async function exportAuditLogsCSV(filters: {
 
         // Generate CSV
         const headers = ["Timestamp", "Severity", "Action", "User ID", "User Email", "Target Type", "Target ID", "Details"];
-        const rows = result.logs.map((log) => [
-            log.timestamp.toDate().toISOString(),
-            log.severity,
-            log.action,
-            log.userId,
-            log.userEmail || "",
-            log.targetType || "",
-            log.targetId || "",
-            log.details || "",
-        ]);
+        const rows = result.logs.map((log: any) => {
+            let timestampStr = "";
+            if (typeof log.timestamp === "string") timestampStr = log.timestamp;
+            else if (log.timestamp?.toDate) timestampStr = log.timestamp.toDate().toISOString();
+            else timestampStr = String(log.timestamp);
+            
+            return [
+                timestampStr,
+                log.severity,
+                log.action,
+                log.userId,
+                log.userEmail || "",
+                log.targetType || "",
+                log.targetId || "",
+                log.details ? JSON.stringify(log.details) : "",
+            ];
+        });
 
         const csvContent = [
             headers.join(","),
@@ -175,7 +180,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
         const q = db.collection(COLLECTIONS.AUDIT_LOGS).where("timestamp", ">=", startDate);
 
         const snapshot = await q.get();
-        const logs = snapshot.docs.map((doc) => doc.data()) as AuditLogEntry[];
+        const logs = serializeDocs(snapshot.docs) as unknown as AuditLogEntry[];
 
         // Calculate statistics
         const stats = {

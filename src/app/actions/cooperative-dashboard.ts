@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Optimized dashboard data loader
@@ -54,15 +55,9 @@ export async function getDashboardDataAction() {
         }
 
         const membershipDoc = membershipSnapshot.docs[0];
-        const membership: CooperativeMembership = {
-            id: membershipDoc.id,
-            ...membershipDoc.data()
-        } as CooperativeMembership;
+        const membership = serializeDoc<CooperativeMembership>(membershipDoc.id, membershipDoc.data());
 
-        const transactions: CooperativeTransaction[] = transactionsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as CooperativeTransaction));
+        const transactions = serializeDocs<CooperativeTransaction>(transactionsSnapshot.docs);
 
         return {
             success: true,

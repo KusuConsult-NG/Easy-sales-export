@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Export Aggregation System
@@ -97,10 +98,7 @@ export async function getActiveExportWindowsAction(): Promise<ExportWindow[]> {
 
         const snapshot = await q.get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as ExportWindow[];
+        return serializeDocs(snapshot.docs) as unknown as ExportWindow[];
     } catch (error) {
         logger.error("Failed to fetch export windows:", error);
         return [];
@@ -191,10 +189,7 @@ export async function getUserExportSlotsAction(userId: string): Promise<ExportSl
 
         const snapshot = await q.get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as ExportSlot[];
+        return serializeDocs(snapshot.docs) as unknown as ExportSlot[];
     } catch (error) {
         logger.error("Failed to fetch export slots:", error);
         return [];

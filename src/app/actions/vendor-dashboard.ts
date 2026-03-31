@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp } from "firebase-admin/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * VENDOR DASHBOARD ANALYTICS ACTIONS
@@ -32,10 +33,7 @@ export async function getVendorSalesStatsAction() {
             .where("paymentStatus", "==", "paid")
             .get();
 
-        const orders = ordersSnapshot.docs.map(doc => ({
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : doc.data().createdAt,
-        }));
+        const orders = serializeDocs(ordersSnapshot.docs);
 
         const stats = {
             today: { orders: 0, revenue: 0 },

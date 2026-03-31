@@ -13,6 +13,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Get all conversations for the current user
@@ -33,10 +34,7 @@ export async function getConversationsAction() {
             .limit(50)
             .get();
 
-        const conversations = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        })) as Conversation[];
+        const conversations = serializeDocs(snapshot.docs) as unknown as Conversation[];
 
         return { conversations, error: null };
     } catch (error) {
@@ -70,10 +68,7 @@ export async function getAllConversationsAdminAction() {
             .limit(200)
             .get();
 
-        const conversations = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        })) as Conversation[];
+        const conversations = serializeDocs(snapshot.docs) as unknown as Conversation[];
 
         return { conversations, error: null };
     } catch (error) {
@@ -120,10 +115,7 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
             .limit(limit)
             .get();
 
-        const messages = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        })) as Message[];
+        const messages = serializeDocs(snapshot.docs) as unknown as Message[];
 
         return { messages, error: null };
     } catch (error) {

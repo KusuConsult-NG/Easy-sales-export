@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 export interface WaveResource {
     id?: string;
@@ -158,10 +159,7 @@ export async function getResourcesAction(category?: string): Promise<WaveResourc
 
         const snapshot = await query.get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as WaveResource[];
+        return serializeDocs(snapshot.docs) as unknown as WaveResource[];
     } catch (error) {
         logger.error("Failed to fetch resources:", error);
         return [];

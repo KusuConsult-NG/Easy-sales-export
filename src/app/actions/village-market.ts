@@ -10,6 +10,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
@@ -108,10 +109,7 @@ export async function getActiveVillageMarketEventsAction(): Promise<VillageMarke
             .limit(20)
             .get();
 
-        return snap.docs.map((doc) => {
-            const d = doc.data();
-            return { id: doc.id, ...d } as VillageMarketEvent;
-        });
+        return serializeDocs(snap.docs) as unknown as VillageMarketEvent[];
     } catch (err) {
         logger.error("getActiveVillageMarketEventsAction error:", err);
         return [];
@@ -138,8 +136,8 @@ export async function getVillageMarketEventAction(eventId: string): Promise<{
 
         if (!eventDoc.exists) return { event: null, products: [] };
 
-        const event = { id: eventDoc.id, ...eventDoc.data() } as VillageMarketEvent;
-        const products = productsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as FlashSaleProduct));
+        const event = serializeDoc(eventDoc.id, eventDoc.data()) as unknown as VillageMarketEvent;
+        const products = serializeDocs(productsSnap.docs) as unknown as FlashSaleProduct[];
 
         return { event, products };
     } catch (err) {

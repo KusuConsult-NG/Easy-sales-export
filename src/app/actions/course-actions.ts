@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import {
     courseProgressSchema,
     courseEnrollmentSchema
@@ -170,8 +171,8 @@ export async function getCourseProgress(courseId: string) {
                 progressPercent: progressData.progressPercent,
                 lastWatchedSecond: progressData.lastWatchedSecond,
                 completed: progressData.completed,
-                completedAt: progressData.completedAt?.toDate() || null,
-                updatedAt: progressData.updatedAt?.toDate() || new Date(),
+                completedAt: progressData.completedAt?.toDate?.()?.toISOString() || null,
+                updatedAt: progressData.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
             } as CourseProgress,
         };
     } catch (error) {
@@ -223,11 +224,7 @@ export async function getUserEnrolledCourses() {
             .where('status', '==', 'active')
             .get();
 
-        const enrollments = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            enrolledAt: (doc.data().enrolledAt as Timestamp)?.toDate() || new Date(),
-        }));
+        const enrollments = serializeDocs(snapshot.docs);
 
         return {
             success: true,
@@ -400,8 +397,8 @@ export async function getCourseCertificate(courseId: string) {
                 userName: certData.userName,
                 courseId: certData.courseId,
                 courseTitle: certData.courseTitle,
-                completedAt: certData.completedAt?.toDate() || new Date(),
-                issuedAt: certData.issuedAt?.toDate() || new Date(),
+                completedAt: certData.completedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+                issuedAt: certData.issuedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
                 certificateNumber: certData.certificateNumber,
             },
         };

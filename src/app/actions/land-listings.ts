@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
+import { serializeDocs } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { unstable_cache } from "next/cache";
 
@@ -270,10 +271,7 @@ export async function searchLandListingsAction(filters: {
                 q = q.limit(limit);
 
                 const snapshot = await q.get();
-                let results = snapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...doc.data(),
-                })) as LandListing[];
+                let results = serializeDocs(snapshot.docs) as unknown as LandListing[];
 
                 // Client-side filtering for numeric ranges
                 if (filters.minSize) {
@@ -320,10 +318,7 @@ export async function getPendingLandListingsAction(): Promise<LandListing[]> {
             .where("status", "==", "pending_verification")
             .get();
 
-        return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-        })) as LandListing[];
+        return serializeDocs(snapshot.docs) as unknown as LandListing[];
     } catch (error) {
         logger.error("Failed to fetch pending listings:", error);
         return [];
@@ -494,7 +489,7 @@ export async function getLandInquiriesAction(userId: string): Promise<{ success:
             .where("listingOwnerId", "==", userId)
             .orderBy("createdAt", "desc")
             .get();
-        const inquiries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const inquiries = serializeDocs(snapshot.docs);
         return { success: true, inquiries };
     } catch (error: any) {
         logger.error("Get inquiries error:", error);

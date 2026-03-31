@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { auth } from '@/lib/auth';
+import { serializeDocs } from '@/lib/firestore-serialize';
 
 export interface SendBulkEmailState {
     success: boolean;
@@ -259,11 +260,7 @@ export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
             .limit(50)
             .get();
 
-        const history = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            sentAt: doc.data().sentAt?.toDate?.()?.toISOString?.() ?? null,
-        }));
+        const history = serializeDocs(snapshot.docs) as any[];
 
         return { success: true, history };
     } catch (error) {
