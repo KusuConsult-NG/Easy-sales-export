@@ -18,19 +18,29 @@ export default function AcademyLandingPage() {
         if (sessionStatus === "loading") return; // wait for session
         if (sessionStatus !== "authenticated") return; // let unauthenticated users see the public page
 
+        // Detect if we're on the dedicated domain (easysalesexportacademy.com)
+        // On dedicated domains, the proxy already maps / → /academy, so we must
+        // use SHORT paths (/dashboard, /setup) to avoid double-rewrite:
+        //   router.replace('/academy/dashboard') → proxy prepends → /academy/academy/dashboard → 404
+        const isDedicatedDomain = typeof window !== 'undefined' &&
+            !window.location.hostname.includes('easysalesexport.com') &&
+            !window.location.hostname.includes('localhost') &&
+            !window.location.hostname.includes('railway.app');
+        const prefix = isDedicatedDomain ? '' : '/academy';
+
         // Authenticated user — check their module status and route accordingly
         (async () => {
             try {
                 const appStatus = await checkAcademyStatusAction();
                 if (appStatus === "approved") {
-                    router.replace("/academy/dashboard");
+                    router.replace(`${prefix}/dashboard`);
                 } else {
                     // pending / rejected / no application — send to setup
-                    router.replace("/academy/setup");
+                    router.replace(`${prefix}/setup`);
                 }
             } catch {
                 // On any error, fall through to setup — safe default
-                router.replace("/academy/setup");
+                router.replace(`${prefix}/setup`);
             }
         })();
     }, [sessionStatus, router]);

@@ -30,16 +30,27 @@ export default function FarmNationLandingPage() {
     useEffect(() => {
         if (sessionStatus === 'loading') return;
         if (sessionStatus !== 'authenticated') return;
+
+        // Detect dedicated domain (farmnation.ng).
+        // On dedicated domains, proxy already maps / → /farm-nation, so using
+        // '/farm-nation/dashboard' would cause double-rewrite → 404.
+        // Use short paths (/dashboard, /onboarding) on dedicated domain instead.
+        const isDedicatedDomain = typeof window !== 'undefined' &&
+            !window.location.hostname.includes('easysalesexport.com') &&
+            !window.location.hostname.includes('localhost') &&
+            !window.location.hostname.includes('railway.app');
+        const prefix = isDedicatedDomain ? '' : '/farm-nation';
+
         (async () => {
             try {
                 const appStatus = await checkFarmNationStatusAction();
                 if (appStatus === 'approved') {
-                    router.replace('/farm-nation/dashboard');
+                    router.replace(`${prefix}/dashboard`);
                 } else {
-                    router.replace('/farm-nation/onboarding');
+                    router.replace(`${prefix}/onboarding`);
                 }
             } catch {
-                router.replace('/farm-nation/onboarding');
+                router.replace(`${prefix}/onboarding`);
             }
         })();
     }, [sessionStatus, router]);
