@@ -9,6 +9,7 @@ import {
     type SmsAudience,
     type SmsFilters,
 } from "@/app/actions/sms-broadcast";
+import { toast } from "sonner";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -93,18 +94,34 @@ export default function SmsBroadcastPage() {
     };
 
     const handlePreview = async () => {
+        if (audience === "custom" && customPhonesText.trim() === "") {
+            toast.error("Please enter or upload at least one phone number.");
+            return;
+        }
+
         setLoadingPreview(true);
         setPreview(null);
         setResult(null);
-        const res = await previewSmsBroadcastAction(buildFilters());
-        setPreview(res);
-        setLoadingPreview(false);
+        toast.loading("Finding recipients...", { id: "sms-preview" });
+        try {
+            const res = await previewSmsBroadcastAction(buildFilters());
+            setPreview(res);
+            if (res.count === 0) {
+                toast.error("No valid recipients found.", { id: "sms-preview" });
+            } else {
+                toast.success(`Found ${res.count} recipients.`, { id: "sms-preview" });
+            }
+        } catch (e: any) {
+            toast.error(e.message || "Failed to estimate recipients.", { id: "sms-preview" });
+        } finally {
+            setLoadingPreview(false);
+        }
     };
 
     const handleSend = async () => {
         if (!message.trim()) return;
         if (!preview || preview.count === 0) {
-            alert("Please run a preview first and ensure there are recipients.");
+            toast.error("Please run a preview first and ensure there are recipients.");
             return;
         }
         const confirmed = confirm(
@@ -114,9 +131,20 @@ export default function SmsBroadcastPage() {
 
         setSending(true);
         setResult(null);
-        const res = await sendSmsBroadcastAction(buildFilters(), message.trim());
-        setResult(res);
-        setSending(false);
+        toast.loading(`Sending SMS to ${preview.count} users...`, { id: "sms-send", duration: 100000 });
+        try {
+            const res = await sendSmsBroadcastAction(buildFilters(), message.trim());
+            setResult(res);
+            if (res.success) {
+                 toast.success(`Complete: Sent ${res.sent}, Failed ${res.failed}`, { id: "sms-send", duration: 5000 });
+            } else {
+                 toast.error(`Broadcast Error: ${res.error}`, { id: "sms-send", duration: 8000 });
+            }
+        } catch (e: any) {
+            toast.error(e.message || "A critical error occurred while sending.", { id: "sms-send" });
+        } finally {
+            setSending(false);
+        }
     };
 
     return (
