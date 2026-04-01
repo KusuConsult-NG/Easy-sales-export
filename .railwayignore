@@ -2,6 +2,7 @@ node_modules
 .next
 .git
 .vscode
+.swc
 .cache
 coverage
 docs
@@ -9,3 +10,18 @@ playwright-report
 test-results
 tmp
 npm-debug.log
+tests
+e2e
+scripts
+*.txt
+*.py
+*.json
+!package.json
+!package-lock.json
+!railway.json
+!tsconfig.json
+!firebase.json
+!firestore.indexes.json
+!sentry.client.config.ts
+!sentry.edge.config.ts
+!sentry.server.config.ts
