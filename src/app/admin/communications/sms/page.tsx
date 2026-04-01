@@ -234,22 +234,17 @@ export default function SmsBroadcastPage() {
                         onChange={(e) => setMessage(e.target.value)}
                         placeholder="Type your SMS message here... Keep it concise and clear."
                         rows={5}
-                        maxLength={480}
+                        maxLength={160}
                         className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-emerald-500 resize-none"
                     />
                     <div className="flex items-center justify-between mt-2">
                         <p className="text-white/40 text-xs">
-                            {charCount} characters · {smsCount} SMS credit{smsCount > 1 ? "s" : ""} per recipient
+                            {charCount} characters (Maximum 160)
                         </p>
-                        <p className={`text-xs font-medium ${charCount > SMS_MAX_LENGTH ? "text-amber-400" : "text-white/40"}`}>
-                            {charCount}/480
+                        <p className={`text-xs font-medium ${charCount >= 160 ? "text-amber-400" : "text-white/40"}`}>
+                            {charCount}/160
                         </p>
                     </div>
-                    {charCount > SMS_MAX_LENGTH && (
-                        <p className="text-amber-400/80 text-xs mt-1">
-                            ⚠️ Messages over 160 characters count as multiple SMS credits.
-                        </p>
-                    )}
                 </div>
 
                 {/* Preview & Send */}
