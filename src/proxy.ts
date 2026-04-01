@@ -77,13 +77,19 @@ export default auth((req: any) => {
     if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
         // Uses isSharedDomainPath from route-manifest.ts — single source of truth.
 
-        // --- Case 0: Root "/" on a dedicated domain → redirect to module landing page ---
-        // We do this HERE in the proxy (before any page loads) to avoid the cross-domain
-        // redirect bug: if we let /wave/page.tsx or /cooperatives/page.tsx fire a server-side
-        // redirect("/wave/landing"), Next.js resolves it against the REWRITTEN internal URL
-        // (easysalesexport.com), not the user's actual browser domain. Handling it here means
-        // the redirect header is built from req.url (the user's real domain).
-        if (pathname === "/") {
+        // --- Case 0: Root "/" on domains that have a dedicated /landing sub-page ---
+        // Only WAVE and Cooperatives have a /landing sub-page separate from their root page.
+        // For those modules: waveprogramme.com/ → redirect to waveprogramme.com/wave/landing
+        //
+        // OTHER modules (academy, marketplace, farm-nation, export) use their root page.tsx
+        // as the landing page directly. For those, skip Case 0 and let Case 3 handle the
+        // rewrite: easysalesexportacademy.com/ → rewrite to /academy (the root page).
+        //
+        // We do root-level redirects HERE in the proxy (not in page.tsx) to avoid the
+        // cross-domain redirect bug: server-side redirect() resolves against the rewritten
+        // internal URL, not the user's actual browser domain.
+        const MODULES_WITH_LANDING_SUBPAGE = new Set(["/wave", "/cooperatives"]);
+        if (pathname === "/" && MODULES_WITH_LANDING_SUBPAGE.has(rewritePrefix)) {
             const landingUrl = new URL(`${rewritePrefix}/landing`, req.url);
             return NextResponse.redirect(landingUrl, { status: 302 });
         }
@@ -94,10 +100,12 @@ export default auth((req: any) => {
             // Admin role guard runs below at line ~126 after the domain block.
         }
         // --- Case 3: path is NOT a shared route and NOT already prefixed ---
+        // This also handles root "/" for modules without a /landing sub-page:
+        //   easysalesexportacademy.com/ → rewrite to /academy (serves /academy/page.tsx)
         else if (!isSharedDomainPath(pathname)) {
             const url = req.nextUrl.clone();
-            // Prepend the module prefix.
-            url.pathname = `${rewritePrefix}${pathname}`;
+            // Prepend the module prefix. For "/" this results in just the prefix (e.g. "/academy").
+            url.pathname = pathname === "/" ? rewritePrefix : `${rewritePrefix}${pathname}`;
             const rewriteRes = NextResponse.rewrite(url);
             response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
             return rewriteRes;

@@ -75,9 +75,19 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
     // ── Status check on mount — replaces server-side Firestore read ────────────
     useEffect(() => {
+        // Detect dedicated domain (easysalescooperative.com).
+        // On dedicated domains, proxy maps / → /cooperatives, so '/cooperatives/dashboard'
+        // causes double-rewrite → /cooperatives/cooperatives/dashboard → 404.
+        // Use short paths when on dedicated domain.
+        const isDedicatedDomain = typeof window !== 'undefined' &&
+            !window.location.hostname.includes('easysalesexport.com') &&
+            !window.location.hostname.includes('localhost') &&
+            !window.location.hostname.includes('railway.app');
+        const prefix = isDedicatedDomain ? '' : '/cooperatives';
+
         checkCooperativeStatusAction().then(async (coopStatus) => {
             if (coopStatus === "active" || coopStatus === "approved") {
-                router.replace("/cooperatives/dashboard");
+                router.replace(`${prefix}/dashboard`);
                 return;
             }
             if (coopStatus === "pending" || coopStatus === "under_review") {
@@ -112,7 +122,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     setIsCheckingStatus(false);
                     return;
                 } else {
-                    router.replace("/cooperatives/onboarding/pending");
+                    router.replace(`${prefix}/onboarding/pending`);
                     return;
                 }
             }
@@ -278,7 +288,12 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     (isRevisionMode || isEditMode) ? "Application resubmitted for review!" : "Application submitted successfully!",
                     "success"
                 );
-                router.push("/cooperatives/onboarding/pending");
+                // Use short path on dedicated domain to avoid double-rewrite
+                const isDed = typeof window !== 'undefined' &&
+                    !window.location.hostname.includes('easysalesexport.com') &&
+                    !window.location.hostname.includes('localhost') &&
+                    !window.location.hostname.includes('railway.app');
+                router.push(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
             } else {
                 showToast(result.error || "Registration failed. Please try again.", "error");
                 setIsSubmitting(false);
@@ -399,7 +414,14 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                         data={personalInfo}
                         onChange={(data) => setPersonalInfo({ ...data, otherName: data.otherName ?? "" })}
                         onNext={() => setCurrentStep(2)}
-                        onBack={() => router.push("/cooperatives")}
+                        onBack={() => {
+                            // Use short path on dedicated domain to avoid double-rewrite
+                            const isDed = typeof window !== 'undefined' &&
+                                !window.location.hostname.includes('easysalesexport.com') &&
+                                !window.location.hostname.includes('localhost') &&
+                                !window.location.hostname.includes('railway.app');
+                            router.push(isDed ? '/' : '/cooperatives');
+                        }}
                     />
                 )}
                 {currentStep === 2 && (
