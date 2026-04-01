@@ -76,6 +76,18 @@ export default auth((req: any) => {
     // -----------------------------------------------------------------------
     if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
         // Uses isSharedDomainPath from route-manifest.ts — single source of truth.
+
+        // --- Case 0: Root "/" on a dedicated domain → redirect to module landing page ---
+        // We do this HERE in the proxy (before any page loads) to avoid the cross-domain
+        // redirect bug: if we let /wave/page.tsx or /cooperatives/page.tsx fire a server-side
+        // redirect("/wave/landing"), Next.js resolves it against the REWRITTEN internal URL
+        // (easysalesexport.com), not the user's actual browser domain. Handling it here means
+        // the redirect header is built from req.url (the user's real domain).
+        if (pathname === "/") {
+            const landingUrl = new URL(`${rewritePrefix}/landing`, req.url);
+            return NextResponse.redirect(landingUrl, { status: 302 });
+        }
+
         // --- Case 1: path already carries the module prefix → no rewrite needed ---
         if (pathname.startsWith(rewritePrefix)) {
             // Case 1: path already carries the module prefix — no rewrite needed.
@@ -84,8 +96,8 @@ export default auth((req: any) => {
         // --- Case 3: path is NOT a shared route and NOT already prefixed ---
         else if (!isSharedDomainPath(pathname)) {
             const url = req.nextUrl.clone();
-            // Prepend the module prefix. Special case: if pathname is just "/", resulting path is rewritePrefix
-            url.pathname = pathname === "/" ? rewritePrefix : `${rewritePrefix}${pathname}`;
+            // Prepend the module prefix.
+            url.pathname = `${rewritePrefix}${pathname}`;
             const rewriteRes = NextResponse.rewrite(url);
             response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
             return rewriteRes;
