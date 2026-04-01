@@ -21,7 +21,10 @@ type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 interface AcademyApplication {
     id: string;
     personalInfo: {
-        fullName: string;
+        fullName: string; // always derived — never stored raw from new submissions
+        firstName?: string;
+        lastName?: string;
+        otherName?: string;
         email: string;
         phone: string;
     };
@@ -124,12 +127,20 @@ export default function AdminAcademyApplicationsPage() {
         const unsub = onSnapshot(q, (snap) => {
             const apps: AcademyApplication[] = snap.docs.map(doc => {
                 const d = doc.data();
+                const pi = d.personalInfo || {};
+                // Derive fullName: support both new (firstName/lastName) and legacy (fullName) schema
+                const derivedFullName = pi.firstName
+                    ? [pi.firstName, pi.otherName, pi.lastName].filter(Boolean).join(" ").trim()
+                    : (pi.fullName ?? d.name ?? "Unknown");
                 return {
                     id: doc.id,
                     personalInfo: {
-                        fullName: d.personalInfo?.fullName ?? d.name ?? "Unknown",
-                        email: d.personalInfo?.email ?? d.email ?? "—",
-                        phone: d.personalInfo?.phone ?? d.phone ?? "",
+                        fullName: derivedFullName,
+                        firstName: pi.firstName,
+                        lastName: pi.lastName,
+                        otherName: pi.otherName,
+                        email: pi.email ?? d.email ?? "—",
+                        phone: pi.phone ?? d.phone ?? "",
                     },
                     education: d.education,
                     status: (d.status ?? "pending") as ApplicationStatus,
@@ -193,10 +204,17 @@ export default function AdminAcademyApplicationsPage() {
         const unsub = onSnapshot(q, (snap) => {
             const apps: AcademyApplication[] = snap.docs.map(doc => {
                 const d = doc.data();
+                // Derive fullName from split fields (new schema) or legacy fullName
+                const derivedFullName = d.firstName
+                    ? [d.firstName, d.otherName, d.lastName].filter(Boolean).join(" ").trim()
+                    : (d.fullName ?? d.name ?? d.kyc?.fullName ?? "—");
                 return {
                     id: doc.id,
                     personalInfo: {
-                        fullName: d.fullName ?? d.name ?? d.kyc?.fullName ?? "—",
+                        fullName: derivedFullName,
+                        firstName: d.firstName,
+                        lastName: d.lastName,
+                        otherName: d.otherName,
                         email: d.email ?? "—",
                         phone: d.phone ?? d.phoneNumber ?? d.kyc?.phoneNumber ?? "",
                     },

@@ -4,7 +4,9 @@ import { User, MapPin, Briefcase, Phone, Calendar } from "lucide-react";
 import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
 
 interface PersonalInfoData {
-    fullName: string;
+    firstName: string;
+    lastName: string;
+    otherName?: string;
     email: string;
     phone: string;
     dateOfBirth: string;
@@ -23,7 +25,6 @@ interface PersonalInfoStepProps {
 export default function PersonalInfoStep({ data, onChange, errors }: PersonalInfoStepProps) {
     const handleChange = (field: keyof PersonalInfoData, value: string) => {
         if (field === "state") {
-            // Reset LGA when state changes
             onChange({ ...data, state: value, lga: "" });
         } else {
             onChange({ ...data, [field]: value });
@@ -41,27 +42,79 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                 </p>
             </div>
 
+            {/* KYC Notice */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <span className="text-amber-500 text-base shrink-0 mt-0.5">⚠️</span>
+                <p className="text-sm text-amber-800 font-medium">
+                    <strong>KYC Notice:</strong> Enter your name exactly as it appears on your NIN/BVN to avoid identity verification failure.
+                </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* First Name */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Full Name *
+                        First Name *
+                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As on your NIN/BVN</span>
                     </label>
                     <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <input
                             type="text"
-                            value={data.fullName}
-                            onChange={(e) => handleChange("fullName", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.fullName ? "border-red-500" : "border-slate-300"
+                            value={data.firstName}
+                            onChange={(e) => handleChange("firstName", e.target.value)}
+                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.firstName ? "border-red-500" : "border-slate-300"
                                 } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
-                            placeholder="Enter your full name"
+                            placeholder="e.g. Amina"
                         />
                     </div>
-                    {errors.fullName && (
-                        <p className="mt-1 text-sm text-red-600">{errors.fullName}</p>
+                    {errors.firstName && (
+                        <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>
                     )}
                 </div>
 
+                {/* Last Name */}
+                <div>
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        Last Name *
+                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As on your NIN/BVN</span>
+                    </label>
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            type="text"
+                            value={data.lastName}
+                            onChange={(e) => handleChange("lastName", e.target.value)}
+                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.lastName ? "border-red-500" : "border-slate-300"
+                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            placeholder="e.g. Ibrahim"
+                        />
+                    </div>
+                    {errors.lastName && (
+                        <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
+                    )}
+                </div>
+
+                {/* Other Name - Optional */}
+                <div>
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        Other Name
+                        <span className="ml-2 text-xs font-normal text-slate-400">(Optional)</span>
+                        <span className="block text-xs font-normal text-slate-500 mt-0.5">Middle name or additional name</span>
+                    </label>
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            type="text"
+                            value={data.otherName || ""}
+                            onChange={(e) => handleChange("otherName", e.target.value)}
+                            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                            placeholder="e.g. Fatima"
+                        />
+                    </div>
+                </div>
+
+                {/* Email */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Email Address *
@@ -82,6 +135,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                     )}
                 </div>
 
+                {/* Phone */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Phone Number *
@@ -103,6 +157,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                     )}
                 </div>
 
+                {/* Date of Birth */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
                         Date of Birth *

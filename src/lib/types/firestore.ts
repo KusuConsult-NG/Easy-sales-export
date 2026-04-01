@@ -20,6 +20,11 @@ export { ROLE_LABELS, LEGACY_ROLE_MAP } from "./roles";
 
 export interface User {
     uid: string;
+    // Structured name fields — written by all onboarding modules (post-April 2026)
+    firstName?: string;
+    lastName?: string;
+    otherName?: string; // optional middle/other name
+    // Legacy combined name — written by old auth registration. Keep for backward compat.
     fullName: string;
     email: string;
     phone?: string;

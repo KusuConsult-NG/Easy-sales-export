@@ -134,6 +134,9 @@ export default function RegisterForm() {
                         <div className="space-y-2">
                             <label htmlFor="fullName" className="block text-sm font-semibold text-slate-900">
                                 Full Name
+                                <span className="block text-xs font-normal text-amber-600 mt-1 mb-1">
+                                    Ensure this perfectly matches your NIN/BVN to prevent KYC verification failure.
+                                </span>
                             </label>
                             <div className="relative group">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-slate-600 transition-colors" />

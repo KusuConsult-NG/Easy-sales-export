@@ -12,6 +12,11 @@ import { ActionResponse, withSafeAction } from "@/lib/safe-action";
 export type BriefingStatus = "registered" | "attended" | "cancelled";
 
 export interface BriefingRegistrationData {
+    // Separated name fields (KYC-compliant)
+    firstName?: string;
+    lastName?: string;
+    otherName?: string;
+    // Derived full name (sent by page on submit)
     fullName: string;
     phoneNumber: string;
     email: string;
@@ -24,6 +29,9 @@ import { z } from "zod";
 // Zod Validation Schema for Registration Data
 const briefingRegistrationSchema = z.object({
     fullName: z.string().trim().min(2, { message: "Full Name must be at least 2 characters" }),
+    firstName: z.string().trim().optional(),
+    lastName: z.string().trim().optional(),
+    otherName: z.string().trim().optional(),
     email: z.string().trim().email({ message: "Please enter a valid email address" }).toLowerCase(),
     phoneNumber: z.string().trim()
         .transform(val => val.replace(/\s/g, "")) // Remove spaces
@@ -80,15 +88,18 @@ export const registerForBriefingAction = withSafeAction(
             const status: BriefingStatus = "registered";
             const docRef = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).add({
                 fullName: validData.fullName,
+                firstName: validData.firstName || validData.fullName.split(' ')[0] || "",
+                lastName: validData.lastName || validData.fullName.split(' ').slice(-1)[0] || "",
+                otherName: validData.otherName || null,
                 phoneNumber: phoneToStore,
                 email: emailToStore,
                 state: validData.state,
                 role: validData.role,
-                createdAt: FieldValue.serverTimestamp(), // Standardized from registeredAt
-                updatedAt: FieldValue.serverTimestamp(), // Standardized
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
                 status: status,
                 confirmationSent: false,
-                attended: false, // Explicit field for attendance tracking
+                attended: false,
             });
 
             logger.info(`[WAVE Briefing] New registration: ${emailToStore}`);

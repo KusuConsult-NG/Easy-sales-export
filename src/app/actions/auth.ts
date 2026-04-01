@@ -251,13 +251,23 @@ export async function registerAction(prevState: any, formData: FormData) {
         // Additional roles are granted after application approval
         const userRoles: UserRole[] = ["general_user"];
 
+        // Split fullName into structured fields at registration time.
+        // This ensures every new user has firstName/lastName from day one,
+        // eliminating the legacy data gap for all future registrations.
+        const nameParts = validatedData.fullName.trim().split(/\s+/).filter(Boolean);
+        const registrationFirstName = nameParts[0] || "";
+        const registrationLastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+
         // Create Firestore user profile
         const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = {
             uid: userRecord.uid,
             fullName: validatedData.fullName,
+            firstName: registrationFirstName,
+            lastName: registrationLastName,
             email: validatedData.email,
             roles: userRoles,
-            verified: true, // Auto-verify on registration (account-level verification)
+            isVerified: true,  // canonical field
+            verified: true,    // legacy compat field — keep both so old queries still work
         };
 
         try {

@@ -14,7 +14,7 @@ import { z } from "zod";
 export const cooperativeMembershipSchema = z.object({
     // Personal Information (11 required fields from PRD)
     firstName: z.string().min(2, "First name is required"),
-    middleName: z.string().optional(),
+    otherName: z.string().optional(),
     lastName: z.string().min(2, "Last name is required"),
     dateOfBirth: z.string().min(1, "Date of birth is required"),
     gender: z.enum(["male", "female"], { message: "Please select gender" }),
@@ -43,7 +43,7 @@ export type CooperativeMembershipRecord = {
     userId: string;
     // Personal info
     firstName: string;
-    middleName?: string;
+    otherName?: string;
     lastName: string;
     dateOfBirth: string;
     gender: "male" | "female";

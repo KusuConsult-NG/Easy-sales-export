@@ -333,7 +333,13 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             "serviceRegistrations.wave.status": "pending",
             "serviceRegistrations.wave.applicationId": applicationId,
             "serviceRegistrations.wave.submittedAt": FieldValue.serverTimestamp(),
-            // Sync PII for Communication Hub
+            // Sync KYC name fields for Admin Communication Hub & admin portal
+            firstName: validatedData.firstName,
+            lastName: validatedData.surname,
+            otherName: validatedData.otherNames || null,
+            fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
+                .filter(Boolean).join(" ").trim(),
+            // Sync other PII for Communication Hub
             phone: applicantPhone,
             gender: "female", // WAVE is exclusive to females
             stateOfOrigin: validatedData.stateOfResidence,

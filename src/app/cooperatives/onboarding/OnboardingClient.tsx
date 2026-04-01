@@ -44,7 +44,9 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     const [tier] = useState<"basic" | "premium">(initialTier);
 
     const [personalInfo, setPersonalInfo] = useState({
-        fullName: "",
+        firstName: "",
+        lastName: "",
+        otherName: "",
         phone: "",
         email: "",
         dateOfBirth: "",
@@ -122,7 +124,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     if (d.firstName || d.fullName) {
                         setPersonalInfo((prev: any) => ({
                             ...prev,
-                            fullName: d.fullName || `${d.firstName || ''} ${d.lastName || ''}`.trim(),
+                            firstName: d.firstName || (d.fullName ? d.fullName.split(' ')[0] : '') || prev.firstName,
+                            lastName: d.lastName || (d.fullName ? d.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName,
                             phone: d.phone || prev.phone,
                             email: d.email || prev.email,
                             dateOfBirth: d.dateOfBirth || prev.dateOfBirth,
@@ -225,12 +228,11 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
             formData.append("membershipTier", tier);
 
-            const nameParts = personalInfo.fullName.trim().split(" ");
-            const firstName = nameParts[0] || "";
-            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : firstName;
-
-            formData.append("firstName", firstName);
-            formData.append("lastName", lastName);
+            formData.append("firstName", personalInfo.firstName.trim());
+            formData.append("lastName", personalInfo.lastName.trim());
+            if (personalInfo.otherName?.trim()) formData.append("otherName", personalInfo.otherName.trim());
+            formData.append("fullName", [personalInfo.firstName, personalInfo.otherName, personalInfo.lastName]
+                .filter(Boolean).map(s => s?.trim()).join(" ").trim());
             formData.append("dateOfBirth", personalInfo.dateOfBirth);
             formData.append("gender", personalInfo.gender);
             formData.append("email", personalInfo.email);
@@ -395,7 +397,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                 {currentStep === 1 && (
                     <PersonalInfoStep
                         data={personalInfo}
-                        onChange={setPersonalInfo}
+                        onChange={(data) => setPersonalInfo({ ...data, otherName: data.otherName ?? "" })}
                         onNext={() => setCurrentStep(2)}
                         onBack={() => router.push("/cooperatives")}
                     />

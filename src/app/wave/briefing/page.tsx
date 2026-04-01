@@ -32,7 +32,9 @@ const ROLES = [
 
 export default function WaveBriefingPage() {
     const [formData, setFormData] = useState({
-        fullName: "",
+        firstName: "",
+        lastName: "",
+        otherName: "",
         phoneNumber: "",
         email: "",
         state: "",
@@ -109,7 +111,12 @@ export default function WaveBriefingPage() {
         setIsSubmitting(true);
 
         try {
-            const result = await registerForBriefingAction(formData);
+            const payload = {
+                ...formData,
+                fullName: [formData.firstName, formData.otherName, formData.lastName]
+                    .filter(Boolean).join(" ").trim(),
+            };
+            const result = await registerForBriefingAction(payload);
             if (result.success) {
                 setIsRegistered(true);
                 // Scroll up so user sees the success message right above the form area
@@ -542,19 +549,64 @@ export default function WaveBriefingPage() {
                             )}
 
                             <form onSubmit={handleSubmit} className="space-y-6">
-                                {/* Full Name */}
+                                {/* KYC Notice */}
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-2 flex items-start gap-2">
+                                    <span className="text-amber-500 text-sm shrink-0 mt-0.5">⚠️</span>
+                                    <p className="text-xs text-amber-800 font-medium">
+                                        <strong>KYC Notice:</strong> Enter your name exactly as it appears on your NIN/BVN.
+                                    </p>
+                                </div>
+
+                                {/* First Name */}
                                 <div>
-                                    <label htmlFor="fullName" className="block text-sm font-bold text-slate-700 mb-2">Full Name</label>
+                                    <label htmlFor="firstName" className="block text-sm font-bold text-slate-700 mb-2">
+                                        First Name <span className="text-red-500">*</span>
+                                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As on your NIN/BVN</span>
+                                    </label>
                                     <input
-                                        id="fullName"
-                                        name="fullName"
+                                        id="firstName"
+                                        name="firstName"
                                         type="text"
                                         required
-                                        autoComplete="name"
-                                        value={formData.fullName}
-                                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                                        value={formData.firstName}
+                                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-900/20 focus:border-green-900 transition-all font-medium"
-                                        placeholder="Enter your full name"
+                                        placeholder="e.g. Amina"
+                                    />
+                                </div>
+
+                                {/* Last Name */}
+                                <div>
+                                    <label htmlFor="lastName" className="block text-sm font-bold text-slate-700 mb-2">
+                                        Last Name <span className="text-red-500">*</span>
+                                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As on your NIN/BVN</span>
+                                    </label>
+                                    <input
+                                        id="lastName"
+                                        name="lastName"
+                                        type="text"
+                                        required
+                                        value={formData.lastName}
+                                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-900/20 focus:border-green-900 transition-all font-medium"
+                                        placeholder="e.g. Ibrahim"
+                                    />
+                                </div>
+
+                                {/* Other Name (Optional) */}
+                                <div>
+                                    <label htmlFor="otherName" className="block text-sm font-bold text-slate-700 mb-2">
+                                        Other Name <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                                        <span className="block text-xs font-normal text-slate-500 mt-0.5">Middle name or additional name</span>
+                                    </label>
+                                    <input
+                                        id="otherName"
+                                        name="otherName"
+                                        type="text"
+                                        value={formData.otherName}
+                                        onChange={(e) => setFormData({ ...formData, otherName: e.target.value })}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-green-900/20 focus:border-green-900 transition-all font-medium"
+                                        placeholder="e.g. Fatima"
                                     />
                                 </div>
 

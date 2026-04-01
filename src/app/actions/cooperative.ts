@@ -179,7 +179,7 @@ export async function registerCooperativeMemberAction(
         // Parse and validate form data
         const rawData = {
             firstName: formData.get("firstName") as string,
-            middleName: formData.get("middleName") as string || undefined,
+            otherName: formData.get("otherName") as string || undefined,
             lastName: formData.get("lastName") as string,
             dateOfBirth: formData.get("dateOfBirth") as string,
             gender: formData.get("gender") as "male" | "female",
@@ -252,8 +252,10 @@ export async function registerCooperativeMemberAction(
         // Update membership record with profile data
         const updatedData = {
             firstName: validatedData.firstName,
-            middleName: validatedData.middleName,
+            otherName: validatedData.otherName || null,
             lastName: validatedData.lastName,
+            fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName]
+                .filter(Boolean).join(" ").trim(),
             dateOfBirth: validatedData.dateOfBirth,
             gender: validatedData.gender, // Make sure this matches schema
             email: validatedData.email,
@@ -289,14 +291,21 @@ export async function registerCooperativeMemberAction(
             "serviceRegistrations.cooperatives.status": "pending",
             "serviceRegistrations.cooperatives.membershipTier": validatedData.membershipTier,
             "serviceRegistrations.cooperatives.onboardingCompletedAt": FieldValue.serverTimestamp(),
-            
-            // Sync core PII backward to central user document for cross-module functionality
+
+            // Sync KYC name fields for Admin Communication Hub & admin portal
+            firstName: validatedData.firstName,
+            lastName: validatedData.lastName,
+            otherName: validatedData.otherName || null,
+            fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName]
+                .filter(Boolean).join(" ").trim(),
+
+            // Sync other PII for cross-module functionality
             phone: validatedData.phone,
             gender: validatedData.gender,
             "address.state": validatedData.stateOfOrigin,
             "address.lga": validatedData.lga,
             "address.street": validatedData.residentialAddress,
-            
+
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -1034,10 +1043,14 @@ export async function resubmitCooperativeApplicationAction(
 
         const memberRef = snap.docs[0].ref;
 
-        const nameParts = (formData.get('firstName') as string || '').trim().split(' ');
+        const first = (formData.get('firstName') as string || '').trim();
+        const other = (formData.get('otherName') as string || '').trim();
+        const last = (formData.get('lastName') as string || '').trim();
         const updatePayload: Record<string, any> = {
-            firstName: formData.get('firstName') || '',
-            lastName: formData.get('lastName') || '',
+            firstName: first,
+            otherName: other || null,
+            lastName: last,
+            fullName: [first, other, last].filter(Boolean).join(' '),
             dateOfBirth: formData.get('dateOfBirth') || '',
             gender: formData.get('gender') || '',
             email: formData.get('email') || '',

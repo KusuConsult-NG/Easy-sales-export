@@ -1395,12 +1395,11 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 query = query.where("roles", "array-contains", options.role);
             }
 
-            // Fix: field is stored as 'isVerified', not 'verified'
-            if (options.status === "verified") {
-                query = query.where("isVerified", "==", true);
-            } else if (options.status === "unverified") {
-                query = query.where("isVerified", "==", false);
-            }
+            // IMPORTANT: Do NOT filter isVerified via Firestore query — 34k+ legacy users
+            // have `verified: true` but NOT `isVerified`. A Firestore where("isVerified","==",true)
+            // query would silently exclude them all.
+            // Instead, status filtering is applied IN-MEMORY after the mapping step uses
+            // the defensive chain: `data.isVerified ?? data.verified ?? false`
 
             // Location filters
             if (options.state && options.state !== "all") {
@@ -1420,9 +1419,19 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
 
         const users = snapshot.docs.map(doc => {
             const data = doc.data();
+            // Defensive name derivation — supports all schema generations:
+            // 1. New schema: firstName + lastName stored separately (onboarding post-April 2026)
+            // 2. Legacy schema: fullName stored as single string
+            // 3. Auth-only schema: name stored from Firebase Auth display name
+            const derivedName = data.firstName
+                ? [data.firstName, data.otherName, data.lastName].filter(Boolean).join(" ").trim()
+                : (data.fullName || data.name || data.displayName || data.email || "Unknown");
             return {
                 id: doc.id,
-                name: data.fullName || "Unknown",
+                name: derivedName,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                otherName: data.otherName,
                 email: data.email,
                 phone: data.phone,
                 role: data.roles?.[0] || "general_user",
@@ -1432,8 +1441,8 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate() : undefined,
                 // Location
                 address: data.address,
-                state: data.address?.state || "",
-                lga: data.address?.lga || "",
+                state: data.address?.state || data.stateOfOrigin || "",
+                lga: data.address?.lga || data.lga || "",
                 // KYC fields — prefer nested kyc.* (written by live QoreID actions),
                 // fall back to legacy top-level fields for existing records
                 bvn: data.kyc?.bvn || data.bvn,
@@ -1466,6 +1475,14 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 (user.state && user.state.toLowerCase().includes(searchLower)) ||
                 (user.lga && user.lga.toLowerCase().includes(searchLower))
             );
+        }
+        // In-memory status filter — using the defensive chain already computed in mapping:
+        // `data.isVerified ?? data.verified ?? false`
+        // This ensures legacy users (verified:true, no isVerified) are included correctly.
+        if (options.status === "verified") {
+            filteredUsers = filteredUsers.filter(u => u.isVerified === true);
+        } else if (options.status === "unverified") {
+            filteredUsers = filteredUsers.filter(u => !u.isVerified);
         }
         if (options.fromDate) {
             const from = new Date(options.fromDate);
@@ -2364,7 +2381,8 @@ export async function getPlatformSettingsAction(): Promise<{
 export interface EditableApplicationFields {
     firstName?: string;
     lastName?: string;
-    middleName?: string;
+    middleName?: string;   // legacy field — keep for backward compat
+    otherName?: string;    // new standard field — replaces middleName
     surname?: string;
     otherNames?: string;
     fullName?: string;
@@ -2388,7 +2406,10 @@ export interface EditableApplicationFields {
 }
 
 const ALLOWED_EDIT_FIELDS: (keyof EditableApplicationFields)[] = [
-    "firstName", "lastName", "middleName", "surname", "otherNames", "fullName", "businessName",
+    "firstName", "lastName",
+    "middleName",   // legacy — kept for backward compat
+    "otherName",    // new KYC standard field
+    "surname", "otherNames", "fullName", "businessName",
     "phone", "email",
     "stateOfOrigin", "lga", "stateOfResidence", "lgaOfResidence", "residentialAddress", "occupation",
     "membershipTier", "nextOfKin.name", "nextOfKin.phone", "nextOfKin.address",

@@ -195,11 +195,23 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
     return (
         <div className="space-y-6">
 
+            {/* KYC Notice Banner */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <span className="text-amber-500 text-base shrink-0 mt-0.5">⚠️</span>
+                <div>
+                    <p className="text-sm font-bold text-amber-900">Important — KYC Verification Notice</p>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                        Enter your name <strong>exactly as it appears on your NIN/BVN</strong>. Any mismatch will cause verification to fail and may delay your application.
+                    </p>
+                </div>
+            </div>
+
             {/* Names */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label className="block text-sm font-medium text-slate-900 mb-2">
                         First Name <span className="text-red-500">*</span>
+                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As it appears on your NIN/BVN</span>
                     </label>
                     <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -215,6 +227,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 <div>
                     <label className="block text-sm font-medium text-slate-900 mb-2">
                         Last Name <span className="text-red-500">*</span>
+                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As it appears on your NIN/BVN</span>
                     </label>
                     <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -243,9 +256,8 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                         className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
                 </div>
-                <p className="mt-2 text-sm text-slate-500">
-                    <AlertCircle className="inline w-4 h-4 mr-1 text-slate-400" />
-                    Important: Provide exact names as they appear on your NIN/BVN.
+                <p className="mt-1 text-xs text-amber-700 font-medium">
+                    ⚠️ Provide names exactly as they appear on your NIN/BVN — mismatch will fail verification.
                 </p>
             </div>
 
@@ -370,7 +382,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                         {ninError}
                     </p>
                 )}
-                <p className="mt-1 text-xs text-slate-400">Dial *346# to retrieve your NIN.</p>
+                <p className="mt-1 text-xs text-slate-400">Dial *346# to retrieve your NIN. Your name above must match your NIN record exactly.</p>
             </div>
 
             {/* ── Voter's Card — live verification (optional alternative) ── */}
@@ -454,7 +466,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                             {bvnError}
                         </p>
                     )}
-                    <p className="mt-1 text-xs text-slate-400">Dial *565*0# to retrieve your BVN.</p>
+                    <p className="mt-1 text-xs text-slate-400">Dial *565*0# to retrieve your BVN. Your name above must match your BVN record exactly.</p>
                 </div>
             )}
 

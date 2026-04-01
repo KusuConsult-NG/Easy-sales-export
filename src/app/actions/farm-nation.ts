@@ -667,7 +667,9 @@ export async function updatePropertyAction(propertyId: string, updates: Partial<
 export interface FarmNationOnboardingData {
     role: "buyer" | "seller" | "both";
     profile: {
-        fullName: string;
+        firstName: string;
+        lastName: string;
+        otherName?: string;
         phone: string;
         businessName?: string;
         state: string;
@@ -754,12 +756,15 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
             {
                 farmNation: {
                     role: data.role,
-                    profile: data.profile,
+                    profile: {
+                        ...data.profile,
+                        fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
+                            .filter(Boolean).join(" ").trim(),
+                    },
                     interests: data.interests,
                     onboardingCompletedAt: new Date().toISOString(),
                     termsAcceptedAt: new Date().toISOString(),
                 },
-                // isVerified: true, // REMOVED: User must be verified by Admin
                 roles: FieldValue.arrayUnion(...roles),
                 updatedAt: FieldValue.serverTimestamp(),
             },
@@ -771,7 +776,13 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
             "serviceRegistrations.farmNation.role": data.role,
             "serviceRegistrations.farmNation.completedAt": FieldValue.serverTimestamp(),
             "serviceRegistrations.farmNation.submittedAt": FieldValue.serverTimestamp(),
-            // Sync PII for Communication Hub
+            // Sync KYC name fields for Admin Communication Hub & admin portal
+            firstName: data.profile.firstName,
+            lastName: data.profile.lastName,
+            otherName: data.profile.otherName || null,
+            fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
+                .filter(Boolean).join(" ").trim(),
+            // Sync other PII for Communication Hub
             phone: data.profile.phone,
             stateOfOrigin: data.profile.state,
             lga: data.profile.lga,
@@ -1018,7 +1029,11 @@ export async function resubmitFarmNationApplicationAction(
             {
                 farmNation: {
                     role: data.role,
-                    profile: data.profile,
+                    profile: {
+                        ...data.profile,
+                        fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
+                            .filter(Boolean).join(" ").trim(),
+                    },
                     interests: data.interests,
                     resubmittedAt: new Date().toISOString(),
                     termsAcceptedAt: new Date().toISOString(),
@@ -1033,6 +1048,12 @@ export async function resubmitFarmNationApplicationAction(
             'serviceRegistrations.farmNation.role': data.role,
             'serviceRegistrations.farmNation.rejectionReason': null,
             'serviceRegistrations.farmNation.resubmittedAt': FieldValue.serverTimestamp(),
+            // Sync KYC name fields to central user document
+            firstName: data.profile.firstName,
+            lastName: data.profile.lastName,
+            otherName: data.profile.otherName || null,
+            fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
+                .filter(Boolean).join(" ").trim(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 

@@ -721,7 +721,10 @@ export async function getLiveSessionsAction(courseId?: string): Promise<LiveSess
 
 export interface AcademyApplicationData {
     personalInfo: {
-        fullName: string;
+        firstName: string;
+        lastName: string;
+        otherName?: string;
+        fullName?: string; // backward compat — derived from firstName + lastName if missing
         email: string;
         phone: string;
         dateOfBirth: string;
@@ -1008,12 +1011,21 @@ export async function submitAcademyApplicationAction(
             "serviceRegistrations.academy.status": "pending",
             "serviceRegistrations.academy.applicationId": applicationId,
             "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
-            // Sync PII for Communication Hub
+            // Sync KYC name fields for Admin Communication Hub & admin portal
+            firstName: applicationData.personalInfo.firstName,
+            lastName: applicationData.personalInfo.lastName,
+            otherName: applicationData.personalInfo.otherName || null,
+            fullName: [
+                applicationData.personalInfo.firstName,
+                applicationData.personalInfo.otherName,
+                applicationData.personalInfo.lastName,
+            ].filter(Boolean).join(" ").trim(),
+            // Sync other PII for Communication Hub
             phone: applicationData.personalInfo.phone,
             gender: applicationData.personalInfo.gender,
             stateOfOrigin: applicationData.personalInfo.state,
             lga: applicationData.personalInfo.lga,
-            "updatedAt": FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Create audit log
@@ -1022,7 +1034,7 @@ export async function submitAcademyApplicationAction(
             userId: session.user.id,
             targetId: applicationId,
             targetType: "academy_application",
-            details: `Learner application submitted for ${applicationData.personalInfo.fullName}`,
+            details: `Learner application submitted for ${applicationData.personalInfo.firstName || ''} ${applicationData.personalInfo.lastName || applicationData.personalInfo.fullName || ''}`.trim(),
         });
 
         return { success: true, applicationId };
@@ -1470,7 +1482,7 @@ export async function requestAcademyRevisionAction(
             const resend = new Resend(process.env.RESEND_API_KEY);
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const email = userDoc.data()?.email;
-            const name = appData?.personalInfo?.fullName || 'Applicant';
+            const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Applicant';
             if (email) {
                 const { data, error } = await resend.emails.send({
                     from: 'Easy Sales Export Academy <noreply@easysalesexport.com>',
@@ -1534,7 +1546,7 @@ export async function approveAcademyApplicationAction(
             const resend = new Resend(process.env.RESEND_API_KEY);
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const email = userDoc.data()?.email;
-            const name = appData?.personalInfo?.fullName || 'Learner';
+            const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Learner';
             if (email) {
                 const { data, error } = await resend.emails.send({
                     from: 'Easy Sales Export Academy <noreply@easysalesexport.com>',

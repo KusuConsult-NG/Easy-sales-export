@@ -109,6 +109,8 @@ export default function AcademyOnboardingPage() {
         try {
             const applicationData: AcademyApplicationData = {
                 personalInfo: {
+                    firstName: session.user.name?.split(' ')[0] || "",
+                    lastName: session.user.name?.split(' ').slice(1).join(' ') || "",
                     fullName: session.user.name || "",
                     email: session.user.email || "",
                     phone: phone,

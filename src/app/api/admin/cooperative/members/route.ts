@@ -80,12 +80,16 @@ export async function GET(request: NextRequest) {
 
         const members = snapshot.docs.map(doc => {
             const data = doc.data();
+            // Defensive name derivation — supports legacy fullName-only AND new firstName/lastName schema
+            const derivedFirstName = data.firstName || (data.fullName ? data.fullName.split(" ")[0] : "");
+            const derivedLastName = data.lastName || (data.fullName ? data.fullName.split(" ").slice(-1)[0] : "");
             return {
                 id: doc.id,
                 userId: data.userId || doc.id,
-                firstName: data.firstName || "",
-                lastName: data.lastName || "",
-                middleName: data.middleName || "",
+                firstName: derivedFirstName,
+                lastName: derivedLastName,
+                // otherName: supports both new 'otherName' field and legacy 'middleName'
+                otherName: data.otherName || data.middleName || "",
                 email: data.email || "",
                 phone: data.phone || "",
                 membershipTier: data.membershipTier || "basic",

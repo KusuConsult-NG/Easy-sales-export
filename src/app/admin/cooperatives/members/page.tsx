@@ -14,6 +14,7 @@ type MembershipApplication = {
     userId: string;
     firstName: string;
     lastName: string;
+    otherName?: string;
     email: string;
     phone: string;
     membershipTier: "basic" | "premium";
@@ -247,7 +248,7 @@ export default function CooperativeMembersPage() {
         setEditFields({
             firstName: selectedApplication.firstName || "",
             lastName: selectedApplication.lastName || "",
-            middleName: selectedApplication.middleName || "",
+            otherName: selectedApplication.otherName || "",
             phone: selectedApplication.phone || "",
             email: selectedApplication.email || "",
             stateOfOrigin: selectedApplication.stateOfOrigin || "",
@@ -278,7 +279,7 @@ export default function CooperativeMembersPage() {
                 ...prev,
                 firstName: editFields.firstName ?? prev.firstName,
                 lastName: editFields.lastName ?? prev.lastName,
-                middleName: editFields.middleName ?? prev.middleName,
+                otherName: editFields.otherName ?? prev.otherName,
                 phone: editFields.phone ?? prev.phone,
                 email: editFields.email ?? prev.email,
                 stateOfOrigin: editFields.stateOfOrigin ?? prev.stateOfOrigin,
@@ -673,7 +674,7 @@ export default function CooperativeMembersPage() {
                             <h3 className="font-bold text-slate-900 mb-3">Personal Information</h3>
                             {isEditMode ? (
                                 <div className="grid grid-cols-2 gap-3 text-sm">
-                                    {(["firstName", "lastName", "middleName", "occupation"] as const).map((key) => (
+                                    {(["firstName", "lastName", "otherName", "occupation"] as const).map((key) => (
                                         <div key={key}>
                                             <label className="text-xs font-semibold text-slate-500 mb-1 block capitalize">{key.replace(/([A-Z])/g, " $1")}</label>
                                             <input
@@ -690,7 +691,7 @@ export default function CooperativeMembersPage() {
                                     <div>
                                         <p className="text-slate-500">Full Name</p>
                                         <p className="font-semibold text-slate-900">
-                                            {selectedApplication.firstName} {selectedApplication.middleName} {selectedApplication.lastName}
+                                            {[selectedApplication.firstName, selectedApplication.otherName, selectedApplication.lastName].filter(Boolean).join(" ")}
                                         </p>
                                     </div>
                                     <div>

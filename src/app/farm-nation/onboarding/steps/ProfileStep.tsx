@@ -20,7 +20,9 @@ const NIGERIAN_STATES = [
 
 export default function ProfileStep({ onNext, onBack, initialData }: ProfileStepProps) {
     const [formData, setFormData] = useState({
-        fullName: initialData?.fullName || "",
+        firstName: initialData?.firstName || (initialData?.fullName ? initialData.fullName.split(' ')[0] : '') || "",
+        lastName: initialData?.lastName || (initialData?.fullName ? initialData.fullName.split(' ').slice(1).join(' ') : '') || "",
+        otherName: initialData?.otherName || "",
         phone: initialData?.phone || "",
         businessName: initialData?.businessName || "",
         state: initialData?.state || "",
@@ -33,12 +35,10 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         if (name === "state") {
-            // Reset LGA when state changes
             setFormData((prev) => ({ ...prev, state: value, lga: "" }));
         } else {
             setFormData((prev) => ({ ...prev, [name]: value }));
         }
-        // Clear error when user starts typing
         if (errors[name]) {
             setErrors((prev) => ({ ...prev, [name]: "" }));
         }
@@ -47,7 +47,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
     const validate = () => {
         const newErrors: Record<string, string> = {};
 
-        if (!formData.fullName.trim()) newErrors.fullName = "Full name is required";
+        if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
+        if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
         if (!formData.phone.trim()) newErrors.phone = "Phone number is required";
         if (!formData.state) newErrors.state = "State is required";
         if (!formData.lga.trim()) newErrors.lga = "LGA is required";
@@ -60,7 +61,9 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (validate()) {
-            onNext({ profile: formData });
+            const fullName = [formData.firstName, formData.otherName, formData.lastName]
+                .filter(Boolean).join(" ").trim();
+            onNext({ profile: { ...formData, fullName } });
         }
     };
 
@@ -68,34 +71,85 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
         <form onSubmit={handleSubmit} className="space-y-6">
             <div>
                 <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
-                    Profile & Location
+                    Profile &amp; Location
                 </h2>
                 <p className="text-slate-600">
                     Help us connect you with the right properties in your area
                 </p>
             </div>
 
+            {/* KYC Notice */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <span className="text-amber-500 text-base shrink-0 mt-0.5">⚠️</span>
+                <p className="text-sm text-amber-800 font-medium">
+                    <strong>KYC Notice:</strong> Enter your name exactly as it appears on your NIN/BVN to avoid identity verification failure.
+                </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Full Name */}
-                <div className="col-span-full">
+                {/* First Name */}
+                <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Full Name <span className="text-red-500">*</span>
+                        First Name <span className="text-red-500">*</span>
+                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As on your NIN/BVN</span>
                     </label>
                     <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <input
                             type="text"
-                            name="fullName"
-                            value={formData.fullName}
+                            name="firstName"
+                            value={formData.firstName}
                             onChange={handleChange}
-                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.fullName ? "border-red-500" : "border-slate-200"
+                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.firstName ? "border-red-500" : "border-slate-200"
                                 } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
-                            placeholder="John Doe"
+                            placeholder="e.g. Amina"
                         />
                     </div>
-                    {errors.fullName && (
-                        <p className="mt-1 text-sm text-red-500">{errors.fullName}</p>
+                    {errors.firstName && (
+                        <p className="mt-1 text-sm text-red-500">{errors.firstName}</p>
                     )}
+                </div>
+
+                {/* Last Name */}
+                <div>
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        Last Name <span className="text-red-500">*</span>
+                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As on your NIN/BVN</span>
+                    </label>
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            type="text"
+                            name="lastName"
+                            value={formData.lastName}
+                            onChange={handleChange}
+                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.lastName ? "border-red-500" : "border-slate-200"
+                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
+                            placeholder="e.g. Ibrahim"
+                        />
+                    </div>
+                    {errors.lastName && (
+                        <p className="mt-1 text-sm text-red-500">{errors.lastName}</p>
+                    )}
+                </div>
+
+                {/* Other Name (Optional) */}
+                <div>
+                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        Other Name <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                        <span className="block text-xs font-normal text-slate-500 mt-0.5">Middle name or additional name</span>
+                    </label>
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            type="text"
+                            name="otherName"
+                            value={formData.otherName}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                            placeholder="e.g. Fatima"
+                        />
+                    </div>
                 </div>
 
                 {/* Phone */}
@@ -121,7 +175,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                 {/* Business Name (Optional) */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Business Name <span className="text-slate-400">(Optional)</span>
+                        Business Name <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                     </label>
                     <div className="relative">
                         <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />

@@ -41,8 +41,9 @@ export async function GET() {
         membersSnapshot.forEach(doc => {
             const data = doc.data();
 
-            // Schema Checks
-            if (!data.firstName || !data.lastName || !data.email) {
+            // Schema Checks: accept either new schema (firstName+lastName) or legacy schema (fullName)
+            const hasNameData = (data.firstName && data.lastName) || data.fullName;
+            if (!hasNameData || !data.email) {
                 report.schemaIssues.push(`Member ${doc.id}: Missing required profile fields`);
             }
             if (!data.membershipStatus) {

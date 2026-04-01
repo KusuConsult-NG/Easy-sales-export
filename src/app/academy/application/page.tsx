@@ -14,7 +14,9 @@ import { useToast } from "@/contexts/ToastContext";
 import { AlertTriangle } from "lucide-react";
 
 interface PersonalInfoData {
-    fullName: string;
+    firstName: string;
+    lastName: string;
+    otherName?: string;
     email: string;
     phone: string;
     dateOfBirth: string;
@@ -71,7 +73,15 @@ export default function AcademyApplicationPage() {
                         const result = await getAcademyApplicationAction();
                         if (result.success && result.data) {
                             const d = result.data;
-                            if (d.personalInfo) setPersonalInfo((prev: any) => ({ ...prev, ...d.personalInfo }));
+                            if (d.personalInfo) {
+                                const pi = d.personalInfo;
+                                setPersonalInfo((prev: any) => ({
+                                    ...prev,
+                                    ...pi,
+                                    firstName: pi.firstName || (pi.fullName ? pi.fullName.split(' ')[0] : '') || prev.firstName,
+                                    lastName: pi.lastName || (pi.fullName ? pi.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName,
+                                }));
+                            }
                             if (d.education) setEducation((prev: any) => ({ ...prev, ...d.education }));
                             if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
                         }
@@ -89,7 +99,15 @@ export default function AcademyApplicationPage() {
                     const result = await getAcademyApplicationAction();
                     if (result.success && result.data) {
                         const d = result.data;
-                        if (d.personalInfo) setPersonalInfo((prev: any) => ({ ...prev, ...d.personalInfo }));
+                        if (d.personalInfo) {
+                            const pi = d.personalInfo;
+                            setPersonalInfo((prev: any) => ({
+                                ...prev,
+                                ...pi,
+                                firstName: pi.firstName || (pi.fullName ? pi.fullName.split(' ')[0] : '') || prev.firstName,
+                                lastName: pi.lastName || (pi.fullName ? pi.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName,
+                            }));
+                        }
                         if (d.education) setEducation((prev: any) => ({ ...prev, ...d.education }));
                         if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
                     }
@@ -121,7 +139,9 @@ export default function AcademyApplicationPage() {
 
 
     const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
-        fullName: "",
+        firstName: "",
+        lastName: "",
+        otherName: "",
         email: "",
         phone: "",
         dateOfBirth: "",
@@ -154,8 +174,12 @@ export default function AcademyApplicationPage() {
     };
 
     useEffect(() => {
-        if (personalInfo.fullName) clearFieldError('fullName');
-    }, [personalInfo.fullName]);
+        if (personalInfo.firstName) clearFieldError('firstName');
+    }, [personalInfo.firstName]);
+
+    useEffect(() => {
+        if (personalInfo.lastName) clearFieldError('lastName');
+    }, [personalInfo.lastName]);
 
     useEffect(() => {
         if (personalInfo.email) clearFieldError('email');
@@ -197,7 +221,8 @@ export default function AcademyApplicationPage() {
         const newErrors: Record<string, string> = {};
 
         if (step === 1) {
-            if (!personalInfo.fullName.trim()) newErrors.fullName = "Full name is required";
+            if (!personalInfo.firstName.trim()) newErrors.firstName = "First name is required";
+            if (!personalInfo.lastName.trim()) newErrors.lastName = "Last name is required";
             if (!personalInfo.email.trim()) {
                 newErrors.email = "Email is required";
             } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalInfo.email)) {
@@ -267,9 +292,13 @@ export default function AcademyApplicationPage() {
         setIsSubmitting(true);
 
         try {
+            const enrichedPersonalInfo = {
+                ...personalInfo,
+                fullName: `${personalInfo.firstName} ${personalInfo.lastName}`.trim(),
+            };
             const response = (isRevisionMode || isEditMode)
-                ? await resubmitAcademyApplicationAction({ personalInfo, education, interests })
-                : await submitAcademyApplicationAction({ personalInfo, education, interests });
+                ? await resubmitAcademyApplicationAction({ personalInfo: enrichedPersonalInfo, education, interests })
+                : await submitAcademyApplicationAction({ personalInfo: enrichedPersonalInfo, education, interests });
 
             if (response.success) {
                 router.push("/academy/application/pending");
@@ -478,7 +507,10 @@ export default function AcademyApplicationPage() {
                     )}
                     {currentStep === 4 && (
                         <ReviewStep
-                            personalInfo={personalInfo}
+                            personalInfo={{
+                                ...personalInfo,
+                                fullName: `${personalInfo.firstName} ${personalInfo.lastName}`.trim(),
+                            }}
                             education={education}
                             interests={interests}
                             acceptTerms={acceptTerms}

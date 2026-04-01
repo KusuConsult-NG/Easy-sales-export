@@ -97,7 +97,10 @@ export async function POST(req: NextRequest) {
                 snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
                     const u = d.data();
                     if (filters.state && u.state !== filters.state) return;
-                    add(u.email || u.emailAddress, u.name || u.displayName || "User");
+                    const uName = (u.firstName || u.lastName)
+                        ? [u.firstName, u.otherName, u.lastName].filter(Boolean).join(" ")
+                        : (u.fullName || u.name || u.displayName || "User");
+                    add(u.email || u.emailAddress, uName);
                 });
                 break;
             }
@@ -114,7 +117,12 @@ export async function POST(req: NextRequest) {
                     if (filters.state && v.address?.state !== filters.state) continue;
                     const userSnap = await db.collection(COLLECTIONS.USERS).doc(v.userId).get();
                     const u = userSnap.data();
-                    if (u) add(u.email || u.emailAddress, u.name || u.displayName || "Seller");
+                    if (u) {
+                        const uName = (u.firstName || u.lastName)
+                            ? [u.firstName, u.otherName, u.lastName].filter(Boolean).join(" ")
+                            : (u.fullName || u.name || u.displayName || "Seller");
+                        add(u.email || u.emailAddress, uName);
+                    }
                 }
                 break;
             }
@@ -124,7 +132,10 @@ export async function POST(req: NextRequest) {
                 snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
                     const u = d.data();
                     if (filters.state && u.state !== filters.state) return;
-                    add(u.email || u.emailAddress, u.name || u.displayName || "User");
+                    const uName = (u.firstName || u.lastName)
+                        ? [u.firstName, u.otherName, u.lastName].filter(Boolean).join(" ")
+                        : (u.fullName || u.name || u.displayName || "User");
+                    add(u.email || u.emailAddress, uName);
                 });
                 break;
             }
@@ -133,7 +144,11 @@ export async function POST(req: NextRequest) {
                     .where("status", "==", "active").get();
                 for (const d of snap.docs) {
                     const m = d.data();
-                    if (m.email) add(m.email, m.name || "Member");
+                    // Derive name: prefer structured fields, fall back to legacy flat name
+                    const memberName = (m.firstName || m.lastName)
+                        ? [m.firstName, m.otherName, m.lastName].filter(Boolean).join(" ")
+                        : (m.fullName || m.name || "Member");
+                    if (m.email) add(m.email, memberName);
                 }
                 break;
             }

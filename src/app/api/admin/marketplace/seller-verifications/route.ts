@@ -43,7 +43,10 @@ export async function GET(request: NextRequest) {
                 return {
                     id: verDoc.id,
                     ...data,
-                    userName: userData?.name || userData?.email || "Unknown User",
+                    // Defensive name chain: structured fields → legacy fullName → name → email
+                    userName: (userData?.firstName || userData?.lastName)
+                        ? [userData?.firstName, userData?.otherName, userData?.lastName].filter(Boolean).join(" ")
+                        : (userData?.fullName || userData?.name || userData?.email || "Unknown User"),
                     userEmail: userData?.email || "",
                     createdAt: data.createdAt?.toDate?.() || new Date(),
                 };

@@ -44,7 +44,10 @@ export async function GET(request: NextRequest) {
                 return {
                     id: appDoc.id,
                     ...data,
-                    userName: userData?.name || userData?.email || "Unknown User",
+                    // Defensive name chain: structured fields → legacy fullName → name → email
+                    userName: (userData?.firstName || userData?.lastName)
+                        ? [userData?.firstName, userData?.otherName, userData?.lastName].filter(Boolean).join(" ")
+                        : (userData?.fullName || userData?.name || userData?.email || "Unknown User"),
                     userEmail: userData?.email || "",
                     appliedAt: data.appliedAt?.toDate?.() || new Date(),
                 };
