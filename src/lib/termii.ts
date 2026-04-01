@@ -40,7 +40,7 @@ export async function sendSMS(to: string, message: string): Promise<TermiiSendRe
             ? `234${to.slice(1)}`  // 08012345678 → 2348012345678
             : to;
 
-    const senderId = process.env.TERMII_SENDER_ID ?? "EasySales";
+    const senderId = process.env.TERMII_SENDER_ID ?? "EASYSALESNG";
 
     try {
         const response = await fetch(`${TERMII_BASE_URL}/sms/send`, {
