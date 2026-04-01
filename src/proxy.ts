@@ -46,13 +46,14 @@ export default auth((req: any) => {
         return new NextResponse("Forbidden - Bot Activity Detected", { status: 403 });
     }
 
-    // 2. Multi-Domain Host-Based Routing
     // Find if the incoming Host explicitly matches one of our dedicated module domains
-    let rewritePrefix = DOMAIN_MAP[hostname];
+    // Strip "www." prefix so both apex and www subdomains resolve to the same module
+    const normalizedHostname = hostname.replace(/^www\./, "");
+    let rewritePrefix = DOMAIN_MAP[normalizedHostname];
 
     // Fallback for subdomains under the main hub for testing (e.g. academy.easysalesexport.com)
-    if (rewritePrefix === undefined && hostname.endsWith(".easysalesexport.com")) {
-        const subdomain = hostname.replace(".easysalesexport.com", "");
+    if (rewritePrefix === undefined && normalizedHostname.endsWith(".easysalesexport.com")) {
+        const subdomain = normalizedHostname.replace(".easysalesexport.com", "");
         if (Object.values(DOMAIN_MAP).includes(`/${subdomain}`)) {
             rewritePrefix = `/${subdomain}`;
         }
