@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
@@ -38,25 +38,29 @@ interface NavItem {
  * Returns the label + href for the user's primary module dashboard link
  * based on their roles — so approved users can jump straight to their module.
  */
-function getModuleLinks(roles: UserRole[]): { label: string; href: string; icon: React.ElementType }[] {
+function getModuleLinks(roles: UserRole[], serviceRegs: any): { label: string; href: string; icon: React.ElementType }[] {
     const links: { label: string; href: string; icon: React.ElementType }[] = [];
 
-    if (roles.includes("wave_participant")) {
+    const isApprovedOrPending = (mod: string) => {
+        return serviceRegs?.[mod]?.status === 'approved' || serviceRegs?.[mod]?.status === 'pending';
+    };
+
+    if (roles.includes("wave_participant") && isApprovedOrPending('wave')) {
         links.push({ label: "WAVE Dashboard", href: "/wave/dashboard", icon: Sparkles });
     }
-    if (roles.includes("academy_participant")) {
+    if (roles.includes("academy_participant") && isApprovedOrPending('academy')) {
         links.push({ label: "Academy", href: "/academy/dashboard", icon: Award });
     }
-    if (roles.includes("buyer") || roles.includes("seller")) {
+    if ((roles.includes("buyer") || roles.includes("seller")) && isApprovedOrPending('marketplace')) {
         links.push({ label: "Marketplace", href: "/marketplace", icon: Package });
     }
-    if (roles.includes("cooperative_member")) {
+    if (roles.includes("cooperative_member") && isApprovedOrPending('cooperatives')) {
         links.push({ label: "Cooperative", href: "/cooperatives/dashboard", icon: User });
     }
-    if (roles.includes("export_participant")) {
+    if (roles.includes("export_participant") && isApprovedOrPending('export')) {
         links.push({ label: "Export Hub", href: "/export/dashboard", icon: ExternalLink });
     }
-    if (roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor")) {
+    if ((roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor")) && isApprovedOrPending('farm-nation')) {
         links.push({ label: "Farm Nation", href: "/farm-nation/dashboard", icon: ExternalLink });
     }
 
@@ -74,6 +78,19 @@ export default function DashboardNav() {
     const roles = (session?.user?.roles as UserRole[]) || [];
     const userName = session?.user?.name || "User";
     const userEmail = session?.user?.email || "";
+
+    const [serviceRegs, setServiceRegs] = useState<any>({});
+
+    // Real-time Service Registrations
+    useEffect(() => {
+        if (!userId) return;
+        const unsub = onSnapshot(doc(db, COLLECTIONS.USERS, userId), (docSnap) => {
+            if (docSnap.exists()) {
+                setServiceRegs(docSnap.data()?.serviceRegistrations || {});
+            }
+        });
+        return () => unsub();
+    }, [userId]);
 
     // Real-time unread notifications count
     useEffect(() => {
@@ -111,17 +128,20 @@ export default function DashboardNav() {
         return () => unsub();
     }, [userId]);
 
-    const moduleLinks = getModuleLinks(roles);
+    const moduleLinks = getModuleLinks(roles, serviceRegs);
 
     // ── Role-gated nav items ──────────────────────────────────────────────────
-    // ONLY show module-specific links to users who have actually enrolled.
-    // "My Orders", "Disputes" = Marketplace users only (buyer or seller)
-    // "My Reviews"           = Marketplace OR Farm Nation users
-    // "Certificates"         = WAVE or Academy participants
-    const isMarketplaceUser = roles.includes("buyer") || roles.includes("seller");
-    const isFarmNationUser  = roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor");
-    const isWaveOrAcademy   = roles.includes("wave_participant") || roles.includes("academy_participant");
-    const isAdmin           = roles.includes("admin") || roles.includes("super_admin");
+    // ONLY show module-specific links to users who have actually enrolled AND are approved.
+    const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+
+    const isMarketplaceApproved = (roles.includes("buyer") || roles.includes("seller")) && serviceRegs?.marketplace?.status === 'approved';
+    const isFarmNationApproved  = (roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor")) && serviceRegs?.['farm-nation']?.status === 'approved';
+    const isWaveOrAcademyApproved = (roles.includes("wave_participant") && serviceRegs?.wave?.status === 'approved') || 
+                                    (roles.includes("academy_participant") && serviceRegs?.academy?.status === 'approved');
+
+    const isMarketplaceUser = isMarketplaceApproved || isAdmin;
+    const isFarmNationUser = isFarmNationApproved || isAdmin;
+    const isWaveOrAcademy = isWaveOrAcademyApproved || isAdmin;
 
     const coreNavItems: NavItem[] = [
         { label: "Overview",       href: "/dashboard",                  icon: LayoutDashboard },

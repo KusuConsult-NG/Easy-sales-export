@@ -50,6 +50,7 @@ export async function initializeContributionPaymentAction(
                 type: 'contribution',
                 amount,
                 userName: session.user.name || session.user.email,
+                userId: session.user.id,
             }
         );
 

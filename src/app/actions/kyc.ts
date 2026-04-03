@@ -193,11 +193,11 @@ export async function verifyVotersCardAction(payload: {
         // Persist result to Firestore regardless of match outcome
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             'kyc.votersCard': votersCardNumber,
-            'kyc.votersCardVerified': result.success && result.isMatch,
+            // Relaxation for Voter's Card: since PVC names in Nigeria often have inconsistent ordering,
+            // if the QoreID lookup succeeds and returns a valid record, we mark it verified.
+            'kyc.votersCardVerified': result.success,
             'kyc.votersCardVerifiedAt': FieldValue.serverTimestamp(),
-            'kyc.votersCardStatus': result.success
-                ? (result.isMatch ? 'verified' : 'mismatch')
-                : 'failed',
+            'kyc.votersCardStatus': result.success ? 'verified' : 'failed',
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -205,14 +205,9 @@ export async function verifyVotersCardAction(payload: {
             return { success: false, error: result.error || "Voter's Card verification failed" };
         }
 
-        if (!result.isMatch) {
-            return {
-                success: true,
-                isMatch: false,
-                error: "Voter's Card name mismatch — the name on your card does not match the name you provided. Please check your name spelling and try again.",
-            };
-        }
-
+        // We purposely remove the !result.isMatch strict check here for Voter's Cards.
+        // Because of the inconsistencies in Nigerian PVC names, if the record lookup
+        // succeeds, we let the user pass and rely on manual ID review.
         // Update overall KYC status if Voter's Card now verified
         await updateOverallKYCStatus(userId);
 

@@ -23,6 +23,9 @@ import { logoutAction } from "@/app/actions/auth";
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
 import { GLOBAL_NAV_ITEMS, MODULE_NAVIGATION, type NavigationItem } from "@/lib/sidebar-config";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 const COLLAPSED_STORAGE_KEY = "sidebar_collapsed_v1";
 
@@ -34,10 +37,22 @@ interface SidebarProps {
 export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const pathname = usePathname();
     const { data: session } = useSession();
+    const userId = session?.user?.id;
 
     // ── Collapse state (desktop only) — persisted ─────────────────────────
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [serviceRegs, setServiceRegs] = useState<any>({});
+
+    useEffect(() => {
+        if (!userId) return;
+        const unsub = onSnapshot(doc(db, COLLECTIONS.USERS, userId), (docSnap) => {
+            if (docSnap.exists()) {
+                setServiceRegs(docSnap.data()?.serviceRegistrations || {});
+            }
+        });
+        return () => unsub();
+    }, [userId]);
 
     useEffect(() => {
         setMounted(true);
@@ -98,8 +113,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
 
     // ── Module enrollment guard ───────────────────────────────────────────────
     // We only show module-specific nav when the user is enrolled in that module.
-    // If a user navigates to /marketplace but only has wave_participant role,
-    // we show the dashboard nav instead of marketplace nav — prevents phantom links.
+    // Ensure both ROLE and SERVICE REGISTRATION status (approved or pending) are met.
     const moduleAppMap: Record<string, AppIdentifier | null> = {
         export: "export",
         marketplace: "marketplace",
@@ -110,19 +124,41 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
         admin: null, // Admin access handled separately
         dashboard: null, // Dashboard is universal
     };
+
     const moduleApp = moduleAppMap[currentModuleKey];
+    const isAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
+
+    // Check service registration status
+    const isModuleApprovedOrPending = () => {
+        if (!moduleApp) return true; // Universal (dashboard, admin)
+        if (isAdmin) return true; // Admins see everything
+        const status = serviceRegs?.[moduleApp]?.status;
+        return status === 'approved' || status === 'pending';
+    };
+
     const userHasModuleAccess =
-        moduleApp === null || // universal (dashboard/admin)
-        hasAppAccess(userRoles, moduleApp as AppIdentifier);
+        (moduleApp === null || hasAppAccess(userRoles, moduleApp as AppIdentifier)) &&
+        isModuleApprovedOrPending();
 
     const resolvedModuleKey = userHasModuleAccess ? currentModuleKey : "dashboard";
     const moduleNavItems = MODULE_NAVIGATION[resolvedModuleKey] || MODULE_NAVIGATION["dashboard"];
 
     // Filter navigation based on user's role
     const filterNavItems = (items: NavigationItem[]) => {
+        const isAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
+
         return items.filter(item => {
+            // Check service registrations if an item specifies an app module and is not a universal app
+            if (item.app && !["dashboard", "messages", "profile"].includes(item.app)) {
+                // If it's the cooperative payment route, we don't need strict 'approved' guard since onboarding handles approval state
+                const isApprovedOrPending = serviceRegs?.[item.app]?.status === 'approved' || serviceRegs?.[item.app]?.status === 'pending';
+                if (!isAdmin && !isApprovedOrPending) {
+                    return false;
+                }
+            }
+
             if (item.app && !hasAppAccess(userRoles, item.app as AppIdentifier)) return false;
-            if (item.requiredRole && !userRoles.includes(item.requiredRole) && !userRoles.includes("super_admin")) {
+            if (item.requiredRole && !userRoles.includes(item.requiredRole) && !isAdmin) {
                 return false;
             }
             return true;
