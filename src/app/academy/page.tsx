@@ -1,49 +1,15 @@
-"use client";
-
-import { useEffect } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, CheckCircle, Home, Zap, Star } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import BackToHub from "@/components/common/BackToHub";
-import { checkAcademyStatusAction } from "@/app/actions/academy";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+    title: "Easy Sales Academy — Agro-Export Training & Certification",
+    description: "Learn the fundamentals of export business, gain certifications, and connect with a global community of agro-trade professionals.",
+};
 
 export default function AcademyLandingPage() {
-    const { status: sessionStatus } = useSession();
-    const router = useRouter();
-
-    // ── Redirect logged-in users to the right page ────────────────────────
-    useEffect(() => {
-        if (sessionStatus === "loading") return; // wait for session
-        if (sessionStatus !== "authenticated") return; // let unauthenticated users see the public page
-
-        // Detect if we're on the dedicated domain (easysalesexportacademy.com)
-        // On dedicated domains, the proxy already maps / → /academy, so we must
-        // use SHORT paths (/dashboard, /setup) to avoid double-rewrite:
-        //   router.replace('/academy/dashboard') → proxy prepends → /academy/academy/dashboard → 404
-        const isDedicatedDomain = typeof window !== 'undefined' &&
-            !window.location.hostname.includes('easysalesexport.com') &&
-            !window.location.hostname.includes('localhost') &&
-            !window.location.hostname.includes('railway.app');
-        const prefix = isDedicatedDomain ? '' : '/academy';
-
-        // Authenticated user — check their module status and route accordingly
-        (async () => {
-            try {
-                const appStatus = await checkAcademyStatusAction();
-                if (appStatus === "approved") {
-                    router.replace(`${prefix}/dashboard`);
-                } else {
-                    // pending / rejected / no application — send to setup
-                    router.replace(`${prefix}/setup`);
-                }
-            } catch {
-                // On any error, fall through to setup — safe default
-                router.replace(`${prefix}/setup`);
-            }
-        })();
-    }, [sessionStatus, router]);
 
     const programTiers = [
         {

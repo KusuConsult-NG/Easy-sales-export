@@ -248,15 +248,15 @@ export default function WaveApplicationPage() {
 
             if (waveStatus === "pending" || waveStatus === "under_review") {
                 if (isEditParam) {
-                    // Enter manual edit mode
+                    // Enter manual edit mode when explicitly requested
                     const result = await getWaveApplicationAction();
                     if (result.success && result.data) {
                         setFormData((prev: any) => ({ ...prev, ...result.data }));
                     }
                     setIsEditMode(true);
-                } else {
-                    router.replace("/wave/application/review-pending");
                 }
+                // Otherwise: stay on application page — do NOT auto-redirect.
+                // The user can see their status and choose to navigate to review-pending themselves.
             } else if (waveStatus === "approved") {
                 router.replace("/wave/dashboard");
             } else if (waveStatus === "revision_required") {
@@ -277,6 +277,7 @@ export default function WaveApplicationPage() {
             console.error("Failed to check status", error);
         }
     };
+
 
     if (status === "loading" || !restored) {
         return (

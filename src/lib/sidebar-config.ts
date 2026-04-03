@@ -62,14 +62,14 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
     ],
 
     // ------------------------------------------------------------------
-    // EXPORT (Module: /export)
+    // EXPORT (Module: /export) — pages live inside /export/(app)/
     // ------------------------------------------------------------------
     "export": [
         { name: "Dashboard", href: "/export/dashboard", icon: LayoutDashboard },
-        { name: "My Windows", href: "/export/windows", icon: Briefcase },
-        { name: "Shipments", href: "/export/shipments", icon: Truck },
-        { name: "Documentation", href: "/export/documents", icon: FileText },
-        { name: "Compliance", href: "/export/compliance", icon: CheckCircle },
+        { name: "Opportunities", href: "/export/opportunities", icon: Briefcase },
+        { name: "Portfolio", href: "/export/portfolio", icon: TrendingUp },
+        { name: "Transactions", href: "/export/transactions", icon: FileText },
+        { name: "Browse Windows", href: "/export/windows", icon: Container },
     ],
 
     // ------------------------------------------------------------------
@@ -77,59 +77,55 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
     // ------------------------------------------------------------------
     "marketplace": [
         { name: "Market Overview", href: "/marketplace", icon: Store, exact: true },
-        // Buyer View
         { name: "Browse Products", href: "/marketplace/buyer", icon: Search },
         { name: "My Orders", href: "/marketplace/orders", icon: Package },
-        { name: "Cart", href: "/marketplace/cart", icon: ShoppingCart },
-        { name: "Escrow", href: "/escrow", icon: Lock }, // Escrow is tight to Marketplace
-        // Seller View (Conditional in Sidebar component)
-        { name: "Seller Dashboard", href: "/marketplace/seller", icon: Store, requiredRole: "seller" },
-        { name: "My Products", href: "/marketplace/seller/products", icon: Package, requiredRole: "seller" },
+        { name: "Escrow", href: "/escrow", icon: Lock },
+        { name: "Seller Dashboard", href: "/marketplace/sell", icon: Store, requiredRole: "seller" },
+        { name: "My Products", href: "/marketplace/products", icon: Package, requiredRole: "seller" },
     ],
 
     // ------------------------------------------------------------------
-    // COOPERATIVES (Module: /cooperatives)
+    // COOPERATIVES (Module: /cooperatives) — pages inside /cooperatives/(member)/
     // ------------------------------------------------------------------
     "cooperatives": [
         { name: "Dashboard", href: "/cooperatives/dashboard", icon: LayoutDashboard },
-        { name: "Members", href: "/cooperatives/members", icon: Users },
-        { name: "Loans", href: "/cooperatives/loans", icon: Wallet },
-        {
-            name: "Savings", href: "/cooperatives/savings", icon:
-                // Custom Piggy Bank Icon or similar if needed, reuse Wallet for now
-                Wallet
-        },
-        { name: "Resources", href: "/cooperatives/resources", icon: BookOpen },
+        { name: "My Savings", href: "/cooperatives/my-savings", icon: Wallet },
+        { name: "Loans", href: "/cooperatives/loans", icon: ScrollText },
+        { name: "Contribute", href: "/cooperatives/contribute", icon: TrendingUp },
+        { name: "Directory", href: "/cooperatives/directory", icon: Users },
+        { name: "History", href: "/cooperatives/history", icon: ClipboardList },
     ],
 
     // ------------------------------------------------------------------
     // FARM NATION (Module: /farm-nation)
     // ------------------------------------------------------------------
     "farm-nation": [
-        { name: "Dashboard", href: "/farm-nation/dashboard", icon: LayoutDashboard },
-        { name: "Land Listings", href: "/farm-nation/listings", icon: Map },
-        { name: "My Farms", href: "/farm-nation/farms", icon: Tractor },
-        { name: "Investments", href: "/farm-nation/investments", icon: Leaf },
+        { name: "Properties", href: "/farm-nation/properties", icon: Map },
+        { name: "My Properties", href: "/farm-nation/my-properties", icon: Tractor },
+        { name: "My Purchases", href: "/farm-nation/my-purchases", icon: Home },
+        { name: "Map View", href: "/farm-nation/map", icon: Map },
+        { name: "List Land", href: "/farm-nation/list-land", icon: Leaf },
     ],
 
     // ------------------------------------------------------------------
-    // WAVE (Module: /wave) -> DISTINCT BRANDING
+    // WAVE (Module: /wave) — pages inside /wave/(member)/
     // ------------------------------------------------------------------
     "wave": [
         { name: "Dashboard", href: "/wave/dashboard", icon: LayoutDashboard },
         { name: "Training", href: "/wave/training", icon: BookOpen },
-        { name: "Grants", href: "/wave/grants", icon: Award },
-        { name: "Community", href: "/wave/community", icon: Users },
         { name: "Resources", href: "/wave/resources", icon: FileText },
+        { name: "Earnings", href: "/wave/earnings", icon: TrendingUp },
+        { name: "Shipments", href: "/wave/shipments", icon: Truck },
+        { name: "Certificates", href: "/wave/certificates", icon: Award },
     ],
 
     // ------------------------------------------------------------------
-    // ACADEMY (Module: /academy)
+    // ACADEMY (Module: /academy) — pages in /academy/ and /academy/(learner)/
     // ------------------------------------------------------------------
     "academy": [
         { name: "Learning Home", href: "/academy/dashboard", icon: GraduationCap },
-        { name: "My Courses", href: "/academy/courses", icon: BookOpen },
-        { name: "Certificates", href: "/academy/certificates", icon: Award },
+        { name: "My Courses", href: "/academy/my-courses", icon: BookOpen },
+        { name: "My Progress", href: "/academy/progress", icon: TrendingUp },
     ],
 
     // ------------------------------------------------------------------
@@ -162,3 +158,4 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
         { name: "AI Chatbot", href: "/admin/chatbot", icon: MessageCircle },
     ],
 };
+
