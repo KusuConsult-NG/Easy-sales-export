@@ -8,8 +8,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
     LayoutDashboard,
     LogOut,
-    Moon,
-    Sun,
     MessageSquare,
     User,
     ChevronRight,
@@ -20,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
 import { getModuleConfig } from "@/lib/module-config";
 import NotificationCenter from "./NotificationCenter";
-import { useTheme } from "@/contexts/ThemeContext";
+
 import { logoutAction } from "@/app/actions/auth";
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
@@ -35,7 +33,6 @@ interface SidebarProps {
 
 export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const pathname = usePathname();
-    const { theme, toggleTheme } = useTheme();
     const { data: session } = useSession();
 
     // ── Collapse state (desktop only) — persisted ─────────────────────────
@@ -390,42 +387,6 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
                 "border-t border-dashed border-slate-200 bg-slate-50/50 backdrop-blur-sm",
                 isCollapsed ? "p-2 space-y-2" : "p-4 space-y-2"
             )}>
-                {/* Theme Toggle */}
-                <div className="relative group/tooltip">
-                    <button
-                        onClick={toggleTheme}
-                        className={cn(
-                            "w-full flex items-center rounded-xl text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all group",
-                            isCollapsed
-                                ? "justify-center w-10 h-10 mx-auto px-0 py-0"
-                                : "justify-between px-4 py-3"
-                        )}
-                        aria-label="Toggle dark mode"
-                    >
-                        <div className={cn("flex items-center", !isCollapsed && "gap-3")}>
-                            {theme === "dark"
-                                ? <Moon className="w-5 h-5 text-indigo-400" />
-                                : <Sun className="w-5 h-5 text-amber-500" />
-                            }
-                            {!isCollapsed && (
-                                <span className="font-medium text-sm">{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
-                            )}
-                        </div>
-                        {!isCollapsed && (
-                            <div className={cn("w-8 h-4 rounded-full relative transition-colors", theme === "dark" ? "bg-slate-700" : "bg-slate-200")}>
-                                <div className={cn("absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm", theme === "dark" ? "left-4.5" : "left-0.5")} />
-                            </div>
-                        )}
-                    </button>
-                    {isCollapsed && (
-                        <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
-                            <div className="bg-slate-900 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
-                                {theme === "dark" ? "Dark Mode" : "Light Mode"}
-                                <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900" />
-                            </div>
-                        </div>
-                    )}
-                </div>
 
                 {/* Logout Button */}
                 <div className="relative group/tooltip">
@@ -598,15 +559,6 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
 
                     {/* Mobile footer */}
                     <div className="p-4 border-t border-dashed border-slate-200 space-y-2 bg-slate-50/50">
-                        <button
-                            onClick={toggleTheme}
-                            className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all"
-                        >
-                            <div className="flex items-center gap-3">
-                                {theme === "dark" ? <Moon className="w-5 h-5 text-indigo-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
-                                <span className="font-medium text-sm">{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
-                            </div>
-                        </button>
                         <button
                             onClick={async () => {
                                 onMobileClose?.();

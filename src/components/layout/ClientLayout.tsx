@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { SessionProvider, useSession } from "next-auth/react";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { Toaster } from "sonner";
-import { ThemeProvider } from "@/contexts/ThemeContext";
+
 import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { FirebaseAuthProvider } from "@/components/providers/FirebaseAuthProvider";
@@ -96,7 +96,7 @@ function LayoutContent({ children }: ClientLayoutProps) {
         <ToastProvider>
             {/* Only show session tracker for authenticated users — never on public pages */}
             {status === "authenticated" && <SessionActivityTracker />}
-            <ThemeProvider>
+            <>
                 {shouldShowSidebar ? (
                     <div className="flex h-screen overflow-hidden">
                         {/* Desktop sidebar (hidden on mobile — handled inside Sidebar.tsx) */}
@@ -135,7 +135,7 @@ function LayoutContent({ children }: ClientLayoutProps) {
                     <>{children}</>
                 )}
                 <Toaster position="top-right" richColors />
-            </ThemeProvider>
+            </>
             {/* Push notification permission banner */}
             {isAuthenticated && <PushNotificationBanner />}
             {/* Module-aware AI chatbot */}

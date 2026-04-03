@@ -1,65 +1,42 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+/**
+ * ThemeContext — STUB (dark mode removed)
+ *
+ * Dark mode has been permanently disabled from the platform.
+ * This file is kept as a compatibility stub so that any existing
+ * imports of ThemeProvider / useTheme continue to compile without
+ * changes to every call-site.
+ *
+ * - The app is ALWAYS in light mode.
+ * - toggleTheme() is a no-op.
+ * - useTheme() is safe to call outside a ThemeProvider.
+ */
 
-type Theme = "light" | "dark";
+import { createContext, useContext, ReactNode } from "react";
+
+type Theme = "light";
 
 interface ThemeContextType {
     theme: Theme;
     toggleTheme: () => void;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+const defaultValue: ThemeContextType = {
+    theme: "light",
+    toggleTheme: () => {}, // intentional no-op
+};
+
+const ThemeContext = createContext<ThemeContextType>(defaultValue);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [theme, setTheme] = useState<Theme>("light");
-    const [mounted, setMounted] = useState(false);
-
-    // Initialize theme on mount
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setMounted(true);
-
-        // Check localStorage first, then system preference
-        const savedTheme = localStorage.getItem("theme") as Theme | null;
-        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-        const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-
-        setTheme(initialTheme);
-        if (initialTheme === "dark") {
-            document.documentElement.classList.add("dark");
-        } else {
-            document.documentElement.classList.remove("dark");
-        }
-    }, []);
-
-    const toggleTheme = () => {
-        const newTheme = theme === "light" ? "dark" : "light";
-        setTheme(newTheme);
-
-        if (newTheme === "dark") {
-            document.documentElement.classList.add("dark");
-            localStorage.setItem("theme", "dark");
-        } else {
-            document.documentElement.classList.remove("dark");
-            localStorage.setItem("theme", "light");
-        }
-    };
-
-    // CRITICAL: Always render the provider, never conditionally
-    // The mounted check ensures we don't flash wrong theme, but provider is ALWAYS present
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        <ThemeContext.Provider value={defaultValue}>
             {children}
         </ThemeContext.Provider>
     );
 }
 
 export function useTheme() {
-    const context = useContext(ThemeContext);
-    if (context === undefined) {
-        throw new Error("useTheme must be used within a ThemeProvider");
-    }
-    return context;
+    return useContext(ThemeContext);
 }
