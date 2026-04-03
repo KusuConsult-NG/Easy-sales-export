@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, User, GraduationCap, Target, Calendar, MapPin, Briefcase, Phone, BookOpen, TrendingUp, Lightbulb } from "lucide-react";
+import Link from "next/link";
 
 interface ReviewStepProps {
     personalInfo: {
@@ -165,13 +166,13 @@ export default function ReviewStep({
                     />
                     <label htmlFor="acceptTerms" className="text-sm text-slate-900">
                         I confirm that all the information provided is accurate and complete. I accept the{" "}
-                        <a href="#" className="text-blue-600 hover:underline font-semibold">
+                        <Link href="/terms" className="text-blue-600 hover:underline font-semibold" target="_blank">
                             Terms and Conditions
-                        </a>{" "}
+                        </Link>{" "}
                         and{" "}
-                        <a href="#" className="text-blue-600 hover:underline font-semibold">
+                        <Link href="/privacy" className="text-blue-600 hover:underline font-semibold" target="_blank">
                             Privacy Policy
-                        </a>{" "}
+                        </Link>{" "}
                         of Easy Sales Academy.
                     </label>
                 </div>

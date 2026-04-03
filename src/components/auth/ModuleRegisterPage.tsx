@@ -131,19 +131,9 @@ function ModuleRegisterContent({
             let redirectPath = "/dashboard"; // Default fallback
 
             // Determine redirect path based on platform/module
-            if (platforms.includes("wave")) {
-                redirectPath = "/wave/application";
-            } else if (platforms.includes("academy")) {
-                redirectPath = "/academy/application";
-            } else if (platforms.includes("export")) {
-                redirectPath = "/export/onboarding";
-            } else if (platforms.includes("cooperatives")) {
-                redirectPath = "/cooperatives/onboarding";
-            } else if (platforms.includes("farm-nation")) {
-                redirectPath = "/farm-nation/onboarding";
-            } else if (platforms.includes("marketplace")) {
-                redirectPath = "/marketplace/onboarding";
-            }
+            // ALL users are now routed to the central User Dashboard, 
+            // where they can access their targeted modules from the "Unapplied" section.
+            redirectPath = "/dashboard";
 
             // If callbackUrl exists and is valid, it might prioritize that, 
             // but for "register" page, we usually want to force the module flow if already logged in.

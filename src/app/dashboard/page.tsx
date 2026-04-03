@@ -33,66 +33,99 @@ interface RecentNotification {
     createdAt: any;
 }
 
-/** Returns module cards for user's approved roles */
-function getModuleCards(roles: UserRole[]) {
-    const cards: { label: string; description: string; href: string; icon: React.ElementType; color: string }[] = [];
-
-    if (roles.includes("wave_participant")) {
-        cards.push({
-            label: "WAVE Program",
-            description: "Access your WAVE dashboard, resources & earnings",
-            href: "/wave/dashboard",
-            icon: Sparkles,
-            color: "from-purple-600 to-violet-700",
-        });
-    }
-    if (roles.includes("academy_participant")) {
-        cards.push({
+/** Returns all platform modules with their dynamic application status */
+function getPlatformModules(serviceRegistrations: Record<string, any>, roles: UserRole[]) {
+    const modulesDef = [
+        {
+            id: "academy",
             label: "Academy",
-            description: "Continue your courses and view certificates",
-            href: "/academy/dashboard",
+            description: "Agricultural education and training",
             icon: BookOpen,
             color: "from-blue-600 to-indigo-700",
-        });
-    }
-    if (roles.includes("buyer") || roles.includes("seller")) {
-        cards.push({
-            label: "Marketplace",
-            description: roles.includes("seller") ? "Manage your store & products" : "Browse & buy products",
-            href: roles.includes("seller") ? "/marketplace/seller/dashboard" : "/marketplace/buyer/dashboard",
-            icon: Package,
-            color: "from-orange-500 to-amber-600",
-        });
-    }
-    if (roles.includes("cooperative_member")) {
-        cards.push({
-            label: "Cooperative",
-            description: "Savings, loans & cooperative management",
-            href: "/cooperatives/dashboard",
-            icon: Users,
-            color: "from-teal-600 to-emerald-700",
-        });
-    }
-    if (roles.includes("export_participant")) {
-        cards.push({
-            label: "Export Hub",
-            description: "Manage your export investments & portfolio",
-            href: "/export/dashboard",
+            onboardingUrl: "/academy/setup",
+            dashboardUrl: "/academy/dashboard",
+            pendingUrl: "/academy/setup",
+        },
+        {
+            id: "wave",
+            label: "WAVE Program",
+            description: "Women Agro-processors Venture Empowerment",
+            icon: Sparkles,
+            color: "from-purple-600 to-violet-700",
+            onboardingUrl: "/wave/application",
+            dashboardUrl: "/wave/dashboard",
+            pendingUrl: "/wave/application/review-pending",
+        },
+        {
+            id: "export",
+            label: "Export Windows",
+            description: "Agricultural Export Crowdfunding",
             icon: Landmark,
             color: "from-cyan-600 to-sky-700",
-        });
-    }
-    if (roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor")) {
-        cards.push({
+            onboardingUrl: "/export/onboarding",
+            dashboardUrl: "/export/dashboard",
+            pendingUrl: "/export/onboarding/pending",
+        },
+        {
+            id: "marketplace",
+            label: "Marketplace",
+            description: "Buy and sell agricultural products",
+            icon: Package,
+            color: "from-orange-500 to-amber-600",
+            onboardingUrl: "/marketplace/onboarding",
+            dashboardUrl: roles.includes("seller") ? "/marketplace/seller/dashboard" : "/marketplace/buyer/dashboard",
+            pendingUrl: "/marketplace/onboarding/pending",
+        },
+        {
+            id: "cooperatives",
+            label: "Cooperatives",
+            description: "Farmer cooperative savings and loans",
+            icon: Users,
+            color: "from-teal-600 to-emerald-700",
+            onboardingUrl: "/cooperatives/onboarding",
+            dashboardUrl: "/cooperatives/dashboard",
+            pendingUrl: "/cooperatives/onboarding/pending",
+        },
+        {
+            id: "farmNation",
             label: "Farm Nation",
             description: "Farm properties, investments & land",
-            href: "/farm-nation/dashboard",
             icon: ExternalLink,
             color: "from-lime-600 to-green-700",
-        });
-    }
+            onboardingUrl: "/farm-nation/onboarding",
+            dashboardUrl: "/farm-nation/dashboard",
+            pendingUrl: "/farm-nation/onboarding/pending",
+        }
+    ];
 
-    return cards;
+    return modulesDef.map(mod => {
+        // farm_nation legacy compat check
+        const registrationStatus = serviceRegistrations[mod.id]?.status 
+            || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.status : null);
+            
+        let status: 'unapplied' | 'pending' | 'approved' = 'unapplied';
+        if (registrationStatus === 'approved') status = 'approved';
+        else if (registrationStatus === 'pending' || registrationStatus === 'under_review' || registrationStatus === 'pending_review') status = 'pending';
+        
+        // Override approved based on roles for safety (in case admin bypassed standard flow)
+        if (mod.id === 'academy' && roles.includes('academy_participant')) status = 'approved';
+        if (mod.id === 'wave' && roles.includes('wave_participant')) status = 'approved';
+        if (mod.id === 'export' && roles.includes('export_participant')) status = 'approved';
+        if (mod.id === 'marketplace' && (roles.includes('seller') || roles.includes('buyer'))) status = 'approved';
+        if (mod.id === 'cooperatives' && roles.includes('cooperative_member')) status = 'approved';
+        if (mod.id === 'farmNation' && (roles.includes('farmer') || roles.includes('land_owner') || roles.includes('investor'))) status = 'approved';
+        
+        const href = 
+            status === 'approved' ? mod.dashboardUrl : 
+            status === 'pending' ? mod.pendingUrl : 
+            mod.onboardingUrl;
+            
+        return {
+            ...mod,
+            status,
+            href
+        };
+    });
 }
 
 function DashboardHomeContent() {
@@ -106,7 +139,20 @@ function DashboardHomeContent() {
         unreadNotifications: 0, unreadMessages: 0,
         loading: true,
     });
+    const [serviceRegistrations, setServiceRegistrations] = useState<Record<string, any>>({});
     const [recentNotifications, setRecentNotifications] = useState<RecentNotification[]>([]);
+
+    // Real-time user profile (for serviceRegistrations)
+    useEffect(() => {
+        if (!userId) return;
+        const userRef = doc(db, COLLECTIONS.USERS, userId);
+        const unsub = onSnapshot(userRef, (snap) => {
+            if (snap.exists()) {
+                setServiceRegistrations(snap.data()?.serviceRegistrations || {});
+            }
+        });
+        return () => unsub();
+    }, [userId]);
 
     // Real-time unread notifications
     useEffect(() => {
@@ -196,7 +242,7 @@ function DashboardHomeContent() {
         );
     }
 
-    const moduleCards = getModuleCards(roles);
+    const platformModules = getPlatformModules(serviceRegistrations, roles);
 
     const statCards = [
         { label: "Wallet Balance", value: fmt(stats.walletBalance), icon: Wallet, color: "text-emerald-600 bg-emerald-50", href: "/dashboard/wallet" },
@@ -251,44 +297,52 @@ function DashboardHomeContent() {
                     </div>
                 </section>
 
-                {/* ── My Modules ──────────────────────────────────── */}
-                {moduleCards.length > 0 && (
-                    <section>
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-bold text-slate-900">My Modules</h2>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {moduleCards.map((card) => (
-                                <Link
-                                    key={card.href}
-                                    href={card.href}
-                                    className="group relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-6 hover:shadow-lg transition-all hover:-translate-y-0.5"
-                                >
-                                    <div className={`absolute top-0 right-0 w-32 h-32 bg-linear-to-br ${card.color} opacity-5 rounded-full translate-x-8 -translate-y-8 group-hover:opacity-10 transition-opacity`} />
-                                    <div className={`w-12 h-12 rounded-xl bg-linear-to-br ${card.color} flex items-center justify-center mb-4 shadow`}>
+                {/* ── Platform Modules ──────────────────────────────────── */}
+                <section>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-slate-900">Platform Modules</h2>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {platformModules.map((card) => (
+                            <Link
+                                key={card.href}
+                                href={card.href}
+                                className={`group relative overflow-hidden rounded-2xl bg-white border p-6 hover:shadow-lg transition-all hover:-translate-y-0.5 ${
+                                    card.status === 'approved' ? 'border-slate-200' : 'border-slate-200 opacity-90'
+                                }`}
+                            >
+                                <div className={`absolute top-0 right-0 w-32 h-32 bg-linear-to-br ${card.color} opacity-5 rounded-full translate-x-8 -translate-y-8 group-hover:opacity-10 transition-opacity`} />
+                                
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className={`w-12 h-12 rounded-xl bg-linear-to-br ${card.color} flex items-center justify-center shadow ${card.status !== 'approved' ? 'grayscale opacity-75' : ''}`}>
                                         <card.icon className="w-6 h-6 text-white" />
                                     </div>
-                                    <h3 className="font-bold text-slate-900 mb-1">{card.label}</h3>
-                                    <p className="text-sm text-slate-500 leading-relaxed">{card.description}</p>
-                                    <div className="mt-4 flex items-center text-sm font-semibold text-emerald-600 gap-1 group-hover:gap-2 transition-all">
-                                        Go to {card.label} <ChevronRight className="w-4 h-4" />
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {moduleCards.length === 0 && (
-                    <section className="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center">
-                        <TrendingUp className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-slate-700 mb-2">No Active Modules</h3>
-                        <p className="text-slate-500 text-sm max-w-md mx-auto">
-                            You haven&apos;t been approved for any modules yet. Once approved by an admin,
-                            your modules will appear here.
-                        </p>
-                    </section>
-                )}
+                                    
+                                    {/* Status Badge */}
+                                    {card.status === 'approved' && (
+                                        <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 rounded-lg">Active</span>
+                                    )}
+                                    {card.status === 'pending' && (
+                                        <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 rounded-lg">Pending Review</span>
+                                    )}
+                                </div>
+                                
+                                <h3 className={`font-bold text-slate-900 mb-1 ${card.status !== 'approved' ? 'text-slate-700' : ''}`}>{card.label}</h3>
+                                <p className="text-sm text-slate-500 leading-relaxed">{card.description}</p>
+                                
+                                <div className={`mt-4 flex items-center text-sm font-semibold gap-1 group-hover:gap-2 transition-all ${
+                                    card.status === 'approved' ? 'text-emerald-600' :
+                                    card.status === 'pending' ? 'text-amber-600' :
+                                    'text-blue-600'
+                                }`}>
+                                    {card.status === 'approved' ? 'Go to Dashboard' :
+                                     card.status === 'pending' ? 'Check Status' :
+                                     'Apply Now'} <ChevronRight className="w-4 h-4" />
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
 
                 {/* ── Quick Links ─────────────────────────────────── */}
                 <section>

@@ -78,10 +78,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             newErrors.nin = "Please click 'Verify' to validate your NIN before continuing";
         }
 
-        // Voter's Card Number — required on WAVE
-        if (!data.votersCardNumber || data.votersCardNumber.trim().length < 5) {
-            newErrors.votersCardNumber = "Voter's Card Number (PVC) is required";
-        }
+        // Voter's Card Number — no longer enforced
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -115,7 +112,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 <div className="flex items-start gap-3">
                     <ShieldCheck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
-                        <strong>NIN and Voter&apos;s Card details are required</strong> for identity and eligibility verification. All data is securely encrypted.
+                        <strong>NIN is required</strong> for identity and eligibility verification. Voter&apos;s Card details are supported but not enforced. All data is securely encrypted.
                     </p>
                 </div>
             </div>
@@ -182,10 +179,10 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                     <p className="mt-1 text-xs text-slate-500">Dial *346# on your registered phone to retrieve your NIN.</p>
                 </div>
 
-                {/* Voter's Card Number (PVC) — REQUIRED on WAVE */}
+                {/* Voter's Card Number (PVC) */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Voter&apos;s Card Number (PVC) <span className="text-red-500">*</span>
+                        Voter&apos;s Card Number (PVC)
                     </label>
                     <input
                         type="text"

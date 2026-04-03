@@ -156,46 +156,28 @@ export async function getPostLoginRedirect(email: string) {
             }
 
             // 2. Check for pending applications
-            const pendingModules = Object.entries(serviceRegistrations)
-                .filter(([_, reg]: [string, any]) =>
-                    reg?.status === 'pending' ||
-                    reg?.status === 'under_review' ||
-                    reg?.status === 'pending_review'
-                );
-
-            if (pendingModules.length > 0) {
-                // User has pending applications — show them the review page
-                const [moduleKey] = pendingModules[0];
-
-                // Map module keys to their pending pages
-                const pendingPageMap: Record<string, string> = {
-                    'wave': '/wave/application/review-pending',
-                    'export': '/export/onboarding/pending',
-                    'marketplace': '/marketplace/onboarding/pending',
-                    'cooperatives': '/cooperatives/onboarding/pending',
-                    'farmNation': '/farm-nation/onboarding/pending',
-                    'farm_nation': '/farm-nation/onboarding/pending',
-                    'academy': '/academy/setup',
-                };
-
-                const pendingPage = pendingPageMap[moduleKey] || '/auth/get-started';
-                logger.info(`[getPostLoginRedirect] User ${email} has pending application for '${moduleKey}', redirecting to: ${pendingPage}`);
-
-                return { success: true, redirectUrl: pendingPage };
-            }
+            // REMOVED: Users are now allowed to access the Dashboard even if they have pending applications.
+            // They can check their pending status and navigate to pending pages from the Dashboard.
+            // 
+            // Fallback for pending users AND new users: route directly to the User Dashboard
+            logger.info(`[getPostLoginRedirect] User ${email} has no active apps, directing to default dashboard`);
+            return {
+                success: true,
+                redirectUrl: '/dashboard'
+            };
         }
 
-        // User has no applications yet — go to get-started
-        logger.info(`[getPostLoginRedirect] No applications found, redirecting to get-started`, { email });
+        // User has no applications yet — go to dashboard instead of /auth/get-started
+        logger.info(`[getPostLoginRedirect] No applications found, redirecting to dashboard`, { email });
         return {
             success: true,
-            redirectUrl: '/auth/get-started'
+            redirectUrl: '/dashboard'
         };
     } catch (error: any) {
         logger.error('[getPostLoginRedirect] Error determining redirect', { email, error: error.message });
         return {
             success: false,
-            redirectUrl: '/auth/get-started',
+            redirectUrl: '/dashboard',
             error: error.message
         };
     }

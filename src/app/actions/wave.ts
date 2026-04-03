@@ -70,7 +70,7 @@ const waveApplicationSchema = z.object({
 
     // SECTION B: National Identity & Civic Status
     nin: z.string().min(11, "Valid NIN is required"),
-    votersCardNumber: z.string().min(5, "Voter's Card Number is required"),
+    votersCardNumber: z.string().optional().or(z.literal("")),
     pollingUnit: z.string().optional(),
     ward: z.string().optional(),
     yearOfVoterRegistration: z.string().optional(),
