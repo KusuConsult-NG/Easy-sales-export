@@ -77,7 +77,7 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
     // ------------------------------------------------------------------
     "marketplace": [
         { name: "Market Overview", href: "/marketplace", icon: Store, exact: true },
-        { name: "Browse Products", href: "/marketplace/buyer", icon: Search },
+        { name: "Browse Products", href: "/marketplace/buyer/products", icon: Search },
         { name: "My Orders", href: "/marketplace/buyer/orders", icon: Package },
         { name: "Escrow", href: "/escrow", icon: Lock },
         { name: "Seller Dashboard", href: "/marketplace/sell", icon: Store, requiredRole: "seller" },
