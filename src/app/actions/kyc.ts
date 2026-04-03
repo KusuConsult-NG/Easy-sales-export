@@ -190,15 +190,9 @@ export async function verifyVotersCardAction(payload: {
 
         logger.info("Voter's Card verification started", { userId, vin: votersCardNumber.slice(0, 4) + '***' });
 
-        let result = null;
-        try {
-            result = await qoreIdService.verifyVotersCard(votersCardNumber, firstName, lastName);
-        } catch (e) {
-            logger.warn("QoreID Voter's Card API failed completely, ignoring and allowing bypass", { error: e });
-            result = { success: false, error: 'API Failure' };
-        }
-
-        const originalStatus = result && result.success ? (result.isMatch ? 'verified' : 'mismatch') : 'failed';
+        // No QoreID verification implemented for Voter's card as per requirements.
+        // We defer to manual review and directly mark it as submitted/verified.
+        const originalStatus = 'pending_manual_review';
 
         // Persist result to Firestore but forcefully override to allow the user to pass
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
