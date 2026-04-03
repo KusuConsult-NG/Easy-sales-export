@@ -1571,7 +1571,7 @@ export async function approveAcademyApplicationAction(
         if (userId) {
             await db.collection(COLLECTIONS.USERS).doc(userId).update({
                 'serviceRegistrations.academy.status': 'approved',
-                roles: FieldValue.arrayUnion('academy_learner'),
+                roles: FieldValue.arrayUnion('academy_participant'),
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }
