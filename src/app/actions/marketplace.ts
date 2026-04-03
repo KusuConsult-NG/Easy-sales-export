@@ -764,7 +764,7 @@ export async function getSellerAnalyticsAction() {
         const userId = session.user.id;
 
         // Fetch Orders
-        const ordersSnapshot = await db.collection(COLLECTIONS.ORDERS)
+        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerId", "==", userId)
             .get();
         const orders = ordersSnapshot.docs.map(doc => doc.data() as Order);
@@ -913,8 +913,8 @@ export async function getBuyerStatsAction() {
         }
 
         const userId = session.user.id;
-        const snapshot = await db.collection(COLLECTIONS.ORDERS)
-            .where("userId", "==", userId)
+        const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+            .where("buyerId", "==", userId)
             .get();
 
         const orders = snapshot.docs.map(doc => doc.data() as Order);
@@ -923,8 +923,9 @@ export async function getBuyerStatsAction() {
         const completedOrders = orders.filter(o => o.status === "delivered" || o.status === "completed").length;
         const totalSpent = orders.reduce((sum, o) => sum + o.totalAmount, 0);
 
-        // Mock saved sellers for now as we don't have a followed_sellers collection yet
-        const savedSellers = 0;
+        // Read saved sellers count from user profile (incremented when user bookmarks a seller)
+        const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const savedSellers: number = buyerDoc.data()?.savedSellersCount ?? 0;
 
         return {
             success: true,
@@ -1070,9 +1071,9 @@ export async function deleteProductAction(productId: string) {
         }
 
         // Check for active orders
-        const activeOrders = await db.collection(COLLECTIONS.ORDERS)
+        const activeOrders = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("productIds", "array-contains", productId)
-            .where("status", "in", ["pending_payment", "processing", "shipped"])
+            .where("orderStatus", "in", ["confirmed", "processing", "shipped"])
             .get();
 
         if (!activeOrders.empty) {

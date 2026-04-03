@@ -850,6 +850,7 @@ export const COLLECTIONS = {
     // NEW: Marketplace Enhancement
     PRODUCT_IMAGES: "product_images",
     SHOPPING_CARTS: "shopping_carts",
+    // @deprecated Use MARKETPLACE_ORDERS moving forward to prevent fragmentation
     ORDERS: "orders",
     MESSAGES: "messages",
     CONVERSATIONS: "conversations",
@@ -890,6 +891,7 @@ export const COLLECTIONS = {
     // Vendor
     VENDOR_SETTINGS: "vendor_settings",
     VENDOR_REVIEWS: "vendor_reviews",
+    // @deprecated Use MARKETPLACE_ORDERS moving forward to prevent fragmentation
     VENDOR_ORDERS: "vendor_orders",
     VENDOR_PRODUCTS: "vendor_products",
     VENDOR_PROFILES: "vendor_profiles",

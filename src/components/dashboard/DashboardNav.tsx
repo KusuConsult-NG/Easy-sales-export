@@ -116,7 +116,7 @@ export default function DashboardNav() {
     const coreNavItems: NavItem[] = [
         { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
         { label: "Wallet", href: "/dashboard/wallet", icon: Wallet },
-        { label: "My Orders", href: "/dashboard/orders", icon: Package },
+        { label: "My Orders", href: "/marketplace/buyer/orders", icon: Package },
         { label: "Messages", href: "/messages", icon: MessageCircle, badge: unreadMessages || null },
         { label: "Notifications", href: "/dashboard/notifications", icon: Bell, badge: unreadCount || null },
         { label: "My Reviews", href: "/dashboard/reviews", icon: Star },

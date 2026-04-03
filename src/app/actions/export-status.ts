@@ -54,7 +54,7 @@ export async function updateExportStatusAction(
 
         // Revalidate the frontend cache so the user instantly sees the update
         revalidatePath("/admin");
-        revalidatePath("/vendor/orders");
+        revalidatePath("/marketplace/seller/orders");
         revalidatePath("/dashboard/export");
 
         return {

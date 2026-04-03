@@ -171,7 +171,7 @@ export default function BuyerDashboard() {
                     </Link>
 
                     <Link
-                        href="/marketplace/orders"
+                        href="/marketplace/buyer/orders"
                         className="bg-linear-to-br from-blue-600 to-cyan-600 text-white rounded-xl p-6 hover:shadow-lg transition-shadow"
                     >
                         <Package className="w-8 h-8 mb-3" />
@@ -197,7 +197,7 @@ export default function BuyerDashboard() {
                                 Recent Orders
                             </h2>
                             <Link
-                                href="/marketplace/orders"
+                                href="/marketplace/buyer/orders"
                                 className="text-green-600 hover:text-green-700 font-semibold text-sm"
                             >
                                 View All →
@@ -255,7 +255,7 @@ export default function BuyerDashboard() {
 
                                             <div className="flex items-center justify-end pt-4 border-t border-slate-200">
                                                 <Link
-                                                    href={`/marketplace/orders/${order.id}`}
+                                                    href={`/marketplace/buyer/orders/${order.id}`}
                                                     className="text-sm text-green-600 hover:text-green-700 font-semibold"
                                                 >
                                                     View Details →

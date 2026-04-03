@@ -165,7 +165,7 @@ export default function VendorDashboardPage() {
                         <div className="space-y-3">
                             {[
                                 { href: "/vendor/overview",  label: "Vendor Overview",  desc: "Analytics & metrics",     icon: BarChart2  },
-                                { href: "/vendor/orders",    label: "View Orders",      desc: "Pending & completed",      icon: ShoppingBag },
+                                { href: "/marketplace/seller/orders", label: "View Orders", desc: "Pending & completed", icon: ShoppingBag },
                                 { href: "/vendor/products",  label: "My Products",      desc: "Manage listings",          icon: Package    },
                                 { href: "/vendor/settings",  label: "Vendor Settings",  desc: "Store configuration",      icon: Settings   },
                             ].map((item) => {
@@ -196,7 +196,7 @@ export default function VendorDashboardPage() {
                     <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold text-slate-900">Recent Activity</h2>
-                            <Link href="/vendor/orders" className="text-sm text-blue-600 hover:underline font-semibold">
+                            <Link href="/marketplace/seller/orders" className="text-sm text-blue-600 hover:underline font-semibold">
                                 View All
                             </Link>
                         </div>

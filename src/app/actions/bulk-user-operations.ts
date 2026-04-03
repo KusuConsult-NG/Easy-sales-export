@@ -660,7 +660,7 @@ export async function exportUserDataAction(
 
         // Get orders
         const ordersSnapshot = await db
-            .collection(COLLECTIONS.ORDERS)
+            .collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("buyerId", "==", userId)
             .limit(50)
             .get();

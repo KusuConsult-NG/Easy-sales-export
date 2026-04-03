@@ -47,7 +47,7 @@ export async function createReviewAction(params: {
         }
 
         // Get order and verify
-        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
+        const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
         if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
         }

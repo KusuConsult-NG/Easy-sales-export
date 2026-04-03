@@ -35,7 +35,7 @@ function NewReviewContent() {
             loadOrder();
         } else {
             showToast("No order specified", "error");
-            router.push("/dashboard/orders");
+            router.push("/marketplace/buyer/orders");
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orderId]);
@@ -53,11 +53,11 @@ function NewReviewContent() {
                 }
             } else {
                 showToast("Order not found", "error");
-                router.push("/dashboard/orders");
+                router.push("/marketplace/buyer/orders");
             }
         } catch (error) {
             showToast("Failed to load order", "error");
-            router.push("/dashboard/orders");
+            router.push("/marketplace/buyer/orders");
         } finally {
             setLoading(false);
         }
@@ -89,7 +89,7 @@ function NewReviewContent() {
 
             if (result.success) {
                 showToast("Review submitted successfully! It will appear after moderation.", "success");
-                router.push("/dashboard/orders");
+                router.push("/marketplace/buyer/orders");
             } else {
                 showToast(result.error || "Failed to submit review", "error");
             }

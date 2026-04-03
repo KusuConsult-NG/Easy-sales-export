@@ -143,8 +143,27 @@ export async function deleteCertificateAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        // Delete from Storage (placeholder - actual implementation would delete the file)
-        // await deleteObject(ref(storage, cert.fileUrl));
+        // Delete from Cloud Storage
+        if (cert.fileUrl) {
+            try {
+                const { getStorage } = await import("firebase-admin/storage");
+                const bucket = getStorage().bucket();
+                // Extract object path: strip the signed URL prefix / query string
+                // fileUrl is in the format: https://storage.googleapis.com/<bucket>/<path>?...
+                const urlObj = new URL(cert.fileUrl);
+                // Path is everything after the bucket name segment
+                const pathParts = urlObj.pathname.split("/");
+                // pathname = /<bucket>/certificates/<userId>/<filename>
+                // We drop index 0 (empty) and index 1 (bucket name)
+                const objectPath = pathParts.slice(2).join("/");
+                if (objectPath) {
+                    await bucket.file(objectPath).delete({ ignoreNotFound: true });
+                }
+            } catch (storageError) {
+                // Log but don't fail — Firestore doc is still deleted
+                logger.warn("Failed to delete certificate file from storage:", { error: storageError instanceof Error ? storageError.message : String(storageError) });
+            }
+        }
 
         // Delete from Firestore
         await certRef.delete();

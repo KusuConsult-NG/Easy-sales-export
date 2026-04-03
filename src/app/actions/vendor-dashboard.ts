@@ -28,7 +28,7 @@ export async function getVendorSalesStatsAction() {
         startOfWeek.setHours(0, 0, 0, 0);
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
+        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("vendorId", "==", vendorId)
             .where("paymentStatus", "==", "paid")
             .get();
@@ -79,7 +79,7 @@ export async function getVendorRevenueTrendsAction() {
         const thirtyDaysAgo = new Date(now);
         thirtyDaysAgo.setDate(now.getDate() - 30);
 
-        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
+        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("vendorId", "==", vendorId)
             .where("paymentStatus", "==", "paid")
             .where("createdAt", ">=", thirtyDaysAgo)
@@ -127,7 +127,7 @@ export async function getTopSellingProductsAction(limit: number = 5) {
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
-        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
+        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("vendorId", "==", vendorId)
             .where("paymentStatus", "==", "paid")
             .get();
@@ -223,7 +223,7 @@ export async function getVendorRevenueInsightsAction() {
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
-        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
+        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("vendorId", "==", vendorId)
             .get();
 
@@ -280,7 +280,7 @@ export async function getVendorActivityFeedAction(limit: number = 20) {
         const vendorId = session.user.id;
         const activities: Array<any> = [];
 
-        const ordersSnapshot = await db.collection(COLLECTIONS.VENDOR_ORDERS)
+        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("vendorId", "==", vendorId)
             .orderBy("createdAt", "desc")
             .limit(10)

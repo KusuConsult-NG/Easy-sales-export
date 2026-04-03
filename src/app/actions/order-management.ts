@@ -315,3 +315,45 @@ export async function confirmDeliveryAction(orderId: string) {
     }
 }
 
+/**
+ * Get a single order by ID — seller view
+ * Verifies the caller is either the seller on the order or an admin.
+ */
+export async function getOrderByIdForSellerAction(orderId: string) {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+
+        if (!session?.user) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
+
+        if (!orderDoc.exists) {
+            return { success: false, error: "Order not found" };
+        }
+
+        const data = orderDoc.data()!;
+        const isAdmin = hasRole(session.user.roles || [], "admin") || hasRole(session.user.roles || [], "super_admin");
+
+        if (data.sellerId !== session.user.id && !isAdmin) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const order: Order = {
+            ...data,
+            id: orderDoc.id,
+            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+            updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
+        } as Order;
+
+        return { success: true, order };
+    } catch (error: any) {
+        logger.error("Get seller order by ID error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+

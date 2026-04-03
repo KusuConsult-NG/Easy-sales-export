@@ -72,7 +72,7 @@ export async function getVendorOrdersAction(filters?: {
             return { success: false, error: "Unauthorized" };
         }
 
-        let query = db.collection(COLLECTIONS.VENDOR_ORDERS).where("vendorId", "==", session.user.id);
+        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).where("vendorId", "==", session.user.id);
 
         if (filters?.status) {
             query = query.where("status", "==", filters.status);
@@ -112,7 +112,7 @@ export async function updateVendorOrderStatusAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        const orderRef = db.collection(COLLECTIONS.VENDOR_ORDERS).doc(orderId);
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
         const updateData: any = {
             status,

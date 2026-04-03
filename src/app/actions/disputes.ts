@@ -35,7 +35,7 @@ export async function createDisputeAction(params: {
         }
 
         // Get order and verify ownership
-        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
+        const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
         if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
         }
@@ -72,7 +72,7 @@ export async function createDisputeAction(params: {
         // Previously two separate writes could leave the order in 'disputed' status
         // with no corresponding dispute document if the second write failed.
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(); // pre-allocate ID
-        const orderRef = db.collection(COLLECTIONS.ORDERS).doc(orderId);
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
         await db.runTransaction(async (tx) => {
             // Re-read order inside transaction to prevent TOCTOU
@@ -341,7 +341,7 @@ export async function updateDisputeStatusAction(
 
             // Update linked order status
             if (freshDispute.orderId) {
-                const orderRef = db.collection(COLLECTIONS.ORDERS).doc(freshDispute.orderId);
+                const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(freshDispute.orderId);
                 let newOrderStatus: string;
 
                 if (resolution === "refund_buyer") {

@@ -107,7 +107,7 @@ export async function createOrderAction(
             const total = subtotal + deliveryFee;
 
             // 3. Create Order
-            const orderRef = db.collection(COLLECTIONS.ORDERS).doc();
+            const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc();
             const orderId = orderRef.id;
 
             const orderData: Partial<Order> = {
@@ -164,7 +164,7 @@ export async function getOrderByIdAction(orderId: string) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
+        const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
 
         if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
@@ -201,7 +201,7 @@ export async function updateOrderPaymentAction(
             return { success: false, error: "Not authenticated" };
         }
 
-        const orderDoc = await db.collection(COLLECTIONS.ORDERS).doc(orderId).get();
+        const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
 
         if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
@@ -213,7 +213,7 @@ export async function updateOrderPaymentAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection(COLLECTIONS.ORDERS).doc(orderId).update({
+        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).update({
             paymentStatus: paymentStatus === "success" ? "paid" : "failed",
             paymentReference,
             status: paymentStatus === "success" ? "confirmed" : "cancelled",

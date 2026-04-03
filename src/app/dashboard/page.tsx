@@ -223,9 +223,9 @@ function DashboardHomeContent() {
             try {
                 const snap = await getDocs(
                     query(
-                        collection(db, COLLECTIONS.ORDERS),
+                        collection(db, COLLECTIONS.MARKETPLACE_ORDERS),
                         where("buyerId", "==", userId),
-                        where("status", "in", ["pending_payment", "payment_received", "processing", "shipped"])
+                        where("orderStatus", "in", ["pending", "confirmed", "processing", "shipped"])
                     )
                 );
                 setStats(s => ({ ...s, activeOrders: snap.size }));
@@ -233,6 +233,7 @@ function DashboardHomeContent() {
         }
         fetchOrders();
     }, [userId]);
+
 
     if (status === "loading") {
         return (

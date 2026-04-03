@@ -381,7 +381,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         });
 
         revalidatePath("/dashboard");
-        revalidatePath("/marketplace/orders");
+        revalidatePath("/marketplace/buyer/orders");
 
         // Notify buyer (payment confirmed) + all sellers (payment received) + admins
         const uniqueSellerIds = Array.from(new Set(orderData.items?.map((i: any) => i.sellerId) || [])) as string[];

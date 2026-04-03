@@ -264,7 +264,7 @@ export default function OrdersPage() {
                                     {/* Actions */}
                                     <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                         <Link
-                                            href={`/marketplace/orders/${order.orderId}`}
+                                            href={`/marketplace/buyer/orders/${order.orderId}`}
                                             className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-semibold text-sm"
                                         >
                                             <Eye className="w-4 h-4" />

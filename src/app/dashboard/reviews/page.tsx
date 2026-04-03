@@ -310,7 +310,7 @@ export default function MyReviewsPage() {
                             You haven't written any reviews yet
                         </p>
                         <button
-                            onClick={() => router.push("/dashboard/orders")}
+                            onClick={() => router.push("/marketplace/buyer/orders")}
                             className="px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition"
                         >
                             View Orders
