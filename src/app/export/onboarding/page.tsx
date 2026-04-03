@@ -77,6 +77,9 @@ export default function ExportOnboardingPage() {
 
                 const status = await checkExportStatusAction();
                 if (status === "pending_approval" || status === "pending" || status === "under_review") {
+                    const params = new URLSearchParams(window.location.search);
+                    const isEditParam = params.get("edit") === "true";
+
                     if (isEditParam) {
                         const result = await getExportApplicationAction();
                         if (result.success && result.data) {
@@ -85,7 +88,9 @@ export default function ExportOnboardingPage() {
                         setIsEditMode(true);
                         setIsLoading(false);
                     } else {
-                        router.replace("/export/onboarding/pending");
+                        // Stay on page — do NOT auto-redirect pending users
+                        // They can navigate to the pending status page themselves via a link
+                        setIsLoading(false);
                     }
                 } else if (status === "approved" || status === "active") {
                     router.replace("/export/dashboard");

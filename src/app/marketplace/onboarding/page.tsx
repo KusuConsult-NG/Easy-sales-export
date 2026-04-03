@@ -112,7 +112,8 @@ export default function MarketplaceOnboarding() {
                         }
                         setIsEditMode(true);
                     } else {
-                        router.replace("/marketplace/onboarding/pending");
+                        // Stay on page — do NOT auto-redirect pending users
+                        // No-op: form stays as-is
                     }
                 } else if (result?.status === "approved" || result?.status === "active") {
                     if (result.accountType === "seller" || result.accountType === "both") {

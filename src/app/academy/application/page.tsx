@@ -90,7 +90,10 @@ export default function AcademyApplicationPage() {
                         setPaymentStatus(payStatus);
                         setIsLoading(false);
                     } else {
-                        router.replace("/academy/application/pending");
+                        // Stay on page — do NOT auto-redirect pending users
+                        const payStatus = await checkAcademyPaymentStatusAction();
+                        setPaymentStatus(payStatus);
+                        setIsLoading(false);
                     }
                 } else if (status === "approved" || status === "active") {
                     router.replace("/academy/dashboard");

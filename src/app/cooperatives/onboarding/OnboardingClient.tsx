@@ -122,7 +122,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     setIsCheckingStatus(false);
                     return;
                 } else {
-                    router.replace(`${prefix}/onboarding/pending`);
+                    // Stay on page — do NOT auto-redirect pending users
+                    setIsCheckingStatus(false);
                     return;
                 }
             }

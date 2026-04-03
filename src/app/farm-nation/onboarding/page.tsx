@@ -85,7 +85,8 @@ export default function FarmNationOnboardingPage() {
                         setIsEditMode(true);
                         setIsLoading(false);
                     } else {
-                        router.replace("/farm-nation/onboarding/pending");
+                        // Stay on page — do NOT auto-redirect pending users
+                        setIsLoading(false);
                     }
                 } else if (status === "approved" || status === "active") {
                     router.replace("/farm-nation/properties");
