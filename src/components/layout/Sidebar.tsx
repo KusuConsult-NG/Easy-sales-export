@@ -92,11 +92,33 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     };
 
     const currentModuleKey = getModuleKey(pathname || "");
-    const moduleNavItems = MODULE_NAVIGATION[currentModuleKey] || MODULE_NAVIGATION["dashboard"];
 
-    // Filter navigation based on user's role
+    // User roles — must be declared before the module guard below
     const userRoles = (session?.user?.roles as UserRole[]) || [];
 
+    // ── Module enrollment guard ───────────────────────────────────────────────
+    // We only show module-specific nav when the user is enrolled in that module.
+    // If a user navigates to /marketplace but only has wave_participant role,
+    // we show the dashboard nav instead of marketplace nav — prevents phantom links.
+    const moduleAppMap: Record<string, AppIdentifier | null> = {
+        export: "export",
+        marketplace: "marketplace",
+        cooperatives: "cooperatives",
+        "farm-nation": "farm-nation",
+        wave: "wave",
+        academy: "academy",
+        admin: null, // Admin access handled separately
+        dashboard: null, // Dashboard is universal
+    };
+    const moduleApp = moduleAppMap[currentModuleKey];
+    const userHasModuleAccess =
+        moduleApp === null || // universal (dashboard/admin)
+        hasAppAccess(userRoles, moduleApp as AppIdentifier);
+
+    const resolvedModuleKey = userHasModuleAccess ? currentModuleKey : "dashboard";
+    const moduleNavItems = MODULE_NAVIGATION[resolvedModuleKey] || MODULE_NAVIGATION["dashboard"];
+
+    // Filter navigation based on user's role
     const filterNavItems = (items: NavigationItem[]) => {
         return items.filter(item => {
             if (item.app && !hasAppAccess(userRoles, item.app as AppIdentifier)) return false;

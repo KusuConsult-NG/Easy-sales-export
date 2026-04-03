@@ -113,16 +113,37 @@ export default function DashboardNav() {
 
     const moduleLinks = getModuleLinks(roles);
 
+    // ── Role-gated nav items ──────────────────────────────────────────────────
+    // ONLY show module-specific links to users who have actually enrolled.
+    // "My Orders", "Disputes" = Marketplace users only (buyer or seller)
+    // "My Reviews"           = Marketplace OR Farm Nation users
+    // "Certificates"         = WAVE or Academy participants
+    const isMarketplaceUser = roles.includes("buyer") || roles.includes("seller");
+    const isFarmNationUser  = roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor");
+    const isWaveOrAcademy   = roles.includes("wave_participant") || roles.includes("academy_participant");
+    const isAdmin           = roles.includes("admin") || roles.includes("super_admin");
+
     const coreNavItems: NavItem[] = [
-        { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
-        { label: "Wallet", href: "/dashboard/wallet", icon: Wallet },
-        { label: "My Orders", href: "/marketplace/buyer/orders", icon: Package },
-        { label: "Messages", href: "/messages", icon: MessageCircle, badge: unreadMessages || null },
-        { label: "Notifications", href: "/dashboard/notifications", icon: Bell, badge: unreadCount || null },
-        { label: "My Reviews", href: "/dashboard/reviews", icon: Star },
-        { label: "Certificates", href: "/dashboard/certificates", icon: Award },
-        { label: "Digital ID", href: "/dashboard/digital-id", icon: IdCard },
-        { label: "Disputes", href: "/dashboard/disputes", icon: AlertTriangle },
+        { label: "Overview",       href: "/dashboard",                  icon: LayoutDashboard },
+        { label: "Wallet",         href: "/dashboard/wallet",           icon: Wallet },
+        // Messages + Notifications — universal
+        { label: "Messages",       href: "/messages",                   icon: MessageCircle, badge: unreadMessages || null },
+        { label: "Notifications",  href: "/dashboard/notifications",    icon: Bell,          badge: unreadCount || null },
+        // Digital ID — universal
+        { label: "Digital ID",     href: "/dashboard/digital-id",       icon: IdCard },
+        // Marketplace-only items
+        ...(isMarketplaceUser || isAdmin ? [
+            { label: "My Orders",  href: "/marketplace/buyer/orders",   icon: Package },
+            { label: "Disputes",   href: "/dashboard/disputes",         icon: AlertTriangle },
+        ] : []),
+        // Reviews — marketplace or farm nation users
+        ...((isMarketplaceUser || isFarmNationUser || isAdmin) ? [
+            { label: "My Reviews", href: "/dashboard/reviews",          icon: Star },
+        ] : []),
+        // Certificates — WAVE or Academy participants (or admin)
+        ...(isWaveOrAcademy || isAdmin ? [
+            { label: "Certificates", href: "/dashboard/certificates",   icon: Award },
+        ] : []),
     ];
 
     function isActive(href: string) {
