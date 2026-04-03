@@ -24,17 +24,28 @@ export default function CooperativePaymentPage() {
 
         const checkExisting = async () => {
             try {
-                const { checkCooperativeStatusAction } = await import("@/app/actions/cooperative");
-                const status = await checkCooperativeStatusAction();
-                if (status === "approved" || status === "active") {
-                    showToast("You are already a cooperative member!", "info");
-                    router.replace("/cooperatives/dashboard");
-                    return;
-                }
-                if (status === "pending" || status === "under_review") {
-                    showToast("Your application is being reviewed.", "info");
-                    router.replace("/cooperatives/onboarding/pending");
-                    return;
+                const { getMembershipAction } = await import("@/app/actions/cooperative");
+                const response = await getMembershipAction();
+                if (response.success && response.data) {
+                    const status = response.data.membershipStatus;
+                    const paymentStatus = response.data.paymentStatus;
+                    
+                    if (status === "approved" || status === "active") {
+                        showToast("You are already a cooperative member!", "info");
+                        router.replace("/cooperatives/dashboard");
+                        return;
+                    }
+                    if (status === "pending") {
+                        showToast("Your application is being reviewed.", "info");
+                        router.replace("/cooperatives/onboarding/pending");
+                        return;
+                    }
+                    
+                    if (paymentStatus === "completed") {
+                        showToast("Payment already completed. Please proceed to onboarding.", "info");
+                        router.replace("/cooperatives/onboarding");
+                        return;
+                    }
                 }
             } catch {
                 // No existing membership, allow payment

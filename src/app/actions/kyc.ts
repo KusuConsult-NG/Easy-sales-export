@@ -213,6 +213,9 @@ export async function verifyVotersCardAction(payload: {
             };
         }
 
+        // Update overall KYC status if Voter's Card now verified
+        await updateOverallKYCStatus(userId);
+
         logger.info("Voter's Card verified successfully", { userId });
         return { success: true, isMatch: true };
     } catch (error: any) {
@@ -376,9 +379,10 @@ async function updateOverallKYCStatus(userId: string) {
 
         const bvnVerified = kyc.bvnVerified === true;
         const ninVerified = kyc.ninVerified === true;
+        const votersCardVerified = kyc.votersCardVerified === true;
 
-        // KYC is considered complete when BOTH primary IDs are verified
-        const kycComplete = bvnVerified && ninVerified;
+        // KYC is considered complete when BVN is verified and at least one primary ID (NIN or Voter's Card) is verified
+        const kycComplete = bvnVerified && (ninVerified || votersCardVerified);
 
         await userRef.update({
             'kyc.status': kycComplete ? 'verified' : 'pending',
