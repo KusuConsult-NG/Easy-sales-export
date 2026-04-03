@@ -17,24 +17,33 @@ interface ClientLayoutProps {
     children: ReactNode;
 }
 
-// Routes that should NOT have the Sidebar (auth pages, landing page, etc.)
+// Routes that should NOT have the global Sidebar (auth pages, landing page, admin, or modules with their own sidebar)
 const noSidebarRoutes = [
     '/auth',
     '/contact',
     '/api',
-    '/admin' // Admin has its own layout/sidebar
+    '/admin',            // Admin has its own layout/sidebar
+    '/farm-nation',      // Farm Nation has its own FarmNationSidebar
+    '/marketplace/seller', // Marketplace seller area has its own MarketplaceSidebar
+    '/export',           // Export has its own ExportSidebar
+    '/academy',          // Academy has its own AcademySidebar
 ];
 
 // Routes that are strictly landing pages (exact match) where sidebar should be hidden even if authenticated
 const landingPages = [
     '/',
     '/wave',
+    '/wave/landing',
     '/cooperatives',
+    '/cooperatives/landing',
     '/marketplace',
+    '/marketplace/landing',
     '/farm-nation',
+    '/farm-nation/landing',
     '/academy',
+    '/academy/landing',
     '/export',
-    '/wave/landing'
+    '/export/landing',
 ];
 
 function LayoutContent({ children }: ClientLayoutProps) {

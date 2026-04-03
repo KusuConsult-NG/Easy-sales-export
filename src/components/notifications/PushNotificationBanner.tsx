@@ -92,7 +92,7 @@ export function PushNotificationBanner() {
     // Success state — briefly shows confirmation then fades
     if (enabled) {
         return (
-            <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-xl text-sm font-semibold animate-pulse-once">
+            <div className="fixed bottom-4 right-4 z-60 flex items-center gap-3 bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-xl text-sm font-semibold animate-pulse-once">
                 <Bell className="w-4 h-4" />
                 Notifications enabled!
             </div>
@@ -103,7 +103,7 @@ export function PushNotificationBanner() {
 
     return (
         <div
-            className={`fixed bottom-4 right-4 z-50 max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 transition-all duration-300 ${visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+            className={`fixed bottom-4 right-4 z-60 max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 transition-all duration-300 ${visible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
                 }`}
         >
             <div className="flex items-start gap-3">
