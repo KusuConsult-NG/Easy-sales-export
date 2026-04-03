@@ -29,10 +29,45 @@ const DOMAIN_MAP: Record<string, string> = {
     "easysalesexport.com": "", // Hub represents the root
 };
 
+// ── All apex (non-www) hosts that should redirect to their www version ─────────
+// Include every custom domain and every easysalesexport.com subdomain here.
+// www.* hosts are NOT listed — they should never redirect (infinite loop).
+const APEX_DOMAINS: readonly string[] = [
+    // Main hub
+    "easysalesexport.com",
+    // Dedicated module domains (custom)
+    "easysalesexportacademy.com",
+    "easysalescooperative.com",
+    "easysalesmarket.com",
+    "waveprogramme.com",
+    "farmnation.ng",
+    "easysalesexportng.com",
+    // Subdomain aliases under the hub (e.g. academy.easysalesexport.com)
+    "marketplace.easysalesexport.com",
+    "wave.easysalesexport.com",
+    "academy.easysalesexport.com",
+    "farmnation.easysalesexport.com",
+    "farm-nation.easysalesexport.com",
+    "cooperatives.easysalesexport.com",
+    "export.easysalesexport.com",
+];
+
 export default auth((req: any) => {
     const { pathname } = req.nextUrl;
     const hostname = req.headers.get("host")?.replace(/:\d+$/, "") || "";
     const userAgent = req.headers.get("user-agent")?.toLowerCase() || "";
+
+    // ── 0. Apex → www permanent redirect ─────────────────────────────────────
+    // When a user types the bare domain (no www.), redirect them to www.
+    // 308 Permanent Redirect: cached by browsers, preserves POST method.
+    // Skipped for localhost, Railway preview URLs, and www.* hosts.
+    if (APEX_DOMAINS.includes(hostname)) {
+        const wwwUrl = req.nextUrl.clone();
+        wwwUrl.host = `www.${hostname}`;
+        wwwUrl.protocol = "https:";
+        wwwUrl.port = "";
+        return NextResponse.redirect(wwwUrl, { status: 308 });
+    }
 
     // Security Headers are set by next.config.ts headers() — not here.
     // Middleware must not duplicate them (last-writer-wins causes conflicts).
