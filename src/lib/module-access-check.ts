@@ -33,12 +33,25 @@ const APP_TO_REG_KEY: Partial<Record<AppIdentifier, string>> = {
     marketplace: "marketplace",
 };
 
+/** Maps each AppIdentifier to the Firestore role(s) that grant access */
+const APP_TO_ROLES: Partial<Record<AppIdentifier, string[]>> = {
+    wave:         ["wave_participant"],
+    academy:      ["academy_participant"],
+    export:       ["export_participant"],
+    cooperatives: ["cooperative_member"],
+    "farm-nation": ["farmer", "land_owner", "investor"],
+    marketplace:  ["buyer", "seller"],
+};
+
 /**
  * Returns true if the user has access to the given app.
  *
- * Fast path: JWT role check.
- * Fallback:  Firestore serviceRegistrations check for "approved" status.
- *            Used when the JWT is stale after admin approval.
+ * Layer 1 (fast)    — JWT role check via hasAppAccess(). Covers 99% of requests.
+ * Layer 2 (Firestore) — serviceRegistrations[module].status === "approved"|"active".
+ *                       Handles stale JWT after normal onboarding approval.
+ * Layer 2.5 (Firestore roles) — Direct roles[] array lookup on the user document.
+ *                       Handles manually-added users where serviceRegistrations
+ *                       was never written (e.g. admin used "Update Roles" only).
  */
 export async function checkModuleAccess(
     userId: string,
@@ -50,9 +63,8 @@ export async function checkModuleAccess(
         return true;
     }
 
-    // ── Layer 2: Firestore fallback (handles stale JWT after admin approval) ──
+    // ── Layer 2: Firestore fallback (handles stale JWT after normal approval) ──
     const regKey = APP_TO_REG_KEY[app];
-    if (!regKey) return false;
 
     try {
         const db = getAdminDb();
@@ -60,14 +72,36 @@ export async function checkModuleAccess(
 
         if (!userDoc.exists) return false;
 
-        const serviceRegistrations = userDoc.data()?.serviceRegistrations || {};
-        const registration = serviceRegistrations[regKey];
+        const userData = userDoc.data()!;
 
-        if (registration?.status === "approved") {
-            logger.info(
-                `[ModuleAccess] JWT stale — Firestore confirmed approval for '${app}' (uid: ${userId}). Granting access.`
-            );
-            return true;
+        // Layer 2 — serviceRegistrations check
+        if (regKey) {
+            const serviceRegistrations = userData.serviceRegistrations || {};
+            const registration = serviceRegistrations[regKey];
+            const VALID_STATUSES = ["approved", "active"];
+
+            if (VALID_STATUSES.includes(registration?.status)) {
+                logger.info(
+                    `[ModuleAccess] Layer 2 — serviceRegistrations confirmed '${app}' access (uid: ${userId}, status: ${registration.status}).`
+                );
+                return true;
+            }
+        }
+
+        // ── Layer 2.5: Direct Firestore roles[] check ───────────────────────────
+        // Handles users who were manually assigned a role via the admin "Update Roles"
+        // panel BEFORE the serviceRegistrations backfill was added. Their Firestore
+        // roles array is correct but serviceRegistrations was never written.
+        const requiredRoles = APP_TO_ROLES[app];
+        if (requiredRoles) {
+            const firestoreRoles: string[] = userData.roles || [];
+            const hasRole = requiredRoles.some(r => firestoreRoles.includes(r));
+            if (hasRole) {
+                logger.info(
+                    `[ModuleAccess] Layer 2.5 — Firestore roles[] confirmed '${app}' access (uid: ${userId}, roles: ${firestoreRoles.join(", ")}).`
+                );
+                return true;
+            }
         }
 
         return false;

@@ -1550,15 +1550,39 @@ export async function updateUserRolesAction(
             return { error: "Cannot remove your own admin privileges", success: false };
         }
 
+        // ── Write serviceRegistrations for module roles ────────────────────────
+        // Without this, manually-added users fail the stale-JWT fallback in
+        // checkModuleAccess (Layer 2 checks serviceRegistrations[module].status).
+        // They would only gain access after logout/re-login (JWT refresh).
+        const serviceUpdates: Record<string, any> = {};
+        const MODULE_ROLE_REGS = [
+            { roles: ["wave_participant"],             key: "serviceRegistrations.wave",         status: "approved" },
+            { roles: ["cooperative_member"],           key: "serviceRegistrations.cooperatives",  status: "approved" },
+            { roles: ["export_participant"],           key: "serviceRegistrations.export",        status: "approved" },
+            { roles: ["academy_participant"],          key: "serviceRegistrations.academy",       status: "active"   },
+            { roles: ["farmer", "land_owner", "investor"], key: "serviceRegistrations.farmNation", status: "approved" },
+            { roles: ["buyer", "seller"],              key: "serviceRegistrations.marketplace",   status: "approved" },
+        ];
+        for (const mapping of MODULE_ROLE_REGS) {
+            if (mapping.roles.some(r => roles.includes(r))) {
+                serviceUpdates[`${mapping.key}.status`] = mapping.status;
+                serviceUpdates[`${mapping.key}.enrolledAt`] = FieldValue.serverTimestamp();
+                serviceUpdates[`${mapping.key}.enrolledBy`] = session.user.id;
+                serviceUpdates[`${mapping.key}.note`] = "Manual admin role assignment";
+            }
+        }
+
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             roles: roles,
             updatedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp()
+            updatedAt: FieldValue.serverTimestamp(),
+            ...serviceUpdates,
         });
 
         await logAuditAction("user_role_update", userId, "user", {
             roles,
-            adminId: session.user.id
+            adminId: session.user.id,
+            serviceRegistrationsUpdated: Object.keys(serviceUpdates).length > 0,
         });
 
         return { success: true, error: null, message: "User roles updated" };
