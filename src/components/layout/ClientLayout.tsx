@@ -29,7 +29,11 @@ const noSidebarRoutes = [
     '/farm-nation',        // Farm Nation has its own FarmNationSidebar
     '/marketplace/seller', // Marketplace seller area has its own MarketplaceSidebar
     '/export',             // Export has its own ExportSidebar
-    // NOTE: /academy intentionally removed — global Sidebar handles Academy nav
+    // Academy: onboarding/payment flows only — sidebar not needed on these
+    '/academy/application',
+    '/academy/payment',
+    '/academy/setup',
+    '/academy/verify',
 ];
 
 // Routes that are strictly landing pages (exact match) where sidebar should be hidden even if authenticated
@@ -67,14 +71,13 @@ function LayoutContent({ children }: ClientLayoutProps) {
         pathname.includes('/onboarding') ||
         pathname.includes('/application') ||   // Wave application steps
         pathname.includes('/join') ||
-        pathname.includes('/payment') ||        // Cooperative/Academy payment flow
-        pathname.includes('/verify-payment') || // Payment verification
-        pathname.includes('/verify') ||         // Academy Paystack callback (/academy/verify)
+        pathname.includes('/verify-payment') || // Cooperative payment verification
         pathname.includes('/pending') ||        // Pending approval pages
         pathname.includes('/pending-payment') ||
         pathname.includes('/review-pending') || // Wave review pending
-        pathname.includes('/setup') ||          // Academy setup
         pathname.includes('/access-denied');    // Access denied pages
+    // NOTE: /academy/payment, /academy/setup, /academy/verify handled in noSidebarRoutes (prefix match)
+    // NOTE: /payment and /setup removed from isExcludedFlow — too broad; use noSidebarRoutes for precision
 
     // NOTE: We intentionally do NOT gate the sidebar on JWT roles here.
     // Module layouts already enforce access via a two-layer check (JWT + Firestore fallback).
