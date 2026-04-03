@@ -257,12 +257,8 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         const applicantPhone = validatedData.phone.replace(/\s+/g, '').trim();
         const applicantNin   = validatedData.nin.trim();
 
-        const [userDoc, emailSnap, phoneSnap, ninSnap] = await Promise.all([
+        const [userDoc, phoneSnap, ninSnap] = await Promise.all([
             db.collection(COLLECTIONS.USERS).doc(session.user.id).get(),
-            db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("userEmail", "==", applicantEmail)
-                .limit(1)
-                .get(),
             db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("phone", "==", applicantPhone)
                 .limit(1)
@@ -272,6 +268,14 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
                 .limit(1)
                 .get(),
         ]);
+
+        let emailSnap = null;
+        if (applicantEmail !== "") {
+            emailSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("userEmail", "==", applicantEmail)
+                .limit(1)
+                .get();
+        }
 
         const existingStatus = userDoc.data()?.serviceRegistrations?.wave?.status;
 
@@ -289,7 +293,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         }
 
         // 🔒 Collection-level uniqueness checks (catches multi-account fraud)
-        if (!emailSnap.empty) {
+        if (emailSnap && !emailSnap.empty) {
             return {
                 success: false,
                 error: "An application with this email address already exists in the WAVE program."
@@ -707,6 +711,7 @@ export interface MemberEarnings {
     commissionRate: number;
     pendingAmount: number;
     paidAmount: number;
+    totalWithdrawn?: number;
     transactions: {
         date: Date;
         orderId: string;
@@ -765,14 +770,29 @@ export async function calculateEarningsAction(userId: string): Promise<MemberEar
             });
         });
 
+        // Fetch past withdrawals to subtract from paidAmount to get true available balance
+        const withdrawalsSnap = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
+            .where("userId", "==", userId)
+            .where("status", "in", ["pending", "approved", "completed"])
+            .get();
+        
+        let withdrawnAmount = 0;
+        withdrawalsSnap.docs.forEach(doc => {
+            const w = doc.data();
+            withdrawnAmount += (w.amount || 0);
+        });
+
+        const availableBalance = Math.max(0, paidAmount - withdrawnAmount);
+
         return {
             memberId: userId,
             totalSales,
             totalEarnings,
             commissionRate,
             pendingAmount,
-            paidAmount,
-            transactions: transactions.sort((a, b) => b.date.getTime() - a.date.getTime()),
+            paidAmount: availableBalance, // Actually available to withdraw
+            totalWithdrawn: withdrawnAmount, // newly added for clarity
+            transactions: transactions.sort((a: any, b: any) => b.date.getTime() - a.date.getTime()),
         };
     } catch (error) {
         logger.error("Calculate earnings error:", error);
@@ -783,6 +803,7 @@ export async function calculateEarningsAction(userId: string): Promise<MemberEar
             commissionRate: 0.05,
             pendingAmount: 0,
             paidAmount: 0,
+            totalWithdrawn: 0,
             transactions: [],
         };
     }

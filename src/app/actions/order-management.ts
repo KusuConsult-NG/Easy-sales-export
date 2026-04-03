@@ -36,7 +36,7 @@ export async function getSellerOrdersAction(filters?: {
         }
 
         // Build query
-        let query = db.collection(COLLECTIONS.ORDERS)
+        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerId", "==", userId)
             .orderBy("createdAt", "desc");
 
@@ -82,7 +82,7 @@ export async function updateOrderStatusAction(
         const userId = session.user.id;
 
         // Get order
-        const orderRef = db.collection(COLLECTIONS.ORDERS).doc(orderId);
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
         const orderDoc = await orderRef.get();
 
         if (!orderDoc.exists) {
@@ -129,7 +129,36 @@ export async function updateOrderStatusAction(
             updateData.deliveredAt = FieldValue.serverTimestamp();
         }
 
-        await orderRef.update(updateData);
+        // 🔒 RESTORE INVENTORY IF CANCELLED
+        if (newStatus === "cancelled" && order.status !== "cancelled") {
+            await db.runTransaction(async (transaction) => {
+                // Ensure order hasn't changed flag in the meantime
+                const currentOrder = await transaction.get(orderRef);
+                if (!currentOrder.exists || currentOrder.data()?.status === "cancelled") {
+                    return; // Already cancelled or deleted
+                }
+
+                const items = order.items || [];
+                
+                // Read all product docs first to avoid write-before-read lock issues
+                const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
+                await Promise.all(productRefs.map(ref => transaction.get(ref)));
+
+                // Restore quantities
+                for (const item of items) {
+                    const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                    transaction.update(productRef, {
+                        availableQuantity: FieldValue.increment(item.quantity),
+                        orders: FieldValue.increment(-1)
+                    });
+                }
+
+                // Finally update order status
+                transaction.update(orderRef, updateData);
+            });
+        } else {
+            await orderRef.update(updateData);
+        }
 
         return { success: true };
     } catch (error: any) {
@@ -156,7 +185,7 @@ export async function getBuyerOrdersAction(filters?: {
         const userId = session.user.id;
 
         // Build query
-        let query = db.collection(COLLECTIONS.ORDERS)
+        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("buyerId", "==", userId)
             .orderBy("createdAt", "desc");
 
@@ -198,7 +227,7 @@ export async function confirmDeliveryAction(orderId: string) {
         const userId = session.user.id;
 
         // Get order
-        const orderRef = db.collection(COLLECTIONS.ORDERS).doc(orderId);
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
         const orderDoc = await orderRef.get();
 
         if (!orderDoc.exists) {

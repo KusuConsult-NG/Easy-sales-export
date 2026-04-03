@@ -304,19 +304,30 @@ export async function verifyCoursePaymentAction(reference: string): Promise<{ su
         }
 
         await db.runTransaction(async (t) => {
+            // 🔒 TRANSACTION FIX: Check again inside transaction to prevent race conditions
+            const tExistingDoc = await t.get(existingRef);
+            if (tExistingDoc.exists) {
+                throw new Error("Payment already processed");
+            }
+
             // 1. Enroll User
             const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
-            const progress: UserProgress = {
-                userId,
-                courseId,
-                completedLessons: [],
-                completedModules: [],
-                quizScores: {},
-                overallProgress: 0,
-                startedAt: FieldValue.serverTimestamp(),
-                lastAccessedAt: FieldValue.serverTimestamp(),
-            };
-            t.set(progressRef, progress);
+            // Check if user already has progress (in case they are somehow re-enrolling or upgrading)
+            const tProgressDoc = await t.get(progressRef);
+            
+            if (!tProgressDoc.exists) {
+                const progress: UserProgress = {
+                    userId,
+                    courseId,
+                    completedLessons: [],
+                    completedModules: [],
+                    quizScores: {},
+                    overallProgress: 0,
+                    startedAt: FieldValue.serverTimestamp(),
+                    lastAccessedAt: FieldValue.serverTimestamp(),
+                };
+                t.set(progressRef, progress);
+            }
 
             // 2. Mark Payment Processed
             t.set(existingRef, {
@@ -324,11 +335,9 @@ export async function verifyCoursePaymentAction(reference: string): Promise<{ su
                 type: "academy_enrollment",
                 courseId,
                 userId,
-                amount: verify.data.amount / 100,
+                amount: amountPaid,
                 processedAt: FieldValue.serverTimestamp(),
             });
-
-            // 3. Update Course Analytics (optional)
         });
 
         // Audit
@@ -510,23 +519,29 @@ export async function completeLessonAction(
             }
         }
 
-        const progress = progressDoc.data() as UserProgress;
+        // Use transaction to prevent concurrent lesson completions from overwriting each other
+        await db.runTransaction(async (t) => {
+            const tProgressDoc = await t.get(progressRef);
+            if (!tProgressDoc.exists) throw new Error("Not enrolled");
+            
+            const progress = tProgressDoc.data() as UserProgress;
 
-        if (!progress.completedLessons.includes(lessonId)) {
-            progress.completedLessons.push(lessonId);
-            progress.lastAccessedAt = FieldValue.serverTimestamp();
+            if (!progress.completedLessons.includes(lessonId)) {
+                progress.completedLessons.push(lessonId);
+                progress.lastAccessedAt = FieldValue.serverTimestamp();
 
-            // Calculate overall progress
-            const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
-            progress.overallProgress = Math.round((progress.completedLessons.length / totalLessons) * 100);
+                // Calculate overall progress
+                const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
+                progress.overallProgress = Math.round((progress.completedLessons.length / totalLessons) * 100);
 
-            // Check if course is complete
-            if (progress.completedLessons.length === totalLessons) {
-                progress.completedAt = FieldValue.serverTimestamp();
+                // Check if course is complete
+                if (progress.completedLessons.length === totalLessons) {
+                    progress.completedAt = FieldValue.serverTimestamp();
+                }
+
+                t.set(progressRef, progress);
             }
-
-            await progressRef.set(progress);
-        }
+        });
 
         return { success: true };
     } catch (error) {
@@ -559,28 +574,36 @@ export async function submitQuizScoreAction(
             return { success: false, error: "Not enrolled in this course" };
         }
 
-        const progress = progressDoc.data() as UserProgress;
-        progress.quizScores[moduleId] = score;
-        progress.lastAccessedAt = FieldValue.serverTimestamp();
+        let userPassed = false;
+        
+        await db.runTransaction(async (t) => {
+            const tProgressDoc = await t.get(progressRef);
+            if (!tProgressDoc.exists) throw new Error("Not enrolled");
+            
+            const progress = tProgressDoc.data() as UserProgress;
+            progress.quizScores = progress.quizScores || {};
+            progress.quizScores[moduleId] = score;
+            progress.lastAccessedAt = FieldValue.serverTimestamp();
+            
+            // Check if module is complete (quiz passed)
+            const courseDoc = await t.get(db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId));
+            if (courseDoc.exists) {
+                const course = courseDoc.data() as Course;
+                const module = course.modules?.find((m) => m.id === moduleId);
 
-        // Check if module is complete (quiz passed)
-        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
-        if (courseDoc.exists) {
-            const course = courseDoc.data() as Course;
-            // eslint-disable-next-line @next/next/no-assign-module-variable
-            const module = course.modules.find((m) => m.id === moduleId);
-
-            if (module?.quiz && score >= module.quiz.passingScore) {
-                if (!progress.completedModules.includes(moduleId)) {
-                    progress.completedModules.push(moduleId);
+                if (module?.quiz && score >= module.quiz.passingScore) {
+                    if (!progress.completedModules) progress.completedModules = [];
+                    if (!progress.completedModules.includes(moduleId)) {
+                        progress.completedModules.push(moduleId);
+                    }
+                    userPassed = true;
                 }
-                await progressRef.set(progress);
-                return { success: true, passed: true };
             }
-        }
+            
+            t.set(progressRef, progress);
+        });
 
-        await progressRef.set(progress);
-        return { success: true, passed: false };
+        return { success: true, passed: userPassed };
     } catch (error) {
         logger.error("Quiz submission error:", error);
         return { success: false, error: "Failed to submit quiz" };
@@ -853,57 +876,78 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
             return { success: false, error: "Invalid payment type" };
         }
 
-        // Mark payment as completed for the user using dot notation to prevent overwriting
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
-            "serviceRegistrations.academy.paymentStatus": "completed",
-            "serviceRegistrations.academy.paymentReference": reference,
-            "serviceRegistrations.academy.paymentAmount": verify.data.amount / 100,
-            "serviceRegistrations.academy.plan": metadata.plan || "foundation",
-            "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
-            "updatedAt": FieldValue.serverTimestamp(),
-        });
+        const existingRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
-        // Auto-create academy_applications record so admin can see paid users
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
-        const applicationId = `ACADEMY-${Date.now()}-${(Date.now() / 10000000000).toString(36).substr(2, 9)}`;
+        await db.runTransaction(async (t) => {
+            const tExistingDoc = await t.get(existingRef);
+            if (tExistingDoc.exists) {
+                throw new Error("Payment already processed");
+            }
 
-        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).set({
-            userId: session.user.id,
-            applicationId,
-            personalInfo: {
-                fullName: userData?.fullName || userData?.name || session.user.name || "Unknown",
-                email: userData?.email || session.user.email || "Unknown",
-                phone: userData?.phone || userData?.phoneNumber || "",
-            },
-            education: {
-                educationLevel: "Not provided (auto-created from payment)",
-                fieldOfStudy: "Not provided",
-            },
-            interests: {
-                learningPaths: [],
-                topics: "",
-                goals: "",
-            },
-            status: "pending",
-            paymentStatus: "completed",
-            paymentReference: reference,
-            paymentAmount: verify.data.amount / 100,
-            plan: metadata.plan || "foundation",
-            submittedAt: FieldValue.serverTimestamp(),
-            source: "payment_callback",
-        });
+            const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
+            const userDoc = await t.get(userRef);
+            const userData = userDoc.data();
 
-        // Link the application to the user
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
-            "serviceRegistrations.academy.applicationId": applicationId,
-            "serviceRegistrations.academy.status": "pending",
+            // Mark payment as completed for the user using dot notation to prevent overwriting
+            t.update(userRef, {
+                "serviceRegistrations.academy.paymentStatus": "completed",
+                "serviceRegistrations.academy.paymentReference": reference,
+                "serviceRegistrations.academy.paymentAmount": verify.data.amount / 100,
+                "serviceRegistrations.academy.plan": metadata.plan || "foundation",
+                "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp(),
+            });
+
+            // Auto-create academy_applications record so admin can see paid users
+            const applicationId = `ACADEMY-${Date.now()}-${(Date.now() / 10000000000).toString(36).substring(2, 11)}`;
+            const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
+
+            t.set(appRef, {
+                userId: session.user.id,
+                applicationId,
+                personalInfo: {
+                    fullName: userData?.fullName || userData?.name || session.user.name || "Unknown",
+                    email: userData?.email || session.user.email || "Unknown",
+                    phone: userData?.phone || userData?.phoneNumber || "",
+                },
+                education: {
+                    educationLevel: "Not provided (auto-created from payment)",
+                    fieldOfStudy: "Not provided",
+                },
+                interests: {
+                    learningPaths: [],
+                    topics: "",
+                    goals: "",
+                },
+                status: "pending",
+                paymentStatus: "completed",
+                paymentReference: reference,
+                paymentAmount: verify.data.amount / 100,
+                plan: metadata.plan || "foundation",
+                submittedAt: FieldValue.serverTimestamp(),
+                source: "payment_callback",
+            });
+
+            // Link the application to the user
+            t.update(userRef, {
+                "serviceRegistrations.academy.applicationId": applicationId,
+                "serviceRegistrations.academy.status": "pending",
+            });
+
+            // Mark the payment as processed globally
+            t.set(existingRef, {
+                reference,
+                type: "academy_registration",
+                userId: session.user.id,
+                amount: verify.data.amount / 100,
+                processedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         return { success: true };
     } catch (error: any) {
         logger.error("Academy payment verification error:", error);
-        return { success: false, error: "Failed to verify payment" };
+        return { success: false, error: error.message === "Payment already processed" ? error.message : "Failed to verify payment" };
     }
 }
 
@@ -945,100 +989,93 @@ export async function submitAcademyApplicationAction(
             return { success: false, error: "Authentication required" };
         }
 
-        // Check for existing application
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const existingStatus = userDoc.data()?.serviceRegistrations?.academy?.status;
-
-        if (existingStatus === 'pending' || existingStatus === 'under_review') {
-            return {
-                success: false,
-                error: "Your previous application is still being processed."
-            };
-        }
-        if (existingStatus === 'approved') {
-            return {
-                success: false,
-                error: "You are already enrolled in the Academy program."
-            };
-        }
-
-        // 🔒 DEDUP GUARD: Collection-level phone check
-        // Catches cross-account duplicates (same phone, different account)
         const phone = applicationData.personalInfo.phone;
         const email = applicationData.personalInfo.email;
-        const [phoneExists, emailExists] = await Promise.all([
-            phone
-                ? db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                    .where("personalInfo.phone", "==", phone)
-                    .limit(1)
-                    .get()
-                : Promise.resolve({ empty: true }),
-            email
-                ? db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                    .where("personalInfo.email", "==", email)
-                    .limit(1)
-                    .get()
-                : Promise.resolve({ empty: true }),
-        ]);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
 
-        if (!(phoneExists as any).empty) {
-            return { success: false, error: "An Academy application with this phone number already exists." };
-        }
-        if (!(emailExists as any).empty) {
-            return { success: false, error: "An Academy application with this email already exists." };
-        }
+        let finalApplicationId: string = "";
 
-        // Generate unique application ID
-        const applicationId = `ACADEMY-${Date.now()}-${(Date.now() / 10000000000).toString(36).substr(2, 9)}`;
+        await db.runTransaction(async (t) => {
+            // Check for existing application status on the user
+            const userDoc = await t.get(userRef);
+            const existingStatus = userDoc.data()?.serviceRegistrations?.academy?.status;
 
-        // Save to Firestore
-        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).set({
-            ...applicationData,
-            userId: session.user.id,
-            applicationId,
-            status: "pending",
-            submittedAt: FieldValue.serverTimestamp(),
-            reviewedAt: null,
-            reviewedBy: null,
-            notes: "",
+            if (existingStatus === 'pending' || existingStatus === 'under_review') {
+                throw new Error("Your previous application is still being processed.");
+            }
+            if (existingStatus === 'approved') {
+                throw new Error("You are already enrolled in the Academy program.");
+            }
+
+            // 🔒 DEDUP GUARD: Collection-level phone and email check within transaction
+            const collectionsContext = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
+            if (phone) {
+                const phoneQuery = collectionsContext.where("personalInfo.phone", "==", phone).limit(1);
+                const phoneSnap = await t.get(phoneQuery);
+                if (!phoneSnap.empty) {
+                    throw new Error("An Academy application with this phone number already exists.");
+                }
+            }
+
+            if (email) {
+                const emailQuery = collectionsContext.where("personalInfo.email", "==", email).limit(1);
+                const emailSnap = await t.get(emailQuery);
+                if (!emailSnap.empty) {
+                    throw new Error("An Academy application with this email already exists.");
+                }
+            }
+
+            // Generate unique application ID
+            const applicationId = `ACADEMY-${Date.now()}-${(Date.now() / 10000000000).toString(36).substring(2, 11)}`;
+            finalApplicationId = applicationId;
+            const appRef = collectionsContext.doc(applicationId);
+
+            // Save to Firestore
+            t.set(appRef, {
+                ...applicationData,
+                userId: session.user.id,
+                applicationId,
+                status: "pending",
+                submittedAt: FieldValue.serverTimestamp(),
+                reviewedAt: null,
+                reviewedBy: null,
+                notes: "",
+            });
+
+            // CRITICAL: Update user.serviceRegistrations to link application with auth
+            t.update(userRef, {
+                "serviceRegistrations.academy.status": "pending",
+                "serviceRegistrations.academy.applicationId": applicationId,
+                "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
+                firstName: applicationData.personalInfo.firstName,
+                lastName: applicationData.personalInfo.lastName,
+                otherName: applicationData.personalInfo.otherName || null,
+                fullName: [
+                    applicationData.personalInfo.firstName,
+                    applicationData.personalInfo.otherName,
+                    applicationData.personalInfo.lastName,
+                ].filter(Boolean).join(" ").trim(),
+                phone: applicationData.personalInfo.phone,
+                gender: applicationData.personalInfo.gender,
+                stateOfOrigin: applicationData.personalInfo.state,
+                lga: applicationData.personalInfo.lga,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
-        // CRITICAL: Update user.serviceRegistrations to link application with auth
-        // CRITICAL: Update user.serviceRegistrations to link application with auth using dot notation
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
-            "serviceRegistrations.academy.status": "pending",
-            "serviceRegistrations.academy.applicationId": applicationId,
-            "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
-            // Sync KYC name fields for Admin Communication Hub & admin portal
-            firstName: applicationData.personalInfo.firstName,
-            lastName: applicationData.personalInfo.lastName,
-            otherName: applicationData.personalInfo.otherName || null,
-            fullName: [
-                applicationData.personalInfo.firstName,
-                applicationData.personalInfo.otherName,
-                applicationData.personalInfo.lastName,
-            ].filter(Boolean).join(" ").trim(),
-            // Sync other PII for Communication Hub
-            phone: applicationData.personalInfo.phone,
-            gender: applicationData.personalInfo.gender,
-            stateOfOrigin: applicationData.personalInfo.state,
-            lga: applicationData.personalInfo.lga,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        // Create audit log
+        // Create audit log outside transaction
         await createAdminAuditLog({
             action: "user_update",
             userId: session.user.id,
-            targetId: applicationId,
+            targetId: finalApplicationId,
             targetType: "academy_application",
             details: `Learner application submitted for ${applicationData.personalInfo.firstName || ''} ${applicationData.personalInfo.lastName || applicationData.personalInfo.fullName || ''}`.trim(),
         });
 
-        return { success: true, applicationId };
-    } catch (error) {
+        return { success: true, applicationId: finalApplicationId };
+    } catch (error: any) {
         logger.error("Academy application submission error:", error);
-        return { success: false, error: "Failed to submit application. Please try again." };
+        return { success: false, error: error.message || "Failed to submit application. Please try again." };
     }
 }
 

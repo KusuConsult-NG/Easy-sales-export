@@ -256,7 +256,8 @@ export async function updateMemberStatusAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId).update({
+        const batch = db.batch();
+        batch.update(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId), {
             membershipStatus: status,
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -267,15 +268,12 @@ export async function updateMemberStatusAction(
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(memberId).get();
             const userData = userDoc.data();
 
-            await db.collection(COLLECTIONS.USERS).doc(memberId).set({
+            batch.update(db.collection(COLLECTIONS.USERS).doc(memberId), {
                 isVerified: true,
                 roles: FieldValue.arrayUnion("cooperative_member"),
-                updatedAt: FieldValue.serverTimestamp(),
-            }, { merge: true });
-            // Also sync serviceRegistrations status (dot notation to avoid cross-module data loss)
-            await db.collection(COLLECTIONS.USERS).doc(memberId).update({
                 "serviceRegistrations.cooperatives.status": "active",
                 "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
 
             // 📧 Send approval notification email (non-blocking)
@@ -310,6 +308,8 @@ export async function updateMemberStatusAction(
             }
         }
 
+        await batch.commit();
+        
         return { success: true };
     } catch (error) {
         logger.error("Update member status error:", error);
@@ -875,7 +875,8 @@ export async function requestCooperativeRevisionAction(
         const memberData = memberDoc.data();
         const userId = memberData?.userId;
 
-        await memberRef.update({
+        const batch = db.batch();
+        batch.update(memberRef, {
             membershipStatus: 'revision_required',
             revisionNote: reason,
             revisionRequestedAt: FieldValue.serverTimestamp(),
@@ -884,11 +885,12 @@ export async function requestCooperativeRevisionAction(
         });
 
         if (userId) {
-            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
                 'serviceRegistrations.cooperatives.status': 'revision_required',
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }
+        await batch.commit();
 
         // Send revision requested email (non-blocking)
         try {

@@ -119,7 +119,8 @@ export async function getWaveMemberStatsAction(): Promise<{
         ).length;
 
         // Calculate days active
-        const enrolledAt = membership.memberData.enrolledAt.toDate();
+        const rawDate = membership.memberData.enrolledAt;
+        const enrolledAt = rawDate?.toDate?.() || (rawDate instanceof Date ? rawDate : new Date(rawDate)) || new Date();
         const daysActive = Math.floor(
             (Date.now() - enrolledAt.getTime()) / (1000 * 60 * 60 * 24)
         );

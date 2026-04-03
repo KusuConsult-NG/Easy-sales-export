@@ -706,68 +706,68 @@ export async function applyForLoanAction(
 
         const { productId, amount, purpose } = validationResult.data;
 
-        // Verify membership and eligibility
-        const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-        const membershipSnapshot = await membershipsRef.where("userId", "==", userId).get();
+        await db.runTransaction(async (t) => {
+            // Verify membership and eligibility
+            const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
+            const membershipSnapshot = await t.get(membershipsRef.where("userId", "==", userId));
 
-        if (membershipSnapshot.empty) {
-            return { error: "You must be a cooperative member to apply for a loan", success: false };
-        }
+            if (membershipSnapshot.empty) {
+                throw new Error("You must be a cooperative member to apply for a loan");
+            }
 
-        const membershipDoc = membershipSnapshot.docs[0];
-        const membershipData = membershipDoc.data();
+            const membershipDoc = membershipSnapshot.docs[0];
+            const membershipData = membershipDoc.data();
 
-        // 1. Check for active loans (Prevent multiple active loans if policy requires)
-        const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
-        const activeLoans = await loansRef
-            .where("memberId", "==", userId)
-            .where("status", "in", ["pending", "approved", "disbursed"])
-            .get();
+            // 1. Check for active loans (Prevent multiple active loans if policy requires)
+            const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
+            const activeLoansQuery = loansRef
+                .where("memberId", "==", userId)
+                .where("status", "in", ["pending", "approved", "disbursed"]);
+            const activeLoansSnap = await t.get(activeLoansQuery);
 
-        if (!activeLoans.empty) {
-            return { error: "You already have an active or pending loan application", success: false };
-        }
+            if (!activeLoansSnap.empty) {
+                throw new Error("You already have an active or pending loan application");
+            }
 
-        // 2. Check Loan Limit (e.g., 3x Savings Balance)
-        const savingsBalance = membershipData.savingsBalance || 0;
-        const maxLoanAmount = savingsBalance * 3;
+            // 2. Check Loan Limit (e.g., 3x Savings Balance)
+            const savingsBalance = membershipData.savingsBalance || 0;
+            const maxLoanAmount = savingsBalance * 3;
 
-        if (amount > maxLoanAmount) {
-            return {
-                error: `Loan amount exceeds your limit of ₦${maxLoanAmount.toLocaleString()} (3x Savings)`,
-                success: false
-            };
-        }
+            if (amount > maxLoanAmount) {
+                throw new Error(`Loan amount exceeds your limit of ₦${maxLoanAmount.toLocaleString()} (3x Savings)`);
+            }
 
-        // 3. Get Loan Product Details (Simulated/fetched)
-        let interestRate = 5; // Default 5%
-        let durationMonths = 6;
+            // 3. Get Loan Product Details (Simulated/fetched)
+            let interestRate = 5; // Default 5%
+            let durationMonths = 6;
 
-        const productDoc = await db.collection(COLLECTIONS.COOPERATIVE_LOAN_PRODUCTS).doc(productId).get();
-        if (productDoc.exists) {
-            const prod = productDoc.data()!;
-            interestRate = prod.interestRate;
-            durationMonths = prod.durationMonths;
-        }
+            const productDoc = await t.get(db.collection(COLLECTIONS.COOPERATIVE_LOAN_PRODUCTS).doc(productId));
+            if (productDoc.exists) {
+                const prod = productDoc.data()!;
+                interestRate = prod.interestRate;
+                durationMonths = prod.durationMonths;
+            }
 
-        const interestAmount = amount * (interestRate / 100);
-        const totalRepayment = amount + interestAmount;
-        const monthlyPayment = totalRepayment / durationMonths;
+            const interestAmount = amount * (interestRate / 100);
+            const totalRepayment = amount + interestAmount;
+            const monthlyPayment = totalRepayment / durationMonths;
 
-        // Create Loan Application
-        await loansRef.add({
-            memberId: userId,
-            productId,
-            amount,
-            purpose,
-            interestAmount,
-            totalRepayment,
-            monthlyPayment,
-            durationMonths,
-            status: "pending",
-            appliedAt: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            // Create Loan Application
+            const newLoanRef = loansRef.doc();
+            t.set(newLoanRef, {
+                memberId: userId,
+                productId,
+                amount,
+                purpose,
+                interestAmount,
+                totalRepayment,
+                monthlyPayment,
+                durationMonths,
+                status: "pending",
+                appliedAt: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         return {
@@ -776,7 +776,7 @@ export async function applyForLoanAction(
             message: "Loan application submitted successfully. It is now under review."
         };
 
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Loan application failed:", error);
         return {
             error: error instanceof Error ? error.message : "Failed to submit loan application",
@@ -1079,12 +1079,15 @@ export async function resubmitCooperativeApplicationAction(
             updatePayload['documents.proofOfAddressUrl'] = formData.get('proofOfAddressUrl');
         }
 
-        await memberRef.update(updatePayload);
-
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+        const batch = db.batch();
+        batch.update(memberRef, updatePayload);
+        
+        batch.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), {
             'serviceRegistrations.cooperatives.status': 'pending',
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        await batch.commit();
 
         return { success: true };
     } catch (error) {

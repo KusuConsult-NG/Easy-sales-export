@@ -218,6 +218,11 @@ export async function updateExportStatusAction(
             return { error: "Unauthorized to update this export", success: false };
         }
 
+        // Prevent duplicate status updates to avoid multiple completion emails
+        if (data?.status === newStatus) {
+            return { error: `Status is already ${newStatus}`, success: false };
+        }
+
         // Update status
         await exportRef.update({
             status: newStatus,
@@ -588,18 +593,20 @@ export async function submitExportOnboardingAction(
             updatedAt: FieldValue.serverTimestamp(),
         };
 
-        // Save to Firestore
+        const batch = db.batch();
         const onboardingRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc();
-        await onboardingRef.set(fullApplication);
+        batch.set(onboardingRef, fullApplication);
 
         // Update user document to mark export service registration with safe dot notation
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-        await userRef.update({
+        batch.update(userRef, {
             "serviceRegistrations.export.status": "pending_approval",
             "serviceRegistrations.export.applicationId": applicationId,
             "serviceRegistrations.export.appliedAt": FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        await batch.commit();
 
         return {
             error: null,
@@ -1113,7 +1120,8 @@ export async function requestExportRevisionAction(
         const appData = appDoc.data();
         const userId = appData?.userId;
 
-        await appRef.update({
+        const batch = db.batch();
+        batch.update(appRef, {
             status: 'revision_required',
             revisionNote: reason,
             revisionRequestedAt: FieldValue.serverTimestamp(),
@@ -1122,11 +1130,12 @@ export async function requestExportRevisionAction(
         });
 
         if (userId) {
-            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
                 'serviceRegistrations.export.status': 'revision_required',
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }
+        await batch.commit();
 
         // Send revision email (non-blocking)
         try {
@@ -1186,7 +1195,8 @@ export async function approveExportApplicationAction(
         const appData = appDoc.data();
         const userId = appData?.userId;
 
-        await appRef.update({
+        const batch = db.batch();
+        batch.update(appRef, {
             status: 'approved',
             approvedAt: FieldValue.serverTimestamp(),
             approvedBy: session.user.id,
@@ -1194,12 +1204,13 @@ export async function approveExportApplicationAction(
         });
 
         if (userId) {
-            await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
                 'serviceRegistrations.export.status': 'approved',
                 roles: FieldValue.arrayUnion('export_investor'),
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }
+        await batch.commit();
 
         // Send approval email (non-blocking)
         try {
@@ -1271,7 +1282,8 @@ export async function resubmitExportApplicationAction(
 
         const appRef = snap.docs[0].ref;
 
-        await appRef.update({
+        const batch = db.batch();
+        batch.update(appRef, {
             ...fields,
             status: 'pending_review',
             revisionNote: null,
@@ -1279,10 +1291,12 @@ export async function resubmitExportApplicationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
             'serviceRegistrations.export.status': 'pending_approval',
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        await batch.commit();
 
         return { success: true };
     } catch (error) {

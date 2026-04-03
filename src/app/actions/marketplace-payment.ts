@@ -477,23 +477,50 @@ export async function createBankTransferOrderAction(
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
         const orderReference = `BT-${Date.now()}`;
 
-        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).set({
-            sellerIds,
-            orderId,
-            buyerId: session.user.id,
-            buyerEmail,
-            buyerPhone,
-            items: validatedItems, // Use validated items
-            productIds: validatedItems.map(i => i.productId), // For querying
-            subtotal,
-            deliveryFee: calculatedDeliveryFee, // Use server calculated fee
-            totalAmount,
-            paymentMethod: "bank_transfer",
-            paymentReference: orderReference,
-            paymentStatus: "pending_verification",
-            status: "pending_payment",
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+        await db.runTransaction(async (transaction) => {
+            // 1. Check all inventory first
+            for (const item of validatedItems) {
+                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const productDoc = await transaction.get(productRef);
+                if (productDoc.exists) {
+                    const currentQty = productDoc.data()?.availableQuantity || 0;
+                    if (currentQty < item.quantity) {
+                        throw new Error(`Insufficient stock for product ID: ${item.productId}`);
+                    }
+                } else {
+                    throw new Error(`Product not found ID: ${item.productId}`);
+                }
+            }
+
+            // 2. Decrement inventory
+            for (const item of validatedItems) {
+                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                transaction.update(productRef, {
+                    availableQuantity: FieldValue.increment(-item.quantity),
+                    orders: FieldValue.increment(1)
+                });
+            }
+
+            // 3. Create the order
+            const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
+            transaction.set(orderRef, {
+                sellerIds,
+                orderId,
+                buyerId: session.user.id,
+                buyerEmail,
+                buyerPhone,
+                items: validatedItems, // Use validated items
+                productIds: validatedItems.map(i => i.productId), // For querying
+                subtotal,
+                deliveryFee: calculatedDeliveryFee, // Use server calculated fee
+                totalAmount,
+                paymentMethod: "bank_transfer",
+                paymentReference: orderReference,
+                paymentStatus: "pending_verification",
+                status: "processing", // changed from pending_payment, as inventory is held and waiting for manual processing
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         return {
@@ -574,24 +601,51 @@ export async function createPaymentOnDeliveryOrderAction(
 
         const orderId = `POD-${Date.now()}-${session.user.id.substring(0, 8)}`;
 
-        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).set({
-            orderId,
-            buyerId: session.user.id,
-            buyerPhone,
-            sellerIds,
-            items: validatedItems,
-            productIds: validatedItems.map((i) => i.productId),
-            subtotal,
-            deliveryFee,
-            totalAmount,
-            paymentMethod: "payment_on_delivery",
-            paymentStatus: "pending",
-            status: "processing",
-            deliveryAddress,
-            buyerConfirmed: false,
-            reviewSubmitted: false,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+        await db.runTransaction(async (transaction) => {
+            // 1. Check all inventory first
+            for (const item of validatedItems) {
+                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const productDoc = await transaction.get(productRef);
+                if (productDoc.exists) {
+                    const currentQty = productDoc.data()?.availableQuantity || 0;
+                    if (currentQty < item.quantity) {
+                        throw new Error(`Insufficient stock for product ID: ${item.productId}`);
+                    }
+                } else {
+                    throw new Error(`Product not found ID: ${item.productId}`);
+                }
+            }
+
+            // 2. Decrement inventory
+            for (const item of validatedItems) {
+                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                transaction.update(productRef, {
+                    availableQuantity: FieldValue.increment(-item.quantity),
+                    orders: FieldValue.increment(1)
+                });
+            }
+
+            // 3. Create the order
+            const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
+            transaction.set(orderRef, {
+                orderId,
+                buyerId: session.user.id,
+                buyerPhone,
+                sellerIds,
+                items: validatedItems,
+                productIds: validatedItems.map((i) => i.productId),
+                subtotal,
+                deliveryFee,
+                totalAmount,
+                paymentMethod: "payment_on_delivery",
+                paymentStatus: "pending",
+                status: "processing",
+                deliveryAddress,
+                buyerConfirmed: false,
+                reviewSubmitted: false,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         // Notify buyer + seller(s) + admins
