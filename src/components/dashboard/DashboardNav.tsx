@@ -139,9 +139,9 @@ export default function DashboardNav() {
     const isWaveOrAcademyApproved = (roles.includes("wave_participant") && serviceRegs?.wave?.status === 'approved') || 
                                     (roles.includes("academy_participant") && serviceRegs?.academy?.status === 'approved');
 
-    const isMarketplaceUser = isMarketplaceApproved || isAdmin;
-    const isFarmNationUser = isFarmNationApproved || isAdmin;
-    const isWaveOrAcademy = isWaveOrAcademyApproved || isAdmin;
+    const isMarketplaceUser = isMarketplaceApproved;
+    const isFarmNationUser = isFarmNationApproved;
+    const isWaveOrAcademy = isWaveOrAcademyApproved;
 
     const coreNavItems: NavItem[] = [
         { label: "Overview",       href: "/dashboard",                  icon: LayoutDashboard },
@@ -152,16 +152,16 @@ export default function DashboardNav() {
         // Digital ID — universal
         { label: "Digital ID",     href: "/dashboard/digital-id",       icon: IdCard },
         // Marketplace-only items
-        ...(isMarketplaceUser || isAdmin ? [
+        ...(isMarketplaceUser ? [
             { label: "My Orders",  href: "/marketplace/buyer/orders",   icon: Package },
             { label: "Disputes",   href: "/dashboard/disputes",         icon: AlertTriangle },
         ] : []),
         // Reviews — marketplace or farm nation users
-        ...((isMarketplaceUser || isFarmNationUser || isAdmin) ? [
+        ...((isMarketplaceUser || isFarmNationUser) ? [
             { label: "My Reviews", href: "/dashboard/reviews",          icon: Star },
         ] : []),
-        // Certificates — WAVE or Academy participants (or admin)
-        ...(isWaveOrAcademy || isAdmin ? [
+        // Certificates — WAVE or Academy participants
+        ...(isWaveOrAcademy ? [
             { label: "Certificates", href: "/dashboard/certificates",   icon: Award },
         ] : []),
     ];

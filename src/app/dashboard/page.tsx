@@ -351,7 +351,6 @@ function DashboardHomeContent() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {[
                             { label: "Wallet", href: "/dashboard/wallet", icon: Wallet },
-                            { label: "Messages", href: "/messages", icon: MessageCircle },
                             { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
                         ].map(({ label, href, icon: Icon }) => (
                             <Link
