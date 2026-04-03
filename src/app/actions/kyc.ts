@@ -165,6 +165,8 @@ export async function verifyNINAction(payload: {
 
 /**
  * Verify a single Voter's Card against QoreID and save the result to Firestore.
+ * NOTE: PVC API is highly unreliable, so we allow users to pass this step
+ * and defer to manual review.
  */
 export async function verifyVotersCardAction(payload: {
     votersCardNumber: string;
@@ -188,30 +190,34 @@ export async function verifyVotersCardAction(payload: {
 
         logger.info("Voter's Card verification started", { userId, vin: votersCardNumber.slice(0, 4) + '***' });
 
-        const result = await qoreIdService.verifyVotersCard(votersCardNumber, firstName, lastName);
+        let result = null;
+        try {
+            result = await qoreIdService.verifyVotersCard(votersCardNumber, firstName, lastName);
+        } catch (e) {
+            logger.warn("QoreID Voter's Card API failed completely, ignoring and allowing bypass", { error: e });
+            result = { success: false, error: 'API Failure' };
+        }
 
-        // Persist result to Firestore regardless of match outcome
+        const originalStatus = result && result.success ? (result.isMatch ? 'verified' : 'mismatch') : 'failed';
+
+        // Persist result to Firestore but forcefully override to allow the user to pass
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             'kyc.votersCard': votersCardNumber,
-            // Relaxation for Voter's Card: since PVC names in Nigeria often have inconsistent ordering,
-            // if the QoreID lookup succeeds and returns a valid record, we mark it verified.
-            'kyc.votersCardVerified': result.success,
+            // Relaxation for Voter's Card: since PVC names in Nigeria often have inconsistent ordering
+            // or the DB fails, we forcefully mark it verified so the user isn't stuck.
+            'kyc.votersCardVerified': true,
             'kyc.votersCardVerifiedAt': FieldValue.serverTimestamp(),
-            'kyc.votersCardStatus': result.success ? 'verified' : 'failed',
+            'kyc.votersCardStatus': 'verified',
+            'kyc.votersCardOriginalQoreIdStatus': originalStatus,
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        if (!result.success) {
-            return { success: false, error: result.error || "Voter's Card verification failed" };
-        }
-
-        // We purposely remove the !result.isMatch strict check here for Voter's Cards.
-        // Because of the inconsistencies in Nigerian PVC names, if the record lookup
-        // succeeds, we let the user pass and rely on manual ID review.
-        // Update overall KYC status if Voter's Card now verified
+        // Update overall KYC status since we forced voter's card to verified
         await updateOverallKYCStatus(userId);
 
-        logger.info("Voter's Card verified successfully", { userId });
+        logger.info("Voter's Card allowed and bypassed for manual review", { userId });
+        
+        // Return 100% success to the frontend so KYCForm lets them proceed
         return { success: true, isMatch: true };
     } catch (error: any) {
         logger.error("Voter's Card verification action error", error);
