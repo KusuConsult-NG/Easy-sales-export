@@ -6,12 +6,14 @@ export async function POST(req: Request) {
     try {
         const url = new URL(req.url);
         const providedSecret = url.searchParams.get("secret");
-        const expectedSecret = process.env.TERMII_SECRET_KEY || "tsk_IZtt31glavG5IXqg7lVIumvotG";
+        const expectedSecret = process.env.TERMII_WEBHOOK_SECRET || process.env.TERMII_SECRET_KEY;
 
         // Secret validation (if configured in Termii Dashboard URL like ?secret=...)
-        if (providedSecret && providedSecret !== expectedSecret) {
-             logger.warn("[termii-webhook] Unauthorized webhook attempt");
-             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        if (expectedSecret) {
+             if (!providedSecret || providedSecret !== expectedSecret) {
+                 logger.warn("[termii-webhook] Unauthorized webhook attempt. Missing or invalid secret.");
+                 return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+             }
         }
 
         const body = await req.json();

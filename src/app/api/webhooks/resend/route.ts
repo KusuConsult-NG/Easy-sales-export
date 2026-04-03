@@ -4,7 +4,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 
 // You can optionally verify the Resend Webhook Signature here 
 // using the Svix library if you configure RESEND_WEBHOOK_SECRET.
-// For now, we process the payload directly if it matches the expected structure.
+import { headers } from "next/headers";
+import { Webhook } from "svix";
 
 /**
  * Handle incoming Resend Webhook events.
@@ -15,14 +16,43 @@ import { COLLECTIONS } from "@/lib/types/firestore";
  */
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
+        const payloadText = await req.text();
+        const headersList = await headers();
+        const resendSecret = process.env.RESEND_WEBHOOK_SECRET;
+        
+        let body;
+        
+        if (resendSecret) {
+            const svix_id = headersList.get("svix-id");
+            const svix_timestamp = headersList.get("svix-timestamp");
+            const svix_signature = headersList.get("svix-signature");
+
+            if (!svix_id || !svix_timestamp || !svix_signature) {
+                 return NextResponse.json({ error: "Missing svix headers" }, { status: 400 });
+            }
+
+            const wh = new Webhook(resendSecret);
+            try {
+                body = wh.verify(payloadText, {
+                    "svix-id": svix_id,
+                    "svix-timestamp": svix_timestamp,
+                    "svix-signature": svix_signature,
+                });
+            } catch (err) {
+                console.error("[Resend Webhook Error]: Invalid signature", err);
+                return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+            }
+        } else {
+            console.warn("[Resend Webhook Warning]: RESEND_WEBHOOK_SECRET is not set. Bypassing signature validation.");
+            body = JSON.parse(payloadText);
+        }
 
         // Basic validation of the Resend webhook payload
-        if (!body || !body.type || !body.data) {
+        if (!body || !(body as any).type || !(body as any).data) {
             return NextResponse.json({ error: "Invalid webhook payload" }, { status: 400 });
         }
 
-        const { type, data } = body;
+        const { type, data } = body as any;
         const eventType = type as string;
 
         // We only care about terminal failures (bounces) and spam complaints

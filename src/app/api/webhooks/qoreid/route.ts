@@ -26,8 +26,11 @@ export async function POST(req: NextRequest) {
             const hmac = crypto.createHmac("sha256", secret);
             const generatedSignature = hmac.update(payload).digest("hex");
             
-            // Allow matching if signature is correct
-            if (generatedSignature !== qoreidSignature) {
+            const signatureBuffer = Buffer.from(qoreidSignature, "hex");
+            const generatedBuffer = Buffer.from(generatedSignature, "hex");
+
+            // Prevent timing attacks and allow matching if signature is correct
+            if (signatureBuffer.length !== generatedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, generatedBuffer)) {
                 logger.warn("Invalid QoreID webhook signature mismatch.", { expected: generatedSignature, received: qoreidSignature });
                 // Return 401 if security is strictly required by the client's risk posture.
                 return NextResponse.json({ error: "Invalid Signature" }, { status: 401 });
