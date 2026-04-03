@@ -228,7 +228,7 @@ function ModuleRegisterContent({
             <div className="relative w-full max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2 z-10">
                 {/* Left Side - Information & Branding */}
                 <div className={`hidden lg:block relative bg-linear-to-br ${theme.gradient} p-12 text-white`}>
-                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10 pointer-events-none" />
 
                     <div className="relative z-10 h-full flex flex-col justify-between">
                         <div>

@@ -128,14 +128,14 @@ export default function WaveLandingPage() {
             <section className="relative min-h-screen flex items-center bg-linear-to-br from-green-50 via-white to-green-100 overflow-hidden">
                 <BackToHub className="top-4 left-4" />
                 {/* Background Pattern */}
-                <div className="absolute inset-0 opacity-5">
-                    <div className="absolute inset-0" style={{
+                <div className="absolute inset-0 opacity-5 pointer-events-none">
+                    <div className="absolute inset-0 pointer-events-none" style={{
                         backgroundImage: `radial-gradient(circle at 2px 2px, #10b981 1px, transparent 0)`,
                         backgroundSize: '40px 40px'
                     }} />
                 </div>
 
-                <div className="relative max-w-7xl mx-auto px-6 py-24 w-full">
+                <div className="relative z-10 max-w-7xl mx-auto px-6 py-24 w-full">
                     <div className="grid lg:grid-cols-2 gap-12 items-center">
 
                         {/* LEFT — Text */}

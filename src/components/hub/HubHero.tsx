@@ -73,8 +73,8 @@ export default function HubHero() {
                     );
                 })}
                 {/* Animated overlay elements - Removed animate-pulse for performance */}
-                <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-50" />
-                <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-50" />
+                <div className="absolute -top-40 -right-40 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-50 pointer-events-none" />
+                <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl opacity-50 pointer-events-none" />
             </div>
 
             {/* Content */}

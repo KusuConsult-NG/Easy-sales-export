@@ -94,8 +94,8 @@ export default function FarmNationLandingPage() {
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-teal-600 via-cyan-600 to-blue-600 text-white">
                 <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
-                <div className="absolute inset-0 bg-black/10"></div>
-                <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
+                <div className="absolute inset-0 bg-black/10 pointer-events-none"></div>
+                <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-24">
                     <div className="max-w-3xl">
                         <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 md:px-4 py-1.5 md:py-2 rounded-full text-xs md:text-sm font-semibold mb-4 md:mb-6">
                             <Home className="w-3 h-3 md:w-4 md:h-4" />
@@ -296,7 +296,7 @@ export default function FarmNationLandingPage() {
             {/* CTA Section */}
             <div className="max-w-7xl mx-auto px-8 py-16">
                 <div className="bg-linear-to-r from-teal-600 to-cyan-600 rounded-3xl p-12 text-center text-white relative overflow-hidden">
-                    <div className="absolute inset-0 bg-black/10"></div>
+                    <div className="absolute inset-0 bg-black/10 pointer-events-none"></div>
                     <div className="relative z-10">
                         <h2 className="text-3xl md:text-4xl font-bold mb-4">
                             Find Your Perfect Agricultural Property

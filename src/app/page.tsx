@@ -79,13 +79,13 @@ export default function HubPage() {
                 <Link href="/wave/briefing" className="block max-w-5xl mx-auto group">
                     <div className="relative overflow-hidden rounded-3xl bg-white p-8 md:p-10 border border-green-200 shadow-xl shadow-green-900/5 hover:shadow-green-900/10 transition-all duration-500 hover:scale-[1.01]">
                         {/* Background pattern */}
-                        <div className="absolute inset-0 opacity-5" style={{
+                        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
                             backgroundImage: `radial-gradient(circle at 2px 2px, #14532d 0.5px, transparent 0)`,
                             backgroundSize: '40px 40px'
                         }} />
                         {/* Glow accent */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-green-100 rounded-full blur-3xl opacity-60" />
-                        <div className="absolute bottom-0 left-0 w-48 h-48 bg-green-50 rounded-full blur-3xl opacity-60" />
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-green-100 rounded-full blur-3xl opacity-60 pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 w-48 h-48 bg-green-50 rounded-full blur-3xl opacity-60 pointer-events-none" />
 
                         <div className="relative z-10">
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">

@@ -19,7 +19,7 @@ export default function ForgotPasswordPage() {
 
     return (
         <div className="min-h-screen bg-linear-to-br from-slate-900 via-primary to-slate-900 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+            <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10 pointer-events-none" />
 
             <div className="relative w-full max-w-md">
                 {/* Logo & Title */}

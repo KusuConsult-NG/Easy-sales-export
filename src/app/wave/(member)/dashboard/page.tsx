@@ -79,7 +79,7 @@ export default function WaveDashboardPage() {
             <div className="max-w-7xl mx-auto px-4 py-8">
                 {/* Hero Welcome Section */}
                 <div className="bg-linear-to-r from-emerald-700 to-emerald-700 rounded-3xl p-8 mb-8 text-white relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10 pointer-events-none" />
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">

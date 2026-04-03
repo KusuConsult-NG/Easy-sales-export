@@ -138,8 +138,8 @@ export default function WaveBriefingPage() {
             {/* ───────────────── HERO SECTION ───────────────── */}
             <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
                 {/* Background layers - Clean White/Green implementation */}
-                <div className="absolute inset-0 bg-white" />
-                <div className="absolute inset-0 opacity-5" style={{
+                <div className="absolute inset-0 bg-white pointer-events-none" />
+                <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
                     backgroundImage: `radial-gradient(circle at 2px 2px, #14532d 0.5px, transparent 0)`,
                     backgroundSize: '40px 40px'
                 }} />
@@ -319,7 +319,7 @@ export default function WaveBriefingPage() {
             {/* ───────────────── FOR WOMEN ───────────────── */}
             <section className="py-24 bg-green-900 text-white relative overflow-hidden">
                 {/* Pattern overlay */}
-                <div className="absolute inset-0 opacity-10" style={{
+                <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
                     backgroundImage: `radial-gradient(circle at 2px 2px, #ffffff 1px, transparent 0)`,
                     backgroundSize: '30px 30px'
                 }} />
@@ -739,7 +739,7 @@ export default function WaveBriefingPage() {
 
             {/* ───────────────── CLOSING SECTION ───────────────── */}
             <section className="py-24 bg-slate-950 text-white text-center relative overflow-hidden">
-                <div className="absolute inset-0 opacity-10" style={{
+                <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
                     backgroundImage: `radial-gradient(circle at 2px 2px, #22c55e 1px, transparent 0)`,
                     backgroundSize: '40px 40px'
                 }} />

@@ -104,8 +104,8 @@ export default function AcademyLandingPage() {
             {/* Hero Section */}
             <div className="relative overflow-hidden bg-linear-to-br from-blue-700 via-indigo-700 to-purple-800 text-white">
                 <BackToHub variant="dark" className="top-4 left-4 border-white/20" />
-                <div className="absolute inset-0 bg-black/10"></div>
-                <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-20 md:py-32 text-center">
+                <div className="absolute inset-0 bg-black/10 pointer-events-none"></div>
+                <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-8 py-20 md:py-32 text-center">
                     <div className="max-w-4xl mx-auto">
                         <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-semibold mb-8">
                             <GraduationCap className="w-5 h-5" />

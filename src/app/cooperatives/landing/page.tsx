@@ -304,14 +304,14 @@ export default function CooperativeLandingPage() {
             {/* Hero Section */}
             <section id="home" className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-purple-50 via-white to-purple-50 overflow-hidden pt-16">
                 {/* Background Pattern */}
-                <div className="absolute inset-0 opacity-5">
-                    <div className="absolute inset-0" style={{
+                <div className="absolute inset-0 opacity-5 pointer-events-none">
+                    <div className="absolute inset-0 pointer-events-none" style={{
                         backgroundImage: `radial-gradient(circle at 2px 2px, #10b981 1px, transparent 0)`,
                         backgroundSize: '40px 40px'
                     }} />
                 </div>
 
-                <div className="relative max-w-5xl mx-auto px-6 py-20 text-center">
+                <div className="relative z-10 max-w-5xl mx-auto px-6 py-20 text-center">
                     <h1 className="text-4xl md:text-6xl font-bold text-slate-900 mb-6 leading-tight">
                         Join the Easy Sales Export Cooperative and Position Yourself for <span className="text-purple-600">Structured Agro and Export Opportunities</span>
                     </h1>
