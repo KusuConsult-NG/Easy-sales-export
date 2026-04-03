@@ -22,11 +22,12 @@ const noSidebarRoutes = [
     '/auth',
     '/contact',
     '/api',
-    '/admin',            // Admin has its own layout/sidebar
-    '/farm-nation',      // Farm Nation has its own FarmNationSidebar
+    '/admin',              // Admin has its own layout/sidebar
+    '/dashboard',          // Hub dashboard has its own DashboardNav sidebar
+    '/farm-nation',        // Farm Nation has its own FarmNationSidebar
     '/marketplace/seller', // Marketplace seller area has its own MarketplaceSidebar
-    '/export',           // Export has its own ExportSidebar
-    '/academy',          // Academy has its own AcademySidebar
+    '/export',             // Export has its own ExportSidebar
+    '/academy',            // Academy has its own AcademySidebar
 ];
 
 // Routes that are strictly landing pages (exact match) where sidebar should be hidden even if authenticated
