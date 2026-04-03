@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useState, useEffect, useCallback } from "react";
 import {
     LayoutDashboard,
     LogOut,
@@ -11,7 +12,9 @@ import {
     Sun,
     MessageSquare,
     User,
-    ChevronRight
+    ChevronRight,
+    ChevronLeft,
+    X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
@@ -23,10 +26,51 @@ import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
 import { GLOBAL_NAV_ITEMS, MODULE_NAVIGATION, type NavigationItem } from "@/lib/sidebar-config";
 
-export function Sidebar() {
+const COLLAPSED_STORAGE_KEY = "sidebar_collapsed_v1";
+
+interface SidebarProps {
+    isMobileOpen?: boolean;
+    onMobileClose?: () => void;
+}
+
+export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const pathname = usePathname();
     const { theme, toggleTheme } = useTheme();
     const { data: session } = useSession();
+
+    // ── Collapse state (desktop only) — persisted ─────────────────────────
+    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        try {
+            const stored = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+            if (stored === "true") setIsCollapsed(true);
+        } catch {
+            // localStorage not available
+        }
+    }, []);
+
+    const toggleCollapsed = useCallback(() => {
+        setIsCollapsed(prev => {
+            const next = !prev;
+            try {
+                localStorage.setItem(COLLAPSED_STORAGE_KEY, String(next));
+            } catch {
+                // ignore
+            }
+            return next;
+        });
+    }, []);
+
+    // Close mobile sidebar on route change
+    useEffect(() => {
+        if (isMobileOpen && onMobileClose) {
+            onMobileClose();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname]);
 
     // Get active module configuration
     const activeModule = getModuleConfig(pathname);
@@ -39,7 +83,6 @@ export function Sidebar() {
     };
 
     // Determine current module key for navigation
-    // This mapping connects URL paths to sidebar-config keys
     const getModuleKey = (path: string): string => {
         if (path.startsWith("/export")) return "export";
         if (path.startsWith("/marketplace")) return "marketplace";
@@ -48,7 +91,7 @@ export function Sidebar() {
         if (path.startsWith("/wave")) return "wave";
         if (path.startsWith("/academy")) return "academy";
         if (path.startsWith("/admin")) return "admin";
-        return "dashboard"; // Default/Hub
+        return "dashboard";
     };
 
     const currentModuleKey = getModuleKey(pathname || "");
@@ -59,10 +102,7 @@ export function Sidebar() {
 
     const filterNavItems = (items: NavigationItem[]) => {
         return items.filter(item => {
-            // Check App Access if item specifies an app
-            if (item.app && !hasAppAccess(userRoles, item.app)) return false;
-
-            // Strict role check if defined
+            if (item.app && !hasAppAccess(userRoles, item.app as AppIdentifier)) return false;
             if (item.requiredRole && !userRoles.includes(item.requiredRole) && !userRoles.includes("super_admin")) {
                 return false;
             }
@@ -73,236 +113,520 @@ export function Sidebar() {
     const visibleModuleItems = filterNavItems(moduleNavItems);
     const visibleGlobalItems = filterNavItems(GLOBAL_NAV_ITEMS);
 
-    // Dynamic Theme Classes
+    // ── Theme helpers ──────────────────────────────────────────────────────
     const getThemeClasses = (isActive: boolean) => {
-        // Base classes
-        const base = "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all group relative";
+        const base = isCollapsed
+            ? "flex items-center justify-center w-10 h-10 rounded-xl font-medium transition-all group relative mx-auto"
+            : "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all group relative";
 
         if (!isActive) {
             return cn(base, "text-slate-600 hover:bg-slate-50 hover:text-slate-900");
         }
 
-        // Active state based on module theme
         switch (activeModule.theme) {
-            case "emerald": // WAVE
-                return cn(base, "text-emerald-700 bg-emerald-50 shadow-sm ring-1 ring-emerald-100");
-            case "blue": // Cooperatives
-                return cn(base, "text-blue-700 bg-blue-50 shadow-sm ring-1 ring-blue-100");
-            case "teal": // Farm Nation
-                return cn(base, "text-teal-700 bg-teal-50 shadow-sm ring-1 ring-teal-100");
-            case "amber": // Academy
-                return cn(base, "text-amber-700 bg-amber-50 shadow-sm ring-1 ring-amber-100");
-            case "indigo": // Marketplace
-                return cn(base, "text-indigo-700 bg-indigo-50 shadow-sm ring-1 ring-indigo-100");
-            case "sky": // Export
-                return cn(base, "text-sky-700 bg-sky-50 shadow-sm ring-1 ring-sky-100");
-            case "rose": // Escrow
-                return cn(base, "text-rose-700 bg-rose-50 shadow-sm ring-1 ring-rose-100");
-            default: // Default Primary
-                return cn(base, "text-primary bg-primary/5 shadow-sm ring-1 ring-primary/10");
+            case "emerald": return cn(base, "text-emerald-700 bg-emerald-50 shadow-sm ring-1 ring-emerald-100");
+            case "blue":    return cn(base, "text-blue-700 bg-blue-50 shadow-sm ring-1 ring-blue-100");
+            case "teal":    return cn(base, "text-teal-700 bg-teal-50 shadow-sm ring-1 ring-teal-100");
+            case "amber":   return cn(base, "text-amber-700 bg-amber-50 shadow-sm ring-1 ring-amber-100");
+            case "indigo":  return cn(base, "text-indigo-700 bg-indigo-50 shadow-sm ring-1 ring-indigo-100");
+            case "sky":     return cn(base, "text-sky-700 bg-sky-50 shadow-sm ring-1 ring-sky-100");
+            case "rose":    return cn(base, "text-rose-700 bg-rose-50 shadow-sm ring-1 ring-rose-100");
+            default:        return cn(base, "text-primary bg-primary/5 shadow-sm ring-1 ring-primary/10");
         }
     };
 
     const getSidebarBorderClass = () => {
         switch (activeModule.theme) {
             case "emerald": return "bg-emerald-50/10 border-emerald-100";
-            case "blue": return "bg-blue-50/10 border-blue-100";
-            case "teal": return "bg-teal-50/10 border-teal-100";
-            case "amber": return "bg-amber-50/10 border-amber-100";
-            case "indigo": return "bg-indigo-50/10 border-indigo-100";
-            case "rose": return "bg-rose-50/10 border-rose-100";
-            default: return "bg-white border-slate-200";
+            case "blue":    return "bg-blue-50/10 border-blue-100";
+            case "teal":    return "bg-teal-50/10 border-teal-100";
+            case "amber":   return "bg-amber-50/10 border-amber-100";
+            case "indigo":  return "bg-indigo-50/10 border-indigo-100";
+            case "rose":    return "bg-rose-50/10 border-rose-100";
+            default:        return "bg-white border-slate-200";
         }
     };
 
     const getHeaderTextClass = () => {
         switch (activeModule.theme) {
             case "emerald": return "text-emerald-700";
-            case "blue": return "text-blue-700";
-            case "teal": return "text-teal-700";
-            case "amber": return "text-amber-700";
-            case "indigo": return "text-indigo-700";
-            case "rose": return "text-rose-700";
-            default: return "text-slate-900";
+            case "blue":    return "text-blue-700";
+            case "teal":    return "text-teal-700";
+            case "amber":   return "text-amber-700";
+            case "indigo":  return "text-indigo-700";
+            case "rose":    return "text-rose-700";
+            default:        return "text-slate-900";
         }
     };
 
     const getSubTextClass = () => {
         switch (activeModule.theme) {
             case "emerald": return "text-emerald-600/70";
-            case "blue": return "text-blue-600/70";
-            case "teal": return "text-teal-600/70";
-            case "amber": return "text-amber-600/70";
-            case "indigo": return "text-indigo-600/70";
-            case "rose": return "text-rose-600/70";
-            default: return "text-slate-500";
+            case "blue":    return "text-blue-600/70";
+            case "teal":    return "text-teal-600/70";
+            case "amber":   return "text-amber-600/70";
+            case "indigo":  return "text-indigo-600/70";
+            case "rose":    return "text-rose-600/70";
+            default:        return "text-slate-500";
         }
     };
 
-    return (
+    // Don't render until client-mounted (to avoid hydration mismatch on collapsed state)
+    if (!mounted) return null;
+
+    // ── Sidebar inner content ──────────────────────────────────────────────
+    const sidebarContent = (
         <aside className={cn(
-            "w-72 border-r flex flex-col shrink-0 transition-all duration-300 h-screen sticky top-0",
+            "border-r flex flex-col shrink-0 transition-all duration-300 h-screen",
+            isCollapsed ? "w-16" : "w-72",
             getSidebarBorderClass()
         )}>
-            {/* Logo Section with Notification */}
-            <div className="p-6 border-b border-dashed border-slate-200">
-                <div className="flex items-center justify-between mb-6">
-                    <Link
-                        href={activeModule.pathPrefix || "/dashboard"}
-                        className="flex items-center gap-3.5 hover:opacity-80 transition-opacity cursor-pointer group"
-                    >
-                        {/* Dynamic Logo/Icon Container */}
-                        <div className={cn(
-                            "w-11 h-11 rounded-xl flex items-center justify-center border shadow-sm transition-all group-hover:scale-105 group-hover:shadow-md",
-                            activeModule.pathPrefix ? "bg-white" : "bg-white",
-                            getHeaderTextClass().replace("text-", "border-").replace("dark:", "dark:border-").replace("700", "200").replace("400", "800")
-                        )}>
+            {/* Logo + Notification + Collapse Toggle */}
+            <div className={cn(
+                "border-b border-dashed border-slate-200 relative",
+                isCollapsed ? "p-3" : "p-6"
+            )}>
+                {!isCollapsed && (
+                    <div className="flex items-center justify-between mb-6">
+                        <Link
+                            href={activeModule.pathPrefix || "/dashboard"}
+                            className="flex items-center gap-3.5 hover:opacity-80 transition-opacity cursor-pointer group"
+                        >
+                            <div className={cn(
+                                "w-11 h-11 rounded-xl flex items-center justify-center border shadow-sm transition-all group-hover:scale-105 group-hover:shadow-md bg-white",
+                                getHeaderTextClass().replace("text-", "border-").replace("700", "200")
+                            )}>
+                                {activeModule.pathPrefix && activeModule.pathPrefix !== "/dashboard" ? (
+                                    <ModuleIcon className={cn("w-6 h-6", getHeaderTextClass())} />
+                                ) : (
+                                    <Image
+                                        src="/images/logo.jpg"
+                                        alt={COMPANY_INFO.name}
+                                        width={44}
+                                        height={44}
+                                        className="w-full h-full rounded-xl object-cover"
+                                    />
+                                )}
+                            </div>
+                            <div className="flex flex-col">
+                                <h1 className={cn("font-bold text-sm leading-tight tracking-wide transition-colors", getHeaderTextClass())}>
+                                    {activeModule.name || "Easy Sales Export"}
+                                </h1>
+                                <p className={cn("text-[10px] font-semibold tracking-widest uppercase transition-colors mt-0.5", getSubTextClass())}>
+                                    {activeModule.description || "Hub"}
+                                </p>
+                            </div>
+                        </Link>
+                        <NotificationCenter />
+                    </div>
+                )}
+
+                {isCollapsed && (
+                    <div className="flex flex-col items-center gap-3">
+                        <Link
+                            href={activeModule.pathPrefix || "/dashboard"}
+                            className="w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm hover:scale-105 transition-all bg-white"
+                        >
                             {activeModule.pathPrefix && activeModule.pathPrefix !== "/dashboard" ? (
-                                <ModuleIcon className={cn("w-6 h-6", getHeaderTextClass())} />
+                                <ModuleIcon className={cn("w-5 h-5", getHeaderTextClass())} />
                             ) : (
                                 <Image
                                     src="/images/logo.jpg"
                                     alt={COMPANY_INFO.name}
-                                    width={44}
-                                    height={44}
+                                    width={40}
+                                    height={40}
                                     className="w-full h-full rounded-xl object-cover"
                                 />
                             )}
-                        </div>
+                        </Link>
+                    </div>
+                )}
 
-                        <div className="flex flex-col">
-                            <h1 className={cn(
-                                "font-bold text-sm leading-tight tracking-wide transition-colors",
-                                getHeaderTextClass()
-                            )}>
-                                {activeModule.name || "Easy Sales Export"}
-                            </h1>
-                            <p className={cn(
-                                "text-[10px] font-semibold tracking-widest uppercase transition-colors mt-0.5",
-                                getSubTextClass()
-                            )}>
-                                {activeModule.description || "Hub"}
-                            </p>
-                        </div>
-                    </Link>
-                    <NotificationCenter />
-                </div>
+                {/* Mobile close button */}
+                {!isCollapsed && onMobileClose && (
+                    <button
+                        onClick={onMobileClose}
+                        className="lg:hidden absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                        aria-label="Close sidebar"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                )}
+
+                {/* Desktop collapse toggle */}
+                <button
+                    onClick={toggleCollapsed}
+                    className={cn(
+                        "hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:border-slate-300 shadow-sm transition-all z-10",
+                    )}
+                    aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                    {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+                </button>
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 px-4 space-y-8 py-6 overflow-y-auto no-scrollbar">
-
+            <nav className={cn(
+                "flex-1 space-y-6 overflow-y-auto no-scrollbar",
+                isCollapsed ? "px-2 py-4" : "px-4 py-6"
+            )}>
                 {/* Module Specific Links */}
-                <div className="space-y-1.5">
-                    <h3 className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-                        {currentModuleKey === "dashboard" ? "Main Menu" : `${activeModule.name} Menu`}
-                    </h3>
+                <div className={cn("space-y-1", isCollapsed && "space-y-2")}>
+                    {!isCollapsed && (
+                        <h3 className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                            {currentModuleKey === "dashboard" ? "Main Menu" : `${activeModule.name} Menu`}
+                        </h3>
+                    )}
                     {visibleModuleItems.map((item) => {
                         const active = isPathActive(item.href, item.exact);
                         const Icon = item.icon;
 
                         return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={getThemeClasses(active)}
-                            >
-                                <Icon className={cn("w-5 h-5", active ? getHeaderTextClass() : "text-slate-400 group-hover:text-slate-600")} />
-                                <span>{item.name}</span>
-                                {active && (
-                                    <div className={cn("absolute right-3 w-1.5 h-1.5 rounded-full", getHeaderTextClass().replace("text-", "bg-"))} />
+                            <div key={item.href} className="relative group/tooltip">
+                                <Link
+                                    href={item.href}
+                                    className={getThemeClasses(active)}
+                                >
+                                    <Icon className={cn(
+                                        isCollapsed ? "w-5 h-5" : "w-5 h-5",
+                                        active ? getHeaderTextClass() : "text-slate-400 group-hover:text-slate-600"
+                                    )} />
+                                    {!isCollapsed && (
+                                        <>
+                                            <span>{item.name}</span>
+                                            {active && (
+                                                <div className={cn("absolute right-3 w-1.5 h-1.5 rounded-full", getHeaderTextClass().replace("text-", "bg-"))} />
+                                            )}
+                                        </>
+                                    )}
+                                </Link>
+                                {/* Tooltip for collapsed mode */}
+                                {isCollapsed && (
+                                    <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
+                                        <div className="bg-slate-900 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
+                                            {item.name}
+                                            <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900" />
+                                        </div>
+                                    </div>
                                 )}
-                            </Link>
+                            </div>
                         );
                     })}
                 </div>
 
-                {/* Global Links (Messages, Profile) */}
-                <div className="space-y-1.5">
-                    <h3 className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-                        Account
-                    </h3>
+                {/* Global Links */}
+                <div className={cn("space-y-1", isCollapsed && "space-y-2")}>
+                    {!isCollapsed && (
+                        <h3 className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                            Account
+                        </h3>
+                    )}
                     {visibleGlobalItems.map((item) => {
                         const active = isPathActive(item.href, item.exact);
                         const Icon = item.icon;
 
                         return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={getThemeClasses(active)}
-                            >
-                                <Icon className={cn("w-5 h-5", active ? getHeaderTextClass() : "text-slate-400 group-hover:text-slate-600")} />
-                                <span>{item.name}</span>
-                            </Link>
+                            <div key={item.href} className="relative group/tooltip">
+                                <Link href={item.href} className={getThemeClasses(active)}>
+                                    <Icon className={cn(
+                                        "w-5 h-5",
+                                        active ? getHeaderTextClass() : "text-slate-400 group-hover:text-slate-600"
+                                    )} />
+                                    {!isCollapsed && <span>{item.name}</span>}
+                                </Link>
+                                {isCollapsed && (
+                                    <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
+                                        <div className="bg-slate-900 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
+                                            {item.name}
+                                            <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900" />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         );
                     })}
                 </div>
 
-                {/* Switch Module Access (Back to Hub) */}
+                {/* Switch Module / Back to Hub */}
                 {currentModuleKey !== "dashboard" && (
                     <div className="pt-4 mt-4 border-t border-dashed border-slate-200">
-                        <Link
-                            href="/dashboard"
-                            className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all group"
-                        >
-                            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-white shadow-sm border border-slate-200 text-slate-400 group-hover:text-primary transition-colors">
-                                <LayoutDashboard className="w-4 h-4" />
-                            </div>
-                            <div className="flex-1">
-                                <span className="text-xs font-medium block">Switch App</span>
-                                <span className="text-[10px] text-slate-400 block group-hover:text-slate-500">Back to Hub</span>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-0.5 transition-transform" />
-                        </Link>
+                        <div className="relative group/tooltip">
+                            <Link
+                                href="/dashboard"
+                                className={cn(
+                                    "flex items-center rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all group",
+                                    isCollapsed
+                                        ? "justify-center w-10 h-10 mx-auto"
+                                        : "gap-3 px-4 py-3"
+                                )}
+                            >
+                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-white shadow-sm border border-slate-200 text-slate-400 group-hover:text-primary transition-colors shrink-0">
+                                    <LayoutDashboard className="w-4 h-4" />
+                                </div>
+                                {!isCollapsed && (
+                                    <div className="flex-1">
+                                        <span className="text-xs font-medium block">Switch App</span>
+                                        <span className="text-[10px] text-slate-400 block group-hover:text-slate-500">Back to Hub</span>
+                                    </div>
+                                )}
+                                {!isCollapsed && <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-0.5 transition-transform" />}
+                            </Link>
+                            {isCollapsed && (
+                                <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
+                                    <div className="bg-slate-900 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
+                                        Back to Hub
+                                        <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </nav>
 
             {/* Footer Actions */}
-            <div className="p-4 border-t border-dashed border-slate-200 space-y-2 bg-slate-50/50 backdrop-blur-sm">
+            <div className={cn(
+                "border-t border-dashed border-slate-200 bg-slate-50/50 backdrop-blur-sm",
+                isCollapsed ? "p-2 space-y-2" : "p-4 space-y-2"
+            )}>
                 {/* Theme Toggle */}
-                <button
-                    onClick={toggleTheme}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all group"
-                    aria-label="Toggle dark mode"
-                >
-                    <div className="flex items-center gap-3">
-                        {theme === "dark" ? <Moon className="w-5 h-5 text-indigo-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
-                        <span className="font-medium text-sm">{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
-                    </div>
-                    <div className={cn(
-                        "w-8 h-4 rounded-full relative transition-colors",
-                        theme === "dark" ? "bg-slate-700" : "bg-slate-200"
-                    )}>
-                        <div className={cn(
-                            "absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm",
-                            theme === "dark" ? "left-4.5" : "left-0.5"
-                        )} />
-                    </div>
-                </button>
+                <div className="relative group/tooltip">
+                    <button
+                        onClick={toggleTheme}
+                        className={cn(
+                            "w-full flex items-center rounded-xl text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all group",
+                            isCollapsed
+                                ? "justify-center w-10 h-10 mx-auto px-0 py-0"
+                                : "justify-between px-4 py-3"
+                        )}
+                        aria-label="Toggle dark mode"
+                    >
+                        <div className={cn("flex items-center", !isCollapsed && "gap-3")}>
+                            {theme === "dark"
+                                ? <Moon className="w-5 h-5 text-indigo-400" />
+                                : <Sun className="w-5 h-5 text-amber-500" />
+                            }
+                            {!isCollapsed && (
+                                <span className="font-medium text-sm">{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
+                            )}
+                        </div>
+                        {!isCollapsed && (
+                            <div className={cn("w-8 h-4 rounded-full relative transition-colors", theme === "dark" ? "bg-slate-700" : "bg-slate-200")}>
+                                <div className={cn("absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform shadow-sm", theme === "dark" ? "left-4.5" : "left-0.5")} />
+                            </div>
+                        )}
+                    </button>
+                    {isCollapsed && (
+                        <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
+                            <div className="bg-slate-900 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
+                                {theme === "dark" ? "Dark Mode" : "Light Mode"}
+                                <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900" />
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 {/* Logout Button */}
-                <button
-                    onClick={async () => {
-                        // Client-side cleanup for Firebase Auth
-                        try {
-                            const { signOut } = await import("firebase/auth");
-                            // Direct import of the initialized auth instance
-                            const { auth } = await import("@/lib/firebase");
-                            await signOut(auth);
-                        } catch (e) {
-                            console.error("Firebase signout failed", e);
-                        }
-                        // Server-side cleanup via Server Action
-                        await logoutAction();
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-all font-medium text-sm text-left"
-                >
-                    <LogOut className="w-5 h-5" />
-                    <span>Sign Out</span>
-                </button>
+                <div className="relative group/tooltip">
+                    <button
+                        onClick={async () => {
+                            try {
+                                const { signOut } = await import("firebase/auth");
+                                const { auth } = await import("@/lib/firebase");
+                                await signOut(auth);
+                            } catch (e) {
+                                console.error("Firebase signout failed", e);
+                            }
+                            await logoutAction();
+                        }}
+                        className={cn(
+                            "w-full flex items-center text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-all font-medium text-sm text-left rounded-xl",
+                            isCollapsed
+                                ? "justify-center w-10 h-10 mx-auto px-0 py-0"
+                                : "gap-3 px-4 py-3"
+                        )}
+                    >
+                        <LogOut className="w-5 h-5 shrink-0" />
+                        {!isCollapsed && <span>Sign Out</span>}
+                    </button>
+                    {isCollapsed && (
+                        <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 z-50 opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-150">
+                            <div className="bg-slate-900 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
+                                Sign Out
+                                <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900" />
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
         </aside>
+    );
+
+    return (
+        <>
+            {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
+            <div className="hidden lg:flex h-screen sticky top-0">
+                {sidebarContent}
+            </div>
+
+            {/* ── Mobile Drawer Overlay ──────────────────────────────────── */}
+            {isMobileOpen && (
+                <div
+                    className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+                    onClick={onMobileClose}
+                    aria-hidden="true"
+                />
+            )}
+
+            {/* ── Mobile Drawer ──────────────────────────────────────────── */}
+            <div className={cn(
+                "lg:hidden fixed inset-y-0 left-0 z-50 flex transition-transform duration-300 ease-in-out",
+                isMobileOpen ? "translate-x-0" : "-translate-x-full"
+            )}>
+                {/* Force full width (w-72) on mobile — never collapsed */}
+                <aside className={cn(
+                    "w-72 border-r flex flex-col h-screen shadow-2xl",
+                    getSidebarBorderClass()
+                )}>
+                    {/* Mobile header */}
+                    <div className="p-6 border-b border-dashed border-slate-200 relative">
+                        <div className="flex items-center justify-between mb-6">
+                            <Link
+                                href={activeModule.pathPrefix || "/dashboard"}
+                                className="flex items-center gap-3.5 hover:opacity-80 transition-opacity cursor-pointer group"
+                                onClick={onMobileClose}
+                            >
+                                <div className="w-11 h-11 rounded-xl flex items-center justify-center border shadow-sm bg-white">
+                                    {activeModule.pathPrefix && activeModule.pathPrefix !== "/dashboard" ? (
+                                        <ModuleIcon className={cn("w-6 h-6", getHeaderTextClass())} />
+                                    ) : (
+                                        <Image src="/images/logo.jpg" alt={COMPANY_INFO.name} width={44} height={44} className="w-full h-full rounded-xl object-cover" />
+                                    )}
+                                </div>
+                                <div className="flex flex-col">
+                                    <h1 className={cn("font-bold text-sm leading-tight tracking-wide", getHeaderTextClass())}>
+                                        {activeModule.name || "Easy Sales Export"}
+                                    </h1>
+                                    <p className={cn("text-[10px] font-semibold tracking-widest uppercase mt-0.5", getSubTextClass())}>
+                                        {activeModule.description || "Hub"}
+                                    </p>
+                                </div>
+                            </Link>
+
+                            <button
+                                onClick={onMobileClose}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                aria-label="Close menu"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Mobile nav */}
+                    <nav className="flex-1 px-4 space-y-6 py-6 overflow-y-auto no-scrollbar">
+                        <div className="space-y-1">
+                            <h3 className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                                {currentModuleKey === "dashboard" ? "Main Menu" : `${activeModule.name} Menu`}
+                            </h3>
+                            {visibleModuleItems.map((item) => {
+                                const active = isPathActive(item.href, item.exact);
+                                const Icon = item.icon;
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        onClick={onMobileClose}
+                                        className={cn(
+                                            "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all group relative",
+                                            active
+                                                ? cn(getThemeClasses(true))
+                                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                        )}
+                                    >
+                                        <Icon className={cn("w-5 h-5", active ? getHeaderTextClass() : "text-slate-400 group-hover:text-slate-600")} />
+                                        <span>{item.name}</span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+
+                        <div className="space-y-1">
+                            <h3 className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Account</h3>
+                            {visibleGlobalItems.map((item) => {
+                                const active = isPathActive(item.href, item.exact);
+                                const Icon = item.icon;
+                                return (
+                                    <Link
+                                        key={item.href}
+                                        href={item.href}
+                                        onClick={onMobileClose}
+                                        className={cn(
+                                            "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all",
+                                            active
+                                                ? cn(getThemeClasses(true))
+                                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                        )}
+                                    >
+                                        <Icon className={cn("w-5 h-5", active ? getHeaderTextClass() : "text-slate-400")} />
+                                        <span>{item.name}</span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+
+                        {currentModuleKey !== "dashboard" && (
+                            <div className="pt-4 border-t border-dashed border-slate-200">
+                                <Link
+                                    href="/dashboard"
+                                    onClick={onMobileClose}
+                                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all group"
+                                >
+                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-white shadow-sm border border-slate-200 text-slate-400 group-hover:text-primary transition-colors">
+                                        <LayoutDashboard className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <span className="text-xs font-medium block">Switch App</span>
+                                        <span className="text-[10px] text-slate-400 block">Back to Hub</span>
+                                    </div>
+                                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                                </Link>
+                            </div>
+                        )}
+                    </nav>
+
+                    {/* Mobile footer */}
+                    <div className="p-4 border-t border-dashed border-slate-200 space-y-2 bg-slate-50/50">
+                        <button
+                            onClick={toggleTheme}
+                            className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all"
+                        >
+                            <div className="flex items-center gap-3">
+                                {theme === "dark" ? <Moon className="w-5 h-5 text-indigo-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
+                                <span className="font-medium text-sm">{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
+                            </div>
+                        </button>
+                        <button
+                            onClick={async () => {
+                                onMobileClose?.();
+                                try {
+                                    const { signOut } = await import("firebase/auth");
+                                    const { auth } = await import("@/lib/firebase");
+                                    await signOut(auth);
+                                } catch (e) {
+                                    console.error("Firebase signout failed", e);
+                                }
+                                await logoutAction();
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-all font-medium text-sm text-left"
+                        >
+                            <LogOut className="w-5 h-5" />
+                            <span>Sign Out</span>
+                        </button>
+                    </div>
+                </aside>
+            </div>
+        </>
     );
 }

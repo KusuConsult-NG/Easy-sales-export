@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { usePathname } from "next/navigation";
 import { SessionProvider, useSession } from "next-auth/react";
 import { ToastProvider } from "@/contexts/ToastContext";
@@ -12,6 +12,8 @@ import { FirebaseAuthProvider } from "@/components/providers/FirebaseAuthProvide
 import { useFCMRegistration } from "@/hooks/useFCMRegistration";
 import { PushNotificationBanner } from "@/components/notifications/PushNotificationBanner";
 import { AiChatWidget } from "@/components/ai/AiChatWidget";
+import { Menu } from "lucide-react";
+import { getModuleConfig } from "@/lib/module-config";
 
 interface ClientLayoutProps {
     children: ReactNode;
@@ -50,20 +52,13 @@ const landingPages = [
 function LayoutContent({ children }: ClientLayoutProps) {
     const pathname = usePathname();
     const { data: session, status } = useSession();
+    const [isMobileOpen, setIsMobileOpen] = useState(false);
 
     // Register for push notifications once user is authenticated (non-blocking)
     useFCMRegistration();
 
     // Show push permission banner to authenticated users
     const isAuthenticated = status === "authenticated";
-
-    // Check if current route should have the Sidebar
-    // Requirements:
-    // 1. User must be authenticated
-    // 2. Not on excluded routes (admin, auth, api)
-    // 3. Not on a landing page (exact match)
-    // 4. Not on any pre-approval flow (onboarding, payment, pending, setup, etc.)
-    // 5. User must have an approved role for the module they're accessing
 
     // Pre-approval path segments — sidebar is NEVER shown on these
     const isExcludedFlow =
@@ -83,13 +78,15 @@ function LayoutContent({ children }: ClientLayoutProps) {
     // NOTE: We intentionally do NOT gate the sidebar on JWT roles here.
     // Module layouts already enforce access via a two-layer check (JWT + Firestore fallback).
     // If a user has passed the layout guard, they are approved — the sidebar should show.
-    // A JWT role-gate here would hide the sidebar for valid approved users with stale JWTs.
     const shouldShowSidebar =
         status === "authenticated" &&
         session &&
         !noSidebarRoutes.some(route => pathname.startsWith(route)) &&
         !landingPages.includes(pathname) &&
         !isExcludedFlow;
+
+    // Active module info for mobile top bar
+    const activeModule = getModuleConfig(pathname);
 
     return (
         <ToastProvider>
@@ -98,20 +95,46 @@ function LayoutContent({ children }: ClientLayoutProps) {
             <ThemeProvider>
                 {shouldShowSidebar ? (
                     <div className="flex h-screen overflow-hidden">
-                        <Sidebar />
-                        <main className="flex-1 overflow-y-auto bg-slate-50">
-                            {children}
-                        </main>
+                        {/* Desktop sidebar (hidden on mobile — handled inside Sidebar.tsx) */}
+                        <Sidebar
+                            isMobileOpen={isMobileOpen}
+                            onMobileClose={() => setIsMobileOpen(false)}
+                        />
+
+                        {/* Main content area */}
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            {/* ── Mobile Top Bar ── only visible on < lg ─────── */}
+                            <header className="lg:hidden flex items-center gap-3 px-4 h-14 border-b border-slate-200 bg-white/95 backdrop-blur-sm sticky top-0 z-30 shrink-0">
+                                <button
+                                    onClick={() => setIsMobileOpen(true)}
+                                    className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                    aria-label="Open navigation menu"
+                                >
+                                    <Menu className="w-5 h-5" />
+                                </button>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-sm text-slate-800">
+                                        {activeModule.name || "Easy Sales Export"}
+                                    </span>
+                                    <span className="text-slate-300">·</span>
+                                    <span className="text-xs text-slate-500">{activeModule.description || "Hub"}</span>
+                                </div>
+                            </header>
+
+                            {/* Page content */}
+                            <main className="flex-1 overflow-y-auto bg-slate-50">
+                                {children}
+                            </main>
+                        </div>
                     </div>
                 ) : (
                     <>{children}</>
                 )}
                 <Toaster position="top-right" richColors />
             </ThemeProvider>
-            {/* Push notification permission banner — only shows to authenticated users
-                who haven't yet granted or denied push permission */}
+            {/* Push notification permission banner */}
             {isAuthenticated && <PushNotificationBanner />}
-            {/* Module-aware AI chatbot — self-hides on admin/auth routes */}
+            {/* Module-aware AI chatbot */}
             <AiChatWidget />
         </ToastProvider>
     );
