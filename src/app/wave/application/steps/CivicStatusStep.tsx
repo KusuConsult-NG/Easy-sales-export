@@ -41,8 +41,8 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         setNinError("");
 
         try {
-            const { verifyNinAction } = await import('@/app/actions/kyc');
-            const result = await verifyNinAction(data.nin, data.firstName, data.surname);
+            const { verifyNINAction } = await import('@/app/actions/kyc');
+            const result = await verifyNINAction({ nin: data.nin, firstName: data.firstName, lastName: data.surname });
 
             if (result.success && 'isMatch' in result && result.isMatch) {
                 setNinVerified(true);
