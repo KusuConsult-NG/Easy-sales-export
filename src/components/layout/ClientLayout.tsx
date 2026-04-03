@@ -29,7 +29,7 @@ const noSidebarRoutes = [
     '/farm-nation',        // Farm Nation has its own FarmNationSidebar
     '/marketplace/seller', // Marketplace seller area has its own MarketplaceSidebar
     '/export',             // Export has its own ExportSidebar
-    '/academy',            // Academy has its own AcademySidebar
+    // NOTE: /academy intentionally removed — global Sidebar handles Academy nav
 ];
 
 // Routes that are strictly landing pages (exact match) where sidebar should be hidden even if authenticated
@@ -67,8 +67,9 @@ function LayoutContent({ children }: ClientLayoutProps) {
         pathname.includes('/onboarding') ||
         pathname.includes('/application') ||   // Wave application steps
         pathname.includes('/join') ||
-        pathname.includes('/payment') ||        // Cooperative payment flow
+        pathname.includes('/payment') ||        // Cooperative/Academy payment flow
         pathname.includes('/verify-payment') || // Payment verification
+        pathname.includes('/verify') ||         // Academy Paystack callback (/academy/verify)
         pathname.includes('/pending') ||        // Pending approval pages
         pathname.includes('/pending-payment') ||
         pathname.includes('/review-pending') || // Wave review pending

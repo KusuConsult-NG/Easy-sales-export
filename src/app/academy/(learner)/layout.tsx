@@ -1,27 +1,25 @@
 /**
  * Academy Learner Layout
- * 
- * Protected layout with server-side access control and sidebar navigation
+ *
+ * Protected layout with server-side access control.
+ * Navigation is handled by the global Sidebar (ClientLayout.tsx).
+ * AcademySidebar removed — global Sidebar has all academy nav items
+ * via MODULE_NAVIGATION["academy"] in sidebar-config.ts.
  */
 
 import { redirect } from "next/navigation";
 import { checkModuleAccess } from "@/lib/module-access-check";
-import { auth } from "@/lib/auth"; // Use NextAuth session
+import { auth } from "@/lib/auth";
 import { logger } from '@/lib/logger';
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-import AcademySidebar from "./AcademySidebar";
-
 async function AcademyLayoutContent({ children }: { children: React.ReactNode }) {
-    // Get NextAuth session
     const session = await auth();
 
-    // Check if user is authenticated
     if (!session?.user?.id) {
         redirect("/auth/login?module=academy");
     }
 
-    // Verify session and check access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
     try {
         const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "academy");
 
@@ -34,15 +32,9 @@ async function AcademyLayoutContent({ children }: { children: React.ReactNode })
     }
 
     return (
-        <div className="min-h-screen bg-slate-50">
-            <AcademySidebar />
-
-            {/* Main Content - Offset for sidebar */}
-            <main className="lg:pl-64 min-h-screen transition-all">
-                <div className="p-4 lg:p-8 mt-16 lg:mt-0">
-                    {children}
-                </div>
-            </main>
+        // No padding offset needed — global Sidebar in ClientLayout handles the flex layout
+        <div className="p-4 lg:p-8">
+            {children}
         </div>
     );
 }
