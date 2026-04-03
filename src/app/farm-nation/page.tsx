@@ -26,34 +26,7 @@ export default function FarmNationLandingPage() {
     const [totalCount, setTotalCount] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // ── Redirect logged-in users to their dashboard ──────────────────────
-    useEffect(() => {
-        if (sessionStatus === 'loading') return;
-        if (sessionStatus !== 'authenticated') return;
 
-        // Detect dedicated domain (farmnation.ng).
-        // On dedicated domains, proxy already maps / → /farm-nation, so using
-        // '/farm-nation/dashboard' would cause double-rewrite → 404.
-        // Use short paths (/dashboard, /onboarding) on dedicated domain instead.
-        const isDedicatedDomain = typeof window !== 'undefined' &&
-            !window.location.hostname.includes('easysalesexport.com') &&
-            !window.location.hostname.includes('localhost') &&
-            !window.location.hostname.includes('railway.app');
-        const prefix = isDedicatedDomain ? '' : '/farm-nation';
-
-        (async () => {
-            try {
-                const appStatus = await checkFarmNationStatusAction();
-                if (appStatus === 'approved') {
-                    router.replace(`${prefix}/dashboard`);
-                } else {
-                    router.replace(`${prefix}/onboarding`);
-                }
-            } catch {
-                router.replace(`${prefix}/onboarding`);
-            }
-        })();
-    }, [sessionStatus, router]);
 
     useEffect(() => {
         async function loadData() {

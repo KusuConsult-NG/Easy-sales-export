@@ -12,34 +12,7 @@ export default function ExportWindowsLandingPage() {
     const { status: sessionStatus } = useSession();
     const router = useRouter();
 
-    // ── Redirect logged-in users to their dashboard ──────────────────────
-    useEffect(() => {
-        if (sessionStatus === 'loading') return;
-        if (sessionStatus !== 'authenticated') return;
 
-        // Detect dedicated domain (easysalesexportng.com).
-        // On dedicated domains, proxy maps / → /export, so '/export/dashboard'
-        // would cause double-rewrite → /export/export/dashboard → 404.
-        // Use short paths on dedicated domain to avoid this.
-        const isDedicatedDomain = typeof window !== 'undefined' &&
-            !window.location.hostname.includes('easysalesexport.com') &&
-            !window.location.hostname.includes('localhost') &&
-            !window.location.hostname.includes('railway.app');
-        const prefix = isDedicatedDomain ? '' : '/export';
-
-        (async () => {
-            try {
-                const appStatus = await checkExportStatusAction();
-                if (appStatus === 'approved') {
-                    router.replace(`${prefix}/dashboard`);
-                } else {
-                    router.replace(`${prefix}/onboarding`);
-                }
-            } catch {
-                router.replace(`${prefix}/onboarding`);
-            }
-        })();
-    }, [sessionStatus, router]);
 
 
 

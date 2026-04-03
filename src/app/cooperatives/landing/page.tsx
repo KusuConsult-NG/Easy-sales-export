@@ -45,23 +45,7 @@ export default function CooperativeLandingPage() {
         }
     };
 
-    // ── Redirect logged-in members to the right page ──────────────────────
-    useEffect(() => {
-        if (sessionStatus === 'loading') return;
-        if (sessionStatus !== 'authenticated') return;
-        (async () => {
-            try {
-                const appStatus = await checkCooperativeStatusAction();
-                if (appStatus === 'approved') {
-                    router.replace('/cooperatives/dashboard');
-                } else {
-                    router.replace('/cooperatives/onboarding');
-                }
-            } catch {
-                router.replace('/cooperatives/onboarding');
-            }
-        })();
-    }, [sessionStatus, router]);
+
 
     // Smooth scroll handler
     const scrollToSection = (sectionId: string) => {

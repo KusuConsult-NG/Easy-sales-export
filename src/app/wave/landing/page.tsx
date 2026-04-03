@@ -59,23 +59,7 @@ export default function WaveLandingPage() {
     const { status: sessionStatus } = useSession();
     const router = useRouter();
 
-    // ── Redirect logged-in users to their dashboard ──────────────────────
-    useEffect(() => {
-        if (sessionStatus === 'loading') return;
-        if (sessionStatus !== 'authenticated') return;
-        (async () => {
-            try {
-                const appStatus = await checkWaveStatusAction();
-                if (appStatus === 'approved') {
-                    router.replace('/wave/dashboard');
-                } else {
-                    router.replace('/wave/application');
-                }
-            } catch {
-                router.replace('/wave/application');
-            }
-        })();
-    }, [sessionStatus, router]);
+
 
     // Image Slider State
     const images = [
