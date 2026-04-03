@@ -41,25 +41,16 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         setNinError("");
 
         try {
-            const response = await fetch('/api/kyc/verify-nin', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    nin: data.nin,
-                    firstName: data.firstName,
-                    lastName: data.surname
-                })
-            });
+            const { verifyNinAction } = await import('@/app/actions/kyc');
+            const result = await verifyNinAction(data.nin, data.firstName, data.surname);
 
-            const result = await response.json();
-
-            if (result.success && result.isMatch) {
+            if (result.success && 'isMatch' in result && result.isMatch) {
                 setNinVerified(true);
                 setNinError("");
                 showToast("NIN Verified Successfully!", "success");
             } else {
                 setNinVerified(false);
-                setNinError(result.error || result.details || "Verification failed");
+                setNinError('error' in result ? (result.error as string) : ('details' in result ? String(result.details) : "Verification failed"));
             }
         } catch (error) {
             setNinError("An unexpected error occurred during verification");
