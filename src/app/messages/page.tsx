@@ -230,10 +230,12 @@ export default function MessagesPage() {
                         <div className="text-center">
                             <MessageSquare className="w-20 h-20 mx-auto text-slate-300 mb-4" />
                             <h3 className="text-xl font-semibold text-slate-900 mb-2">
-                                Select a conversation
+                                {conversations.length === 0 ? "Welcome to Messages" : "Select a conversation"}
                             </h3>
                             <p className="text-slate-500">
-                                Choose a chat from the list or start a new conversation
+                                {conversations.length === 0 
+                                    ? "Start a new conversation using the + button."
+                                    : "Choose a chat from the list or start a new conversation"}
                             </p>
                         </div>
                     </div>

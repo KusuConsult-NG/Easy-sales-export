@@ -19,8 +19,8 @@ import {
 } from "@/app/actions/wallet";
 import { useToast } from "@/contexts/ToastContext";
 
-const fmt = (n: number) =>
-    new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n);
+const fmt = (n: number = 0) =>
+    new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
 
 const fmtDate = (val: any) => {
     if (!val) return "—";

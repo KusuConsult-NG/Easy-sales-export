@@ -93,7 +93,7 @@ export default function DisputesPage() {
         try {
             const result = await startConversationAction(dispute.sellerId);
             if (result && "conversationId" in result && result.conversationId) {
-                router.push(`/dashboard/messages?conversation=${result.conversationId}`);
+                router.push(`/messages?conversation=${result.conversationId}`);
             } else {
                 showToast((result as any)?.error || "Failed to contact support", "error");
             }

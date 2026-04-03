@@ -186,36 +186,34 @@ export async function getCoursesAction(
 }
 
 /**
- * Get course by ID
+ * Get course by ID — direct Firestore fetch (no module-level cache).
+ * Using unstable_cache at module scope caused null to be cached at build time.
+ * Per-request caching via Next.js fetch cache handles deduplication instead.
  */
-const getCachedCourseById = (courseId: string) => unstable_cache(
-    async () => {
-        try {
-            const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
+export async function getCourseByIdAction(courseId: string): Promise<Course | null> {
+    try {
+        if (!courseId) return null;
 
-            if (!courseDoc.exists) {
-                return null;
-            }
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
 
-            const d = courseDoc.data()!;
-            return {
-                id: courseDoc.id,
-                ...d,
-                // Serialize Timestamps → ISO strings
-                createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
-                updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
-            } as Course;
-        } catch (error) {
-            logger.error("Failed to fetch course:", error);
+        if (!courseDoc.exists) {
+            logger.warn(`[getCourseByIdAction] Course not found in Firestore: ${courseId}`);
             return null;
         }
-    },
-    [`academy-course-${courseId}`],
-    { revalidate: 3600, tags: [`academy-course-${courseId}`] }
-)();
 
-export async function getCourseByIdAction(courseId: string): Promise<Course | null> {
-    return getCachedCourseById(courseId);
+        const d = courseDoc.data()!;
+        return {
+            id: courseDoc.id,
+            ...d,
+            // Serialize Timestamps → ISO strings so Next.js can safely
+            // pass them from Server Actions to Client Components
+            createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
+            updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
+        } as Course;
+    } catch (error) {
+        logger.error("[getCourseByIdAction] Failed to fetch course:", error);
+        return null;
+    }
 }
 
 /**

@@ -13,8 +13,8 @@ import { collection, doc, query, where, onSnapshot, orderBy, limit, getDocs } fr
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 
-const fmt = (n: number) =>
-    new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n);
+const fmt = (n: number = 0) =>
+    new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
 
 interface StatsState {
     walletBalance: number;
@@ -200,8 +200,7 @@ function DashboardHomeContent() {
 
     const statCards = [
         { label: "Wallet Balance", value: fmt(stats.walletBalance), icon: Wallet, color: "text-emerald-600 bg-emerald-50", href: "/dashboard/wallet" },
-        { label: "Active Orders", value: stats.activeOrders.toString(), icon: Package, color: "text-blue-600 bg-blue-50", href: "/dashboard/orders" },
-        { label: "Unread Messages", value: stats.unreadMessages.toString(), icon: MessageCircle, color: "text-violet-600 bg-violet-50", href: "/dashboard/messages" },
+        { label: "Unread Messages", value: stats.unreadMessages.toString(), icon: MessageCircle, color: "text-violet-600 bg-violet-50", href: "/messages" },
         { label: "Notifications", value: stats.unreadNotifications.toString(), icon: Bell, color: "text-orange-600 bg-orange-50", href: "/dashboard/notifications" },
     ];
 
@@ -297,12 +296,8 @@ function DashboardHomeContent() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                         {[
                             { label: "Wallet", href: "/dashboard/wallet", icon: Wallet },
-                            { label: "Orders", href: "/dashboard/orders", icon: Package },
-                            { label: "Messages", href: "/dashboard/messages", icon: MessageCircle },
-                            { label: "Certificates", href: "/dashboard/certificates", icon: Award },
-                            { label: "Digital ID", href: "/dashboard/digital-id", icon: IdCard },
-                            { label: "Reviews", href: "/dashboard/reviews", icon: Star },
-                            { label: "Disputes", href: "/dashboard/disputes", icon: AlertTriangle },
+                            { label: "Messages", href: "/messages", icon: MessageCircle },
+                            { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
                         ].map(({ label, href, icon: Icon }) => (
                             <Link
                                 key={href}

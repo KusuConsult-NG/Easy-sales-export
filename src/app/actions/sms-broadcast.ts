@@ -398,7 +398,7 @@ export async function sendSmsBroadcastAction(
 
         let sent = 0;
         let failed = 0;
-        let skipped = 0;
+        const skipped = 0;
 
         // Send in batches of 10 with a 1s pause between batches
         const BATCH = 10;

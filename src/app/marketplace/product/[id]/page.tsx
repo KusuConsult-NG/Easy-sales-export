@@ -89,7 +89,7 @@ export default function ProductDetailPage() {
             });
 
             if (result.success) {
-                router.push(`/dashboard/messages?conversation=${result.conversationId}`);
+                router.push(`/messages?conversation=${result.conversationId}`);
             } else {
                 showToast(result.error || "Failed to start conversation", "error");
             }

@@ -236,7 +236,7 @@ export default function AdminAcademyApplicationsPage() {
     // Loaded when any of the 3 listeners has fired — data shows immediately
     // and subsequent listeners add to the view incrementally
     useEffect(() => {
-        if (loadedCount >= 1) setLoaded(true);
+        if (loadedCount >= 1) queueMicrotask(() => setLoaded(true));
     }, [loadedCount]);
 
     const handleApprove = async (id: string) => {

@@ -82,7 +82,7 @@ export default function BuyerOrdersPage() {
             const result = await startConversationAction(order.sellerId);
 
             if (result && "conversationId" in result && result.conversationId) {
-                router.push(`/dashboard/messages?conversation=${result.conversationId}`);
+                router.push(`/messages?conversation=${result.conversationId}`);
             } else {
                 showToast((result as any)?.error || "Failed to start conversation", "error");
             }

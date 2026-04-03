@@ -16,58 +16,63 @@ const DISMISSED_KEY = "push_banner_dismissed_v1";
  * on every page navigation within the same browser session.
  */
 export function usePushPermissionState() {
-    const [permissionState, setPermissionState] = useState<
-        "default" | "granted" | "denied" | "unsupported" | "loading"
-    >("loading");
+  const [permissionState, setPermissionState] = useState<
+    "default" | "granted" | "denied" | "unsupported" | "loading"
+  >("loading");
 
-    useEffect(() => {
-        if (typeof window === "undefined" || !("Notification" in window)) {
-            setPermissionState("unsupported");
-            return;
+  useEffect(() => {
+    queueMicrotask(() => {
+      if (typeof window === "undefined" || !("Notification" in window)) {
+        setPermissionState("unsupported");
+        return;
+      }
+
+      const nativePerm = Notification.permission as
+        | "default"
+        | "granted"
+        | "denied";
+
+      // If the user already granted or denied at browser level, respect that
+      if (nativePerm !== "default") {
+        setPermissionState(nativePerm);
+        return;
+      }
+
+      // Check if the user dismissed the banner in this browser (persisted)
+      try {
+        const dismissed = localStorage.getItem(DISMISSED_KEY);
+        if (dismissed === "true") {
+          setPermissionState("denied"); // treat as dismissed — hide banner
+          return;
         }
+      } catch {
+        // localStorage may be unavailable in some environments (private mode)
+      }
 
-        const nativePerm = Notification.permission as "default" | "granted" | "denied";
+      setPermissionState("default");
+    });
+  }, []);
 
-        // If the user already granted or denied at browser level, respect that
-        if (nativePerm !== "default") {
-            setPermissionState(nativePerm);
-            return;
-        }
+  const request = useCallback(async (): Promise<boolean> => {
+    if (!("Notification" in window)) return false;
+    try {
+      const perm = await Notification.requestPermission();
+      setPermissionState(perm as "default" | "granted" | "denied");
+      return perm === "granted";
+    } catch {
+      return false;
+    }
+  }, []);
 
-        // Check if the user dismissed the banner in this browser (persisted)
-        try {
-            const dismissed = localStorage.getItem(DISMISSED_KEY);
-            if (dismissed === "true") {
-                setPermissionState("denied"); // treat as dismissed — hide banner
-                return;
-            }
-        } catch {
-            // localStorage may be unavailable in some environments (private mode)
-        }
+  const dismiss = useCallback(() => {
+    // Persist dismissal so banner does not reappear on next page navigation
+    try {
+      localStorage.setItem(DISMISSED_KEY, "true");
+    } catch {
+      // Ignore if localStorage is unavailable
+    }
+    setPermissionState("denied");
+  }, []);
 
-        setPermissionState("default");
-    }, []);
-
-    const request = useCallback(async (): Promise<boolean> => {
-        if (!("Notification" in window)) return false;
-        try {
-            const perm = await Notification.requestPermission();
-            setPermissionState(perm as "default" | "granted" | "denied");
-            return perm === "granted";
-        } catch {
-            return false;
-        }
-    }, []);
-
-    const dismiss = useCallback(() => {
-        // Persist dismissal so banner does not reappear on next page navigation
-        try {
-            localStorage.setItem(DISMISSED_KEY, "true");
-        } catch {
-            // Ignore if localStorage is unavailable
-        }
-        setPermissionState("denied");
-    }, []);
-
-    return { permissionState, request, dismiss };
+  return { permissionState, request, dismiss };
 }

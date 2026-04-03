@@ -99,20 +99,20 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Message required" }, { status: 400 });
         }
 
-        const module: ChatbotModule = VALID_MODULES.includes(rawModule) ? rawModule : "hub";
+        const validModule: ChatbotModule = VALID_MODULES.includes(rawModule) ? rawModule : "hub";
         const sessionId: string = clientSessionId || randomUUID();
         const isNewSession = !clientSessionId;
 
         // 5. Create session in Firestore if this is the first message
         if (isNewSession) {
-            await createChatbotSession(sessionId, userId, userEmail, module);
+            await createChatbotSession(sessionId, userId, userEmail, validModule);
         }
 
         // 6. Detect escalation
         const isEscalation = detectEscalation(message);
 
         // 7. Build system prompt and call OpenAI
-        const systemPrompt = buildSystemPrompt(module);
+        const systemPrompt = buildSystemPrompt(validModule);
         const apiKey = process.env.OPENAI_API_KEY;
         let reply: string | null = null;
 
@@ -172,12 +172,12 @@ export async function POST(req: NextRequest) {
         // 9. Persist messages (fire-and-forget — never blocks the response)
         const userMsgId = `${sessionId}_u_${Date.now()}`;
         const botMsgId = `${sessionId}_a_${Date.now() + 1}`;
-        saveMessageAsync(userMsgId, sessionId, userId, "user", message, module, isEscalation);
-        saveMessageAsync(botMsgId, sessionId, userId, "assistant", reply, module, false);
+        saveMessageAsync(userMsgId, sessionId, userId, "user", message, validModule, isEscalation);
+        saveMessageAsync(botMsgId, sessionId, userId, "assistant", reply, validModule, false);
 
         return NextResponse.json({
             reply,
-            module,
+            module: validModule,
             sessionId,
             remaining: remaining ?? 0,
             escalated: isEscalation,
