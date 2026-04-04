@@ -477,7 +477,7 @@ export default function LocalizationSettingsPage() {
                 </section>
 
                 {/* ── Summary card ── */}
-                <section className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5 flex items-start gap-4">
+                <section className="bg-linear-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5 flex items-start gap-4">
                     <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
                     <div className="text-sm">
                         <p className="font-semibold text-green-800 mb-1">Configuration Summary</p>

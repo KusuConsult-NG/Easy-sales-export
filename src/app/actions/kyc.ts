@@ -59,6 +59,12 @@ export async function verifyBVNAction(payload: {
             return { success: false, error: 'First name and last name are required for BVN verification' };
         }
 
+        // Guard: env vars must be present — return a clean error instead of leaking config details
+        if (!process.env.QOREID_CLIENT_ID || !process.env.QOREID_SECRET_KEY) {
+            logger.error('[verifyBVNAction] QOREID_CLIENT_ID or QOREID_SECRET_KEY is missing from environment.');
+            return { success: false, error: 'Identity verification is temporarily unavailable. Please try again later or contact support.' };
+        }
+
         logger.info('BVN verification started', { userId, bvn: bvn.slice(0, 4) + '***' });
 
         const result = await qoreIdService.verifyBVN(bvn, firstName, lastName);
@@ -121,6 +127,12 @@ export async function verifyNINAction(payload: {
         }
         if (!firstName || !lastName) {
             return { success: false, error: 'First name and last name are required for NIN verification' };
+        }
+
+        // Guard: env vars must be present — return a clean error instead of leaking config details
+        if (!process.env.QOREID_CLIENT_ID || !process.env.QOREID_SECRET_KEY) {
+            logger.error('[verifyNINAction] QOREID_CLIENT_ID or QOREID_SECRET_KEY is missing from environment.');
+            return { success: false, error: 'Identity verification is temporarily unavailable. Please try again later or contact support.' };
         }
 
         logger.info('NIN verification started', { userId, nin: nin.slice(0, 4) + '***' });
