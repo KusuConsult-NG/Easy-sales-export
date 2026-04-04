@@ -132,7 +132,10 @@ export default auth((req: any) => {
         // internal URL, not the user's actual browser domain.
         const MODULES_WITH_LANDING_SUBPAGE = new Set(["/wave", "/cooperatives"]);
         if (pathname === "/" && MODULES_WITH_LANDING_SUBPAGE.has(rewritePrefix)) {
-            const landingUrl = new URL(`${rewritePrefix}/landing`, req.url);
+            // Build the redirect URL using the real browser hostname (x-forwarded-host),
+            // NOT req.url — which resolves to Railway's internal host and causes the
+            // browser to land on www.easysalesexport.com instead of the custom domain.
+            const landingUrl = new URL(`https://${hostname}${rewritePrefix}/landing`);
             return NextResponse.redirect(landingUrl, { status: 302 });
         }
 
