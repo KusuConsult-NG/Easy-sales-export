@@ -7,7 +7,7 @@ import { ToastProvider } from "@/contexts/ToastContext";
 import { Toaster } from "sonner";
 
 import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { ModuleSidebar } from "@/components/layout/ModuleSidebar";
 import { FirebaseAuthProvider } from "@/components/providers/FirebaseAuthProvider";
 import { useFCMRegistration } from "@/hooks/useFCMRegistration";
 import { PushNotificationBanner } from "@/components/notifications/PushNotificationBanner";
@@ -19,95 +19,95 @@ interface ClientLayoutProps {
     children: ReactNode;
 }
 
-// Routes that should NOT have the global Sidebar (auth pages, landing page, admin, or modules with their own sidebar)
-const noSidebarRoutes = [
-    '/auth',
-    '/contact',
-    '/api',
-    '/admin',              // Admin has its own layout/sidebar
-    '/dashboard',          // Hub dashboard has its own DashboardNav sidebar
-    '/farm-nation',        // Farm Nation has its own FarmNationSidebar
-    '/marketplace/seller', // Marketplace seller area has its own MarketplaceSidebar
-    '/export',             // Export has its own ExportSidebar
-    // Academy: onboarding/payment flows only — sidebar not needed on these
-    '/academy/application',
-    '/academy/payment',
-    '/academy/setup',
-    '/academy/verify',
-];
+/**
+ * Determines whether the global ModuleSidebar should be shown.
+ *
+ * Rules:
+ *   "none"   → public pages, auth pages, onboarding flows, the Hub (/dashboard)
+ *   "module" → any authenticated module route that passed its server layout guard
+ *
+ * NOTE: /dashboard has its OWN DashboardNav rendered from within the page —
+ * the ClientLayout must NOT add a second sidebar on top of it.
+ */
+type SidebarMode = "none" | "module";
 
-// Routes that are strictly landing pages (exact match) where sidebar should be hidden even if authenticated
-const landingPages = [
-    '/',
-    '/wave',
-    '/wave/landing',
-    '/cooperatives',
-    '/cooperatives/landing',
-    '/marketplace',
-    '/marketplace/landing',
-    '/farm-nation',
-    '/farm-nation/landing',
-    '/academy',
-    '/academy/landing',
-    '/export',
-    '/export/landing',
-];
+function getSidebarMode(pathname: string): SidebarMode {
+    // Auth, API, public pages
+    if (
+        pathname.startsWith("/auth") ||
+        pathname.startsWith("/api") ||
+        pathname.startsWith("/contact") ||
+        pathname === "/"
+    ) return "none";
+
+    // Hub dashboard — DashboardNav renders itself inside the page
+    if (pathname.startsWith("/dashboard")) return "none";
+
+    // Module root landing pages (exact match only — not /academy/dashboard)
+    const MODULE_ROOTS = [
+        "/wave", "/academy", "/cooperatives",
+        "/marketplace", "/farm-nation", "/export", "/escrow",
+    ];
+    if (MODULE_ROOTS.includes(pathname)) return "none";
+
+    // Non-member subpaths: onboarding, payment flows, landing variants
+    const NON_MEMBER_PREFIXES = [
+        "/wave/landing", "/wave/application", "/wave/briefing", "/wave/access-denied",
+        "/academy/landing", "/academy/application", "/academy/payment", "/academy/setup", "/academy/verify",
+        "/cooperatives/landing", "/cooperatives/application", "/cooperatives/verify-payment",
+        "/marketplace/landing",
+        "/farm-nation/landing", "/farm-nation/application",
+        "/export/landing", "/export/application",
+        // Universal pages without a module context -- content is full-width
+        "/messages", "/profile",
+    ];
+    if (NON_MEMBER_PREFIXES.some(p => pathname.startsWith(p))) return "none";
+
+    // Generic onboarding/auth flow segments that may appear in any module URL
+    if (
+        pathname.includes("/login") ||
+        pathname.includes("/register") ||
+        pathname.includes("/onboarding") ||
+        pathname.includes("/pending") ||
+        pathname.includes("/join") ||
+        pathname.includes("/review-pending") ||
+        pathname.includes("/access-denied")
+    ) return "none";
+
+    return "module";
+}
 
 function LayoutContent({ children }: ClientLayoutProps) {
     const pathname = usePathname();
     const { data: session, status } = useSession();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-    // Register for push notifications once user is authenticated (non-blocking)
+    // Register for push notifications once authenticated (non-blocking)
     useFCMRegistration();
 
-    // Show push permission banner to authenticated users
     const isAuthenticated = status === "authenticated";
+    const mode = getSidebarMode(pathname || "");
+    const showSidebar = mode === "module" && isAuthenticated && !!session;
 
-    // Pre-approval path segments — sidebar is NEVER shown on these
-    const isExcludedFlow =
-        pathname.includes('/login') ||
-        pathname.includes('/register') ||
-        pathname.includes('/onboarding') ||
-        pathname.includes('/application') ||   // Wave application steps
-        pathname.includes('/join') ||
-        pathname.includes('/verify-payment') || // Cooperative payment verification
-        pathname.includes('/pending') ||        // Pending approval pages
-        pathname.includes('/pending-payment') ||
-        pathname.includes('/review-pending') || // Wave review pending
-        pathname.includes('/access-denied');    // Access denied pages
-    // NOTE: /academy/payment, /academy/setup, /academy/verify handled in noSidebarRoutes (prefix match)
-    // NOTE: /payment and /setup removed from isExcludedFlow — too broad; use noSidebarRoutes for precision
-
-    // NOTE: We intentionally do NOT gate the sidebar on JWT roles here.
-    // Module layouts already enforce access via a two-layer check (JWT + Firestore fallback).
-    // If a user has passed the layout guard, they are approved — the sidebar should show.
-    const shouldShowSidebar =
-        status === "authenticated" &&
-        session &&
-        !noSidebarRoutes.some(route => pathname.startsWith(route)) &&
-        !landingPages.includes(pathname) &&
-        !isExcludedFlow;
-
-    // Active module info for mobile top bar
+    // Active module info for mobile top bar label
     const activeModule = getModuleConfig(pathname);
 
     return (
         <ToastProvider>
-            {/* Only show session tracker for authenticated users — never on public pages */}
             {status === "authenticated" && <SessionActivityTracker />}
+
             <>
-                {shouldShowSidebar ? (
+                {showSidebar ? (
                     <div className="flex h-screen overflow-hidden">
-                        {/* Desktop sidebar (hidden on mobile — handled inside Sidebar.tsx) */}
-                        <Sidebar
+                        {/* ModuleSidebar — renders desktop aside + mobile drawer internally */}
+                        <ModuleSidebar
                             isMobileOpen={isMobileOpen}
                             onMobileClose={() => setIsMobileOpen(false)}
                         />
 
-                        {/* Main content area */}
-                        <div className="flex-1 flex flex-col overflow-hidden">
-                            {/* ── Mobile Top Bar ── only visible on < lg ─────── */}
+                        {/* Main content column */}
+                        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+                            {/* ── Mobile top bar (hamburger) ── lg:hidden */}
                             <header className="lg:hidden flex items-center gap-3 px-4 h-14 border-b border-slate-200 bg-white/95 backdrop-blur-sm sticky top-0 z-30 shrink-0">
                                 <button
                                     onClick={() => setIsMobileOpen(true)}
@@ -134,10 +134,13 @@ function LayoutContent({ children }: ClientLayoutProps) {
                 ) : (
                     <>{children}</>
                 )}
+
                 <Toaster position="top-right" richColors />
             </>
+
             {/* Push notification permission banner */}
             {isAuthenticated && <PushNotificationBanner />}
+
             {/* Module-aware AI chatbot */}
             <AiChatWidget />
         </ToastProvider>
