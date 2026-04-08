@@ -52,7 +52,7 @@ const APEX_DOMAINS: readonly string[] = [
     "export.easysalesexport.com",
 ];
 
-export default auth((req: any) => {
+const authMiddleware = auth((req: any) => {
     const { pathname } = req.nextUrl;
     // Railway proxies requests: the real browser domain arrives in x-forwarded-host,
     // while host contains the internal Railway service hostname. Prefer x-forwarded-host
@@ -195,6 +195,27 @@ export default auth((req: any) => {
 
     return response;
 });
+
+export default async function middleware(req: any, event: any) {
+    const res = await authMiddleware(req, event);
+    
+    // EXPLICIT BYPASS: NextAuth automatically redirects authenticated users who try to 
+    // access paths under `pages.signIn` to prevent them from seeing the login screen.
+    // However, we want the Admin Login page to ALWAYS render, even if the user is 
+    // currently authenticated as a standard user (so they can switch accounts or 
+    // explicitly see the admin prompt).
+    if (req.nextUrl.pathname === "/auth/login/admin" && res && res.status >= 300 && res.status <= 399) {
+        const nextRes = NextResponse.next();
+        res.headers.forEach((value: string, key: string) => {
+            if (key.toLowerCase() !== 'location') {
+                nextRes.headers.set(key, value);
+            }
+        });
+        return nextRes;
+    }
+    
+    return res;
+}
 
 export const config = {
     matcher: [
