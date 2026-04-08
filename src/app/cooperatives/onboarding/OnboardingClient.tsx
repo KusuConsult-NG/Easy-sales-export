@@ -40,6 +40,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
     const [isRevisionMode, setIsRevisionMode] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    // True for members onboarded before the platform — payment already confirmed by admin.
+    const [isLegacyImport, setIsLegacyImport] = useState(false);
 
     const [tier] = useState<"basic" | "premium">(initialTier);
 
@@ -88,6 +90,13 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         checkCooperativeStatusAction().then(async (coopStatus) => {
             if (coopStatus === "active" || coopStatus === "approved") {
                 router.replace(`${prefix}/dashboard`);
+                return;
+            }
+            // Legacy import: member is approved + paid offline, just needs to fill the form.
+            // Do NOT redirect — stay on this page and show form with payment step bypassed.
+            if (coopStatus === "legacy_pending_onboarding") {
+                setIsLegacyImport(true);
+                setIsCheckingStatus(false);
                 return;
             }
             if (coopStatus === "pending" || coopStatus === "under_review") {
@@ -206,14 +215,16 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     }, [documents, userId]);
     // ─────────────────────────────────────────────────────────────────────────
 
-    const isPaid = paymentStatus === "completed";
+    // isPaid: true if Paystack payment already confirmed OR if this is a legacy import
+    // (payment was verified offline by admin — the script sets paymentStatus='completed').
+    const isPaid = paymentStatus === "completed" || isLegacyImport;
     const totalSteps = 4;
 
     const steps = [
         { number: 1, name: "Personal Info" },
         { number: 2, name: "Next of Kin" },
         { number: 3, name: "Documents" },
-        { number: 4, name: "Payment" },
+        { number: 4, name: isLegacyImport ? "Review & Submit" : "Payment" },
     ];
 
     async function handlePayNow() {
@@ -446,8 +457,14 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                 {currentStep === 4 && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-8">
                         <div>
-                            <h2 className="text-2xl font-bold text-slate-900 mb-1">Membership Payment</h2>
-                            <p className="text-slate-500">Complete your one-time membership fee to submit your application.</p>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-1">
+                                {isLegacyImport ? "Review & Submit" : "Membership Payment"}
+                            </h2>
+                            <p className="text-slate-500">
+                                {isLegacyImport
+                                    ? "Your registration fee has already been received. Please review and submit your details."
+                                    : "Complete your one-time membership fee to submit your application."}
+                            </p>
                         </div>
 
                         {isPaid ? (
@@ -456,8 +473,17 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                 <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-xl">
                                     <CheckCircle className="w-6 h-6 text-green-600 shrink-0" />
                                     <div>
-                                        <p className="font-semibold text-green-800">Payment Confirmed</p>
-                                        <p className="text-sm text-green-700">Your ₦10,000 membership fee has been received.</p>
+                                        {isLegacyImport ? (
+                                            <>
+                                                <p className="font-semibold text-green-800">Payment Verified by Admin</p>
+                                                <p className="text-sm text-green-700">Your registration fee has been confirmed from records. Submit your details to activate your membership.</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="font-semibold text-green-800">Payment Confirmed</p>
+                                                <p className="text-sm text-green-700">Your ₦10,000 membership fee has been received.</p>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 

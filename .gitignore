@@ -43,3 +43,7 @@ next-env.d.ts
 # Firebase service account (NEVER commit)
 service-account*.json
 .env*.local
+
+# Scripts data (prevent committing json/csv with real user PII)
+scripts/data/*.json
+scripts/data/*.csv

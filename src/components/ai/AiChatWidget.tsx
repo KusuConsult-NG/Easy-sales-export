@@ -96,7 +96,7 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
       setIsRateLimited(false);
       setMessages([
         {
-          id: "greeting-" + module,
+          id: "greeting-" + activeModule,
           role: "assistant",
           content: config.greeting,
           timestamp: new Date(),
@@ -104,7 +104,7 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
       ]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [module]);
+  }, [activeModule]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -113,7 +113,7 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
   const handleQuickAction = useCallback((action: string) => {
     setInputValue(action);
     setTimeout(() => {
-      const form = document.getElementById("chat-form-" + module);
+      const form = document.getElementById("chat-form-" + activeModule);
       if (form) (form as HTMLFormElement).requestSubmit();
     }, 50);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -410,7 +410,7 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
 
         {/* Input Area */}
         <form
-          id={"chat-form-" + module}
+          id={"chat-form-" + activeModule}
           onSubmit={handleSubmit}
           className="p-3 bg-white border-t border-slate-200"
         >

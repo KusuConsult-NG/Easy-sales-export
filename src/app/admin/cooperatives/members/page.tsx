@@ -6,6 +6,7 @@ import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, Slid
 import { useToast } from "@/contexts/ToastContext";
 import Modal from "@/components/ui/Modal";
 import RejectionModal from "@/components/admin/RejectionModal";
+import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { editApplicationAction } from "@/app/actions/admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -50,6 +51,7 @@ export default function CooperativeMembersPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingId, setRejectingId] = useState<string | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Edit mode
     const [isEditMode, setIsEditMode] = useState(false);
@@ -320,14 +322,23 @@ export default function CooperativeMembersPage() {
                         Review and approve member registrations
                     </p>
                 </div>
-                <button
-                    onClick={handleExportCSV}
-                    disabled={filteredApplications.length === 0}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
-                >
-                    <Download className="w-4 h-4" />
-                    Export CSV ({filteredApplications.length})
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all"
+                    >
+                        <Users className="w-4 h-4" />
+                        Import Legacy Member
+                    </button>
+                    <button
+                        onClick={handleExportCSV}
+                        disabled={filteredApplications.length === 0}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+                    >
+                        <Download className="w-4 h-4" />
+                        Export CSV ({filteredApplications.length})
+                    </button>
+                </div>
             </div>
 
             {/* Filters and Search */}
@@ -865,6 +876,13 @@ export default function CooperativeMembersPage() {
                 title="Reject Membership Application"
                 description="This member will receive an email notification with the reason you provide."
                 isProcessing={isProcessing}
+            />
+
+            {/* Import Legacy Member Modal */}
+            <ImportLegacyModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => fetchApplications()}
             />
         </div>
     );

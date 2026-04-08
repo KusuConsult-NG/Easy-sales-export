@@ -161,6 +161,8 @@ export async function registerCooperativeMemberAction(
         const existingMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
         const existingMember = await existingMemberRef.get();
 
+        // Legacy import members already have paymentStatus=completed set by the script.
+        // We create the member doc below if it doesn't exist (defensive).
         if (!existingMember.exists) {
             return { error: "No membership record found. Please complete payment first.", success: false };
         }
@@ -168,11 +170,14 @@ export async function registerCooperativeMemberAction(
         const memberData = existingMember.data();
 
         // 🔒 Verify Payment Status
-        if (memberData?.paymentStatus !== "completed") {
+        // Legacy import members (_importSource present) already have paymentStatus='completed'
+        // set by the admin import script — they never went through Paystack, so we skip
+        // the payment gate for them. For all other members, payment must be confirmed.
+        const isLegacyImport = Boolean(memberData?._importSource);
+        if (!isLegacyImport && memberData?.paymentStatus !== "completed") {
             return {
                 error: "Payment not verified. Please ensure you have completed the payment step.",
                 success: false,
-                // Optional: Provide payment URL again?
             };
         }
 
@@ -193,7 +198,7 @@ export async function registerCooperativeMemberAction(
             nextOfKinPhone: formData.get("nextOfKinPhone") as string,
             nextOfKinAddress: formData.get("nextOfKinAddress") as string,
             // Membership Tier comes from existing record, but we can validate if sent
-            membershipTier: memberData.membershipTier as "basic" | "premium",
+            membershipTier: (memberData?.membershipTier ?? "basic") as "basic" | "premium",
         };
 
         // Extract document data
@@ -639,29 +644,39 @@ export async function checkCooperativeStatusAction(): Promise<string | null> {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
-        const registration = userData?.serviceRegistrations?.cooperatives;
+        // Support both key variants:
+        //  - 'cooperatives' (plural) — written by registerCooperativeMemberAction post-V2
+        //  - 'cooperative' (singular) — written by the legacy import script
+        const registration =
+            userData?.serviceRegistrations?.cooperative ||
+            userData?.serviceRegistrations?.cooperatives;
 
         if (registration?.status) {
+            // 'legacy_pending_onboarding' is a sentinel set by the import script.
+            // Pass it through so OnboardingClient knows to show the form without payment.
             return registration.status;
         }
 
-        // ── FALLBACK: Returning member whose data predates V2 schema ──────
-        const legacySnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where('userId', '==', session.user.id)
-            .limit(1)
+        // ── FALLBACK: cooperative_members doc predates V2 schema ─────────
+        const memberSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .doc(session.user.id)
             .get();
 
-        if (!legacySnap.empty) {
-            const legacyData = legacySnap.docs[0].data();
-            const legacyStatus = legacyData?.status ?? 'pending';
+        if (memberSnap.exists) {
+            const memberData = memberSnap.data()!;
+            // Legacy import members: paymentStatus=completed but onboardingCompleted=false
+            if (memberData.paymentStatus === 'completed' && !memberData.onboardingCompleted) {
+                return 'legacy_pending_onboarding';
+            }
+            const derivedStatus = memberData.membershipStatus ?? memberData.status ?? 'pending';
 
+            // Backfill the user doc so future reads hit the fast path
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
-                { serviceRegistrations: { cooperatives: { status: legacyStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
+                { serviceRegistrations: { cooperatives: { status: derivedStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
                 { merge: true }
             );
-
-            logger.info(`[checkCooperativeStatus] Backfilled legacy cooperative status '${legacyStatus}' for user ${session.user.id}`);
-            return legacyStatus;
+            logger.info(`[checkCooperativeStatus] Backfilled status '${derivedStatus}' for user ${session.user.id}`);
+            return derivedStatus;
         }
 
         return null;

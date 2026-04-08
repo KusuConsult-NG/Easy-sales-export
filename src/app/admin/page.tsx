@@ -210,7 +210,7 @@ export default function AdminDashboardPage() {
                 {/* Quick Actions */}
                 <div className="mb-8">
                     <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                         <Link
                             href="/admin/cooperatives/loans"
                             className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm flex items-start gap-4"
@@ -242,6 +242,24 @@ export default function AdminDashboardPage() {
                                 </h3>
                                 <p className="text-sm text-slate-500">
                                     Review pending submissions
+                                </p>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
+                        </Link>
+
+                        <Link
+                            href="/admin/cooperatives/members"
+                            className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm border border-blue-100 flex items-start gap-4"
+                        >
+                            <div className="p-2.5 bg-blue-50 rounded-lg shrink-0">
+                                <Users className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-blue-600 transition">
+                                    Import Legacy Member
+                                </h3>
+                                <p className="text-sm text-slate-500">
+                                    Add members physically approved
                                 </p>
                             </div>
                             <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
