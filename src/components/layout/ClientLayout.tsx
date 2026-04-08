@@ -40,8 +40,8 @@ function getSidebarMode(pathname: string): SidebarMode {
         pathname === "/"
     ) return "none";
 
-    // Hub dashboard — DashboardNav renders itself inside the page
-    if (pathname.startsWith("/dashboard")) return "none";
+    // Hub dashboard and Admin panel render their own custom navigation layouts internally
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) return "none";
 
     // Module root landing pages (exact match only — not /academy/dashboard)
     const MODULE_ROOTS = [
