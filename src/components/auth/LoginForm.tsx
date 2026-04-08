@@ -18,14 +18,13 @@ import LoadingButton from "@/components/ui/LoadingButton";
  * 
  * FIX: Uses client-side signIn() to guarantee session cookies are set before redirecting.
  */
-export default function LoginForm() {
+export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defaultCallbackUrl?: string }) {
     const { data: session, status, update } = useSession();
     const router = useRouter();
     const searchParams = useSearchParams();
 
     // Auth redirect handling
-    const redirectDefault = "/dashboard";
-    const callbackUrl = searchParams.get("callbackUrl") || redirectDefault;
+    const callbackUrl = searchParams.get("callbackUrl") || defaultCallbackUrl;
     const errorParam = searchParams.get("error");
 
     const { showToast } = useToast();

@@ -62,9 +62,9 @@ export type AuditAction =
     | "seller_badge_grant"
     | "seller_badge_revoke"
     | "dispute_escalated"
-    | "dispute_resolved"
     | "academy_manual_enroll"
-    | "legacy_member_import";
+    | "legacy_member_import"
+    | "legacy_member_invited";
 
 export interface AuditLog {
     id: string;

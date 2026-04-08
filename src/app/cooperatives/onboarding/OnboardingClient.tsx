@@ -25,6 +25,7 @@ import DocumentUploadStep from "./steps/DocumentUploadStep";
 interface OnboardingContentProps {
     initialTier: "basic" | "premium";
     paymentStatus: string; // "pending" | "completed"
+    inviteToken?: string;
 }
 
 function CooperativeOnboardingContent({ initialTier, paymentStatus }: OnboardingContentProps) {
@@ -42,6 +43,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     const [isEditMode, setIsEditMode] = useState(false);
     // True for members onboarded before the platform — payment already confirmed by admin.
     const [isLegacyImport, setIsLegacyImport] = useState(false);
+    const [validInviteToken, setValidInviteToken] = useState<string | null>(null);
 
     const [tier] = useState<"basic" | "premium">(initialTier);
 
@@ -87,7 +89,31 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             !window.location.hostname.includes('railway.app');
         const prefix = isDedicatedDomain ? '' : '/cooperatives';
 
-        checkCooperativeStatusAction().then(async (coopStatus) => {
+        // Check if there's an invite token passed as a prop (from searchParams)
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            if (token) {
+                 import("@/app/actions/cooperative").then(({ validateCooperativeInviteAction }) => {
+                     validateCooperativeInviteAction(token).then((validateRes) => {
+                          if (validateRes.success) {
+                               setIsLegacyImport(true);
+                               setValidInviteToken(token);
+                               setIsCheckingStatus(false);
+                          } else {
+                               showToast(validateRes.error || "Invalid invite link", "error");
+                               checkStatusFromBackend();
+                          }
+                     });
+                 });
+                 return; // Pause execution here until token is validated
+            }
+        }
+        
+        checkStatusFromBackend();
+
+        function checkStatusFromBackend() {
+            checkCooperativeStatusAction().then(async (coopStatus) => {
             if (coopStatus === "active" || coopStatus === "approved") {
                 router.replace(`${prefix}/dashboard`);
                 return;
@@ -172,6 +198,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         }).catch(() => {
             setIsCheckingStatus(false);
         });
+        }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // ── User-scoped localStorage keys ────────────────────────────────────────
@@ -249,6 +276,10 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             const formData = new FormData();
 
             formData.append("membershipTier", tier);
+            
+            if (validInviteToken) {
+                 formData.append("inviteToken", validInviteToken);
+            }
 
             formData.append("firstName", personalInfo.firstName.trim());
             formData.append("lastName", personalInfo.lastName.trim());
@@ -576,10 +607,10 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     );
 }
 
-export default function CooperativeOnboardingClient({ initialTier, paymentStatus }: OnboardingContentProps) {
+export default function CooperativeOnboardingClient({ initialTier, paymentStatus, inviteToken }: OnboardingContentProps) {
     return (
         <CooperativeErrorBoundary>
-            <CooperativeOnboardingContent initialTier={initialTier} paymentStatus={paymentStatus} />
+            <CooperativeOnboardingContent initialTier={initialTier} paymentStatus={paymentStatus} inviteToken={inviteToken} />
         </CooperativeErrorBoundary>
     );
 }

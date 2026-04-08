@@ -2719,18 +2719,14 @@ export async function manualAcademyEnrollmentAction(
 
 import { z } from "zod";
 
-const ImportLegacyMemberSchema = z.object({
+const InviteLegacyMemberSchema = z.object({
     email: z.string().email(),
-    firstName: z.string().min(1, "First name is required"),
-    lastName: z.string().min(1, "Last name is required"),
-    phone: z.string().min(10, "Phone number is required"),
-    membershipTier: z.enum(["basic", "premium"]),
-    registrationFee: z.number().min(0).optional(),
+    firstName: z.string().min(1, "First name is optional but recommended for personalization").optional(),
 });
 
-export async function importLegacyMemberAction(
-    data: z.infer<typeof ImportLegacyMemberSchema>
-): Promise<{ error: string | null; success: boolean; resetLink?: string; uid?: string }> {
+export async function inviteLegacyMemberAction(
+    data: z.infer<typeof InviteLegacyMemberSchema>
+): Promise<{ error: string | null; success: boolean }> {
     try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { error: adminCheck.error, success: false };
@@ -2739,154 +2735,117 @@ export async function importLegacyMemberAction(
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
 
-        // Permissions: Use users:create or cooperative:manage (borrowing from other admin roles, let's just make sure they are superadmin or have users:create)
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:create")) {
-             // Fallback: If they lack users:create but are still admin, we can allow it for cooperatives:approve_members
              if (!hasAdminPermission(session.user.roles, "cooperatives:approve_members")) {
                 return { error: "Unauthorized: Permission required - cooperatives:approve_members", success: false };
              }
         }
 
-        const valid = ImportLegacyMemberSchema.safeParse(data);
+        const valid = InviteLegacyMemberSchema.safeParse(data);
         if (!valid.success) {
             return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
-        const member = valid.data;
-        const fee = member.registrationFee ?? (member.membershipTier === 'premium' ? 20000 : 10000);
-        const cooperativeTier = member.membershipTier === 'premium' ? 'tier2' : 'tier1';
-        
-        let uid: string;
-        let authCreated = false;
-        
-        // 1. Create or get Auth User
+        const { email, firstName } = valid.data;
+
+        // 1. Check if user is already a fully onboarded cooperative member
+        let existingUid: string | null = null;
         try {
-            const existing = await adminAuth.getUserByEmail(member.email);
-            uid = existing.uid;
+            const existing = await adminAuth.getUserByEmail(email);
+            existingUid = existing.uid;
         } catch (err: any) {
-            if (err.code === 'auth/user-not-found') {
-                const tempPassword = `Coop@${crypto.randomBytes(8).toString('hex')}`;
-                const created = await adminAuth.createUser({
-                    email: member.email,
-                    password: tempPassword,
-                    displayName: `${member.firstName} ${member.lastName}`.trim(),
-                    emailVerified: false,
-                });
-                uid = created.uid;
-                authCreated = true;
-            } else {
-                return { error: "Failed to verify Auth account: " + err.message, success: false };
+            // User doesn't exist in Auth, which is fine. They will create an account during onboarding.
+        }
+
+        if (existingUid) {
+            const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(existingUid);
+            const memberDoc = await memberRef.get();
+            if (memberDoc.exists && memberDoc.data()?.onboardingCompleted === true) {
+                return { error: "User is already a fully onboarded cooperative member.", success: false };
             }
         }
 
-        // Check if already onboarded
-        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(uid);
-        const memberDoc = await memberRef.get();
-        if (memberDoc.exists && memberDoc.data()?.onboardingCompleted === true) {
-            return { error: "User is already fully onboarded.", success: false };
-        }
+        // 2. Map existing active tokens for this email to revoked
+        const invitesQuery = await db.collection(COLLECTIONS.COOPERATIVES_INVITES)
+            .where("email", "==", email)
+            .where("status", "==", "pending")
+            .get();
 
-        const now = FieldValue.serverTimestamp();
         const batch = db.batch();
-
-        const fullName = `${member.firstName} ${member.lastName}`.trim();
-        const userRef = db.collection(COLLECTIONS.USERS).doc(uid);
-
-        // Merge User Doc
-        batch.set(userRef, {
-            uid,
-            fullName,
-            firstName: member.firstName,
-            lastName: member.lastName,
-            email: member.email,
-            phone: member.phone,
-            roles: FieldValue.arrayUnion('general_user', 'cooperative_member'),
-            verified: true,
-            isVerified: true,
-            cooperativeTier,
-            cooperativeRegistrationFee: fee,
-            'serviceRegistrations.cooperative': {
-                status: 'legacy_pending_onboarding',
-                tier: cooperativeTier,
-                applicationId: `${uid}_legacy`,
-                paymentReference: 'LEGACY_IMPORT_RECEIPT',
-                submittedAt: now,
-            },
-            _importedAt: now,
-            _importSource: "legacy_manual_import",
-            createdAt: memberDoc.exists ? undefined : now,
-            updatedAt: now,
-        }, { merge: true });
-
-        // Merge Cooperative Member Doc
-        batch.set(memberRef, {
-            userId: uid,
-            fullName,
-            firstName: member.firstName,
-            lastName: member.lastName,
-            email: member.email,
-            phone: member.phone,
-            membershipTier: member.membershipTier,
-            registrationFee: fee,
-            membershipStatus: 'approved',
-            paymentStatus: 'completed',
-            savingsBalance: 0,
-            loanBalance: 0,
-            onboardingCompleted: false, // trigger UI bypass
-            _importedAt: now,
-            _importSource: "legacy_manual_import",
-            createdAt: memberDoc.exists ? undefined : now,
-            updatedAt: now,
-        }, { merge: true });
-
-        // Transaction Entry
-        const txId = `${uid}_legacy_reg`;
-        const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(txId);
-        batch.set(txRef, {
-            userId: uid,
-            type: 'membership_registration',
-            amount: fee,
-            status: 'completed',
-            description: 'Legacy Registration (verified by admin)',
-            membershipTier: member.membershipTier,
-            source: 'legacy_manual_import',
-            date: now,
-            createdAt: now,
-        }, { merge: true }); // Use merge conceptually in case it exists, but usually write once
-
-        // Queue Reset Token
-        let resetLink;
-        if (authCreated) {
-            const token = crypto.randomBytes(32).toString('hex');
-            const expiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
-
-            const resetRef = db.collection('password_resets').doc(token);
-            batch.set(resetRef, {
-                email: member.email,
-                token,
-                expiry,
-                used: false,
-                createdAt: now,
-            });
-            // Assumes domain structure
-            resetLink = `https://easysalesexport.com/auth/reset-password?token=${token}`;
-        }
-
-        await batch.commit();
-
-        await logAuditAction("legacy_member_import", uid, "cooperative_member", {
-            adminId: session.user.id,
-            email: member.email
+        invitesQuery.docs.forEach(doc => {
+            batch.update(doc.ref, { status: "revoked", updatedAt: FieldValue.serverTimestamp() });
         });
 
-        return {
-            error: null,
-            success: true,
-            uid,
-            resetLink
-        };
+        // 3. Generate secure token
+        const token = crypto.randomBytes(32).toString('hex');
+        const now = FieldValue.serverTimestamp();
+
+        // 4. Validate and construct URL
+        const inviteRef = db.collection(COLLECTIONS.COOPERATIVES_INVITES).doc(token);
+        batch.set(inviteRef, {
+            email,
+            token,
+            status: "pending",
+            invitedBy: session.user.id,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        // 5. Commit Firestore
+        await batch.commit();
+
+        // 6. Send Email
+        const onboardingLink = `https://www.easysalesexport.com/cooperatives/onboarding?token=${token}`;
+
+        if (process.env.RESEND_API_KEY) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+
+                const { error: emailError } = await resend.emails.send({
+                    from: "Easy Sales Cooperative <noreply@easysalesexport.com>",
+                    to: email,
+                    subject: "You're Invited to the Cooperative!",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                            <h2 style="color: #6366f1;">Welcome to the Cooperative!</h2>
+                            <p>Hello ${firstName || "Member"},</p>
+                            <p>You have been invited to formally complete your cooperative onboarding on the Easy Sales Export platform. Because you're an existing member, <strong>your registration fee has already been waived</strong> when you use this direct link.</p>
+                            
+                            <div style="background: #eef2ff; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #c7d2fe;">
+                                <p style="margin: 0; color: #4338ca;">Click the button below to join:</p>
+                            </div>
+
+                            <div style="text-align: center; margin-top: 30px;">
+                                <a href="${onboardingLink}" style="background-color: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Complete Onboarding</a>
+                            </div>
+
+                            <p style="margin-top: 30px; font-size: 12px; color: #6b7280;">If the button doesn't work, copy and paste this link into your browser:<br/>${onboardingLink}</p>
+                        </div>
+                    `
+                });
+
+                if (emailError) {
+                    logger.error("Resend API Error (Coop Invite):", emailError);
+                    return { error: "Invite created but failed to send email. Link: " + onboardingLink, success: true }; // Partial success
+                }
+            } catch (err: any) {
+                logger.error("Resend Error (Coop Invite):", err);
+                return { error: "Invite created but failed to send email.", success: true };
+            }
+        } else {
+             logger.warn("RESEND_API_KEY is not set. Assuming development mode. Invite created silently.");
+        }
+
+        // 7. Audit Log
+        await logAuditAction("legacy_member_invited", token, "cooperative_member", {
+            adminId: session.user.id,
+            email: email
+        });
+
+        return { error: null, success: true };
     } catch (error: any) {
-        logger.error("Failed to import legacy member via admin UI:", error);
-        return { error: error.message || "Failed to import member", success: false };
+        logger.error("Failed to send cooperative invite:", error);
+        return { error: error.message || "Failed to invite member", success: false };
     }
 }

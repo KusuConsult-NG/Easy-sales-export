@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { logAuditAction } from "@/app/actions/audit";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import {
     contributionSchema,
@@ -156,29 +157,40 @@ export async function registerCooperativeMemberAction(
         }
 
         const userId = session.user.id;
+        const inviteToken = formData.get("inviteToken") as string | null;
 
         // Check for existing partial record with payment
         const existingMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
         const existingMember = await existingMemberRef.get();
-
-        // Legacy import members already have paymentStatus=completed set by the script.
-        // We create the member doc below if it doesn't exist (defensive).
-        if (!existingMember.exists) {
-            return { error: "No membership record found. Please complete payment first.", success: false };
-        }
-
         const memberData = existingMember.data();
 
-        // 🔒 Verify Payment Status
-        // Legacy import members (_importSource present) already have paymentStatus='completed'
-        // set by the admin import script — they never went through Paystack, so we skip
-        // the payment gate for them. For all other members, payment must be confirmed.
-        const isLegacyImport = Boolean(memberData?._importSource);
-        if (!isLegacyImport && memberData?.paymentStatus !== "completed") {
-            return {
-                error: "Payment not verified. Please ensure you have completed the payment step.",
-                success: false,
-            };
+        let isLegacyImport = false;
+        let membershipTier = (memberData?.membershipTier ?? "basic") as "basic" | "premium";
+
+        if (inviteToken) {
+            if (existingMember.exists && memberData?.onboardingCompleted) {
+                 return { error: "You have already completed onboarding.", success: false };
+            }
+            // Validate the token to allow bypassing payment
+            const inviteRes = await validateCooperativeInviteAction(inviteToken);
+            if (!inviteRes.success) {
+                return { error: inviteRes.error || "Invalid invitation token", success: false };
+            }
+            isLegacyImport = true;
+        } else {
+            // Legacy check
+            if (!existingMember.exists) {
+                return { error: "No membership record found. Please complete payment first.", success: false };
+            }
+
+            // 🔒 Verify Payment Status
+            isLegacyImport = Boolean(memberData?._importSource);
+            if (!isLegacyImport && memberData?.paymentStatus !== "completed") {
+                return {
+                    error: "Payment not verified. Please ensure you have completed the payment step.",
+                    success: false,
+                };
+            }
         }
 
         // Parse and validate form data
@@ -198,7 +210,7 @@ export async function registerCooperativeMemberAction(
             nextOfKinPhone: formData.get("nextOfKinPhone") as string,
             nextOfKinAddress: formData.get("nextOfKinAddress") as string,
             // Membership Tier comes from existing record, but we can validate if sent
-            membershipTier: (memberData?.membershipTier ?? "basic") as "basic" | "premium",
+            membershipTier: membershipTier,
         };
 
         // Extract document data
@@ -287,8 +299,30 @@ export async function registerCooperativeMemberAction(
             updatedAt: FieldValue.serverTimestamp(),
         };
 
+        // If from an invite, mark them as paid and from an invite source
+        if (inviteToken) {
+            Object.assign(updatedData, {
+                paymentStatus: "completed",
+                _importSource: "email_invite",
+                userId: userId,
+                createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp(),
+            });
+        }
+
         // Save to Firestore (Merge)
-        await existingMemberRef.update(updatedData);
+        await existingMemberRef.set(updatedData, { merge: true });
+
+        // If an invite token was used, mark it as completed
+        if (inviteToken) {
+            await db.collection(COLLECTIONS.COOPERATIVES_INVITES).doc(inviteToken).update({
+                status: "used",
+                usedBy: userId,
+                usedAt: FieldValue.serverTimestamp()
+            });
+            await logAuditAction("legacy_member_invited", userId, "cooperative_member", {
+                 details: `Legacy member completed onboarding via invite token: ${inviteToken}`
+            });
+        }
 
         // Update user service registration and sync profile data for global modules (like Admin Communication Hub)
         // Dot notation prevents cross-module data loss
@@ -1247,5 +1281,41 @@ export async function updatePassportPhotoAction(
     } catch (error) {
         logger.error("updatePassportPhotoAction error:", error);
         return { success: false, error: "Failed to update passport photo. Please try again." };
+    }
+}
+
+// ============================================
+// COOPERATIVE INVITES
+// ============================================
+
+export async function validateCooperativeInviteAction(
+    token: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+        if (!token) return { success: false, error: "Invalid token" };
+
+        const inviteRef = db.collection(COLLECTIONS.COOPERATIVES_INVITES).doc(token);
+        const inviteDoc = await inviteRef.get();
+
+        if (!inviteDoc.exists) {
+            return { success: false, error: "Invalid or expired invitation link." };
+        }
+
+        const data = inviteDoc.data()!;
+
+        if (data.status !== "pending") {
+            return { success: false, error: "This invitation has already been used or revoked." };
+        }
+
+        return {
+            success: true,
+            data: {
+                email: data.email,
+            }
+        };
+
+    } catch (error: any) {
+        logger.error("validateCooperativeInviteAction error:", error);
+        return { success: false, error: "Failed to validate invitation link. Please try again." };
     }
 }

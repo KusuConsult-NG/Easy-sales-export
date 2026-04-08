@@ -12,14 +12,21 @@ import OnboardingClient from "./OnboardingClient";
  * mount via checkCooperativeStatusAction(), same pattern used by
  * export, farm-nation, marketplace, and wave onboarding pages.
  */
-export default async function CooperativeOnboardingPage() {
+export default async function CooperativeOnboardingPage(
+    props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }
+) {
+    const searchParams = props.searchParams ? await props.searchParams : {};
+    const token = typeof searchParams.token === 'string' ? searchParams.token : undefined;
+
     const session = await auth();
 
     if (!session?.user) {
-        redirect("/auth/login?callbackUrl=/cooperatives/onboarding");
+        const callbackUrl = token 
+            ? `/cooperatives/onboarding?token=${token}` 
+            : "/cooperatives/onboarding";
+        redirect(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
     }
 
-    // Pass nothing — client checks its own status on mount
-    return <OnboardingClient initialTier="basic" paymentStatus="pending" />;
+    // Pass token to client
+    return <OnboardingClient initialTier="basic" paymentStatus="pending" inviteToken={token} />;
 }
-

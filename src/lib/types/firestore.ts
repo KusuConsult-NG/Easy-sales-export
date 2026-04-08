@@ -807,6 +807,7 @@ export const COLLECTIONS = {
 
     // Cooperatives & Finance
     COOPERATIVES: "cooperatives",
+    COOPERATIVES_INVITES: "cooperatives_invites",
     COOPERATIVE_MEMBERS: "cooperative_members",
     COOPERATIVE_TRANSACTIONS: "cooperative_transactions",
     COOPERATIVE_LOANS: "cooperative_loans",

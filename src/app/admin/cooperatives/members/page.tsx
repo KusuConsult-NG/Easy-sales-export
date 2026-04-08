@@ -328,7 +328,7 @@ export default function CooperativeMembersPage() {
                         className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all"
                     >
                         <Users className="w-4 h-4" />
-                        Import Legacy Member
+                        Invite Legacy Member
                     </button>
                     <button
                         onClick={handleExportCSV}
