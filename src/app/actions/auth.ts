@@ -117,6 +117,14 @@ export async function getPostLoginRedirect(email: string) {
             const userRoles = userData.roles || ['general_user'];
             const serviceRegistrations = (userData as FirestoreUser & { serviceRegistrations?: any }).serviceRegistrations || {};
 
+            // ── ADMIN OVERRIDE ──────────────────────────────────────────────
+            // If the user is an admin, always ensure they land on the Admin Dashboard
+            // by default, instead of the standard user dashboard.
+            if (userRoles.includes('super_admin') || userRoles.includes('admin')) {
+                logger.info(`[getPostLoginRedirect] User ${email} is an admin, redirecting to /admin`);
+                return { success: true, redirectUrl: '/admin' };
+            }
+
             // CRITICAL: Check application status and redirect accordingly
             // Priority: Approved > Pending > No Applications
 
