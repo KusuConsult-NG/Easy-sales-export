@@ -56,17 +56,6 @@ const nextConfig: NextConfig = {
   // Compression
   compress: true,
 
-  // Redirects for deprecated paths
-  async redirects() {
-    return [
-      {
-        source: '/auth/login/admin',
-        destination: '/auth/login',
-        permanent: true,
-      },
-    ];
-  },
-
   // Security headers
   async headers() {
     return [
