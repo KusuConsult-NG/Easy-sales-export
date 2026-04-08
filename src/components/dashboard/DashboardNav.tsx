@@ -20,7 +20,7 @@ import {
     ExternalLink,
     Sparkles,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { logoutAction } from "@/app/actions/auth";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -255,7 +255,18 @@ export default function DashboardNav() {
             {/* Sign out */}
             <div className="p-3 border-t border-slate-700/50">
                 <button
-                    onClick={() => signOut({ callbackUrl: "/auth/login" })}
+                    onClick={async () => {
+                        // Client-side cleanup for Firebase Auth
+                        try {
+                            const { signOut } = await import("firebase/auth");
+                            const { auth } = await import("@/lib/firebase");
+                            await signOut(auth);
+                        } catch (e) {
+                            console.error("Firebase signout failed", e);
+                        }
+                        // Server-side cleanup via Server Action
+                        await logoutAction();
+                    }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all"
                 >
                     <LogOut className="w-4 h-4" />
