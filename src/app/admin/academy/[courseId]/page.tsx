@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Trash2, Plus, GripVertical, FileText, PlayCircle, HelpCircle, Upload, Save, Edit2, Loader2, ArrowLeft, Settings, UploadCloud } from "lucide-react";
+import { Trash2, Plus, GripVertical, FileText, PlayCircle, HelpCircle, Upload, Save, Edit2, Loader2, ArrowLeft, Settings, UploadCloud, FileSpreadsheet } from "lucide-react";
 import { getCourseByIdAction, updateCourseAction, updateCourseModulesAction, type Course, type CourseModule, type Lesson, type Quiz } from "@/app/actions/academy";
 import { toast } from "sonner";
 import Modal from "@/components/ui/Modal";
@@ -13,7 +13,7 @@ import { uploadFile, type UploadProgress } from "@/lib/storage-upload";
 
 // Local interface for UI state
 interface LessonWithState extends Lesson {
-    type?: 'video' | 'text' | 'quiz';
+    type?: 'video' | 'text' | 'quiz' | 'excel';
 }
 
 interface CourseModuleWithState extends Omit<CourseModule, 'lessons'> {
@@ -38,9 +38,10 @@ export default function CourseManagerPage() {
     const [newModuleForm, setNewModuleForm] = useState<{
         title: string;
         description: string;
-        contentType: 'video' | 'document';
+        contentType: 'video' | 'document' | 'excel';
         videoUrl?: string;
         documentUrl?: string;
+        excelUrl?: string;
     }>({
         title: '',
         description: '',
@@ -112,15 +113,16 @@ export default function CourseManagerPage() {
             id: `m-${Date.now()}`,
             title: newModuleForm.title.trim(),
             description: newModuleForm.description,
-            lessons: newModuleForm.videoUrl || newModuleForm.documentUrl ? [{
+            lessons: newModuleForm.videoUrl || newModuleForm.documentUrl || newModuleForm.excelUrl ? [{
                 id: firstLessonId,
                 title: `${newModuleForm.title} — Lesson 1`,
-                content: newModuleForm.documentUrl || '',
+                content: newModuleForm.documentUrl || newModuleForm.excelUrl || '',
                 duration: '00:00',
                 order: 0,
-                type: newModuleForm.contentType === 'video' ? 'video' : 'text',
+                type: newModuleForm.contentType === 'video' ? 'video' : newModuleForm.contentType === 'excel' ? 'excel' : 'text',
                 ...(newModuleForm.videoUrl && { videoUrl: newModuleForm.videoUrl }),
                 ...(newModuleForm.documentUrl && { documentUrl: newModuleForm.documentUrl }),
+                ...(newModuleForm.excelUrl && { excelUrl: newModuleForm.excelUrl }),
             } as LessonWithState] : [],
             order: modules.length,
             isExpanded: true,
@@ -239,7 +241,7 @@ export default function CourseManagerPage() {
         }
     }
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'document') => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'document' | 'excel') => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -253,7 +255,7 @@ export default function CourseManagerPage() {
                 // Uploading for the Add Module modal
                 setNewModuleForm(prev => ({
                     ...prev,
-                    ...(type === 'video' ? { videoUrl: url } : { documentUrl: url }),
+                    ...(type === 'video' ? { videoUrl: url } : type === 'excel' ? { excelUrl: url } : { documentUrl: url }),
                 }));
             } else if (editingLesson) {
                 // Uploading for an existing lesson
@@ -263,12 +265,12 @@ export default function CourseManagerPage() {
                         ...prev,
                         lesson: {
                             ...prev.lesson,
-                            ...(type === 'video' ? { videoUrl: url } : { documentUrl: url, content: url })
+                            ...(type === 'video' ? { videoUrl: url } : type === 'excel' ? { excelUrl: url, content: url } : { documentUrl: url, content: url })
                         }
                     };
                 });
             }
-            toast.success(`${type === 'video' ? 'Video' : 'Document'} uploaded successfully`);
+            toast.success(`${type === 'video' ? 'Video' : type === 'excel' ? 'Excel File' : 'Document'} uploaded successfully`);
         } catch (error: any) {
             toast.error(`Failed to upload ${type}: ${error.message}`);
         } finally {
@@ -297,6 +299,7 @@ export default function CourseManagerPage() {
             case "video": return <PlayCircle className="w-4 h-4 text-blue-500" />;
             case "text": return <FileText className="w-4 h-4 text-orange-500" />;
             case "quiz": return <HelpCircle className="w-4 h-4 text-purple-500" />;
+            case "excel": return <FileSpreadsheet className="w-4 h-4 text-green-500" />;
             default: return <FileText className="w-4 h-4" />;
         }
     };
@@ -465,11 +468,19 @@ export default function CourseManagerPage() {
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setNewModuleForm({ ...newModuleForm, contentType: 'document', videoUrl: undefined })}
+                                    onClick={() => setNewModuleForm({ ...newModuleForm, contentType: 'document', videoUrl: undefined, excelUrl: undefined })}
                                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-medium text-sm transition ${newModuleForm.contentType === 'document' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
                                 >
                                     <FileText className="w-5 h-5" />
                                     Document / PDF
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setNewModuleForm({ ...newModuleForm, contentType: 'excel', videoUrl: undefined, documentUrl: undefined })}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-medium text-sm transition ${newModuleForm.contentType === 'excel' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                                >
+                                    <FileSpreadsheet className="w-5 h-5" />
+                                    Excel File
                                 </button>
                             </div>
                         </div>
@@ -477,7 +488,7 @@ export default function CourseManagerPage() {
                         {/* Upload Field */}
                         <div className="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50 space-y-3">
                             <p className="text-sm font-semibold text-slate-700">
-                                {newModuleForm.contentType === 'video' ? 'Upload Video' : 'Upload Document / PDF'}
+                                {newModuleForm.contentType === 'video' ? 'Upload Video' : newModuleForm.contentType === 'excel' ? 'Upload Excel File' : 'Upload Document / PDF'}
                                 <span className="text-slate-400 font-normal ml-1">(optional — you can add content later)</span>
                             </p>
 
@@ -493,6 +504,21 @@ export default function CourseManagerPage() {
                                         <label htmlFor="new-module-video-upload" className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-600 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer text-sm">
                                             <UploadCloud className="w-5 h-5" />
                                             Choose Video File
+                                        </label>
+                                    </>
+                                )
+                            ) : newModuleForm.contentType === 'excel' ? (
+                                newModuleForm.excelUrl ? (
+                                    <div className="flex items-center justify-between bg-green-50 text-green-700 p-3 rounded-lg border border-green-200">
+                                        <span className="text-sm">✓ Excel file uploaded and ready</span>
+                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setNewModuleForm(p => ({ ...p, excelUrl: undefined }))}>Remove</button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleFileUpload(e, 'excel')} className="hidden" id="new-module-excel-upload" />
+                                        <label htmlFor="new-module-excel-upload" className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-600 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer text-sm">
+                                            <UploadCloud className="w-5 h-5" />
+                                            Choose Excel File
                                         </label>
                                     </>
                                 )
@@ -568,11 +594,12 @@ export default function CourseManagerPage() {
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Lesson Type</label>
                                 <select
                                     value={editingLesson.lesson.type || "video"}
-                                    onChange={(e) => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, type: e.target.value as "video" | "text" | "quiz" } } : null)}
+                                    onChange={(e) => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, type: e.target.value as "video" | "text" | "quiz" | "excel" } } : null)}
                                     className="w-full px-4 py-2 border rounded-lg"
                                 >
                                     <option value="video">Video Lesson</option>
                                     <option value="text">Text/Document Lesson</option>
+                                    <option value="excel">Excel/Spreadsheet Lesson</option>
                                     <option value="quiz">Interactive Quiz</option>
                                 </select>
                             </div>
@@ -639,6 +666,31 @@ export default function CourseManagerPage() {
                                         <label htmlFor="document-upload" className="w-full py-2 border border-slate-300 rounded-lg text-slate-700 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer">
                                             <UploadCloud className="w-5 h-5" />
                                             Upload Document
+                                        </label>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Excel Upload */}
+                            <div className="border p-4 rounded-xl space-y-3 bg-slate-50">
+                                <label className="block text-sm font-bold text-slate-700">Excel/Spreadsheet Content</label>
+                                {editingLesson.lesson.excelUrl ? (
+                                    <div className="flex items-center justify-between bg-green-50 text-green-700 p-3 rounded-lg border border-green-200">
+                                        <span className="text-sm truncate mr-2" title={editingLesson.lesson.excelUrl}>Excel file uploaded</span>
+                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, excelUrl: undefined } } : null)}>Remove</button>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <input
+                                            type="file"
+                                            accept=".xlsx,.xls,.csv"
+                                            onChange={(e) => handleFileUpload(e, 'excel')}
+                                            className="hidden"
+                                            id="excel-upload"
+                                        />
+                                        <label htmlFor="excel-upload" className="w-full py-2 border border-slate-300 rounded-lg text-slate-700 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer">
+                                            <UploadCloud className="w-5 h-5" />
+                                            Upload Excel File
                                         </label>
                                     </div>
                                 )}

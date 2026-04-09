@@ -90,6 +90,7 @@ export interface Lesson {
     content: string;
     videoUrl?: string;
     documentUrl?: string;
+    excelUrl?: string;
     duration: string;
     order: number;
 }

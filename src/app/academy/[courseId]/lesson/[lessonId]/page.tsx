@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
     ArrowLeft, ArrowRight, CheckCircle, Loader2, BookOpen,
-    PlayCircle, Clock
+    PlayCircle, Clock, Table
 } from "lucide-react";
 import {
     getCourseByIdAction,
@@ -353,6 +353,30 @@ export default function LessonPage(props: LessonPageProps) {
                                 src={`${currentLesson.documentUrl}#toolbar=0&navpanes=0&scrollbar=0`}
                                 className="w-full h-full border-0"
                                 title="Lesson Document"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Excel Viewer (if excel exists) */}
+                {currentLesson.excelUrl && (
+                    <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-6 flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                <Table className="w-6 h-6 text-green-600" />
+                                Course Spreadsheet
+                            </h3>
+                            <div className="flex items-center gap-3">
+                                <a href={currentLesson.excelUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-blue-600 bg-blue-100 px-3 py-2 rounded-lg hover:bg-blue-200 transition">
+                                    Download External
+                                </a>
+                            </div>
+                        </div>
+                        <div className="w-full h-[600px] md:h-[800px] bg-slate-100 rounded-xl overflow-hidden border border-slate-200 relative">
+                            <iframe 
+                                src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(currentLesson.excelUrl)}`}
+                                className="w-full h-full border-0"
+                                title="Lesson Spreadsheet"
                             />
                         </div>
                     </div>
