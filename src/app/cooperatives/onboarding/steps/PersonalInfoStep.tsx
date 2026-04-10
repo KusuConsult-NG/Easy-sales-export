@@ -73,7 +73,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 </p>
             </div>
 
-            {/* Form — max-w-xl keeps all inputs proportional */}
+            {/* Form */}
             <div className="space-y-6">
 
                 {/* First Name + Last Name */}
