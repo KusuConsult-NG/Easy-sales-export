@@ -69,7 +69,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
             </div>
 
             {/* KYC Notice */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-3">
                 <span className="text-amber-500 text-lg shrink-0 mt-0.5">⚠️</span>
                 <p className="text-sm text-amber-800 font-medium">
                     <strong>KYC Notice:</strong> Enter your name exactly as it appears on your NIN/BVN to avoid identity verification failure.
@@ -90,7 +90,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             value={data.firstName}
                             onChange={(e) => onChange({ ...data, firstName: e.target.value })}
                             placeholder="e.g. Amina"
-                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.firstName ? "border-red-500" : "border-slate-300"}`}
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.firstName ? "border-red-500" : "border-slate-300"}`}
                         />
                         {errors.firstName && <p className="text-sm text-red-600 mt-1">{errors.firstName}</p>}
                     </div>
@@ -105,29 +105,30 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             value={data.lastName}
                             onChange={(e) => onChange({ ...data, lastName: e.target.value })}
                             placeholder="e.g. Ibrahim"
-                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.lastName ? "border-red-500" : "border-slate-300"}`}
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.lastName ? "border-red-500" : "border-slate-300"}`}
                         />
                         {errors.lastName && <p className="text-sm text-red-600 mt-1">{errors.lastName}</p>}
                     </div>
                 </div>
 
-                {/* Other Name - Optional */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Other Name <span className="text-slate-400 font-normal text-xs">(Optional)</span>
-                        <span className="block text-xs font-normal text-slate-500 mt-0.5">Middle name or additional name</span>
-                    </label>
-                    <input
-                        type="text"
-                        value={data.otherName || ""}
-                        onChange={(e) => onChange({ ...data, otherName: e.target.value })}
-                        placeholder="e.g. Fatima"
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    />
+                {/* Other Name + Date of Birth */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+                            Other Name <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={data.otherName || ""}
+                            onChange={(e) => onChange({ ...data, otherName: e.target.value })}
+                            placeholder="e.g. Fatima"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                    </div>
                 </div>
 
                 {/* Phone and Email */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Phone Number <span className="text-red-500">*</span>
@@ -137,7 +138,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             value={data.phone}
                             onChange={(e) => onChange({ ...data, phone: e.target.value })}
                             placeholder="08012345678"
-                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.phone ? "border-red-500" : "border-slate-300"}`}
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.phone ? "border-red-500" : "border-slate-300"}`}
                         />
                         {errors.phone && <p className="text-sm text-red-600 mt-1">{errors.phone}</p>}
                     </div>
@@ -151,7 +152,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             value={data.email}
                             onChange={(e) => onChange({ ...data, email: e.target.value })}
                             placeholder="you@email.com"
-                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.email ? "border-red-500" : "border-slate-300"}`}
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.email ? "border-red-500" : "border-slate-300"}`}
                         />
                         {errors.email && <p className="text-sm text-red-600 mt-1">{errors.email}</p>}
                     </div>
@@ -160,47 +161,48 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 {/* Date of Birth + Gender */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-1.5">
                             Date of Birth
                         </label>
                         <input
                             type="date"
                             value={data.dateOfBirth}
                             onChange={(e) => onChange({ ...data, dateOfBirth: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         />
                     </div>
+                </div>
 
+                {/* Gender + Occupation */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 mb-1.5">
                             Gender <span className="text-red-500">*</span>
                         </label>
                         <select
                             value={data.gender}
                             onChange={(e) => onChange({ ...data, gender: e.target.value })}
-                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.gender ? "border-red-500" : "border-slate-300"}`}
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.gender ? "border-red-500" : "border-slate-300"}`}
                         >
                             <option value="">Select gender</option>
                             <option value="male">Male</option>
                             <option value="female">Female</option>
                         </select>
-                        {errors.gender && <p className="text-sm text-red-600 mt-1">{errors.gender}</p>}
+                        {errors.gender && <p className="text-xs text-red-600 mt-1">{errors.gender}</p>}
                     </div>
-                </div>
-
-                {/* Occupation */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Occupation <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                        type="text"
-                        value={data.occupation}
-                        onChange={(e) => onChange({ ...data, occupation: e.target.value })}
-                        placeholder="e.g., Farmer, Trader, Student"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.occupation ? "border-red-500" : "border-slate-300"}`}
-                    />
-                    {errors.occupation && <p className="text-sm text-red-600 mt-1">{errors.occupation}</p>}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+                            Occupation <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={data.occupation}
+                            onChange={(e) => onChange({ ...data, occupation: e.target.value })}
+                            placeholder="e.g., Farmer, Trader, Student"
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.occupation ? "border-red-500" : "border-slate-300"}`}
+                        />
+                        {errors.occupation && <p className="text-xs text-red-600 mt-1">{errors.occupation}</p>}
+                    </div>
                 </div>
 
                 {/* State + LGA */}
@@ -212,7 +214,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         <select
                             value={data.address.state}
                             onChange={(e) => onChange({ ...data, address: { ...data.address, state: e.target.value, lga: "" } })}
-                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.state ? "border-red-500" : "border-slate-300"}`}
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.state ? "border-red-500" : "border-slate-300"}`}
                         >
                             <option value="">Select state</option>
                             {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -228,7 +230,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                             value={data.address.lga}
                             onChange={(e) => onChange({ ...data, address: { ...data.address, lga: e.target.value } })}
                             disabled={!data.address.state}
-                            className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 ${errors.lga ? "border-red-500" : "border-slate-300"}`}
+                            className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 ${errors.lga ? "border-red-500" : "border-slate-300"}`}
                         >
                             <option value="">Select LGA</option>
                             {data.address.state && NIGERIAN_LOCATIONS[data.address.state]?.map((lga) => (
@@ -249,7 +251,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         value={data.address.street}
                         onChange={(e) => onChange({ ...data, address: { ...data.address, street: e.target.value } })}
                         placeholder="123 Main Street"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.street ? "border-red-500" : "border-slate-300"}`}
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.street ? "border-red-500" : "border-slate-300"}`}
                     />
                     {errors.street && <p className="text-sm text-red-600 mt-1">{errors.street}</p>}
                 </div>
@@ -259,14 +261,14 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     <button
                         type="button"
                         onClick={onBack}
-                        className="px-6 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition"
+                        className="px-6 py-3 border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition"
                     >
                         ← Back
                     </button>
                     <button
                         type="button"
                         onClick={handleContinue}
-                        className="flex-1 py-3 px-6 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition"
+                        className="flex-1 py-3 px-6 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold transition"
                     >
                         Continue →
                     </button>

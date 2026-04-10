@@ -101,7 +101,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                         ].map((area) => (
                             <label
                                 key={area.value}
-                                className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.valueChainAreas.includes(area.value)
+                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.valueChainAreas.includes(area.value)
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -144,7 +144,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                         ].map((commodity) => (
                             <label
                                 key={commodity.value}
-                                className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.preferredCommodities.includes(commodity.value)
+                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.preferredCommodities.includes(commodity.value)
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -177,7 +177,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             type="text"
                             value={data.preferredCommodityOther}
                             onChange={(e) => updateData({ preferredCommodityOther: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Specify other commodity"
                         />
                         {errors.preferredCommodityOther && (
@@ -201,7 +201,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                         ].map((option) => (
                             <label
                                 key={option.label}
-                                className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.hasAccessToFarmland === option.value
+                                className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.hasAccessToFarmland === option.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -231,7 +231,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             step="0.1"
                             value={data.farmlandHectares || ""}
                             onChange={(e) => updateData({ farmlandHectares: parseFloat(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="e.g., 2.5"
                         />
                         {errors.farmlandHectares && (
@@ -256,7 +256,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             ].map((option) => (
                                 <label
                                     key={option.label}
-                                    className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.needsFarmlandAccess === option.value
+                                    className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.needsFarmlandAccess === option.value
                                         ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                         : "border-slate-300 hover:bg-slate-50"
                                         }`}
@@ -280,14 +280,14 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-lg font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back
                 </button>
                 <button
                     onClick={handleNext}
-                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-3 rounded-xl font-bold transition-all"
+                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-3 rounded-lg font-bold transition-all"
                 >
                     Continue
                     <ChevronRight className="w-5 h-5" />

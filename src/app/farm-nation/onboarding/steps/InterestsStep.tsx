@@ -160,7 +160,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                             value={formData.budgetRange}
                             onChange={(e) => setFormData((prev) => ({ ...prev, budgetRange: e.target.value }))}
                             className={`w-full px-4 py-3 bg-white border ${errors.budgetRange ? "border-red-500" : "border-slate-200"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500`}
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500`}
                         >
                             <option value="">Select budget range</option>
                             {BUDGET_RANGES.map((range) => (
@@ -182,7 +182,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                         <select
                             value={formData.preferredSize}
                             onChange={(e) => setFormData((prev) => ({ ...prev, preferredSize: e.target.value }))}
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                         >
                             <option value="">Select size range</option>
                             {ACREAGE_RANGES.map((range) => (
@@ -235,7 +235,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                         <select
                             value={formData.totalAcreage}
                             onChange={(e) => setFormData((prev) => ({ ...prev, totalAcreage: e.target.value }))}
-                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                         >
                             <option value="">Select total acreage</option>
                             {ACREAGE_RANGES.map((range) => (
@@ -269,14 +269,14 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                 <button
                     type="button"
                     onClick={onBack}
-                    className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-lg font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back
                 </button>
                 <button
                     type="submit"
-                    className="px-8 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition-colors flex items-center gap-2"
+                    className="px-8 py-3 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 transition-colors flex items-center gap-2"
                 >
                     Continue
                     <ArrowRight className="w-4 h-4" />

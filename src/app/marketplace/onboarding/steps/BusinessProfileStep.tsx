@@ -90,7 +90,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         value={data.businessName}
                         onChange={(e) => onChange({ businessName: e.target.value })}
                         placeholder="Enter your business or farm name"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.businessName ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.businessName ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     />
                     {errors.businessName && (
@@ -112,7 +112,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                             <button
                                 key={type.value}
                                 onClick={() => onChange({ businessType: type.value as "individual" | "company" | "cooperative" })}
-                                className={`px-4 py-3 border-2 rounded-xl font-semibold transition-all ${data.businessType === type.value
+                                className={`px-4 py-3 border-2 rounded-lg font-semibold transition-all ${data.businessType === type.value
                                     ? "border-green-500 bg-green-50 text-green-700"
                                     : "border-slate-300 hover:border-green-300"
                                     }`}
@@ -133,7 +133,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         value={data.phone}
                         onChange={(e) => onChange({ phone: e.target.value })}
                         placeholder="08012345678"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.phone ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.phone ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     />
                     {errors.phone && (
@@ -149,7 +149,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                     <select
                         value={data.location.state}
                         onChange={(e) => onChange({ location: { ...data.location, state: e.target.value, lga: "" } })}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.state ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.state ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     >
                         <option value="">Select State</option>
@@ -173,7 +173,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         value={data.location.lga}
                         onChange={(e) => onChange({ location: { ...data.location, lga: e.target.value } })}
                         disabled={!data.location.state}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.lga ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.lga ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50`}
                     >
                         <option value="">Select LGA</option>
@@ -196,7 +196,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         onChange={(e) => onChange({ location: { ...data.location, address: e.target.value } })}
                         placeholder="Enter your complete business address"
                         rows={3}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 ${errors.address ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.address ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     />
                     {errors.address && (
@@ -209,13 +209,13 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-lg hover:bg-slate-50 transition-colors"
                 >
                     Back
                 </button>
                 <button
                     onClick={handleContinue}
-                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors"
+                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
                 >
                     Continue
                 </button>

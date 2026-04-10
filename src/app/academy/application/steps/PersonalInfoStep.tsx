@@ -43,7 +43,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
             </div>
 
             {/* KYC Notice */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-3">
                 <span className="text-amber-500 text-base shrink-0 mt-0.5">⚠️</span>
                 <p className="text-sm text-amber-800 font-medium">
                     <strong>KYC Notice:</strong> Enter your name exactly as it appears on your NIN/BVN to avoid identity verification failure.
@@ -63,8 +63,8 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                             type="text"
                             value={data.firstName}
                             onChange={(e) => handleChange("firstName", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.firstName ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.firstName ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="e.g. Amina"
                         />
                     </div>
@@ -85,8 +85,8 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                             type="text"
                             value={data.lastName}
                             onChange={(e) => handleChange("lastName", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.lastName ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.lastName ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="e.g. Ibrahim"
                         />
                     </div>
@@ -108,7 +108,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                             type="text"
                             value={data.otherName || ""}
                             onChange={(e) => handleChange("otherName", e.target.value)}
-                            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                            className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                             placeholder="e.g. Fatima"
                         />
                     </div>
@@ -125,8 +125,8 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                             type="email"
                             value={data.email}
                             onChange={(e) => handleChange("email", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.email ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.email ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="your.email@example.com"
                         />
                     </div>
@@ -146,8 +146,8 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                             type="tel"
                             value={data.phone}
                             onChange={(e) => handleChange("phone", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.phone ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.phone ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="+234 800 000 0000"
                             maxLength={11}
                         />
@@ -168,8 +168,8 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                             type="date"
                             value={data.dateOfBirth}
                             onChange={(e) => handleChange("dateOfBirth", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.dateOfBirth ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.dateOfBirth ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                         />
                     </div>
                     {errors.dateOfBirth && (
@@ -186,7 +186,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                         value={data.gender}
                         onChange={(e) => handleChange("gender", e.target.value)}
                         className={`w-full px-4 py-3 bg-white border ${errors.gender ? "border-red-500" : "border-slate-300"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                     >
                         <option value="">Select gender</option>
                         <option value="male">Male</option>
@@ -207,8 +207,8 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                         <select
                             value={data.state}
                             onChange={(e) => handleChange("state", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.state ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.state ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                         >
                             <option value="">Select your state</option>
                             {STATES.map((state) => (
@@ -233,7 +233,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                         onChange={(e) => handleChange("lga", e.target.value)}
                         disabled={!data.state}
                         className={`w-full px-4 py-3 bg-white border ${errors.lga ? "border-red-500" : "border-slate-300"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50`}
+                            } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-50`}
                     >
                         <option value="">Select LGA</option>
                         {data.state && NIGERIAN_LOCATIONS[data.state]?.map((lga) => (
@@ -256,8 +256,8 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                             type="text"
                             value={data.occupation}
                             onChange={(e) => handleChange("occupation", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.occupation ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.occupation ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="e.g., Farmer, Student, Entrepreneur"
                         />
                     </div>

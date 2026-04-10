@@ -132,7 +132,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
             </div>
 
             {/* Info Banner */}
-            <div className="max-w-2xl mx-auto bg-orange-50 border border-orange-200 rounded-xl p-4">
+            <div className="max-w-2xl mx-auto bg-orange-50 border border-orange-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
                     <div>
@@ -158,7 +158,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                     <p className="text-sm text-slate-600 mb-3">
                         Government-issued ID (NIN slip, Driver's License, International Passport)
                     </p>
-                    <div className={`border-2 border-dashed rounded-xl p-6 text-center ${errors.validId ? "border-red-500 bg-red-50" : "border-slate-300 bg-slate-50"}`}>
+                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${errors.validId ? "border-red-500 bg-red-50" : "border-slate-300 bg-slate-50"}`}>
                         {uploadStates.validId.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
@@ -205,7 +205,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         Passport Photo <span className="text-red-500">*</span>
                     </label>
                     <p className="text-sm text-slate-600 mb-3">Recent passport-sized photograph</p>
-                    <div className={`border-2 border-dashed rounded-xl p-6 text-center ${errors.passportPhoto ? "border-red-500 bg-red-50" : "border-slate-300 bg-slate-50"}`}>
+                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${errors.passportPhoto ? "border-red-500 bg-red-50" : "border-slate-300 bg-slate-50"}`}>
                         {uploadStates.passportPhoto.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
@@ -247,7 +247,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         Proof of Address <span className="text-slate-500">(Optional)</span>
                     </label>
                     <p className="text-sm text-slate-600 mb-3">Utility bill, bank statement, or tenancy agreement</p>
-                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50">
+                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center bg-slate-50">
                         {uploadStates.proofOfAddress.uploading ? (
                             <div className="flex flex-col items-center gap-3">
                                 <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
@@ -296,7 +296,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         onChange={(e) => onChange({ ...data, bvn: e.target.value.replace(/\D/g, '').slice(0, 11) })}
                         placeholder="12345678901"
                         maxLength={11}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.bvn ? "border-red-500" : "border-slate-300"}`}
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.bvn ? "border-red-500" : "border-slate-300"}`}
                     />
                     {errors.bvn && <p className="text-sm text-red-600 mt-1">{errors.bvn}</p>}
                     <p className="text-xs text-slate-500 mt-2">📞 Dial *565*0# to retrieve your BVN</p>
@@ -308,11 +308,11 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         Terms of Reference <span className="text-red-500">*</span>
                     </label>
 
-                    <div className="h-64 overflow-y-auto border border-slate-200 rounded-xl p-4 bg-slate-50 text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                    <div className="h-64 overflow-y-auto border border-slate-200 rounded-lg p-4 bg-slate-50 text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
                         {TERMS_OF_REFERENCE}
                     </div>
 
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                         <div className="flex items-start gap-3">
                             <input
                                 type="checkbox"
@@ -336,13 +336,13 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-semibold hover:bg-slate-50 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 rounded-lg font-semibold hover:bg-slate-50 transition-all"
                 >
                     ← Back
                 </button>
                 <button
                     onClick={handleContinue}
-                    className="px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all flex items-center gap-2"
+                    className="px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-all flex items-center gap-2"
                 >
                     Continue →
                 </button>

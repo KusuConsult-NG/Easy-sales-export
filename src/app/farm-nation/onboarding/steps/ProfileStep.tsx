@@ -79,7 +79,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
             </div>
 
             {/* KYC Notice */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-3">
                 <span className="text-amber-500 text-base shrink-0 mt-0.5">⚠️</span>
                 <p className="text-sm text-amber-800 font-medium">
                     <strong>KYC Notice:</strong> Enter your name exactly as it appears on your NIN/BVN to avoid identity verification failure.
@@ -100,8 +100,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="firstName"
                             value={formData.firstName}
                             onChange={handleChange}
-                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.firstName ? "border-red-500" : "border-slate-200"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border ${errors.firstName ? "border-red-500" : "border-slate-200"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                             placeholder="e.g. Amina"
                         />
                     </div>
@@ -123,8 +123,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="lastName"
                             value={formData.lastName}
                             onChange={handleChange}
-                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.lastName ? "border-red-500" : "border-slate-200"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border ${errors.lastName ? "border-red-500" : "border-slate-200"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                             placeholder="e.g. Ibrahim"
                         />
                     </div>
@@ -146,7 +146,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="otherName"
                             value={formData.otherName}
                             onChange={handleChange}
-                            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                            className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                             placeholder="e.g. Fatima"
                         />
                     </div>
@@ -164,8 +164,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="phone"
                             value={formData.phone}
                             onChange={handleChange}
-                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.phone ? "border-red-500" : "border-slate-200"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border ${errors.phone ? "border-red-500" : "border-slate-200"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                             placeholder="0801 234 5678"
                         />
                     </div>
@@ -184,7 +184,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="businessName"
                             value={formData.businessName}
                             onChange={handleChange}
-                            className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
+                            className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all"
                             placeholder="Agro Ventures Ltd"
                         />
                     </div>
@@ -201,8 +201,8 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                             name="state"
                             value={formData.state}
                             onChange={handleChange}
-                            className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.state ? "border-red-500" : "border-slate-200"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border ${errors.state ? "border-red-500" : "border-slate-200"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                         >
                             <option value="">Select State</option>
                             {NIGERIAN_STATES.map((state) => (
@@ -226,7 +226,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                         onChange={handleChange}
                         disabled={!formData.state}
                         className={`w-full px-4 py-3 bg-slate-50 border ${errors.lga ? "border-red-500" : "border-slate-200"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all disabled:opacity-50`}
+                            } rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all disabled:opacity-50`}
                     >
                         <option value="">Select LGA</option>
                         {formData.state && NIGERIAN_LOCATIONS[formData.state]?.map((lga) => (
@@ -247,7 +247,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                         value={formData.address}
                         onChange={handleChange}
                         className={`w-full px-4 py-3 bg-slate-50 border ${errors.address ? "border-red-500" : "border-slate-200"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
+                            } rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all`}
                         placeholder="123 Main Street"
                     />
                     {errors.address && <p className="mt-1 text-sm text-red-500">{errors.address}</p>}
@@ -258,14 +258,14 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                 <button
                     type="button"
                     onClick={onBack}
-                    className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
+                    className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-lg font-bold hover:bg-slate-50 transition-colors flex items-center gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back
                 </button>
                 <button
                     type="submit"
-                    className="px-8 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition-colors flex items-center gap-2"
+                    className="px-8 py-3 bg-teal-600 text-white rounded-lg font-bold hover:bg-teal-700 transition-colors flex items-center gap-2"
                 >
                     Continue
                     <ArrowRight className="w-4 h-4" />

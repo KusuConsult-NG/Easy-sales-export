@@ -116,7 +116,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             <p className="text-slate-600 mb-4">
                 Provide your banking and cooperative membership information
             </p>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-8">
                 <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-700">
@@ -127,7 +127,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
 
             <div className="space-y-6">
                 {/* Bank Details — Always Required */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 space-y-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 space-y-6">
                     <h3 className="text-base font-bold text-slate-900">Bank Account Details <span className="text-red-500">*</span></h3>
 
                     <div>
@@ -138,7 +138,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             type="text"
                             value={data.bankName}
                             onChange={(e) => updateData({ bankName: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="e.g., First Bank, GT Bank, Access Bank"
                         />
                         {errors.bankName && (
@@ -158,7 +158,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             value={data.accountNumber}
                             onChange={(e) => updateData({ accountNumber: e.target.value.replace(/\D/g, "").slice(0, 10) })}
                             maxLength={10}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="10-digit account number"
                         />
                         {errors.accountNumber && (
@@ -186,7 +186,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                     }}
                                     disabled={bvnVerified || verifyingBvn}
                                     maxLength={11}
-                                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 ${errors.bvn ? 'border-red-400' : 'border-slate-300'}`}
+                                    className={`w-full px-3.5 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 ${errors.bvn ? 'border-red-400' : 'border-slate-300'}`}
                                     placeholder="11-digit BVN"
                                 />
                             </div>
@@ -194,7 +194,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                                 type="button"
                                 onClick={handleVerifyBvn}
                                 disabled={bvnVerified || verifyingBvn || data.bvn?.length !== 11}
-                                className="px-6 py-3 bg-emerald-100 text-emerald-800 font-semibold rounded-xl hover:bg-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                className="px-6 py-3 bg-emerald-100 text-emerald-800 font-semibold rounded-lg hover:bg-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-2"
                             >
                                 {verifyingBvn ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify"}
                             </button>
@@ -242,7 +242,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         ].map((option) => (
                             <label
                                 key={option.label}
-                                className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.isMemberOfCooperative === option.value
+                                className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.isMemberOfCooperative === option.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -270,7 +270,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                             type="text"
                             value={data.cooperativeName}
                             onChange={(e) => updateData({ cooperativeName: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Name of your cooperative"
                         />
                         {errors.cooperativeName && (
@@ -294,7 +294,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                         ].map((option) => (
                             <label
                                 key={option.label}
-                                className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToJoinCooperative === option.value
+                                className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.willingToJoinCooperative === option.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -317,14 +317,14 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-lg font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back
                 </button>
                 <button
                     onClick={handleNext}
-                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-3 rounded-xl font-bold transition-all"
+                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-3 rounded-lg font-bold transition-all"
                 >
                     Continue
                     <ChevronRight className="w-5 h-5" />

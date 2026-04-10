@@ -109,7 +109,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             type="text"
                             value={data.surname}
                             onChange={(e) => updateData({ surname: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Surname"
                         />
                         {errors.surname && (
@@ -128,7 +128,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             type="text"
                             value={data.firstName}
                             onChange={(e) => updateData({ firstName: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="First Name"
                         />
                         {errors.firstName && (
@@ -147,7 +147,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             type="text"
                             value={data.otherNames}
                             onChange={(e) => updateData({ otherNames: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Middle name (optional)"
                         />
                     </div>
@@ -163,7 +163,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             type="date"
                             value={data.dateOfBirth}
                             onChange={(e) => handleDateChange(e.target.value)}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         />
                         {errors.dateOfBirth && (
                             <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
@@ -181,7 +181,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             type="number"
                             value={data.age || ""}
                             readOnly
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-slate-100 cursor-not-allowed"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm bg-slate-100 cursor-not-allowed"
                             placeholder="Auto-calculated"
                         />
                     </div>
@@ -201,7 +201,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                 updateData({ phone: val });
                             }}
                             maxLength={11}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="08012345678"
                         />
                         {errors.phone && (
@@ -220,7 +220,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             type="tel"
                             value={data.alternativePhone}
                             onChange={(e) => updateData({ alternativePhone: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="08098765432 (optional)"
                         />
                     </div>
@@ -235,7 +235,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         type="email"
                         value={data.email}
                         onChange={(e) => updateData({ email: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="youremail@example.com (optional)"
                     />
                 </div>
@@ -249,7 +249,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         value={data.residentialAddress}
                         onChange={(e) => updateData({ residentialAddress: e.target.value })}
                         rows={3}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 resize-none"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 resize-none"
                         placeholder="Your current residential address"
                     />
                     {errors.residentialAddress && (
@@ -269,7 +269,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         <select
                             value={data.stateOfOrigin}
                             onChange={(e) => updateData({ stateOfOrigin: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         >
                             <option value="">Select state</option>
                             {STATES.map((state) => (
@@ -293,7 +293,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         <select
                             value={data.lgaOfOrigin}
                             onChange={(e) => updateData({ lgaOfOrigin: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             disabled={!data.stateOfOrigin}
                         >
                             <option value="">Select LGA</option>
@@ -319,7 +319,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         <select
                             value={data.stateOfResidence}
                             onChange={(e) => updateData({ stateOfResidence: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         >
                             <option value="">Select state</option>
                             {STATES.map((state) => (
@@ -343,7 +343,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         <select
                             value={data.lgaOfResidence}
                             onChange={(e) => updateData({ lgaOfResidence: e.target.value })}
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                            className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             disabled={!data.stateOfResidence}
                         >
                             <option value="">Select LGA</option>
@@ -374,7 +374,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         ].map((status) => (
                             <label
                                 key={status.value}
-                                className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.maritalStatus === status.value
+                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.maritalStatus === status.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -400,7 +400,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 </div>
 
                 {/* Next of Kin Details */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-6">
                     <h3 className="text-lg font-semibold text-slate-900 mb-4">
                         Next of Kin Information
                     </h3>
@@ -413,7 +413,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                 type="text"
                                 value={data.nextOfKinName}
                                 onChange={(e) => updateData({ nextOfKinName: e.target.value })}
-                                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                 placeholder="Full name of next of kin"
                             />
                             {errors.nextOfKinName && (
@@ -433,7 +433,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                     type="tel"
                                     value={data.nextOfKinPhone}
                                     onChange={(e) => updateData({ nextOfKinPhone: e.target.value })}
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                     placeholder="08012345678"
                                 />
                                 {errors.nextOfKinPhone && (
@@ -452,7 +452,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                     type="text"
                                     value={data.nextOfKinRelationship}
                                     onChange={(e) => updateData({ nextOfKinRelationship: e.target.value })}
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                     placeholder="e.g., Spouse, Parent, Sibling"
                                 />
                                 {errors.nextOfKinRelationship && (
@@ -470,7 +470,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 <div className="mt-8">
                     <button
                         onClick={handleNext}
-                        className="w-full bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2"
+                        className="w-full bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-4 rounded-lg font-bold text-lg transition-all flex items-center justify-center gap-2"
                     >
                         Continue to Civic Status
                         <CheckCircle className="w-5 h-5" />

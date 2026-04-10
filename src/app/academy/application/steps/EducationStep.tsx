@@ -67,8 +67,8 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                         <select
                             value={data.educationLevel}
                             onChange={(e) => handleChange("educationLevel", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.educationLevel ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.educationLevel ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                         >
                             <option value="">Select education level</option>
                             {EDUCATION_LEVELS.map((level) => (
@@ -93,8 +93,8 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                             type="text"
                             value={data.fieldOfStudy}
                             onChange={(e) => handleChange("fieldOfStudy", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.fieldOfStudy ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.fieldOfStudy ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="e.g., Agricultural Science, Business, Engineering"
                         />
                     </div>
@@ -115,8 +115,8 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                             max="50"
                             value={data.yearsExperience}
                             onChange={(e) => handleChange("yearsExperience", parseInt(e.target.value) || 0)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.yearsExperience ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.yearsExperience ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                             placeholder="0"
                         />
                     </div>
@@ -137,8 +137,8 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                         <select
                             value={data.currentRole}
                             onChange={(e) => handleChange("currentRole", e.target.value)}
-                            className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.currentRole ? "border-red-500" : "border-slate-300"
-                                } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
+                            className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.currentRole ? "border-red-500" : "border-slate-300"
+                                } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
                         >
                             <option value="">Select your current role</option>
                             {CURRENT_ROLES.map((role) => (

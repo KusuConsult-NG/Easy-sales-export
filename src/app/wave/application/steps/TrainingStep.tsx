@@ -92,7 +92,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                         ].map((support) => (
                             <label
                                 key={support.value}
-                                className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.supportNeeded.includes(support.value)
+                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.supportNeeded.includes(support.value)
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -117,7 +117,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                 </div>
 
                 {/* Commitment Questions */}
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 space-y-6">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-6 space-y-6">
                     <h3 className="text-lg font-semibold text-emerald-900 mb-4">
                         Program Commitment Requirements
                     </h3>
@@ -134,7 +134,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                             ].map((option) => (
                                 <label
                                     key={option.label}
-                                    className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToUndergoTraining === option.value
+                                    className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.willingToUndergoTraining === option.value
                                         ? option.value
                                             ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                             : "border-red-300 bg-red-50 text-red-700"
@@ -172,7 +172,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                             ].map((option) => (
                                 <label
                                     key={option.label}
-                                    className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToComplyWithStandards === option.value
+                                    className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.willingToComplyWithStandards === option.value
                                         ? option.value
                                             ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                             : "border-red-300 bg-red-50 text-red-700"
@@ -210,7 +210,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                             ].map((option) => (
                                 <label
                                     key={option.label}
-                                    className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.willingToParticipateInME === option.value
+                                    className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.willingToParticipateInME === option.value
                                         ? option.value
                                             ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                             : "border-red-300 bg-red-50 text-red-700"
@@ -242,14 +242,14 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-lg font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back
                 </button>
                 <button
                     onClick={handleNext}
-                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-3 rounded-xl font-bold transition-all"
+                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-3 rounded-lg font-bold transition-all"
                 >
                     Continue to Review
                     <ChevronRight className="w-5 h-5" />

@@ -46,7 +46,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
 
             <div className="max-w-2xl mx-auto">
                 {/* Info Banner */}
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                     <div className="flex items-start gap-3">
                         <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                             <span className="text-white text-sm">ℹ</span>
@@ -70,7 +70,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
                 />
 
                 {/* Payment Schedule Info */}
-                <div className="mt-8 bg-slate-50 border border-slate-200 rounded-xl p-6">
+                <div className="mt-8 bg-slate-50 border border-slate-200 rounded-lg p-6">
                     <h4 className="font-bold text-slate-900 mb-3">
                         Payment Schedule
                     </h4>
@@ -95,7 +95,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
                 </div>
 
                 {/* Security Notice */}
-                <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-4">
+                <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
                     <div className="flex items-start gap-3">
                         <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -119,14 +119,14 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-lg hover:bg-slate-50 transition-colors"
                 >
                     Back
                 </button>
                 <button
                     onClick={handleContinue}
                     disabled={!data?.accountName}
-                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
                 >
                     Complete Registration
                 </button>

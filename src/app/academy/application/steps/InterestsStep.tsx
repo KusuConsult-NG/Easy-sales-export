@@ -74,7 +74,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                             key={path.id}
                             type="button"
                             onClick={() => handlePathToggle(path.id)}
-                            className={`relative p-4 rounded-xl border-2 text-left transition-all ${data.learningPaths.includes(path.id)
+                            className={`relative p-4 rounded-lg border-2 text-left transition-all ${data.learningPaths.includes(path.id)
                                     ? "border-blue-600 bg-blue-50"
                                     : "border-slate-300 hover:border-blue-400"
                                 }`}
@@ -109,8 +109,8 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                         value={data.topics}
                         onChange={(e) => handleChange("topics", e.target.value)}
                         rows={4}
-                        className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.topics ? "border-red-500" : "border-slate-300"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none`}
+                        className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.topics ? "border-red-500" : "border-slate-300"
+                            } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none`}
                         placeholder="e.g., Yam farming, Export documentation, Organic farming, Poultry management..."
                     />
                 </div>
@@ -129,8 +129,8 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                         value={data.goals}
                         onChange={(e) => handleChange("goals", e.target.value)}
                         rows={4}
-                        className={`w-full pl-11 pr-4 py-3 bg-white border ${errors.goals ? "border-red-500" : "border-slate-300"
-                            } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none`}
+                        className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.goals ? "border-red-500" : "border-slate-300"
+                            } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none`}
                         placeholder="What do you hope to achieve through the Academy? Be specific..."
                     />
                 </div>

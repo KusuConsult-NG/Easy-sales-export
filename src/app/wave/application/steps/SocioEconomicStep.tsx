@@ -84,7 +84,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                     <select
                         value={data.highestEducation}
                         onChange={(e) => updateData({ highestEducation: e.target.value as "none" | "primary" | "secondary" | "tertiary" | "vocational" })}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     >
                         <option value="">Select education level</option>
                         <option value="none">No Formal Education</option>
@@ -110,7 +110,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                         type="text"
                         value={data.currentOccupation}
                         onChange={(e) => updateData({ currentOccupation: e.target.value })}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="e.g., Farmer, Trader, Processor"
                     />
                     {errors.currentOccupation && (
@@ -129,7 +129,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                     <select
                         value={data.averageMonthlyIncome}
                         onChange={(e) => updateData({ averageMonthlyIncome: e.target.value as "below_50k" | "50k_100k" | "100k_250k" | "above_250k" })}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     >
                         <option value="">Select income range</option>
                         <option value="below_50k">Below ₦50,000</option>
@@ -157,7 +157,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                         ].map((option) => (
                             <label
                                 key={option.label}
-                                className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.involvedInAgriculture === option.value
+                                className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.involvedInAgriculture === option.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -191,7 +191,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                             ].map((type) => (
                                 <label
                                     key={type.value}
-                                    className={`flex items-center gap-2 px-4 py-3 border rounded-xl cursor-pointer transition-all ${data.agricultureTypes.includes(type.value)
+                                    className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.agricultureTypes.includes(type.value)
                                         ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                         : "border-slate-300 hover:bg-slate-50"
                                         }`}
@@ -221,14 +221,14 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
             <div className="flex items-center justify-between mt-8 gap-4">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-xl font-semibold hover:bg-slate-50 transition-all text-slate-900"
+                    className="flex items-center gap-2 px-6 py-3 border border-slate-300 rounded-lg font-semibold hover:bg-slate-50 transition-all text-slate-900"
                 >
                     <ChevronLeft className="w-5 h-5" />
                     Back
                 </button>
                 <button
                     onClick={handleNext}
-                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-3 rounded-xl font-bold transition-all"
+                    className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-8 py-3 rounded-lg font-bold transition-all"
                 >
                     Continue
                     <ChevronRight className="w-5 h-5" />

@@ -52,7 +52,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
 
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Info Banner */}
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-start gap-3">
                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
                             <span className="text-blue-600 text-sm font-bold">ℹ</span>
@@ -88,7 +88,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                     />
 
                     {documents.businessRegistration && (
-                        <div className="mt-4 p-4 border border-slate-200 rounded-xl bg-white space-y-4">
+                        <div className="mt-4 p-4 border border-slate-200 rounded-lg bg-white space-y-4">
                             <h4 className="font-semibold text-slate-900 text-sm">Business Registration Details</h4>
                             <p className="text-xs text-slate-500">
                                 Our team will manually review your registration document within 1-3 business days.
@@ -134,7 +134,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                         value={documents.taxId || ""}
                         onChange={(e) => updateDocuments({ taxId: e.target.value })}
                         placeholder="Enter your TIN"
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
                     <p className="mt-2 text-sm text-slate-600">
                         Collected for tax compliance — reviewed by our team
@@ -212,7 +212,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 </div>
 
                 {/* Verification Timeline */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-6">
                     <h4 className="font-bold text-slate-900 mb-3">
                         What happens next?
                     </h4>
@@ -241,13 +241,13 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 font-semibold rounded-lg hover:bg-slate-50 transition-colors"
                 >
                     Back
                 </button>
                 <button
                     onClick={onNext}
-                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 transition-colors"
+                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
                 >
                     Continue
                 </button>

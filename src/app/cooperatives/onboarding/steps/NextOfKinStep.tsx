@@ -83,7 +83,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             </div>
 
             {/* Info Banner */}
-            <div className="max-w-2xl mx-auto bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="max-w-2xl mx-auto bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-800">
                     ℹ️ Your next of kin will be contacted in case of emergencies and will be the beneficiary
                     of your savings in the event of unforeseen circumstances.
@@ -102,7 +102,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
                         value={data.fullName}
                         onChange={(e) => onChange({ ...data, fullName: e.target.value })}
                         placeholder="Jane Doe"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.fullName ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.fullName ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.fullName && (
@@ -118,7 +118,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
                     <select
                         value={data.relationship}
                         onChange={(e) => onChange({ ...data, relationship: e.target.value })}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.relationship ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.relationship ? "border-red-500" : "border-slate-300"
                             }`}
                     >
                         <option value="">Select relationship</option>
@@ -141,7 +141,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
                         value={data.phone}
                         onChange={(e) => onChange({ ...data, phone: e.target.value })}
                         placeholder="08012345678"
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.phone ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.phone ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.phone && (
@@ -159,7 +159,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
                         onChange={(e) => onChange({ ...data, address: e.target.value })}
                         placeholder="Full address including state"
                         rows={3}
-                        className={`w-full px-4 py-3 border rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.address ? "border-red-500" : "border-slate-300"
+                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.address ? "border-red-500" : "border-slate-300"
                             }`}
                     />
                     {errors.address && (
@@ -172,13 +172,13 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             <div className="flex justify-between pt-6">
                 <button
                     onClick={onBack}
-                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 rounded-xl font-semibold hover:bg-slate-50 transition-all"
+                    className="px-8 py-3 border-2 border-slate-300 text-slate-900 rounded-lg font-semibold hover:bg-slate-50 transition-all"
                 >
                     Back
                 </button>
                 <button
                     onClick={handleContinue}
-                    className="px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
+                    className="px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-all"
                 >
                     Continue
                 </button>
