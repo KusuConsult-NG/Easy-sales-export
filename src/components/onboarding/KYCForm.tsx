@@ -8,8 +8,9 @@
 'use client';
 
 import { useState } from 'react';
-import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
+import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
+import { isObviouslyFakeId } from '@/lib/kyc-validators';
 
 export interface KYCData {
     firstName: string;
@@ -79,6 +80,9 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
     const [bvnError, setBvnError] = useState<string>('');
     const [ninError, setNinError] = useState<string>('');
     const [votersCardError, setVotersCardError] = useState<string>('');
+    // Confirmation checkbox — user must explicitly confirm digits are correct
+    const [ninConfirmed, setNinConfirmed] = useState(false);
+    const [bvnConfirmed, setBvnConfirmed] = useState(false);
 
     const handleChange = (field: keyof KYCData, value: string | boolean) => {
         const updated = { ...formData, [field]: value };
@@ -86,11 +90,13 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         if (field === 'bvn') {
             setBvnState('idle');
             setBvnError('');
+            setBvnConfirmed(false);
             updated.bvnVerified = false;
         }
         if (field === 'nin') {
             setNinState('idle');
             setNinError('');
+            setNinConfirmed(false);
             updated.ninVerified = false;
         }
         if (field === 'votersCard') {
@@ -110,6 +116,14 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
         if (!firstName || !lastName) {
             setBvnError('Enter your first name and last name before verifying BVN.');
+            return;
+        }
+        if (isObviouslyFakeId(bvn)) {
+            setBvnError('This BVN looks invalid (e.g. all same digits or a sequential number). Please enter your real BVN — dial *565*0# to retrieve it.');
+            return;
+        }
+        if (!bvnConfirmed) {
+            setBvnError('Please confirm that your BVN digits are correct before verifying.');
             return;
         }
 
@@ -140,6 +154,14 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
         if (!firstName || !lastName) {
             setNinError('Enter your first name and last name before verifying NIN.');
+            return;
+        }
+        if (isObviouslyFakeId(nin)) {
+            setNinError('This NIN looks invalid (e.g. all same digits or a sequential number). Please enter your real NIN — dial *346# to retrieve it.');
+            return;
+        }
+        if (!ninConfirmed) {
+            setNinError('Please confirm that your NIN digits are correct before verifying.');
             return;
         }
 
@@ -195,14 +217,17 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
     return (
         <div className="space-y-6">
 
-            {/* KYC Notice Banner */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
-                <span className="text-amber-500 text-base shrink-0 mt-0.5">⚠️</span>
+            {/* ⚠️ Verification Warning — prominent ban notice */}
+            <div className="bg-red-50 border-2 border-red-300 rounded-xl px-4 py-4 flex items-start gap-3">
+                <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
                 <div>
-                    <p className="text-sm font-bold text-amber-900">Important — KYC Verification Notice</p>
-                    <p className="text-xs text-amber-800 mt-0.5">
-                        Enter your name <strong>exactly as it appears on your NIN/BVN</strong>. Any mismatch will cause verification to fail and may delay your application.
-                    </p>
+                    <p className="text-sm font-bold text-red-900">⚠️ Important — Read Before Verifying</p>
+                    <ul className="mt-1.5 space-y-1 text-xs text-red-800 list-disc list-inside">
+                        <li>Enter your <strong>exact NIN / BVN digits</strong>. Even one wrong digit will fail.</li>
+                        <li>Your name below <strong>must match exactly</strong> as it appears on your NIN/BVN record.</li>
+                        <li><strong className="text-red-700">Submitting incorrect or fake details may result in your account being permanently banned.</strong></li>
+                        <li>Dial <strong>*346#</strong> to get your NIN &nbsp;|&nbsp; Dial <strong>*565*0#</strong> to get your BVN.</li>
+                    </ul>
                 </div>
             </div>
 
@@ -364,7 +389,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     <button
                         type="button"
                         onClick={handleVerifyNIN}
-                        disabled={ninState === 'loading' || ninState === 'verified' || !formData.nin || formData.nin.length !== 11}
+                        disabled={ninState === 'loading' || ninState === 'verified' || !formData.nin || formData.nin.length !== 11 || !ninConfirmed}
                         className="px-4 py-2.5 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 whitespace-nowrap"
                     >
                         {ninState === 'loading' ? (
@@ -381,6 +406,20 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                         <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                         {ninError}
                     </p>
+                )}
+                {/* Confirmation checkbox — must tick before Verify is active */}
+                {ninState !== 'verified' && formData.nin && formData.nin.length === 11 && !isObviouslyFakeId(formData.nin) && (
+                    <label className="mt-2.5 flex items-start gap-2 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={ninConfirmed}
+                            onChange={(e) => { setNinConfirmed(e.target.checked); if (ninError) setNinError(''); }}
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                        />
+                        <span className="text-xs text-slate-700">
+                            I confirm that <strong>{formData.nin}</strong> is my correct NIN. I understand that submitting wrong information may result in my account being banned.
+                        </span>
+                    </label>
                 )}
                 <p className="mt-1 text-xs text-slate-400">Dial *346# to retrieve your NIN. Your name above must match your NIN record exactly.</p>
             </div>
@@ -448,7 +487,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                         <button
                             type="button"
                             onClick={handleVerifyBVN}
-                            disabled={bvnState === 'loading' || bvnState === 'verified' || !formData.bvn || formData.bvn.length !== 11}
+                            disabled={bvnState === 'loading' || bvnState === 'verified' || !formData.bvn || formData.bvn.length !== 11 || !bvnConfirmed}
                             className="px-4 py-2.5 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 whitespace-nowrap"
                         >
                             {bvnState === 'loading' ? (
@@ -465,6 +504,20 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                             {bvnError}
                         </p>
+                    )}
+                    {/* Confirmation checkbox for BVN */}
+                    {bvnState !== 'verified' && formData.bvn && formData.bvn.length === 11 && !isObviouslyFakeId(formData.bvn) && (
+                        <label className="mt-2.5 flex items-start gap-2 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={bvnConfirmed}
+                                onChange={(e) => { setBvnConfirmed(e.target.checked); if (bvnError) setBvnError(''); }}
+                                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                            />
+                            <span className="text-xs text-slate-700">
+                                I confirm that <strong>{formData.bvn}</strong> is my correct BVN. I understand that submitting wrong information may result in my account being banned.
+                            </span>
+                        </label>
                     )}
                     <p className="mt-1 text-xs text-slate-400">Dial *565*0# to retrieve your BVN. Your name above must match your BVN record exactly.</p>
                 </div>

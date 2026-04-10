@@ -13,6 +13,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
+import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,12 @@ export async function verifyBVNAction(payload: {
         }
         if (!firstName || !lastName) {
             return { success: false, error: 'First name and last name are required for BVN verification' };
+        }
+
+        // Guard: reject obviously fake / placeholder BVN patterns server-side
+        if (isObviouslyFakeId(bvn)) {
+            logger.warn('[verifyBVNAction] Suspicious BVN submitted', { userId, bvn });
+            return { success: false, error: fakeIdErrorMessage('BVN') };
         }
 
         // Guard: env vars must be present — return a clean error instead of leaking config details
@@ -127,6 +134,12 @@ export async function verifyNINAction(payload: {
         }
         if (!firstName || !lastName) {
             return { success: false, error: 'First name and last name are required for NIN verification' };
+        }
+
+        // Guard: reject obviously fake / placeholder NIN patterns server-side
+        if (isObviouslyFakeId(nin)) {
+            logger.warn('[verifyNINAction] Suspicious NIN submitted', { userId, nin });
+            return { success: false, error: fakeIdErrorMessage('NIN') };
         }
 
         // Guard: env vars must be present — return a clean error instead of leaking config details
