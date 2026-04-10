@@ -59,10 +59,10 @@ export function IdInput({
     const ring = RING[accentColor];
     const border = error ? 'border-red-400' : 'border-slate-300';
 
-    // Size the input to exactly fit its max content + small breathing room.
-    // 1ch ≈ width of one character; +3ch covers the focus ring + internal padding.
+    // Size the input to exactly fit its max content + comfortable breathing room.
+    // 1ch ≈ width of one character; +6ch covers padding, caret, and focus ring.
     const inputStyle: CSSProperties = maxLength
-        ? { width: `${maxLength + 3}ch`, maxWidth: '100%' }
+        ? { width: `${maxLength + 6}ch`, maxWidth: '100%' }
         : {};
 
     return (
