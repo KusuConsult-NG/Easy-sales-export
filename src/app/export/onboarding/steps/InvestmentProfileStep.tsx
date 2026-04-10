@@ -72,7 +72,7 @@ export function InvestmentProfileStep({
                 </p>
             </div>
 
-            <div className="space-y-6">
+            <div className="max-w-xl mx-auto space-y-4">
                 {/* Investment Range */}
                 <div>
                     <label className="block text-sm font-medium text-slate-900 mb-3">

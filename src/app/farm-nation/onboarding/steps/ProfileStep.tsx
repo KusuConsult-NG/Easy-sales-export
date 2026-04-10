@@ -68,7 +68,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="max-w-xl mx-auto space-y-4">
             <div>
                 <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
                     Profile &amp; Location
@@ -86,7 +86,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* First Name */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">

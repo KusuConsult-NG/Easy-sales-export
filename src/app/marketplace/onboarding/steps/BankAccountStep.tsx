@@ -33,7 +33,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
     };
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-xl mx-auto space-y-4">
             {/* Header */}
             <div className="text-center">
                 <h2 className="text-3xl font-bold text-slate-900 mb-3">

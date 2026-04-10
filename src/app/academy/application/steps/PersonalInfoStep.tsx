@@ -32,7 +32,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
     };
 
     return (
-        <div className="space-y-6">
+        <div className="max-w-xl mx-auto space-y-4">
             <div>
                 <h2 className="text-2xl font-bold text-slate-900 mb-2">
                     Personal Information
@@ -50,7 +50,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* First Name */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">

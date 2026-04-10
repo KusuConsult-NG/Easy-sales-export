@@ -55,7 +55,7 @@ export function BankAccountStep({
                 </p>
             </div>
 
-            <div className="space-y-6">
+            <div className="max-w-xl mx-auto space-y-4">
                 {/* Bank Account Verification */}
                 <BankAccountVerification
                     onVerified={handleVerified}

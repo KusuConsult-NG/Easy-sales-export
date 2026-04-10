@@ -71,7 +71,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
     };
 
     return (
-        <div className="space-y-8">
+        <div className="max-w-xl mx-auto space-y-4">
             {/* Header */}
             <div className="text-center">
                 <h2 className="text-3xl font-bold text-slate-900 mb-3">
@@ -91,7 +91,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             </div>
 
             {/* Form */}
-            <div className="max-w-2xl mx-auto space-y-6">
+            <div className="max-w-xl mx-auto space-y-4">
                 {/* Full Name */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">

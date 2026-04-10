@@ -98,9 +98,9 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 Please provide your personal details as they appear on your National ID (NIN)
             </p>
 
-            <div className="space-y-6">
+            <div className="max-w-xl mx-auto space-y-4">
                 {/* Name Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Surname (as on NIN) *
@@ -154,7 +154,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 </div>
 
                 {/* Date of Birth & Age */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Date of Birth *
@@ -188,7 +188,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 </div>
 
                 {/* Contact Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Phone Number (Primary) *
@@ -261,7 +261,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 </div>
 
                 {/* State of Origin & LGA */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             State of Origin *
@@ -311,7 +311,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 </div>
 
                 {/* State of Residence & LGA */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             State of Residence *
@@ -404,7 +404,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     <h3 className="text-lg font-semibold text-slate-900 mb-4">
                         Next of Kin Information
                     </h3>
-                    <div className="space-y-6">
+                    <div className="max-w-xl mx-auto space-y-4">
                         <div>
                             <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Next of Kin Name *
@@ -424,7 +424,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-semibold text-slate-900 mb-2">
                                     Next of Kin Phone Number *

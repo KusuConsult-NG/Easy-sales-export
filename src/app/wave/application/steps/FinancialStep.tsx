@@ -125,7 +125,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
                 </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="max-w-xl mx-auto space-y-4">
                 {/* Bank Details — Always Required */}
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 space-y-6">
                     <h3 className="text-base font-bold text-slate-900">Bank Account Details <span className="text-red-500">*</span></h3>

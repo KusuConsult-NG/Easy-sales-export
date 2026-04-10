@@ -75,7 +75,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
                 Tell us what support you need and your commitment to the program
             </p>
 
-            <div className="space-y-6">
+            <div className="max-w-xl mx-auto space-y-4">
                 {/* Which support do you need */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
