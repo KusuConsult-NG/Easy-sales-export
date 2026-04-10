@@ -5,24 +5,16 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { withRateLimit } from "@/lib/rate-limit";
 
 /**
  * Check MFA status for current user
  */
-export async function GET(request: NextRequest) {
+async function getMFAStatusHandler(request: NextRequest) {
     try {
         const session = await auth();
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-
-        // Return non-error response when not authenticated
-        if (!session?.user) {
-            return NextResponse.json({
-                success: true,
-                enabled: false,
-                authenticated: false,
-            });
         }
 
         // Get user MFA status (Admin SDK)
@@ -52,3 +44,5 @@ export async function GET(request: NextRequest) {
         });
     }
 }
+
+export const GET = withRateLimit(getMFAStatusHandler);
