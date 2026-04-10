@@ -23,14 +23,14 @@ function normState(state?: string): string {
 function resolveMatch(data: any): boolean {
     // Check top-level status.state
     const topState = normState(data?.status?.state);
-    const stateOk = topState === 'complete' || topState === 'exact_match';
+    const stateOk = topState === 'complete' || topState === 'exact_match' || topState === 'verified' || topState === 'found';
 
     // Check nested nin_check / bvn_check status (inside summary)
     const summaryChecks = data?.summary || {};
     const checkStatuses = Object.values(summaryChecks)
         .map((v: any) => normState(v?.status))
         .filter(Boolean);
-    const anyCheckExactMatch = checkStatuses.some(s => s === 'exact_match' || s === 'complete');
+    const anyCheckExactMatch = checkStatuses.some(s => s === 'exact_match' || s === 'complete' || s === 'verified' || s === 'found');
 
     const nameMatch = data?.summary?.exactMatch !== false;
     return (stateOk || anyCheckExactMatch) && nameMatch;

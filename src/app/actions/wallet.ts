@@ -104,7 +104,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
                 amount: amountKobo,
                 reference,
                 channels: ["bank_transfer"],
-                callback_url: `${process.env.NEXTAUTH_URL}/api/wallet/verify?ref=${reference}`,
+                callback_url: `${process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/api/wallet/verify?ref=${reference}`,
                 metadata: {
                     userId,
                     type: "wallet_funding",
