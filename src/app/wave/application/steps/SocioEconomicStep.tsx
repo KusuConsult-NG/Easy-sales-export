@@ -75,7 +75,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                 Help us understand your educational background and economic situation
             </p>
 
-            <div className="max-w-xl mx-auto space-y-4">
+            <div className="space-y-6">
                 {/* Highest Level of Education */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">

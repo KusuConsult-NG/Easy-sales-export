@@ -43,7 +43,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
     };
 
     return (
-        <div className="max-w-xl mx-auto space-y-4">
+        <div className="space-y-6">
             {/* Header */}
             <div className="text-center">
                 <h2 className="text-2xl font-bold text-slate-900 mb-1">Next of Kin Information</h2>
@@ -57,11 +57,11 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             </div>
 
             {/* Full Name + Relationship */}
-            <div className="grid grid-cols-2 gap-4">
-                <FormInput label="Full Name" size="md" required
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormInput label="Full Name" required
                     value={data.fullName} onChange={e => set("fullName", e.target.value)}
                     placeholder="Jane Doe" error={errors.fullName} />
-                <FormSelect label="Relationship" size="md" required
+                <FormSelect label="Relationship" required
                     value={data.relationship} onChange={e => set("relationship", e.target.value)}
                     error={errors.relationship}>
                     <option value="">Select relationship</option>
@@ -70,7 +70,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
             </div>
 
             {/* Phone */}
-            <FormInput label="Phone Number" size="sm" required type="tel"
+            <FormInput label="Phone Number" required type="tel"
                 value={data.phone} onChange={e => set("phone", e.target.value)}
                 placeholder="08012345678" error={errors.phone} />
 

@@ -98,7 +98,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                 Please provide your personal details as they appear on your National ID (NIN)
             </p>
 
-            <div className="max-w-xl mx-auto space-y-4">
+            <div className="space-y-6">
                 {/* Name Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
@@ -404,7 +404,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     <h3 className="text-lg font-semibold text-slate-900 mb-4">
                         Next of Kin Information
                     </h3>
-                    <div className="max-w-xl mx-auto space-y-4">
+                    <div className="space-y-6">
                         <div>
                             <label className="block text-sm font-semibold text-slate-900 mb-2">
                                 Next of Kin Name *

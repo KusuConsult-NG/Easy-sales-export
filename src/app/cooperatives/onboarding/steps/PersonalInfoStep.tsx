@@ -74,13 +74,13 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
             </div>
 
             {/* Form — max-w-xl keeps all inputs proportional */}
-            <div className="max-w-xl mx-auto space-y-4">
+            <div className="space-y-6">
 
                 {/* First Name + Last Name */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         label="First Name"
-                        size="md"
+                       
                         required
                         value={data.firstName}
                         onChange={(e) => onChange({ ...data, firstName: e.target.value })}
@@ -90,7 +90,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     />
                     <FormInput
                         label="Last Name"
-                        size="md"
+                       
                         required
                         value={data.lastName}
                         onChange={(e) => onChange({ ...data, lastName: e.target.value })}
@@ -101,10 +101,10 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 </div>
 
                 {/* Other Name + Date of Birth */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         label="Other Name"
-                        size="md"
+                       
                         optional
                         value={data.otherName || ""}
                         onChange={(e) => onChange({ ...data, otherName: e.target.value })}
@@ -112,7 +112,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     />
                     <FormInput
                         label="Date of Birth"
-                        size="sm"
+                       
                         type="date"
                         value={data.dateOfBirth}
                         onChange={(e) => onChange({ ...data, dateOfBirth: e.target.value })}
@@ -120,10 +120,10 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 </div>
 
                 {/* Phone + Email */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormInput
                         label="Phone Number"
-                        size="sm"
+                       
                         required
                         type="tel"
                         value={data.phone}
@@ -133,7 +133,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     />
                     <FormInput
                         label="Email Address"
-                        size="lg"
+                       
                         required
                         type="email"
                         value={data.email}
@@ -144,10 +144,10 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 </div>
 
                 {/* Gender + Occupation */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormSelect
                         label="Gender"
-                        size="sm"
+                       
                         required
                         value={data.gender}
                         onChange={(e) => onChange({ ...data, gender: e.target.value })}
@@ -159,7 +159,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     </FormSelect>
                     <FormInput
                         label="Occupation"
-                        size="md"
+                       
                         required
                         value={data.occupation}
                         onChange={(e) => onChange({ ...data, occupation: e.target.value })}
@@ -169,10 +169,10 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 </div>
 
                 {/* State + LGA */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormSelect
                         label="State"
-                        size="md"
+                       
                         required
                         value={data.address.state}
                         onChange={(e) => onChange({ ...data, address: { ...data.address, state: e.target.value, lga: "" } })}
@@ -183,7 +183,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     </FormSelect>
                     <FormSelect
                         label="LGA"
-                        size="md"
+                       
                         required
                         value={data.address.lga}
                         onChange={(e) => onChange({ ...data, address: { ...data.address, lga: e.target.value } })}
@@ -200,7 +200,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                 {/* Street Address — full width is appropriate here */}
                 <FormInput
                     label="Street Address"
-                    size="full"
+                   
                     required
                     value={data.address.street}
                     onChange={(e) => onChange({ ...data, address: { ...data.address, street: e.target.value } })}

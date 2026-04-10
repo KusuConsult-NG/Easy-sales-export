@@ -109,7 +109,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
     };
 
     return (
-        <form onSubmit={handleSubmit} className="max-w-xl mx-auto space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
             <div>
                 <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">
                     Your Property Preferences

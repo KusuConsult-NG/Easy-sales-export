@@ -39,7 +39,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
     };
 
     return (
-        <div className="max-w-xl mx-auto space-y-4">
+        <div className="space-y-6">
             {/* Header */}
             <div className="text-center">
                 <h2 className="text-3xl font-bold text-slate-900 mb-3">

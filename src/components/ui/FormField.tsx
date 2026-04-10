@@ -1,40 +1,20 @@
 /**
  * FormField.tsx
  *
- * Universal form input component used across all 6 modules.
- * Enforces consistent, proportional field widths based on the
- * type of data expected — so no input is ever wider than its content.
+ * Shared styled wrapper for form inputs across all 6 modules.
+ * Provides consistent label/error/hint rendering.
  *
- * Size guide:
- *   xs   → ~120px  – years, codes, short numbers
- *   sm   → ~170px  – phone, date, gender, age
- *   md   → ~230px  – first name, last name, LGA, city
- *   lg   → ~320px  – email, business name, occupation
- *   full → 100%    – address, bio, textarea
+ * Layout sizing is handled by the PARENT GRID — inputs use w-full
+ * to fill their grid column naturally. This avoids distortion from
+ * applying max-width to cells inside a grid layout.
  *
- * Usage:
- *   <FormField label="Phone" size="sm" required>
- *     <input type="tel" ... />
- *   </FormField>
- *
- *   <FormInput label="First Name" size="md" value={...} onChange={...} required />
+ * Only identity fields (NIN, BVN, VIN) use the separate IdInput component
+ * which applies ch-unit sizing for those specific short fixed-length values.
  */
 
 'use client';
 
 import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from 'react';
-
-// ─── Size map ────────────────────────────────────────────────────────────────
-
-type FieldSize = 'xs' | 'sm' | 'md' | 'lg' | 'full';
-
-const SIZE_MAX: Record<FieldSize, string> = {
-    xs:   'max-w-[120px]',
-    sm:   'max-w-[170px]',
-    md:   'max-w-[230px]',
-    lg:   'max-w-[320px]',
-    full: 'w-full',
-};
 
 // ─── Shared class tokens ──────────────────────────────────────────────────────
 
@@ -55,10 +35,10 @@ export const INPUT_EMERALD =
     'disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
 
 // ─── FormField wrapper ────────────────────────────────────────────────────────
+// No max-width here — sizing is controlled by the parent grid column.
 
 interface FormFieldProps {
     label: string;
-    size?: FieldSize;
     required?: boolean;
     optional?: boolean;
     hint?: string;
@@ -68,7 +48,6 @@ interface FormFieldProps {
 
 export function FormField({
     label,
-    size = 'full',
     required,
     optional,
     hint,
@@ -76,7 +55,7 @@ export function FormField({
     children,
 }: FormFieldProps) {
     return (
-        <div className={`${size === 'full' ? 'w-full' : SIZE_MAX[size]}`}>
+        <div className="w-full">
             <label className="block text-sm font-medium text-slate-900 mb-1.5">
                 {label}
                 {required && <span className="text-red-500 ml-0.5">*</span>}
@@ -94,9 +73,8 @@ export function FormField({
 
 // ─── FormInput ────────────────────────────────────────────────────────────────
 
-interface FormInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
+interface FormInputProps extends InputHTMLAttributes<HTMLInputElement> {
     label: string;
-    size?: FieldSize;
     required?: boolean;
     optional?: boolean;
     hint?: string;
@@ -106,7 +84,6 @@ interface FormInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'si
 
 export function FormInput({
     label,
-    size = 'full',
     required,
     optional,
     hint,
@@ -119,7 +96,7 @@ export function FormInput({
     const err = error ? INPUT_ERROR : '';
 
     return (
-        <FormField label={label} size={size} required={required} optional={optional} hint={hint} error={error}>
+        <FormField label={label} required={required} optional={optional} hint={hint} error={error}>
             <input
                 {...rest}
                 className={`${base} ${err} ${className ?? ''}`}
@@ -130,9 +107,8 @@ export function FormInput({
 
 // ─── FormSelect ───────────────────────────────────────────────────────────────
 
-interface FormSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
+interface FormSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
     label: string;
-    size?: FieldSize;
     required?: boolean;
     optional?: boolean;
     hint?: string;
@@ -143,7 +119,6 @@ interface FormSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 
 
 export function FormSelect({
     label,
-    size = 'full',
     required,
     optional,
     hint,
@@ -157,7 +132,7 @@ export function FormSelect({
     const err = error ? INPUT_ERROR : '';
 
     return (
-        <FormField label={label} size={size} required={required} optional={optional} hint={hint} error={error}>
+        <FormField label={label} required={required} optional={optional} hint={hint} error={error}>
             <select
                 {...rest}
                 className={`${base} ${err} ${className ?? ''}`}
@@ -170,7 +145,7 @@ export function FormSelect({
 
 // ─── FormTextarea ─────────────────────────────────────────────────────────────
 
-interface FormTextareaProps extends Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'size'> {
+interface FormTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
     label: string;
     required?: boolean;
     optional?: boolean;
@@ -190,7 +165,7 @@ export function FormTextarea({
     const err = error ? INPUT_ERROR : '';
 
     return (
-        <FormField label={label} size="full" required={required} optional={optional} hint={hint} error={error}>
+        <FormField label={label} required={required} optional={optional} hint={hint} error={error}>
             <textarea
                 {...rest}
                 className={`${INPUT_BASE} resize-none ${err} ${className ?? ''}`}

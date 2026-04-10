@@ -47,7 +47,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
     };
 
     return (
-        <div className="max-w-xl mx-auto space-y-4">
+        <div className="space-y-6">
             <div>
                 <h2 className="text-2xl font-bold text-slate-900 mb-2">
                     Educational Background

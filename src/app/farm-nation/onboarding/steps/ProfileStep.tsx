@@ -60,7 +60,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
     };
 
     return (
-        <form onSubmit={handleSubmit} className="max-w-xl mx-auto space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
             <div>
                 <h2 className="text-2xl font-bold text-slate-900 mb-1">Profile & Location</h2>
                 <p className="text-sm text-slate-600">Help us connect you with the right properties in your area</p>
@@ -74,36 +74,36 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
             </div>
 
             {/* Row 1: First Name + Last Name */}
-            <div className="grid grid-cols-2 gap-4">
-                <FormInput label="First Name" size="md" required
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormInput label="First Name" required
                     value={formData.firstName} onChange={e => set('firstName', e.target.value)}
                     placeholder="e.g. Amina" error={errors.firstName} hint="As on your NIN/BVN"
                     accentColor="emerald" />
-                <FormInput label="Last Name" size="md" required
+                <FormInput label="Last Name" required
                     value={formData.lastName} onChange={e => set('lastName', e.target.value)}
                     placeholder="e.g. Ibrahim" error={errors.lastName} hint="As on your NIN/BVN"
                     accentColor="emerald" />
             </div>
 
             {/* Row 2: Other Name + Phone */}
-            <div className="grid grid-cols-2 gap-4">
-                <FormInput label="Other Name" size="md" optional
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormInput label="Other Name" optional
                     value={formData.otherName} onChange={e => set('otherName', e.target.value)}
                     placeholder="e.g. Fatima" accentColor="emerald" />
-                <FormInput label="Phone Number" size="sm" required type="tel"
+                <FormInput label="Phone Number" required type="tel"
                     value={formData.phone} onChange={e => set('phone', e.target.value)}
                     placeholder="08012345678" error={errors.phone} accentColor="emerald" />
             </div>
 
             {/* Row 3: State + LGA */}
-            <div className="grid grid-cols-2 gap-4">
-                <FormSelect label="State" size="md" required
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormSelect label="State" required
                     value={formData.state} onChange={e => set('state', e.target.value)}
                     error={errors.state} accentColor="emerald">
                     <option value="">Select State</option>
                     {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                 </FormSelect>
-                <FormSelect label="LGA" size="md" required
+                <FormSelect label="LGA" required
                     value={formData.lga} onChange={e => set('lga', e.target.value)}
                     disabled={!formData.state} error={errors.lga} accentColor="emerald">
                     <option value="">Select LGA</option>
@@ -114,14 +114,14 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
             </div>
 
             {/* Row 4: Business Name + Address spans full */}
-            <div className="grid grid-cols-2 gap-4">
-                <FormInput label="Business Name" size="md" optional
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormInput label="Business Name" optional
                     value={formData.businessName} onChange={e => set('businessName', e.target.value)}
                     placeholder="Agro Ventures Ltd" accentColor="emerald" />
                 <div /> {/* spacer */}
             </div>
 
-            <FormInput label="Address" size="full" required
+            <FormInput label="Address" required
                 value={formData.address} onChange={e => set('address', e.target.value)}
                 placeholder="123 Main Street" error={errors.address} accentColor="emerald" />
 

@@ -84,7 +84,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 Tell us about your interests in the agricultural value chain
             </p>
 
-            <div className="max-w-xl mx-auto space-y-4">
+            <div className="space-y-6">
                 {/* Value Chain Areas */}
                 <div>
                     <label className="block text-sm font-semibold text-slate-900 mb-2">
