@@ -160,7 +160,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
                     <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <input
-                            type="tel"
+                            type="tel" style={{maxWidth:"180px"}}
                             name="phone"
                             value={formData.phone}
                             onChange={handleChange}

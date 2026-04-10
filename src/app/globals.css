@@ -174,3 +174,17 @@ body {
     @apply text-slate-900;
   }
 }
+
+/* ── Short field constraint — no input wider than City field ────────────────── */
+.field-short {
+  max-width: 230px;
+  width: 100%;
+}
+.field-phone {
+  max-width: 180px;
+  width: 100%;
+}
+.field-date {
+  max-width: 180px;
+  width: 100%;
+}

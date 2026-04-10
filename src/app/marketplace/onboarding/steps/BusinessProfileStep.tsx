@@ -129,7 +129,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         Phone Number *
                     </label>
                     <input
-                        type="tel"
+                        type="tel" style={{maxWidth:"180px"}}
                         value={data.phone}
                         onChange={(e) => onChange({ phone: e.target.value })}
                         placeholder="08012345678"

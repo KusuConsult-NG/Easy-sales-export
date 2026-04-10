@@ -137,7 +137,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
                         Phone Number <span className="text-red-500">*</span>
                     </label>
                     <input
-                        type="tel"
+                        type="tel" style={{maxWidth:"180px"}}
                         value={data.phone}
                         onChange={(e) => onChange({ ...data, phone: e.target.value })}
                         placeholder="08012345678"

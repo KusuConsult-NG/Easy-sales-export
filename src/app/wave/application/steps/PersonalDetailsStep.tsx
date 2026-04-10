@@ -160,7 +160,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             Date of Birth *
                         </label>
                         <input
-                            type="date"
+                            type="date" style={{maxWidth:"180px"}}
                             value={data.dateOfBirth}
                             onChange={(e) => handleDateChange(e.target.value)}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
@@ -194,7 +194,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             Phone Number (Primary) *
                         </label>
                         <input
-                            type="tel"
+                            type="tel" style={{maxWidth:"180px"}}
                             value={data.phone}
                             onChange={(e) => {
                                 const val = e.target.value.replace(/\D/g, "").slice(0, 11);
@@ -217,7 +217,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             Alternative Phone Number
                         </label>
                         <input
-                            type="tel"
+                            type="tel" style={{maxWidth:"180px"}}
                             value={data.alternativePhone}
                             onChange={(e) => updateData({ alternativePhone: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
@@ -430,7 +430,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                     Next of Kin Phone Number *
                                 </label>
                                 <input
-                                    type="tel"
+                                    type="tel" style={{maxWidth:"180px"}}
                                     value={data.nextOfKinPhone}
                                     onChange={(e) => updateData({ nextOfKinPhone: e.target.value })}
                                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"

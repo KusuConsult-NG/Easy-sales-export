@@ -424,6 +424,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     label="Voter's Card Number (PVC / VIN)"
                     value={formData.votersCard || ''}
                     onChange={(v) => handleChange('votersCard', v)}
+                    maxLength={19}
                     placeholder="e.g. 90F5B123456789012345"
                     hint="The Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                     accentColor="orange"

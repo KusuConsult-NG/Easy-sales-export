@@ -143,7 +143,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                     <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <input
-                            type="tel"
+                            type="tel" style={{maxWidth:"180px"}}
                             value={data.phone}
                             onChange={(e) => handleChange("phone", e.target.value)}
                             className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.phone ? "border-red-500" : "border-slate-300"
@@ -165,7 +165,7 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                     <div className="relative">
                         <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <input
-                            type="date"
+                            type="date" style={{maxWidth:"180px"}}
                             value={data.dateOfBirth}
                             onChange={(e) => handleChange("dateOfBirth", e.target.value)}
                             className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.dateOfBirth ? "border-red-500" : "border-slate-300"

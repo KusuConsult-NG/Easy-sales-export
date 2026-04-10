@@ -170,6 +170,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         label="Voter's Card Number (PVC)"
                         value={data.votersCardNumber}
                         onChange={(v) => updateData({ votersCardNumber: v })}
+                        maxLength={19}
                         placeholder="e.g. 90F5B123456789012345"
                         hint="Enter the Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                         accentColor="emerald"
