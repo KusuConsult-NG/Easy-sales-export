@@ -47,17 +47,12 @@ export function KYCVerificationStep({
             return;
         }
 
-        // Require either NIN or Voter's Card, plus BVN matching logic
-        const hasId = kycData.ninVerified || kycData.votersCardVerified;
-        
-        if (!hasId && !kycData.bvnVerified) {
-            showToast('Please verify both your primary ID and BVN before continuing', 'error');
+        // Require NIN verification only
+        if (!kycData.ninVerified) {
+            showToast('Please verify your NIN before continuing', 'error');
             return;
         }
-        if (!hasId) {
-            showToast("Please verify your NIN or Voter's Card before continuing", 'error');
-            return;
-        }
+
         if (!kycData.bvnVerified) {
             showToast('Please verify your BVN before continuing', 'error');
             return;

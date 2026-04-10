@@ -424,44 +424,19 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 <p className="mt-1 text-xs text-slate-400">Dial *346# to retrieve your NIN. Your name above must match your NIN record exactly.</p>
             </div>
 
-            {/* ── Voter's Card — live verification (optional alternative) ── */}
+            {/* ── Voter's Card — collect number only, no verification required ── */}
             <div className="pt-4 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-slate-900">
-                        Voter's Card (Optional)
-                    </label>
-                    <VerifyBadge state={votersCardState} />
-                </div>
-                <div className="flex gap-2">
-                    <input
-                        type="text"
-                        value={formData.votersCard || ''}
-                        onChange={(e) => handleChange('votersCard', e.target.value)}
-                        placeholder="Enter Voter's Card Number (VIN)"
-                        disabled={votersCardState === 'verified'}
-                        className="flex-1 px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
-                    />
-                    <button
-                        type="button"
-                        onClick={handleVerifyVotersCard}
-                        disabled={votersCardState === 'loading' || votersCardState === 'verified' || !formData.votersCard}
-                        className="px-4 py-2.5 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 whitespace-nowrap"
-                    >
-                        {votersCardState === 'loading' ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
-                        ) : votersCardState === 'verified' ? (
-                            <><ShieldCheck className="w-4 h-4" /> Verified</>
-                        ) : (
-                            'Verify Card'
-                        )}
-                    </button>
-                </div>
-                {votersCardError && (
-                    <p className="mt-1.5 text-xs text-red-600 flex items-start gap-1">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                        {votersCardError}
-                    </p>
-                )}
+                <label className="block text-sm font-medium text-slate-900 mb-2">
+                    Voter&apos;s Card Number (PVC / VIN)
+                </label>
+                <input
+                    type="text"
+                    value={formData.votersCard || ''}
+                    onChange={(e) => handleChange('votersCard', e.target.value.toUpperCase())}
+                    placeholder="Enter Voter's Card Number (VIN)"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-xs text-slate-400">The Voter Identification Number (VIN) as printed on your Permanent Voter Card.</p>
             </div>
 
             {/* ── BVN — live verification (optional, shown when includeBVN=true) ── */}
