@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
 import { isObviouslyFakeId } from '@/lib/kyc-validators';
+import { IdInput } from '@/components/ui/IdInput';
 
 export interface KYCData {
     firstName: string;
@@ -369,45 +370,39 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
             {/* ── NIN — live verification ─────────────────────────────────── */}
             <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-sm font-medium text-slate-900">
                         NIN (National Identity Number) <span className="text-red-500">*</span>
                     </label>
                     <VerifyBadge state={ninState} />
                 </div>
-                <div className="flex gap-2">
-                    <input
-                        type="text"
-                        inputMode="numeric"
-                        value={formData.nin || ''}
-                        onChange={(e) => handleChange('nin', e.target.value.replace(/\D/g, '').slice(0, 11))}
-                        placeholder="11-digit NIN"
-                        maxLength={11}
-                        disabled={ninState === 'verified'}
-                        className="flex-1 px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
-                    />
-                    <button
-                        type="button"
-                        onClick={handleVerifyNIN}
-                        disabled={ninState === 'loading' || ninState === 'verified' || !formData.nin || formData.nin.length !== 11 || !ninConfirmed}
-                        className="px-4 py-2.5 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 whitespace-nowrap"
-                    >
-                        {ninState === 'loading' ? (
-                            <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
-                        ) : ninState === 'verified' ? (
-                            <><ShieldCheck className="w-4 h-4" /> Verified</>
-                        ) : (
-                            'Verify NIN'
-                        )}
-                    </button>
-                </div>
-                {ninError && (
-                    <p className="mt-1.5 text-xs text-red-600 flex items-start gap-1">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                        {ninError}
-                    </p>
-                )}
-                {/* Confirmation checkbox — must tick before Verify is active */}
+                <IdInput
+                    label=""
+                    value={formData.nin || ''}
+                    onChange={(v) => handleChange('nin', v)}
+                    digitsOnly
+                    showCount
+                    maxLength={11}
+                    placeholder="11-digit NIN"
+                    disabled={ninState === 'verified'}
+                    error={ninError}
+                    hint="Dial *346# to retrieve your NIN. Your name must match your NIN record exactly."
+                    accentColor="orange"
+                    suffix={
+                        <button
+                            type="button"
+                            onClick={handleVerifyNIN}
+                            disabled={ninState === 'loading' || ninState === 'verified' || !formData.nin || formData.nin.length !== 11 || !ninConfirmed}
+                            className="px-4 py-2.5 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                            {ninState === 'loading' ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
+                            ) : ninState === 'verified' ? (
+                                <><ShieldCheck className="w-4 h-4" /> Verified</>
+                            ) : 'Verify NIN'}
+                        </button>
+                    }
+                />
                 {ninState !== 'verified' && formData.nin && formData.nin.length === 11 && !isObviouslyFakeId(formData.nin) && (
                     <label className="mt-2.5 flex items-start gap-2 cursor-pointer select-none">
                         <input
@@ -421,66 +416,56 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                         </span>
                     </label>
                 )}
-                <p className="mt-1 text-xs text-slate-400">Dial *346# to retrieve your NIN. Your name above must match your NIN record exactly.</p>
             </div>
 
             {/* ── Voter's Card — collect number only, no verification required ── */}
             <div className="pt-4 border-t border-slate-100">
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                    Voter&apos;s Card Number (PVC / VIN)
-                </label>
-                <input
-                    type="text"
+                <IdInput
+                    label="Voter's Card Number (PVC / VIN)"
                     value={formData.votersCard || ''}
-                    onChange={(e) => handleChange('votersCard', e.target.value.toUpperCase())}
-                    placeholder="Enter Voter's Card Number (VIN)"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    onChange={(v) => handleChange('votersCard', v)}
+                    placeholder="e.g. 90F5B123456789012345"
+                    hint="The Voter Identification Number (VIN) as printed on your Permanent Voter Card."
+                    accentColor="orange"
                 />
-                <p className="mt-1 text-xs text-slate-400">The Voter Identification Number (VIN) as printed on your Permanent Voter Card.</p>
             </div>
 
             {/* ── BVN — live verification (optional, shown when includeBVN=true) ── */}
             {includeBVN && (
                 <div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1.5">
                         <label className="block text-sm font-medium text-slate-900">
                             BVN (Bank Verification Number) <span className="text-red-500">*</span>
                         </label>
                         <VerifyBadge state={bvnState} />
                     </div>
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            value={formData.bvn || ''}
-                            onChange={(e) => handleChange('bvn', e.target.value.replace(/\D/g, '').slice(0, 11))}
-                            placeholder="11-digit BVN"
-                            maxLength={11}
-                            disabled={bvnState === 'verified'}
-                            className="flex-1 px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400"
-                        />
-                        <button
-                            type="button"
-                            onClick={handleVerifyBVN}
-                            disabled={bvnState === 'loading' || bvnState === 'verified' || !formData.bvn || formData.bvn.length !== 11 || !bvnConfirmed}
-                            className="px-4 py-2.5 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 whitespace-nowrap"
-                        >
-                            {bvnState === 'loading' ? (
-                                <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
-                            ) : bvnState === 'verified' ? (
-                                <><ShieldCheck className="w-4 h-4" /> Verified</>
-                            ) : (
-                                'Verify BVN'
-                            )}
-                        </button>
-                    </div>
-                    {bvnError && (
-                        <p className="mt-1.5 text-xs text-red-600 flex items-start gap-1">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                            {bvnError}
-                        </p>
-                    )}
-                    {/* Confirmation checkbox for BVN */}
+                    <IdInput
+                        label=""
+                        value={formData.bvn || ''}
+                        onChange={(v) => handleChange('bvn', v)}
+                        digitsOnly
+                        showCount
+                        maxLength={11}
+                        placeholder="11-digit BVN"
+                        disabled={bvnState === 'verified'}
+                        error={bvnError}
+                        hint="Dial *565*0# to retrieve your BVN. Your name must match your BVN record exactly."
+                        accentColor="orange"
+                        suffix={
+                            <button
+                                type="button"
+                                onClick={handleVerifyBVN}
+                                disabled={bvnState === 'loading' || bvnState === 'verified' || !formData.bvn || formData.bvn.length !== 11 || !bvnConfirmed}
+                                className="px-4 py-2.5 text-sm bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                                {bvnState === 'loading' ? (
+                                    <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
+                                ) : bvnState === 'verified' ? (
+                                    <><ShieldCheck className="w-4 h-4" /> Verified</>
+                                ) : 'Verify BVN'}
+                            </button>
+                        }
+                    />
                     {bvnState !== 'verified' && formData.bvn && formData.bvn.length === 11 && !isObviouslyFakeId(formData.bvn) && (
                         <label className="mt-2.5 flex items-start gap-2 cursor-pointer select-none">
                             <input
@@ -494,7 +479,6 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                             </span>
                         </label>
                     )}
-                    <p className="mt-1 text-xs text-slate-400">Dial *565*0# to retrieve your BVN. Your name above must match your BVN record exactly.</p>
                 </div>
             )}
 
