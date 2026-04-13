@@ -8,6 +8,7 @@ import Modal from "@/components/ui/Modal";
 import RejectionModal from "@/components/admin/RejectionModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { editApplicationAction } from "@/app/actions/admin";
+import { getCooperativeStatsAction } from "@/app/actions/cooperative-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 type MembershipApplication = {
@@ -43,6 +44,7 @@ export default function CooperativeMembersPage() {
     const { showToast } = useToast();
     const [applications, setApplications] = useState<MembershipApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [stats, setStats] = useState<{ totalMembers: number; pendingMembers: number; activeMembers: number; } | null>(null);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [selectedApplication, setSelectedApplication] = useState<MembershipApplication | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -128,6 +130,15 @@ export default function CooperativeMembersPage() {
         fetchApplications(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statusFilter, stateFilter, lgaFilter, fromDate, toDate]);
+
+    // Load Global Stats
+    useEffect(() => {
+        getCooperativeStatsAction().then(res => {
+            if (res.success && res.data) {
+                setStats(res.data);
+            }
+        });
+    }, []);
 
     // Client-side search (still useful for the current batch)
     // For true scalability, search should also be server-side, but that requires full text search service (e.g. Algolia)
@@ -452,7 +463,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-yellow-600 mb-1">Pending</p>
                             <p className="text-3xl font-bold text-yellow-700">
-                                {applications.filter(a => (a.membershipStatus || (a as any).status) === "pending").length}
+                                {stats ? stats.pendingMembers : applications.filter(a => (a.membershipStatus || (a as any).status) === "pending").length}
                             </p>
                         </div>
                         <Clock className="w-12 h-12 text-yellow-500 opacity-50" />
@@ -464,7 +475,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-green-600 mb-1">Approved</p>
                             <p className="text-3xl font-bold text-green-700">
-                                {applications.filter(a => (a.membershipStatus || (a as any).status) === "approved").length}
+                                {stats ? stats.activeMembers : applications.filter(a => (a.membershipStatus || (a as any).status) === "approved").length}
                             </p>
                         </div>
                         <CheckCircle className="w-12 h-12 text-green-500 opacity-50" />
@@ -476,7 +487,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-slate-600 mb-1">Total</p>
                             <p className="text-3xl font-bold text-slate-900">
-                                {applications.length}
+                                {stats ? stats.totalMembers : applications.length}
                             </p>
                         </div>
                         <Users className="w-12 h-12 text-slate-400 opacity-50" />

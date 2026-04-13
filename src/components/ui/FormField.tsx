@@ -14,7 +14,7 @@
 
 'use client';
 
-import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode } from 'react';
+import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, ReactNode, useId } from 'react';
 
 // ─── Shared class tokens ──────────────────────────────────────────────────────
 
@@ -34,16 +34,22 @@ export const INPUT_EMERALD =
     'transition-colors duration-150 ' +
     'disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
 
-// ─── FormField wrapper ────────────────────────────────────────────────────────
-// No max-width here — sizing is controlled by the parent grid column.
-
-interface FormFieldProps {
-    label: string;
+// ─── Base Field Contract ──────────────────────────────────────────────────────
+export interface BaseFieldProps {
+    label?: string;
     required?: boolean;
     optional?: boolean;
     hint?: string;
     error?: string;
-    children: ReactNode;
+    labelRight?: ReactNode; // Useful for badges, counters, etc.
+}
+
+// ─── FormField wrapper ────────────────────────────────────────────────────────
+// No max-width here — sizing is controlled by the parent grid column.
+
+export interface FormFieldProps extends BaseFieldProps {
+    id?: string;
+    children: (inputId: string, errorId: string) => ReactNode;
 }
 
 export function FormField({
@@ -52,20 +58,35 @@ export function FormField({
     optional,
     hint,
     error,
+    labelRight,
+    id: providedId,
     children,
 }: FormFieldProps) {
+    const generatedId = useId();
+    const id = providedId || generatedId;
+    const errorId = `${id}-error`;
+
     return (
         <div className="w-full">
-            <label className="block text-sm font-medium text-slate-900 mb-1.5">
-                {label}
-                {required && <span className="text-red-500 ml-0.5">*</span>}
-                {optional && <span className="text-slate-400 font-normal text-xs ml-1">(Optional)</span>}
-            </label>
-            {children}
+            {label && (
+                <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor={id} className="block text-sm font-medium text-slate-900">
+                        {label}
+                        {required && <span className="text-red-500 ml-0.5">*</span>}
+                        {optional && <span className="text-slate-400 font-normal text-xs ml-1">(Optional)</span>}
+                    </label>
+                    {labelRight && <div>{labelRight}</div>}
+                </div>
+            )}
+            
+            <div className="relative">
+                {children(id, errorId)}
+            </div>
+
             {error ? (
-                <p className="mt-1 text-xs text-red-600">{error}</p>
+                <p id={errorId} className="mt-1 text-xs text-red-600">{error}</p>
             ) : hint ? (
-                <p className="mt-1 text-xs text-slate-400">{hint}</p>
+                <p id={errorId} className="mt-1 text-xs text-slate-400">{hint}</p>
             ) : null}
         </div>
     );
@@ -73,12 +94,7 @@ export function FormField({
 
 // ─── FormInput ────────────────────────────────────────────────────────────────
 
-interface FormInputProps extends InputHTMLAttributes<HTMLInputElement> {
-    label: string;
-    required?: boolean;
-    optional?: boolean;
-    hint?: string;
-    error?: string;
+interface FormInputProps extends InputHTMLAttributes<HTMLInputElement>, BaseFieldProps {
     accentColor?: 'orange' | 'emerald';
 }
 
@@ -88,31 +104,33 @@ export function FormInput({
     optional,
     hint,
     error,
+    labelRight,
     accentColor = 'orange',
     className,
+    id: providedId,
     ...rest
 }: FormInputProps) {
     const base = accentColor === 'emerald' ? INPUT_EMERALD : INPUT_BASE;
     const err = error ? INPUT_ERROR : '';
 
     return (
-        <FormField label={label} required={required} optional={optional} hint={hint} error={error}>
-            <input
-                {...rest}
-                className={`${base} ${err} ${className ?? ''}`}
-            />
+        <FormField label={label} required={required} optional={optional} hint={hint} error={error} labelRight={labelRight} id={providedId}>
+            {(id, errorId) => (
+                <input
+                    {...rest}
+                    id={id}
+                    required={required}
+                    aria-describedby={error || hint ? errorId : undefined}
+                    className={`${base} ${err} ${className ?? ''}`}
+                />
+            )}
         </FormField>
     );
 }
 
 // ─── FormSelect ───────────────────────────────────────────────────────────────
 
-interface FormSelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
-    label: string;
-    required?: boolean;
-    optional?: boolean;
-    hint?: string;
-    error?: string;
+interface FormSelectProps extends SelectHTMLAttributes<HTMLSelectElement>, BaseFieldProps {
     accentColor?: 'orange' | 'emerald';
     children: ReactNode;
 }
@@ -123,34 +141,36 @@ export function FormSelect({
     optional,
     hint,
     error,
+    labelRight,
     accentColor = 'orange',
     className,
     children,
+    id: providedId,
     ...rest
 }: FormSelectProps) {
     const base = accentColor === 'emerald' ? INPUT_EMERALD : INPUT_BASE;
     const err = error ? INPUT_ERROR : '';
 
     return (
-        <FormField label={label} required={required} optional={optional} hint={hint} error={error}>
-            <select
-                {...rest}
-                className={`${base} ${err} ${className ?? ''}`}
-            >
-                {children}
-            </select>
+        <FormField label={label} required={required} optional={optional} hint={hint} error={error} labelRight={labelRight} id={providedId}>
+            {(id, errorId) => (
+                <select
+                    {...rest}
+                    id={id}
+                    required={required}
+                    aria-describedby={error || hint ? errorId : undefined}
+                    className={`${base} ${err} ${className ?? ''}`}
+                >
+                    {children}
+                </select>
+            )}
         </FormField>
     );
 }
 
 // ─── FormTextarea ─────────────────────────────────────────────────────────────
 
-interface FormTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-    label: string;
-    required?: boolean;
-    optional?: boolean;
-    hint?: string;
-    error?: string;
+interface FormTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement>, BaseFieldProps {
 }
 
 export function FormTextarea({
@@ -159,17 +179,24 @@ export function FormTextarea({
     optional,
     hint,
     error,
+    labelRight,
     className,
+    id: providedId,
     ...rest
 }: FormTextareaProps) {
     const err = error ? INPUT_ERROR : '';
 
     return (
-        <FormField label={label} required={required} optional={optional} hint={hint} error={error}>
-            <textarea
-                {...rest}
-                className={`${INPUT_BASE} resize-none ${err} ${className ?? ''}`}
-            />
+        <FormField label={label} required={required} optional={optional} hint={hint} error={error} labelRight={labelRight} id={providedId}>
+            {(id, errorId) => (
+                <textarea
+                    {...rest}
+                    id={id}
+                    required={required}
+                    aria-describedby={error || hint ? errorId : undefined}
+                    className={`${INPUT_BASE} resize-none ${err} ${className ?? ''}`}
+                />
+            )}
         </FormField>
     );
 }

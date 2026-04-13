@@ -12,6 +12,8 @@ import { User, MapPin, Phone, Calendar, CheckCircle2, AlertCircle, Loader2, Shie
 import { verifyBVNAction, verifyNINAction, verifyVotersCardAction } from '@/app/actions/kyc';
 import { isObviouslyFakeId } from '@/lib/kyc-validators';
 import { IdInput } from '@/components/ui/IdInput';
+import PhoneInput from '@/components/ui/PhoneInput';
+import { FormField, FormInput, FormSelect, FormTextarea } from '@/components/ui/FormField';
 
 export interface KYCData {
     firstName: string;
@@ -131,19 +133,24 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         setBvnState('loading');
         setBvnError('');
 
-        const result = await verifyBVNAction({ bvn, firstName, lastName });
+        try {
+            const result = await verifyBVNAction({ bvn, firstName, lastName });
 
-        if (result.success && result.isMatch) {
-            setBvnState('verified');
-            const updated = { ...formData, bvnVerified: true };
-            setFormData(updated);
-            onDataChange(updated);
-        } else if (result.success && !result.isMatch) {
-            setBvnState('mismatch');
-            setBvnError(result.error || 'Name mismatch. Please check the name on your BVN record.');
-        } else {
+            if (result.success && result.isMatch) {
+                setBvnState('verified');
+                const updated = { ...formData, bvnVerified: true };
+                setFormData(updated);
+                onDataChange(updated);
+            } else if (result.success && !result.isMatch) {
+                setBvnState('mismatch');
+                setBvnError(result.error || 'Name mismatch. Please check the name on your BVN record.');
+            } else {
+                setBvnState('error');
+                setBvnError(result.error || 'BVN verification failed. Please try again.');
+            }
+        } catch (error) {
             setBvnState('error');
-            setBvnError(result.error || 'BVN verification failed. Please try again.');
+            setBvnError('Network error or server timeout. Please try again later.');
         }
     };
 
@@ -169,19 +176,24 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         setNinState('loading');
         setNinError('');
 
-        const result = await verifyNINAction({ nin, firstName, lastName });
+        try {
+            const result = await verifyNINAction({ nin, firstName, lastName });
 
-        if (result.success && result.isMatch) {
-            setNinState('verified');
-            const updated = { ...formData, ninVerified: true };
-            setFormData(updated);
-            onDataChange(updated);
-        } else if (result.success && !result.isMatch) {
-            setNinState('mismatch');
-            setNinError(result.error || 'Name mismatch. Please check the name on your NIN record.');
-        } else {
+            if (result.success && result.isMatch) {
+                setNinState('verified');
+                const updated = { ...formData, ninVerified: true };
+                setFormData(updated);
+                onDataChange(updated);
+            } else if (result.success && !result.isMatch) {
+                setNinState('mismatch');
+                setNinError(result.error || 'Name mismatch. Please check the name on your NIN record.');
+            } else {
+                setNinState('error');
+                setNinError(result.error || 'NIN verification failed. Please try again.');
+            }
+        } catch (error) {
             setNinState('error');
-            setNinError(result.error || 'NIN verification failed. Please try again.');
+            setNinError('Network error or server timeout. Please try again later.');
         }
     };
 
@@ -199,19 +211,24 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         setVotersCardState('loading');
         setVotersCardError('');
 
-        const result = await verifyVotersCardAction({ votersCardNumber: votersCard, firstName, lastName });
+        try {
+            const result = await verifyVotersCardAction({ votersCardNumber: votersCard, firstName, lastName });
 
-        if (result.success && result.isMatch) {
-            setVotersCardState('verified');
-            const updated = { ...formData, votersCardVerified: true };
-            setFormData(updated);
-            onDataChange(updated);
-        } else if (result.success && !result.isMatch) {
-            setVotersCardState('mismatch');
-            setVotersCardError(result.error || "Name mismatch. Please check the name on your Voter's Card record.");
-        } else {
+            if (result.success && result.isMatch) {
+                setVotersCardState('verified');
+                const updated = { ...formData, votersCardVerified: true };
+                setFormData(updated);
+                onDataChange(updated);
+            } else if (result.success && !result.isMatch) {
+                setVotersCardState('mismatch');
+                setVotersCardError(result.error || "Name mismatch. Please check the name on your Voter's Card record.");
+            } else {
+                setVotersCardState('error');
+                setVotersCardError(result.error || "Voter's Card verification failed. Please try again.");
+            }
+        } catch (error) {
             setVotersCardState('error');
-            setVotersCardError(result.error || "Voter's Card verification failed. Please try again.");
+            setVotersCardError('Network error or server timeout. Please try again later.');
         }
     };
 
@@ -234,150 +251,135 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
             {/* Names */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2">
-                        First Name <span className="text-red-500">*</span>
-                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As it appears on your NIN/BVN</span>
-                    </label>
-                    <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                        <input
-                            type="text"
-                            value={formData.firstName || ''}
-                            onChange={(e) => handleChange('firstName', e.target.value)}
-                            placeholder="e.g. John"
-                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        />
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2">
-                        Last Name <span className="text-red-500">*</span>
-                        <span className="block text-xs font-normal text-slate-500 mt-0.5">As it appears on your NIN/BVN</span>
-                    </label>
-                    <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                        <input
-                            type="text"
-                            value={formData.lastName || ''}
-                            onChange={(e) => handleChange('lastName', e.target.value)}
-                            placeholder="e.g. Doe"
-                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        />
-                    </div>
-                </div>
+                <FormField label="First Name" required hint="As it appears on your NIN/BVN">
+                    {(id, errorId) => (
+                        <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                            <input
+                                id={id}
+                                aria-describedby={errorId}
+                                type="text"
+                                value={formData.firstName || ''}
+                                onChange={(e) => handleChange('firstName', e.target.value)}
+                                placeholder="e.g. John"
+                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            />
+                        </div>
+                    )}
+                </FormField>
+                
+                <FormField label="Last Name" required hint="As it appears on your NIN/BVN">
+                    {(id, errorId) => (
+                        <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                            <input
+                                id={id}
+                                aria-describedby={errorId}
+                                type="text"
+                                value={formData.lastName || ''}
+                                onChange={(e) => handleChange('lastName', e.target.value)}
+                                placeholder="e.g. Doe"
+                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            />
+                        </div>
+                    )}
+                </FormField>
             </div>
             
-            <div>
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                    Other Names <span className="text-slate-500 font-normal">(Optional)</span>
-                </label>
-                <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input
-                        type="text"
-                        value={formData.otherNames || ''}
-                        onChange={(e) => handleChange('otherNames', e.target.value)}
-                        placeholder="e.g. Chukwudi"
-                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    />
-                </div>
-                <p className="mt-1 text-xs text-amber-700 font-medium">
-                    ⚠️ Provide names exactly as they appear on your NIN/BVN — mismatch will fail verification.
-                </p>
-            </div>
+            <FormField label="Other Names" optional>
+                {(id, errorId) => (
+                    <div>
+                        <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                            <input
+                                id={id}
+                                aria-describedby={errorId}
+                                type="text"
+                                value={formData.otherNames || ''}
+                                onChange={(e) => handleChange('otherNames', e.target.value)}
+                                placeholder="e.g. Chukwudi"
+                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            />
+                        </div>
+                        <p className="mt-1 text-xs text-amber-700 font-medium">
+                            ⚠️ Provide names exactly as they appear on your NIN/BVN — mismatch will fail verification.
+                        </p>
+                    </div>
+                )}
+            </FormField>
 
             {/* Date of Birth */}
-            <div>
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                    Date of Birth <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input
-                        type="date"
-                        value={formData.dateOfBirth || ''}
-                        onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    />
-                </div>
-            </div>
+            <FormField label="Date of Birth" required>
+                {(id, errorId) => (
+                    <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input
+                            id={id}
+                            aria-describedby={errorId}
+                            type="date"
+                            value={formData.dateOfBirth || ''}
+                            onChange={(e) => handleChange('dateOfBirth', e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        />
+                    </div>
+                )}
+            </FormField>
 
             {/* Phone Number */}
-            <div>
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                    Phone Number <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input
-                        type="tel"
-                        value={formData.phoneNumber || ''}
-                        onChange={(e) => handleChange('phoneNumber', e.target.value)}
-                        placeholder="+234 800 000 0000"
-                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    />
-                </div>
-            </div>
+            <PhoneInput 
+                label="Phone Number"
+                required
+                value={formData.phoneNumber || ''}
+                onChange={(e) => handleChange('phoneNumber', e.target.value)}
+            />
 
             {/* Address */}
-            <div>
-                <label className="block text-sm font-medium text-slate-900 mb-2">
-                    Street Address <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                    <MapPin className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-                    <textarea
-                        value={formData.address || ''}
-                        onChange={(e) => handleChange('address', e.target.value)}
-                        placeholder="Enter your street address"
-                        rows={3}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                    />
-                </div>
-            </div>
+            <FormField label="Street Address" required>
+                {(id, errorId) => (
+                    <div className="relative">
+                        <MapPin className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                        <textarea
+                            id={id}
+                            aria-describedby={errorId}
+                            value={formData.address || ''}
+                            onChange={(e) => handleChange('address', e.target.value)}
+                            placeholder="Enter your street address"
+                            rows={3}
+                            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                        />
+                    </div>
+                )}
+            </FormField>
 
             {/* City and State */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2">
-                        City <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                        type="text"
-                        value={formData.city || ''}
-                        onChange={(e) => handleChange('city', e.target.value)}
-                        placeholder="e.g., Lagos"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2">
-                        State <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                        value={formData.state || ''}
-                        onChange={(e) => handleChange('state', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    >
-                        <option value="">Select state</option>
-                        {NIGERIAN_STATES.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                        ))}
-                    </select>
-                </div>
+                <FormInput
+                    label="City"
+                    required
+                    value={formData.city || ''}
+                    onChange={(e) => handleChange('city', e.target.value)}
+                    placeholder="e.g., Lagos"
+                />
+                
+                <FormSelect
+                    label="State"
+                    required
+                    value={formData.state || ''}
+                    onChange={(e) => handleChange('state', e.target.value)}
+                >
+                    <option value="">Select state</option>
+                    {NIGERIAN_STATES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                    ))}
+                </FormSelect>
             </div>
 
             {/* ── NIN — live verification ─────────────────────────────────── */}
             <div>
-                <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm font-medium text-slate-900">
-                        NIN (National Identity Number) <span className="text-red-500">*</span>
-                    </label>
-                    <VerifyBadge state={ninState} />
-                </div>
                 <IdInput
-                    label=""
+                    label="NIN (National Identity Number)"
+                    required
+                    labelRight={<VerifyBadge state={ninState} />}
                     value={formData.nin || ''}
                     onChange={(v) => handleChange('nin', v)}
                     digitsOnly
@@ -425,6 +427,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     value={formData.votersCard || ''}
                     onChange={(v) => handleChange('votersCard', v)}
                     maxLength={19}
+                    showCount
                     placeholder="e.g. 90F5B123456789012345"
                     hint="The Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                     accentColor="orange"
@@ -434,14 +437,10 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
             {/* ── BVN — live verification (optional, shown when includeBVN=true) ── */}
             {includeBVN && (
                 <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                        <label className="block text-sm font-medium text-slate-900">
-                            BVN (Bank Verification Number) <span className="text-red-500">*</span>
-                        </label>
-                        <VerifyBadge state={bvnState} />
-                    </div>
                     <IdInput
-                        label=""
+                        label="BVN (Bank Verification Number)"
+                        required
+                        labelRight={<VerifyBadge state={bvnState} />}
                         value={formData.bvn || ''}
                         onChange={(v) => handleChange('bvn', v)}
                         digitsOnly
@@ -485,29 +484,24 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
 
             {/* Other ID type — for additional document collection (no live verify) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2">Additional ID Type</label>
-                    <select
-                        value={formData.idType || ''}
-                        onChange={(e) => handleChange('idType', e.target.value)}
-                        className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    >
-                        <option value="">Select ID type (optional)</option>
-                        {ID_TYPES.map((type) => (
-                            <option key={type.value} value={type.value}>{type.label}</option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-900 mb-2">ID Number</label>
-                    <input
-                        type="text"
-                        value={formData.idNumber || ''}
-                        onChange={(e) => handleChange('idNumber', e.target.value)}
-                        placeholder="Enter ID number"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    />
-                </div>
+                <FormSelect
+                    label="Additional ID Type"
+                    value={formData.idType || ''}
+                    onChange={(e) => handleChange('idType', e.target.value)}
+                >
+                    <option value="">Select ID type (optional)</option>
+                    {ID_TYPES.map((type) => (
+                        <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                </FormSelect>
+                
+                <FormInput
+                    label="ID Number"
+                    type="text"
+                    value={formData.idNumber || ''}
+                    onChange={(e) => handleChange('idNumber', e.target.value)}
+                    placeholder="Enter ID number"
+                />
             </div>
 
             {/* Info banner */}

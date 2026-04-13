@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Upload, FileText, Image, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { uploadDocumentAction } from "@/app/actions/upload";
 import { useToast } from "@/contexts/ToastContext";
+import { IdInput } from "@/components/ui/IdInput";
 
 interface DocumentUploadStepProps {
     data: {
@@ -97,9 +98,9 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
             newErrors.passportPhoto = "Passport photo is required";
         }
 
-        // BVN format check only — no live verification
-        if (data.bvn && !/^\d{11}$/.test(data.bvn)) {
-            newErrors.bvn = "BVN must be exactly 11 digits";
+        // BVN format check - now required
+        if (!data.bvn || !/^\d{11}$/.test(data.bvn)) {
+            newErrors.bvn = "A valid 11-digit BVN is required";
         }
 
         if (!torAgreed) {
@@ -282,24 +283,21 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                     </div>
                 </div>
 
-                {/* BVN — plain text, no verification button */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Bank Verification Number (BVN) <span className="text-slate-400 text-xs font-normal">(Optional)</span>
-                    </label>
-                    <p className="text-sm text-slate-600 mb-3">
-                        Your 11-digit BVN — used for identity checks during admin review
-                    </p>
-                    <input
-                        type="text"
+                {/* BVN — required via IdInput standardize */}
+                <div className="pt-4 border-t border-slate-100">
+                    <IdInput
+                        label="Bank Verification Number (BVN)"
+                        required
                         value={data.bvn || ""}
-                        onChange={(e) => onChange({ ...data, bvn: e.target.value.replace(/\D/g, '').slice(0, 11) })}
-                        placeholder="12345678901"
+                        onChange={(v) => onChange({ ...data, bvn: v })}
+                        digitsOnly
+                        showCount
                         maxLength={11}
-                        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 focus:ring-2 focus:ring-purple-500 focus:border-transparent ${errors.bvn ? "border-red-500" : "border-slate-300"}`}
+                        placeholder="11-digit BVN"
+                        hint="Your 11-digit BVN — used for identity checks during admin review. 📞 Dial *565*0# to retrieve your BVN."
+                        accentColor="purple"
+                        error={errors.bvn}
                     />
-                    {errors.bvn && <p className="text-sm text-red-600 mt-1">{errors.bvn}</p>}
-                    <p className="text-xs text-slate-500 mt-2">📞 Dial *565*0# to retrieve your BVN</p>
                 </div>
 
                 {/* Terms of Reference */}

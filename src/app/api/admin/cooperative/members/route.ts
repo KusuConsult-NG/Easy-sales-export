@@ -78,30 +78,61 @@ export async function GET(request: NextRequest) {
 
         const snapshot = await query.get();
 
+        // 1. Batch fetch user records to fallback missing data (e.g. partial registrations)
+        const userIds = [...new Set(snapshot.docs.map(doc => doc.data().userId || doc.id))];
+        const userFallbackMap = new Map<string, any>();
+        
+        for (let i = 0; i < userIds.length; i += 100) {
+            const batch = userIds.slice(i, i + 100);
+            const refs = batch.map(id => db.collection(COLLECTIONS.USERS).doc(id));
+            try {
+                const userDocs = await db.getAll(...refs);
+                userDocs.forEach(doc => {
+                    if (doc.exists) {
+                        userFallbackMap.set(doc.id, doc.data());
+                    }
+                });
+            } catch (err) {
+                logger.error("Failed to fetch batch user fallbacks", err);
+            }
+        }
+
         const members = snapshot.docs.map(doc => {
             const data = doc.data();
+            const userId = data.userId || doc.id;
+            const fallbackUser = userFallbackMap.get(userId) || {};
+
             // Defensive name derivation — supports legacy fullName-only AND new firstName/lastName schema
-            const derivedFirstName = data.firstName || (data.fullName ? data.fullName.split(" ")[0] : "");
-            const derivedLastName = data.lastName || (data.fullName ? data.fullName.split(" ").slice(-1)[0] : "");
+            let derivedFirstName = data.firstName || (data.fullName ? data.fullName.split(" ")[0] : "");
+            let derivedLastName = data.lastName || (data.fullName ? data.fullName.split(" ").slice(-1)[0] : "");
+
+            // Fallback to core USERS collection if names are missing (common for partial onboarding)
+            if (!derivedFirstName) {
+                derivedFirstName = fallbackUser.firstName || (fallbackUser.fullName ? fallbackUser.fullName.split(" ")[0] : "");
+            }
+            if (!derivedLastName) {
+                derivedLastName = fallbackUser.lastName || (fallbackUser.fullName ? fallbackUser.fullName.split(" ").slice(-1)[0] : "");
+            }
+
             return {
                 id: doc.id,
-                userId: data.userId || doc.id,
+                userId: userId,
                 firstName: derivedFirstName,
                 lastName: derivedLastName,
-                // otherName: supports both new 'otherName' field and legacy 'middleName'
-                otherName: data.otherName || data.middleName || "",
-                email: data.email || "",
-                phone: data.phone || "",
+                // otherName: supports both new 'otherName' field and legacy 'middleName', fallback to user profile
+                otherName: data.otherName || data.middleName || fallbackUser.otherName || "",
+                email: data.email || fallbackUser.email || "",
+                phone: data.phone || fallbackUser.phone || "",
                 membershipTier: data.membershipTier || "basic",
                 registrationFee: data.registrationFee || 0,
                 membershipStatus: data.membershipStatus || "pending",
                 paymentStatus: data.paymentStatus || "pending",
                 onboardingCompleted: data.onboardingCompleted || false,
                 dateOfBirth: data.dateOfBirth || "",
-                gender: data.gender || "",
-                stateOfOrigin: data.stateOfOrigin || "",
-                lga: data.lga || "",
-                residentialAddress: data.residentialAddress || "",
+                gender: data.gender || fallbackUser.gender || "",
+                stateOfOrigin: data.stateOfOrigin || fallbackUser.address?.state || "",
+                lga: data.lga || fallbackUser.address?.lga || "",
+                residentialAddress: data.residentialAddress || fallbackUser.address?.street || "",
                 occupation: data.occupation || "",
                 nextOfKin: {
                     name: data.nextOfKin?.name || data.nextOfKinName || "",

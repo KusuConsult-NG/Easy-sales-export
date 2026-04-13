@@ -112,10 +112,6 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             <div className="space-y-6">
                 {/* NIN — REQUIRED and API-Verified */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        National Identification Number (NIN) 🔒{" "}
-                        <span className="text-red-500">*</span>
-                    </label>
                     <IdInput
                         label="National Identification Number (NIN) 🔒"
                         value={data.nin}
@@ -163,14 +159,12 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
                 {/* Voter's Card Number (PVC) */}
                 <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Voter&apos;s Card Number (PVC)
-                    </label>
                     <IdInput
                         label="Voter's Card Number (PVC)"
                         value={data.votersCardNumber}
                         onChange={(v) => updateData({ votersCardNumber: v })}
                         maxLength={19}
+                        showCount
                         placeholder="e.g. 90F5B123456789012345"
                         hint="Enter the Voter Identification Number (VIN) as printed on your Permanent Voter Card."
                         accentColor="emerald"

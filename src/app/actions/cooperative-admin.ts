@@ -64,6 +64,12 @@ export async function getCooperativeStatsAction(): Promise<{
         pendingLoans: number;
         totalSavings: number;
         monthlyGrowth: number;
+        // Transaction stats
+        totalTransactions: number;
+        totalTransactionAmount: number;
+        completedTransactions: number;
+        pendingTransactions: number;
+        failedTransactions: number;
     };
     error?: string;
 }> {
@@ -162,6 +168,13 @@ export async function getCooperativeStatsAction(): Promise<{
                 ? ((monthlyContributions - previousMonthContributions) / previousMonthContributions) * 100
                 : 0;
 
+        // NEW: Global Transaction Stats
+        const totalTransactions = transactions.length;
+        const totalTransactionAmount = transactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
+        const completedTransactions = transactions.filter((t: any) => t.status === "completed").length;
+        const pendingTransactions = transactions.filter((t: any) => t.status === "pending").length;
+        const failedTransactions = transactions.filter((t: any) => t.status === "failed").length;
+
         return {
             success: true,
             data: {
@@ -176,6 +189,11 @@ export async function getCooperativeStatsAction(): Promise<{
                 pendingLoans,
                 totalSavings,
                 monthlyGrowth,
+                totalTransactions,
+                totalTransactionAmount,
+                completedTransactions,
+                pendingTransactions,
+                failedTransactions,
             },
         };
     } catch (error) {

@@ -11,28 +11,29 @@
 'use client';
 
 import { InputHTMLAttributes, CSSProperties } from 'react';
+import { FormField, BaseFieldProps } from './FormField';
 
-interface IdInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
-    label: string;
+interface IdInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'>, BaseFieldProps {
     value: string;
     onChange: (value: string) => void;
-    hint?: string;
-    error?: string;
-    required?: boolean;
     /** Strip non-digit characters on input (for NIN / BVN) */
     digitsOnly?: boolean;
     /** Show character count (e.g. "7 / 11") */
     showCount?: boolean;
     /** Controlled suffix element — e.g. a Verify button or status badge */
     suffix?: React.ReactNode;
-    accentColor?: 'orange' | 'emerald' | 'blue';
+    accentColor?: 'orange' | 'emerald' | 'blue' | 'purple';
 }
 
 const RING: Record<string, string> = {
     orange:  'focus:ring-orange-500 focus:border-orange-500',
     emerald: 'focus:ring-emerald-600 focus:border-emerald-600',
     blue:    'focus:ring-blue-500 focus:border-blue-500',
+    purple:  'focus:ring-purple-600 focus:border-purple-600',
 };
+
+// ❌ Do NOT wrap this component in a <label>
+// It already renders its own label and accessibility bindings via <FormField>
 
 export function IdInput({
     label,
@@ -41,6 +42,8 @@ export function IdInput({
     hint,
     error,
     required,
+    optional,
+    labelRight,
     digitsOnly,
     showCount,
     suffix,
@@ -65,53 +68,57 @@ export function IdInput({
         ? { width: `${maxLength + 6}ch`, maxWidth: '100%' }
         : {};
 
-    return (
-        <div className={maxLength ? 'inline-block w-auto max-w-full' : 'w-full'}>
-            {/* Label row */}
-            <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-medium text-slate-900">
-                    {label}
-                    {required && <span className="text-red-500 ml-0.5">*</span>}
-                </label>
-                {showCount && maxLength && (
-                    <span className={`text-xs tabular-nums ml-3 ${value.length === maxLength ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
-                        {value.length} / {maxLength}
-                    </span>
-                )}
-            </div>
+    // Built-in showCount logic as an addition to labelRight
+    const countElement = showCount && maxLength ? (
+        <span className={`text-xs tabular-nums ml-3 ${value.length === maxLength ? 'text-emerald-600 font-semibold' : 'text-slate-400'}`}>
+            {value.length} / {maxLength}
+        </span>
+    ) : null;
 
-            {/* Input + optional suffix (e.g. Verify button) */}
-            <div className="flex gap-2 items-center">
-                <input
-                    {...rest}
-                    type="text"
-                    inputMode={digitsOnly ? 'numeric' : 'text'}
-                    value={value}
-                    onChange={(e) => handleChange(e.target.value)}
-                    disabled={disabled}
-                    maxLength={maxLength}
-                    placeholder={placeholder}
-                    style={inputStyle}
-                    className={[
-                        maxLength ? '' : 'flex-1',
-                        'px-3.5 py-2.5 text-sm rounded-lg border',
-                        'bg-white text-slate-900 placeholder-slate-400',
-                        'transition-colors duration-150',
-                        'focus:outline-none focus:ring-2',
-                        ring,
-                        border,
-                        disabled ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : '',
-                    ].filter(Boolean).join(' ')}
-                />
-                {suffix}
-            </div>
-
-            {/* Error or hint */}
-            {error ? (
-                <p className="mt-1 text-xs text-red-600">{error}</p>
-            ) : hint ? (
-                <p className="mt-1 text-xs text-slate-400">{hint}</p>
-            ) : null}
+    const combinedLabelRight = (
+        <div className="flex items-center gap-2">
+            {labelRight}
+            {countElement}
         </div>
+    );
+
+    return (
+        <FormField 
+            label={label} 
+            required={required} 
+            optional={optional} 
+            hint={hint} 
+            error={error} 
+            labelRight={labelRight || countElement ? combinedLabelRight : undefined}
+        >
+            {(id, errorId) => (
+                <div className="flex gap-2 items-center">
+                    <input
+                        {...rest}
+                        id={id}
+                        type="text"
+                        inputMode={digitsOnly ? 'numeric' : 'text'}
+                        value={value}
+                        onChange={(e) => handleChange(e.target.value)}
+                        disabled={disabled}
+                        maxLength={maxLength}
+                        placeholder={placeholder}
+                        style={inputStyle}
+                        aria-describedby={error || hint ? errorId : undefined}
+                        className={[
+                            maxLength ? '' : 'flex-1',
+                            'px-3.5 py-2.5 text-sm rounded-lg border',
+                            'bg-white text-slate-900 placeholder-slate-400',
+                            'transition-colors duration-150',
+                            'focus:outline-none focus:ring-2',
+                            ring,
+                            border,
+                            disabled ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : '',
+                        ].filter(Boolean).join(' ')}
+                    />
+                    {suffix}
+                </div>
+            )}
+        </FormField>
     );
 }

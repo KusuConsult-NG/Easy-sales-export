@@ -1,10 +1,11 @@
 import { InputHTMLAttributes, forwardRef } from "react";
-import { AlertCircle } from "lucide-react";
+import { FormField, BaseFieldProps } from "./FormField";
 
-interface PhoneInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
-    error?: string;
-    label?: string;
+interface PhoneInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>, BaseFieldProps {
 }
+
+// ❌ Do NOT wrap this component in a <label>
+// It already renders its own label and accessibility bindings via <FormField>
 
 /**
  * Secure Phone Number Input Component
@@ -14,7 +15,7 @@ interface PhoneInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 't
  * - Prevents alphabet input
  */
 const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
-    ({ error, label, className = "", value, onChange, ...props }, ref) => {
+    ({ error, label, required, optional, hint, labelRight, className = "", value, onChange, ...props }, ref) => {
 
         const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             // Only allow digits, spaces, +, (, ), and -
@@ -60,42 +61,40 @@ const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
         };
 
         return (
-            <div className="w-full">
-                {label && (
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        {label}
-                    </label>
+            <FormField 
+                label={label} 
+                required={required} 
+                optional={optional} 
+                hint={hint} 
+                error={error} 
+                labelRight={labelRight}
+            >
+                {(id, errorId) => (
+                    <input
+                        ref={ref}
+                        id={id}
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="+234XXXXXXXXXX or 08012345678"
+                        pattern="^(\+?234|0)[0-9]{10}$"
+                        value={value}
+                        onChange={handlePhoneChange}
+                        onKeyDown={handleKeyDown}
+                        aria-describedby={error || hint ? errorId : undefined}
+                        className={`
+                            w-full px-4 py-3 
+                            bg-slate-50 
+                            border ${error ? 'border-red-500 text-red-900 focus:ring-red-500' : 'border-slate-200 text-slate-900 focus:ring-primary'}
+                            rounded-xl 
+                            placeholder:text-slate-400 
+                            focus:outline-none focus:ring-2 
+                            transition-all
+                            ${className}
+                        `}
+                        {...props}
+                    />
                 )}
-                <input
-                    ref={ref}
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="+234XXXXXXXXXX or 08012345678"
-                    pattern="^(\+?234|0)[0-9]{10}$"
-                    value={value}
-                    onChange={handlePhoneChange}
-                    onKeyDown={handleKeyDown}
-                    className={`
-                        w-full px-4 py-3 
-                        bg-slate-50 
-                        border ${error ? 'border-red-500' : 'border-slate-200'}
-                        rounded-xl 
-                        text-slate-900 
-                        placeholder:text-slate-400 
-                        focus:outline-none focus:ring-2 
-                        ${error ? 'focus:ring-red-500' : 'focus:ring-primary'}
-                        transition-all
-                        ${className}
-                    `}
-                    {...props}
-                />
-                {error && (
-                    <div className="mt-2 flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                        <p className="text-sm text-red-600">{error}</p>
-                    </div>
-                )}
-            </div>
+            </FormField>
         );
     }
 );
@@ -111,19 +110,11 @@ export function isValidNigerianPhone(phone: string): boolean {
     // Remove all non-digit characters
     const cleaned = phone.replace(/\D/g, '');
 
-    // Check for valid Nigerian phone formats:
-    // - 11 digits starting with 0 (e.g., 08012345678)
-    // - 13 digits starting with 234 (e.g., 2348012345678)
-    // - 10 digits (without leading 0, e.g., 8012345678)
-
     if (cleaned.length === 11 && cleaned.startsWith('0')) {
-        // Valid: 08012345678
         return /^0[789][01]\d{8}$/.test(cleaned);
     } else if (cleaned.length === 13 && cleaned.startsWith('234')) {
-        // Valid: 2348012345678
         return /^234[789][01]\d{8}$/.test(cleaned);
     } else if (cleaned.length === 10) {
-        // Valid: 8012345678
         return /^[789][01]\d{8}$/.test(cleaned);
     }
 
@@ -136,19 +127,15 @@ export function formatPhoneNumber(phone: string): string {
 
     const cleaned = phone.replace(/\D/g, '');
 
-    // Format as +234 XXX XXX XXXX
     if (cleaned.length === 11 && cleaned.startsWith('0')) {
-        // Convert 08012345678 to +234 801 234 5678
         return `+234 ${cleaned.slice(1, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7)}`;
     } else if (cleaned.length === 13 && cleaned.startsWith('234')) {
-        // 2348012345678 to +234 801 234 5678
         return `+${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6, 9)} ${cleaned.slice(9)}`;
     } else if (cleaned.length === 10) {
-        // 8012345678 to +234 801 234 5678
         return `+234 ${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
     }
 
-    return phone; // Return as-is if format not recognized
+    return phone;
 }
 
 // Helper function to normalize phone to international format for storage

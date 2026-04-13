@@ -18,7 +18,7 @@ import {
     DollarSign,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { getAllTransactionsAction } from "@/app/actions/cooperative-admin";
+import { getAllTransactionsAction, getCooperativeStatsAction } from "@/app/actions/cooperative-admin";
 import { toast } from "sonner";
 
 type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
@@ -44,20 +44,34 @@ export default function AdminTransactionsPage() {
     const [statusFilter, setStatusFilter] = useState<TransactionStatus>("all");
     const [searchTerm, setSearchTerm] = useState("");
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [globalStats, setGlobalStats] = useState<{
+        totalTransactions: number;
+        totalTransactionAmount: number;
+        completedTransactions: number;
+        pendingTransactions: number;
+        failedTransactions: number;
+    } | null>(null);
 
     const loadTransactions = useCallback(async () => {
         setLoading(true);
         try {
-            const result = await getAllTransactionsAction({
-                type: typeFilter,
-                status: statusFilter,
-                limit: 100,
-            });
+            const [result, statsResult] = await Promise.all([
+                getAllTransactionsAction({
+                    type: typeFilter,
+                    status: statusFilter,
+                    limit: 100,
+                }),
+                getCooperativeStatsAction()
+            ]);
 
             if (result.success && result.data) {
                 setTransactions(result.data);
             } else {
                 toast.error(result.error || "Failed to load transactions");
+            }
+            
+            if (statsResult.success && statsResult.data) {
+                setGlobalStats(statsResult.data as any);
             }
         } catch (error) {
             logger.error("Failed to load transactions:", error);
@@ -155,11 +169,18 @@ export default function AdminTransactionsPage() {
         );
     });
 
-    // Calculate summary stats
-    const totalAmount = filteredTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const completedCount = filteredTransactions.filter((t) => t.status === "completed").length;
-    const pendingCount = filteredTransactions.filter((t) => t.status === "pending").length;
-    const failedCount = filteredTransactions.filter((t) => t.status === "failed").length;
+    // Calculate summary stats (fallback if global stats fail)
+    const localTotalAmount = filteredTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const localCompletedCount = filteredTransactions.filter((t) => t.status === "completed").length;
+    const localPendingCount = filteredTransactions.filter((t) => t.status === "pending").length;
+    const localFailedCount = filteredTransactions.filter((t) => t.status === "failed").length;
+
+    // Use global stats by default to prevent arrays capped at 100 from skewing dashboard totals
+    const displayedTotalTxs = globalStats?.totalTransactions ?? filteredTransactions.length;
+    const displayedTotalAmount = globalStats?.totalTransactionAmount ?? localTotalAmount;
+    const displayedCompleted = globalStats?.completedTransactions ?? localCompletedCount;
+    const displayedPending = globalStats?.pendingTransactions ?? localPendingCount;
+    const displayedFailed = globalStats?.failedTransactions ?? localFailedCount;
 
     return (
         <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 p-8">
@@ -200,7 +221,7 @@ export default function AdminTransactionsPage() {
                             <p className="text-sm text-slate-500">Total Transactions</p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900">
-                            {filteredTransactions.length}
+                            {displayedTotalTxs}
                         </p>
                     </div>
 
@@ -212,7 +233,7 @@ export default function AdminTransactionsPage() {
                             <p className="text-sm text-slate-500">Total Amount</p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900">
-                            {formatCurrency(totalAmount)}
+                            {formatCurrency(displayedTotalAmount)}
                         </p>
                     </div>
 
@@ -223,7 +244,7 @@ export default function AdminTransactionsPage() {
                             </div>
                             <p className="text-sm text-slate-500">Completed</p>
                         </div>
-                        <p className="text-3xl font-bold text-green-600">{completedCount}</p>
+                        <p className="text-3xl font-bold text-green-600">{displayedCompleted}</p>
                     </div>
 
                     <div className="bg-white rounded-2xl p-6 shadow-sm">
@@ -234,9 +255,9 @@ export default function AdminTransactionsPage() {
                             <p className="text-sm text-slate-500">Pending / Failed</p>
                         </div>
                         <p className="text-lg">
-                            <span className="font-bold text-yellow-600">{pendingCount}</span>
+                            <span className="font-bold text-yellow-600">{displayedPending}</span>
                             <span className="text-slate-400 mx-2">•</span>
-                            <span className="font-bold text-red-600">{failedCount}</span>
+                            <span className="font-bold text-red-600">{displayedFailed}</span>
                         </p>
                     </div>
                 </div>
