@@ -1,11 +1,10 @@
 "use server";
 
-import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
-import { FieldValue } from "firebase-admin/firestore";
-import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
-import { COLLECTIONS } from "@/lib/types/firestore";
+import { createAuditLog } from '@/lib/audit-log';
+import type { AuditAction } from '@/lib/audit-log';
+import { getAuditLogsAction as coreGetAuditLogsAction } from './audit-log-actions';
 
 /**
  * Audit Logging System
@@ -13,58 +12,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
  * Tracks all admin actions for compliance and security.
  */
 
-export type AuditAction =
-    | "wave_approve"
-    | "wave_reject"
-    | "withdrawal_approve"
-    | "withdrawal_reject"
-    | "user_verify"
-    | "user_unverify"
-    | "user_role_change"
-    | "user_role_update"
-    | "user_delete"
-    | "user_kyc_verify_bvn"
-    | "user_kyc_verify_nin"
-    | "user_kyc_verify_tin"
-    | "user_kyc_verify_cac"
-    | "user_kyc_unverify_bvn"
-    | "user_kyc_unverify_nin"
-    | "user_kyc_unverify_tin"
-    | "user_kyc_unverify_cac"
-    | "account_unlock"
-    | "export_create"
-    | "export_status_update"
-    | "cooperative_join"
-    | "contribution_make"
-    | "announcement_created"
-    | "announcement_updated"
-    | "announcement_deleted"
-    | "banner_created"
-    | "loan_approved"
-    | "loan_partially_approved"
-    | "loan_rejected"
-    | "land_approve"
-    | "land_reject"
-    | "land_verified"
-    | "land_rejected"
-    | "land_rejected"
-    | "escrow_released"
-    | "seller_approve"
-    | "seller_reject"
-    | "export_approve"
-    | "export_reject"
-    | "academy_approve"
-    | "academy_reject"
-    | "academy_under_review"
-    | "farm_nation_reject"
-    | "export_investment"
-    | "admin_edit_application"
-    | "seller_badge_grant"
-    | "seller_badge_revoke"
-    | "dispute_escalated"
-    | "academy_manual_enroll"
-    | "legacy_member_import"
-    | "legacy_member_invited";
+export type { AuditAction };
 
 export interface AuditLog {
     id: string;
@@ -100,16 +48,14 @@ export async function logAuditAction(
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
 
-        await db.collection(COLLECTIONS.AUDIT_LOGS).add({
+        await createAuditLog({
             action,
-            adminId: session.user.id,
-            adminEmail: session.user.email || "",
+            userId: session.user.id,
+            userEmail: session.user.email || "",
             targetId,
             targetType,
-            details,
-            timestamp: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            details: JSON.stringify(details),
+            metadata: details,
         });
 
         return { error: null, success: true };
@@ -133,21 +79,32 @@ export async function getAuditLogsAction(
             return { error: "Unauthorized: Admin access required", success: false, data: null };
         }
 
-        const snapshot = await db.collection(COLLECTIONS.AUDIT_LOGS)
-            .orderBy("timestamp", "desc")
-            .limit(limitCount)
-            .get();
+        const result = await coreGetAuditLogsAction({ limit: limitCount });
+        
+        if (!result.success || !result.logs) {
+            return { error: result.error || "Failed to fetch audit logs", success: false, data: null };
+        }
 
-        const logs: AuditLog[] = snapshot.docs.map(doc => ({
-            id: doc.id,
-            action: doc.data().action,
-            adminId: doc.data().adminId,
-            adminEmail: doc.data().adminEmail,
-            targetId: doc.data().targetId,
-            targetType: doc.data().targetType,
-            details: doc.data().details,
-            timestamp: doc.data().timestamp?.toDate() || new Date(),
-        })) as AuditLog[];
+        // Map standard AuditLogEntry to legacy format used by old UI
+        const logs: AuditLog[] = result.logs.map(log => {
+            let logDate = new Date();
+            if (log.timestamp && typeof log.timestamp === 'object' && 'toDate' in log.timestamp) {
+                logDate = log.timestamp.toDate(); 
+            } else if (log.timestamp && typeof log.timestamp === 'string') {
+                logDate = new Date(log.timestamp);
+            }
+
+            return {
+                id: log.id || '',
+                action: log.action as AuditAction,
+                adminId: log.userId,
+                adminEmail: log.userEmail || '',
+                targetId: log.targetId || '',
+                targetType: log.targetType || '',
+                details: log.metadata || {},
+                timestamp: logDate,
+            };
+        });
 
         return {
             error: null,

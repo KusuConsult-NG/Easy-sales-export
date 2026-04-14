@@ -1,10 +1,8 @@
-
-import { db } from "@/lib/firebase-admin";
-import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue } from "firebase-admin/firestore";
+import { createAuditLog } from "./audit-log";
+import type { AuditAction } from "./audit-log";
 import { logger } from "@/lib/logger";
 
-export interface AuditLogEntry {
+export interface LegacyAuditLogEntry {
     userId: string;
     action: string;
     details: string;
@@ -14,13 +12,17 @@ export interface AuditLogEntry {
 }
 
 /**
- * Log sensitive actions to Firestore
+ * Log sensitive actions to Firestore (Legacy Proxy)
  */
-export async function logAuditAction(entry: AuditLogEntry) {
+export async function logAuditAction(entry: LegacyAuditLogEntry) {
     try {
-        await db.collection(COLLECTIONS.AUDIT_LOGS).add({
-            ...entry,
-            timestamp: FieldValue.serverTimestamp(),
+        await createAuditLog({
+            userId: entry.userId,
+            action: entry.action as AuditAction,
+            details: entry.details,
+            metadata: entry.metadata,
+            ipAddress: entry.ip,
+            userAgent: entry.userAgent,
         });
     } catch (error) {
         // Fallback to console logger if Firestore fails (don't block the action)

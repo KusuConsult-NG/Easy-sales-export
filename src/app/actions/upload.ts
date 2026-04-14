@@ -1,23 +1,23 @@
 "use server";
 
 /**
- * Server-side file upload — Firebase Storage with Firestore fallback
+ * Server-side file upload — Cloudinary (sole upload provider)
  *
- * STRATEGY (never returns a 500):
- *  1. Try Firebase Storage (primary) — stores file, returns signed URL
- *  2. If Storage unavailable → store base64 in Firestore (fallback)
- *     The admin panel can download/migrate these later once Storage is set up.
- *  3. If both fail → return a structured error (no throw, no 500)
+ * STRATEGY:
+ *  1. Validate auth, mime type, and file size
+ *  2. Send file to Cloudinary via signed upload API
+ *  3. Return { success: true, url } or { success: false, error }
  *
- * Both paths return { success: true, url } so the UI always proceeds.
+ * IMPORTANT: Firebase Storage is NOT used. All uploads go to Cloudinary.
+ * The old Firebase Storage + Firestore fallback path was removed because:
+ *  a) The Firebase Storage bucket does not exist in the Railway environment
+ *  b) The bucket.exists() check was throwing and escaping try/catch,
+ *     causing Server Component renderer crashes visible to end users
+ *  c) The /api/upload route already uses Cloudinary successfully
  */
 
-import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
-import { getAdminStorage, getAdminDb } from "@/lib/firebase-admin";
-import { COLLECTIONS } from "@/lib/types/firestore";
-import { Timestamp } from "firebase-admin/firestore";
 
 const ALLOWED_TYPES: Record<string, string> = {
     "image/jpeg": "jpg",
@@ -28,147 +28,99 @@ const ALLOWED_TYPES: Record<string, string> = {
 
 const MAX_SIZE_MB = 5;
 
-// ── Primary: Firebase Storage ────────────────────────────────────────────────
-async function uploadToStorage(
-    buffer: Buffer,
-    userId: string,
-    fileName: string,
-    mimeType: string,
-    documentType: string,
-    ext: string
-): Promise<string> {
-    const bucketName =
-        process.env.FIREBASE_STORAGE_BUCKET ||
-        process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-
-    if (!bucketName) throw new Error("FIREBASE_STORAGE_BUCKET not configured");
-
-    const storage = getAdminStorage();
-    const bucket = storage.bucket(bucketName);
-
-    const [exists] = await bucket.exists();
-    if (!exists) throw new Error(`Storage bucket '${bucketName}' does not exist`);
-
-    const timestamp = Date.now();
-    const storagePath = `documents/${userId}/${documentType}-${timestamp}.${ext}`;
-
-    const file = bucket.file(storagePath);
-    await file.save(buffer, {
-        metadata: {
-            contentType: mimeType,
-            metadata: {
-                uploadedBy: userId,
-                documentType,
-                originalName: fileName,
-                uploadedAt: new Date().toISOString(),
-            },
-        },
-        resumable: false,
-    });
-
-    // 7-year signed read URL
-    const [signedUrl] = await file.getSignedUrl({
-        action: "read",
-        expires: Date.now() + 7 * 365 * 24 * 60 * 60 * 1000,
-    });
-
-    return signedUrl;
-}
-
-// ── Fallback: Firestore document storage ────────────────────────────────────
-async function uploadToFirestore(
-    base64Content: string,
-    userId: string,
-    fileName: string,
-    mimeType: string,
-    documentType: string
-): Promise<string> {
-    const db = getAdminDb();
-    const docRef = db.collection(COLLECTIONS.DOCUMENT_UPLOADS).doc();
-    const docId = docRef.id;
-
-    await docRef.set({
-        userId,
-        documentType,
-        fileName,
-        mimeType,
-        base64: base64Content,
-        storedVia: "firestore_fallback",
-        uploadedAt: Timestamp.now(),
-        migrated: false,
-    });
-
-    logger.warn(
-        `File stored in Firestore fallback (Storage not available). Doc: ${docId}`
-    );
-
-    // Return a internal reference URL so the app can still function.
-    // Admin panel reads /api/admin/documents/[docId] to serve the file.
-    return `/api/admin/documents/${docId}`;
-}
-
 // ── Main export ──────────────────────────────────────────────────────────────
 export async function uploadDocumentAction(
-    base64Data: string,
-    fileName: string,
-    mimeType: string,
-    documentType: string
+    formData: FormData
 ): Promise<{ success: boolean; url?: string; error?: string; fallback?: boolean }> {
     try {
-        // Auth check
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+        const file = formData.get("file") as File | null;
+        const fileName = formData.get("fileName") as string;
+        const mimeType = formData.get("mimeType") as string;
+        const documentType = formData.get("documentType") as string;
+
+        if (!file || !fileName || !mimeType || !documentType) {
+            return { success: false, error: "Missing required upload parameters." };
         }
 
-        // Validate mime type
+        // ── Auth check ───────────────────────────────────────────────────────
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: "Your session has expired. Please log in again." };
+        }
+        const { session } = sessionResult;
+        const userId = session.user.id;
+
+        // ── Validate mime type ───────────────────────────────────────────────
         const ext = ALLOWED_TYPES[mimeType];
         if (!ext) {
             return { success: false, error: "Invalid file type. Only JPG, PNG, PDF allowed." };
         }
 
-        // Decode base64
-        const base64Content = base64Data.split(",").pop() || base64Data;
-        const buffer = Buffer.from(base64Content, "base64");
-
-        // Size check
-        const sizeMB = buffer.byteLength / (1024 * 1024);
+        // ── Size-check ───────────────────────────────────────────────────────
+        // size property on File is in bytes natively. 
+        const sizeMB = file.size / (1024 * 1024);
         if (sizeMB > MAX_SIZE_MB) {
             return { success: false, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
         }
+        
+        logger.info(`[Upload:Start] User:${userId} | Stream Size: ${sizeMB.toFixed(2)}MB`);
 
-        const userId = session.user.id;
+        // ── Cloudinary credentials check ─────────────────────────────────────
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+        const apiKey = process.env.CLOUDINARY_API_KEY;
+        const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-        // ── Path 1: Firebase Storage ──────────────────────────────────────
-        try {
-            const url = await uploadToStorage(buffer, userId, fileName, mimeType, documentType, ext);
-            logger.info(`Document uploaded to Storage: ${documentType} for user ${userId}`);
-            return { success: true, url };
-        } catch (storageErr) {
-            logger.warn(
-                `Firebase Storage unavailable (${(storageErr as Error).message}), using Firestore fallback`
-            );
-        }
-
-        // ── Path 2: Firestore Fallback ────────────────────────────────────
-        try {
-            const url = await uploadToFirestore(base64Content, userId, fileName, mimeType, documentType);
-            return { success: true, url, fallback: true };
-        } catch (firestoreErr) {
-            logger.error("Firestore fallback also failed:", firestoreErr);
+        if (!cloudName || !apiKey || !apiSecret) {
+            logger.error("[uploadDocumentAction] Cloudinary environment variables not configured");
             return {
                 success: false,
-                error: "Upload failed — please try again or contact support.",
+                error: "Upload service is temporarily unavailable. Please try again later or contact support.",
             };
         }
 
+        // ── Build signed Cloudinary upload ───────────────────────────────────
+        const timestamp = Math.floor(Date.now() / 1000);
+        const safeName = documentType.replace(/[^a-zA-Z0-9-]/g, "-");
+        const publicId = `documents/${userId}/${safeName}-${timestamp}`;
+
+        const crypto = await import("crypto");
+        const signatureStr = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+        const signature = crypto.createHash("sha256").update(signatureStr).digest("hex");
+
+        const resourceType = mimeType === "application/pdf" ? "raw" : "image";
+
+        const cloudinaryForm = new FormData();
+        // Zero-copy stream mapping directly from incoming request stream to Cloudinary
+        cloudinaryForm.append("file", file);
+        cloudinaryForm.append("api_key", apiKey);
+        cloudinaryForm.append("timestamp", String(timestamp));
+        cloudinaryForm.append("public_id", publicId);
+        cloudinaryForm.append("signature", signature);
+        cloudinaryForm.append("resource_type", resourceType);
+
+        const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
+        const response = await fetch(uploadUrl, { method: "POST", body: cloudinaryForm });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            logger.error("[uploadDocumentAction] Cloudinary upload failed:", errBody);
+            return {
+                success: false,
+                error: "File upload failed. Please check your file and try again.",
+            };
+        }
+
+        const result = await response.json();
+        const url: string = result.secure_url;
+
+        logger.info(`[uploadDocumentAction] Uploaded to Cloudinary: ${documentType} for user ${userId}`);
+        return { success: true, url };
+
     } catch (error) {
-        logger.error("uploadDocumentAction unexpected error:", error);
+        logger.error("[uploadDocumentAction] Unexpected error:", error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : "Upload failed.",
+            error: error instanceof Error ? error.message : "Upload failed. Please try again.",
         };
     }
 }

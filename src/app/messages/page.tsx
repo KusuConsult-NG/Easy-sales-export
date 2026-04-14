@@ -2,18 +2,22 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { isSessionExpired } from '@/lib/session-expiry-code';
 import { MessageSquare, Search, Plus, Send, Loader2 } from "lucide-react";
 import { getConversationsAction, getMessagesAction, sendMessageAction, startConversationAction, searchUsersAction, markAsReadAction } from "@/app/actions/messages";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, limit, onSnapshot, doc } from "firebase/firestore";
+import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { format } from "date-fns";
 
 export default function MessagesPage() {
     const { data: session } = useSession();
+    const searchParams = useSearchParams();
+    const defaultConv = searchParams.get("conversation");
+    
     const [conversations, setConversations] = useState<Conversation[]>([]);
-    const [selectedConv, setSelectedConv] = useState<string | null>(null);
+    const [selectedConv, setSelectedConv] = useState<string | null>(defaultConv);
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState("");
     const [loading, setLoading] = useState(true);
@@ -29,7 +33,10 @@ export default function MessagesPage() {
             setLoading(true);
             const result = await getConversationsAction();
             if (!isSessionExpired(result) && result.conversations) {
-                setConversations(result.conversations);
+                setConversations(result.conversations as Conversation[]);
+                if (defaultConv && !result.conversations.find((c: any) => c.id === defaultConv)) {
+                    // Start an additional fetch for the requested conversation if it's new
+                }
             }
             setLoading(false);
         }
@@ -37,7 +44,7 @@ export default function MessagesPage() {
         if (session?.user) {
             loadConversations();
         }
-    }, [session]);
+    }, [session, defaultConv]);
 
     // Load messages for selected conversation
     useEffect(() => {
@@ -212,7 +219,10 @@ export default function MessagesPage() {
                                         </div>
                                         {conv.lastMessage && (
                                             <div className="text-xs text-slate-400">
-                                                {format(conv.lastMessage.timestamp.toDate(), "HH:mm")}
+                                                {typeof (conv.lastMessage.timestamp as any)?.toDate === 'function' ?
+                                                    format((conv.lastMessage.timestamp as any).toDate(), "HH:mm") :
+                                                    format(new Date(conv.lastMessage.timestamp), "HH:mm")
+                                                }
                                             </div>
                                         )}
                                     </div>
@@ -279,7 +289,11 @@ export default function MessagesPage() {
                                             )}
                                             <div>{msg.text}</div>
                                             <div className={`text-xs mt-1 ${isOwnMessage ? "text-blue-100" : "text-slate-400"}`}>
-                                                {format(msg.timestamp.toDate(), "HH:mm")}
+                                                {msg.timestamp ? (
+                                                    typeof (msg.timestamp as any).toDate === 'function' ?
+                                                        format((msg.timestamp as any).toDate(), "HH:mm") :
+                                                        format(new Date(msg.timestamp), "HH:mm")
+                                                ) : "Now"}
                                             </div>
                                         </div>
                                     </div>

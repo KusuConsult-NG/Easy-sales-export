@@ -1,6 +1,5 @@
-import { getFirestore, Timestamp } from 'firebase/firestore';
-import { collection, addDoc, query, where, getDocs, orderBy, limit as firestoreLimit, deleteDoc } from 'firebase/firestore';
-import app from './firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { logger } from './logger';
 
 /**
@@ -15,6 +14,21 @@ export type AuditAction =
     | 'user_unverify'
     | 'user_delete'
     | 'user_update'
+    | 'user_suspend'
+    | 'user_activate'
+    | 'user_role_change'
+    | 'user_impersonate'
+    | 'user_kyc_verify_bvn'
+    | 'user_kyc_verify_nin'
+    | 'user_kyc_verify_tin'
+    | 'user_kyc_verify_cac'
+    | 'user_kyc_unverify_bvn'
+    | 'user_kyc_unverify_nin'
+    | 'user_kyc_unverify_tin'
+    | 'user_kyc_unverify_cac'
+    | 'account_unlock'
+    | 'legacy_member_import'
+    | 'legacy_member_invited'
     // Financial Actions
     | 'payment_initiated'
     | 'payment_completed'
@@ -30,10 +44,17 @@ export type AuditAction =
     | 'loan_repaid'
     | 'contribution_made'
     | 'withdrawal_made'
+    | 'withdrawal_requested'
+    | 'withdrawal_approved'
+    | 'withdrawal_rejected'
+    | 'withdrawal_approve'
+    | 'withdrawal_reject'
     // Admin Actions
     | 'land_verified'
     | 'land_rejected'
     | 'land_inquiry'
+    | 'land_approve'
+    | 'land_reject'
     | 'dispute_created'
     | 'dispute_resolved'
     | 'dispute_escalated'
@@ -49,12 +70,25 @@ export type AuditAction =
     | 'resource_update'
     | 'resource_delete'
     | 'feature_toggled'
+    | 'config_updated'
+    | 'config_rollback'
+    | 'admin_edit_application'
+    // Marketplace Actions
+    | 'seller_approved'
+    | 'seller_rejected'
+    | 'seller_suspended'
+    | 'seller_approve'
+    | 'seller_reject'
+    | 'seller_badge_grant'
+    | 'seller_badge_revoke'
     // WAVE Actions
     | 'wave_enrollment'
     | 'wave_training_created'
     | 'wave_training_updated'
     | 'wave_application_approved'
     | 'wave_application_rejected'
+    | 'wave_approve'
+    | 'wave_reject'
     | 'training_registration'
     // LMS Actions
     | 'course_created'
@@ -62,20 +96,36 @@ export type AuditAction =
     | 'course_enrolled'
     | 'course_completed'
     | 'certificate_issued'
+    | 'quiz_created'
     // Security Actions
     | 'mfa_enabled'
     | 'mfa_disabled'
     | 'password_changed'
     | 'session_expired'
     | 'suspicious_activity'
+    | 'failed_login_attempt'
     | 'data_export'
     // Academy Actions
     | 'academy_approve'
     | 'academy_reject'
+    | 'academy_under_review'
     | 'academy_application_created'
     | 'export_investment'
     | 'system_cleanup'
     | 'academy_manual_enroll'
+    // Export Actions
+    | 'export_create'
+    | 'export_status_update'
+    | 'export_approve'
+    | 'export_reject'
+    // Farm Nation & Cooperative
+    | 'farm_nation_reject'
+    | 'cooperative_join'
+    | 'contribution_make'
+    // Content Moderation Actions
+    | 'content:approve'
+    | 'content:reject'
+    | 'content:flag'
     // AI Chatbot Actions (Phase 13)
     | 'chatbot_session_started'
     | 'chatbot_escalated'
@@ -86,7 +136,7 @@ export type AuditSeverity = 'info' | 'warning' | 'critical';
 /**
  * Auto-assign severity based on action type
  */
-function getSeverityForAction(action: AuditAction): AuditSeverity {
+export function getSeverityForAction(action: AuditAction): AuditSeverity {
     const criticalActions: AuditAction[] = [
         'user_delete',
         'escrow_refunded',
@@ -124,11 +174,10 @@ export interface AuditLogEntry {
     metadata?: Record<string, any>;
     ipAddress?: string;
     userAgent?: string;
-    timestamp: Timestamp;
+    timestamp: any;
     details?: string;
 }
 
-const db = getFirestore(app);
 const AUDIT_LOGS_COLLECTION = 'audit_logs';
 
 /**
@@ -136,13 +185,14 @@ const AUDIT_LOGS_COLLECTION = 'audit_logs';
  */
 export async function createAuditLog(entry: Omit<AuditLogEntry, 'timestamp' | 'id' | 'severity'>): Promise<string> {
     try {
+        const db = getAdminDb();
         const logEntry: Omit<AuditLogEntry, 'id'> = {
             ...entry,
             severity: getSeverityForAction(entry.action),
-            timestamp: Timestamp.now(),
+            timestamp: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await addDoc(collection(db, AUDIT_LOGS_COLLECTION), logEntry);
+        const docRef = await db.collection(AUDIT_LOGS_COLLECTION).add(logEntry);
         return docRef.id;
     } catch (error) {
         logger.error('Failed to create audit log', error instanceof Error ? error : undefined);
@@ -161,33 +211,35 @@ export async function getAuditLogs(options: {
     limit?: number;
 }): Promise<AuditLogEntry[]> {
     try {
+        const db = getAdminDb();
         const retentionDays = parseInt(process.env.AUDIT_LOG_RETENTION_DAYS || '30', 10);
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-        let q = query(
-            collection(db, AUDIT_LOGS_COLLECTION),
-            where('timestamp', '>=', Timestamp.fromDate(options.startDate || cutoffDate)),
-            orderBy('timestamp', 'desc')
-        );
+        let q: FirebaseFirestore.Query = db.collection(AUDIT_LOGS_COLLECTION)
+            .where('timestamp', '>=', Timestamp.fromDate(options.startDate || cutoffDate))
+            .orderBy('timestamp', 'desc');
 
         if (options.userId) {
-            q = query(q, where('userId', '==', options.userId));
+            q = q.where('userId', '==', options.userId);
         }
 
         if (options.action) {
-            q = query(q, where('action', '==', options.action));
+            q = q.where('action', '==', options.action);
         }
 
         if (options.endDate) {
-            q = query(q, where('timestamp', '<=', Timestamp.fromDate(options.endDate)));
+            // Need to apply this carefully due to Firestore limits on inequality filters.
+            // Using in memory filter later if multiple inequality filters are applied!
+            // But if it's the same field ('timestamp'), we can just do '<='
+            q = q.where('timestamp', '<=', Timestamp.fromDate(options.endDate));
         }
 
         if (options.limit) {
-            q = query(q, firestoreLimit(options.limit));
+            q = q.limit(options.limit);
         }
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         return snapshot.docs.map(doc => ({
             id: doc.id,
@@ -205,22 +257,23 @@ export async function getAuditLogs(options: {
  */
 export async function purgeOldAuditLogs(): Promise<number> {
     try {
+        const db = getAdminDb();
         const retentionDays = parseInt(process.env.AUDIT_LOG_RETENTION_DAYS || '30', 10);
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
-        const q = query(
-            collection(db, AUDIT_LOGS_COLLECTION),
-            where('timestamp', '<', Timestamp.fromDate(cutoffDate))
-        );
+        const q = db.collection(AUDIT_LOGS_COLLECTION)
+            .where('timestamp', '<', Timestamp.fromDate(cutoffDate));
 
-        const snapshot = await getDocs(q);
+        const snapshot = await q.get();
 
         let deletedCount = 0;
+        const batch = db.batch();
         for (const doc of snapshot.docs) {
-            await deleteDoc(doc.ref);
+            batch.delete(doc.ref);
             deletedCount++;
         }
+        await batch.commit();
 
         logger.info(`Purged ${deletedCount} audit logs older than ${retentionDays} days`, { deletedCount, retentionDays });
         return deletedCount;

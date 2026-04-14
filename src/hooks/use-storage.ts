@@ -29,33 +29,49 @@ export function useStorage() {
         }));
 
         try {
-            // Step 1: Read file as base64 data URL (required by uploadDocumentAction)
+            // Step 1: Create FormData (Zero-Memory Payload Pipeline)
             setUploadState(prev => ({
                 ...prev,
                 [file.name]: { ...prev[file.name], progress: 20 },
             }));
 
-            const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = () => reject(new Error("Failed to read file"));
-                reader.readAsDataURL(file);
-            });
+            // Derive documentType from the path segment after the last slash grouping
+            const documentType = path.split("/").pop()?.replace(/^\d+_/, "") || file.name;
+
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("fileName", file.name);
+            formData.append("mimeType", file.type);
+            formData.append("documentType", documentType);
 
             setUploadState(prev => ({
                 ...prev,
                 [file.name]: { ...prev[file.name], progress: 50 },
             }));
 
-            // Step 2: Upload via server action (Cloudinary, authenticated)
-            // Derive documentType from the path segment after the last slash grouping
-            const documentType = path.split("/").pop()?.replace(/^\d+_/, "") || file.name;
+            // Step 2: Upload via server action (Cloudinary, authenticated, streaming)
+            // Retry wrapper for robust uploads
+            const uploadWithRetry = async (attempt = 1): Promise<any> => {
+                try {
+                    const res = await uploadDocumentAction(formData);
+                    if (!res.success || !res.url) throw new Error(res.error || "Upload failed");
+                    return res;
+                } catch (err) {
+                    if (attempt < 3) {
+                        // Exponential backoff: 1s, 2s, 4s...
+                        await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+                        // Update progress to indicate retry
+                        setUploadState(prev => ({
+                            ...prev,
+                            [file.name]: { ...prev[file.name], progress: 50 + (attempt * 10) }, // Slight visual bump per retry
+                        }));
+                        return uploadWithRetry(attempt + 1);
+                    }
+                    throw err;
+                }
+            };
 
-            const result = await uploadDocumentAction(base64, file.name, file.type, documentType);
-
-            if (!result.success || !result.url) {
-                throw new Error(result.error || "Upload failed");
-            }
+            const result = await uploadWithRetry();
 
             setUploadState(prev => ({
                 ...prev,

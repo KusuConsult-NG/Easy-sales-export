@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
         const session = await auth();
         if (!session?.user) {
             return NextResponse.json(
-                { success: false, message: "Unauthorized" },
+                { success: false, data: null, error: "Unauthorized", meta: null },
                 { status: 401 }
             );
         }
@@ -36,12 +36,13 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            products
+            data: { products },
+            meta: null
         });
     } catch (error) {
         logger.error("Failed to fetch products:", error);
         return NextResponse.json(
-            { success: false, message: "Internal server error" },
+            { success: false, data: null, error: "Internal server error", meta: null },
             { status: 500 }
         );
     }

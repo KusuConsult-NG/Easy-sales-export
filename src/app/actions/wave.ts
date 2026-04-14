@@ -490,62 +490,102 @@ export async function enrollInWaveAction(userId: string): Promise<{
 /**
  * Get WAVE resources
  */
-export async function getWaveResourcesAction(category?: string): Promise<WaveResource[]> {
+export async function getWaveResourcesAction(
+    category?: string,
+    cursor?: string | null,
+    limit = 20
+): Promise<{ success: boolean; data?: WaveResource[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
+        if (!sessionResult.session) return { success: false, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
         const { session } = sessionResult;
-        if (!session?.user) return [];
+        if (!session?.user) return { success: false, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
 
         // STRICT ENROLLMENT CHECK
         const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
         if (!memberDoc.exists || !memberDoc.data()?.active) {
-            // Check if admin, otherwise deny
             if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
                 logger.warn(`Unauthorized WAVE resource access attempt by ${session.user.id}`);
-                return [];
+                return { success: false, error: "Access denied: Not enrolled in WAVE", meta: { cursor: null, hasMore: false } };
             }
         }
 
-        const q = db.collection(COLLECTIONS.WAVE_RESOURCES);
-        let queryRef;
+        const pageSize = Math.min(Math.max(limit, 1), 50);
+
+        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_RESOURCES)
+            .orderBy("createdAt", "desc")
+            .limit(pageSize + 1);
 
         if (category) {
-            queryRef = q.where("category", "==", category);
-        } else {
-            queryRef = q;
+            queryRef = db.collection(COLLECTIONS.WAVE_RESOURCES)
+                .where("category", "==", category)
+                .orderBy("createdAt", "desc")
+                .limit(pageSize + 1);
+        }
+
+        if (cursor) {
+            const cursorDate = new Date(cursor);
+            if (!isNaN(cursorDate.getTime())) {
+                queryRef = queryRef.startAfter(cursorDate);
+            }
         }
 
         const snapshot = await queryRef.get();
+        const hasMore = snapshot.docs.length > pageSize;
+        const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
 
-        return serializeDocs<WaveResource>(snapshot.docs);
+        const data = serializeDocs<WaveResource>(docs);
+        const nextCursor = hasMore && docs.length > 0
+            ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
+            : null;
+
+        return { success: true, data, meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("Failed to fetch WAVE resources:", error);
-        return [];
+        return { success: false, error: "Failed to fetch resources", meta: { cursor: null, hasMore: false } };
     }
 }
 
 /**
  * Get upcoming WAVE training events
  */
-export async function getWaveTrainingEventsAction(): Promise<WaveTrainingEvent[]> {
+export async function getWaveTrainingEventsAction(
+    cursor?: string | null,
+    limit = 20
+): Promise<{ success: boolean; data?: WaveTrainingEvent[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
+        if (!sessionResult.session) return { success: false, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
         const { session } = sessionResult;
-        if (!session?.user) return [];
+        if (!session?.user) return { success: false, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
 
-        // Optional: Check enrollment here too if trainings are exclusive
-        // For now, allowing visibility but restricting registration
+        const pageSize = Math.min(Math.max(limit, 1), 50);
 
-        const snapshot = await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS)
+        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS)
             .where("status", "in", ["upcoming", "ongoing"])
-            .get();
+            .orderBy("scheduledAt", "asc")
+            .limit(pageSize + 1);
 
-        return serializeDocs<WaveTrainingEvent>(snapshot.docs);
+        if (cursor) {
+            const cursorDate = new Date(cursor);
+            if (!isNaN(cursorDate.getTime())) {
+                queryRef = queryRef.startAfter(cursorDate);
+            }
+        }
+
+        const snapshot = await queryRef.get();
+        const hasMore = snapshot.docs.length > pageSize;
+        const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+
+        const data = serializeDocs<WaveTrainingEvent>(docs);
+        const nextCursor = hasMore && docs.length > 0
+            ? docs[docs.length - 1].data().scheduledAt?.toDate?.()?.toISOString() ?? null
+            : null;
+
+        return { success: true, data, meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("Get training events error:", error);
-        return [];
+        return { success: false, error: "Failed to fetch training events", meta: { cursor: null, hasMore: false } };
     }
 }
 

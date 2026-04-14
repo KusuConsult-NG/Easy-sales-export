@@ -223,7 +223,7 @@ export async function markAsReadAction(conversationId: string) {
 /**
  * Start a new conversation with a user
  */
-export async function startConversationAction(participantUid: string) {
+export async function startConversationAction(participantUid: string, productId?: string, orderId?: string) {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -242,9 +242,15 @@ export async function startConversationAction(participantUid: string) {
             .get();
 
         for (const doc of existingSnapshot.docs) {
-            const conversation = doc.data() as Conversation;
+            const conversation = doc.data() as any;
             if (conversation.participants.includes(participantUid) && conversation.participants.length === 2) {
-                return { conversationId: doc.id, error: null };
+                // If this is a product-specific chat request, ensure productId matches to avoid mixing
+                if (productId) {
+                    if (conversation.productId === productId) return { conversationId: doc.id, error: null };
+                } else {
+                    // For generic support chat, just return the existing 1-on-1
+                    return { conversationId: doc.id, error: null };
+                }
             }
         }
 
@@ -257,7 +263,7 @@ export async function startConversationAction(participantUid: string) {
         const participant = participantDoc.data();
 
         // Create new conversation
-        const conversationData = {
+        const conversationData: any = {
             participants: [session.user.id, participantUid],
             participantDetails: {
                 [session.user.id]: {
@@ -277,6 +283,9 @@ export async function startConversationAction(participantUid: string) {
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
         };
+
+        if (productId) conversationData.productId = productId;
+        if (orderId) conversationData.orderId = orderId;
 
         const newConversation = await db.collection(COLLECTIONS.CONVERSATIONS).add(conversationData);
 

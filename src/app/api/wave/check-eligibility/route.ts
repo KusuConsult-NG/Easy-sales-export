@@ -7,52 +7,52 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
- * API Route: Check WAVE Eligibility and Application Status
+ * GET /api/wave/check-eligibility
+ * Check WAVE eligibility and application status for the authenticated user.
+ *
+ * Response: { success, data: { gender, applicationStatus, eligible }, meta: { cursor: null, hasMore: false } }
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
     try {
         const session = await auth();
         if (!session?.user) {
             return NextResponse.json(
-                { success: false, message: "Unauthorized" },
+                { success: false, data: null, error: "Unauthorized", meta: { cursor: null, hasMore: false } },
                 { status: 401 }
             );
         }
 
         const userId = session.user.id;
 
-        // Get user profile for gender (Admin SDK)
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) {
-            return NextResponse.json({
-                success: false,
-                message: "User profile not found"
-            }, { status: 404 });
+            return NextResponse.json(
+                { success: false, data: null, error: "User profile not found", meta: { cursor: null, hasMore: false } },
+                { status: 404 }
+            );
         }
 
         const userData = userDoc.data()!;
-        const gender = userData.gender || null;
+        const gender: string | null = userData.gender || null;
 
-        // Check WAVE application status (Admin SDK)
-        const waveDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(userId).get();
-
-        let applicationStatus = "not_applied";
-        if (waveDoc.exists) {
-            const waveData = waveDoc.data()!;
-            applicationStatus = waveData.status || "pending";
-        }
+        // Check application status from user's serviceRegistrations (single source of truth)
+        const applicationStatus: string =
+            userData.serviceRegistrations?.wave?.status || "not_applied";
 
         return NextResponse.json({
             success: true,
-            gender,
-            applicationStatus,
-            eligible: gender === "female"
+            data: {
+                gender,
+                applicationStatus,
+                eligible: gender === "female",
+            },
+            meta: { cursor: null, hasMore: false },
         });
     } catch (error) {
-        logger.error("Failed to check WAVE eligibility:", error);
+        logger.error("GET /api/wave/check-eligibility error:", error);
         return NextResponse.json(
-            { success: false, message: "Internal server error" },
+            { success: false, data: null, error: "Internal server error", meta: { cursor: null, hasMore: false } },
             { status: 500 }
         );
     }

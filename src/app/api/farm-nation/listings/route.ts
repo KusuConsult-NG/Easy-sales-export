@@ -26,12 +26,13 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            listings
+            data: { listings },
+            meta: null
         });
     } catch (error) {
         logger.error("Failed to fetch listings:", error);
         return NextResponse.json(
-            { success: false, message: "Internal server error" },
+            { success: false, data: null, error: "Internal server error", meta: null },
             { status: 500 }
         );
     }

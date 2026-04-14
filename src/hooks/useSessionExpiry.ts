@@ -36,8 +36,24 @@ export function useSessionExpiry() {
             typeof window !== "undefined"
                 ? window.location.pathname + window.location.search
                 : "/";
+                
+        // Clear all local app state to prevent stale data renders during redirect
+        if (typeof window !== "undefined") {
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+            } catch (e) {
+                // Ignore storage clearing edge cases
+            }
+        }
+        
+        // Force a hard redirect, bypassing Next.js router cache
         signOut({
-            callbackUrl: `/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+            redirect: false,
+        }).then(() => {
+            if (typeof window !== "undefined") {
+                 window.location.href = `/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}&expired=true`;
+            }
         });
     }, []);
 

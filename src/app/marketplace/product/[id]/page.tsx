@@ -20,7 +20,7 @@ import {
     DollarSign
 } from "lucide-react";
 import { getProductByIdAction } from "@/app/actions/marketplace-buyer";
-import { createConversationAction } from "@/app/actions/messaging";
+import { startConversationAction } from "@/app/actions/messages";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
@@ -83,12 +83,9 @@ export default function ProductDetailPage() {
         if (!product) return;
 
         try {
-            const result = await createConversationAction({
-                recipientId: product.sellerId,
-                productId: product.id,
-            });
+            const result = await startConversationAction(product.sellerId, product.id);
 
-            if (result.success) {
+            if (result.conversationId) {
                 router.push(`/messages?conversation=${result.conversationId}`);
             } else {
                 showToast(result.error || "Failed to start conversation", "error");

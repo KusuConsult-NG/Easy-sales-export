@@ -54,10 +54,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
                     // ── STEP 3: Rate limit check ─────────────────────────────
                     const { consumeLoginAttempt, resetLoginAttempts } = await import("@/lib/rate-limit");
-                    const rateLimitResult = await consumeLoginAttempt(email);
-
-                    if (!rateLimitResult.allowed) {
-                        throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
+                    try {
+                        const rateLimitResult = await consumeLoginAttempt(email);
+                        if (!rateLimitResult.allowed) {
+                            throw new Error(rateLimitResult.error || "Too many login attempts. Please try again later.");
+                        }
+                    } catch (err: any) {
+                        // CIRCUIT BREAKER: Fail Open
+                        // If Upstash Redis times out or crashes, do NOT block the login.
+                        if (err.message && err.message.includes("Too many login attempts")) {
+                            throw err; // Real rate limit
+                        }
+                        logger.error(`[Auth:Fallback] Redis consumeLoginAttempt failed, failing open. Error: ${err.message}`);
                     }
 
                     // ── STEP 4: Firebase authentication (REST API) ───────────
@@ -87,7 +95,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const uid = responseData.localId;
 
                     // ── STEP 5: Reset rate limit on success ─────────────────
-                    await resetLoginAttempts(email);
+                    try {
+                        await resetLoginAttempts(email);
+                    } catch (err: any) {
+                        logger.error(`[Auth:Fallback] Redis resetLoginAttempts failed. Error: ${err.message}`);
+                    }
 
                     // ── STEP 6: Fetch user profile (cache-first) ─────────────
                     const { getUserProfile } = await import("@/lib/user-cache");

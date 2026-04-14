@@ -16,7 +16,8 @@ const NEW_DOMAINS = [
     "easysalesmarket.com",
     "waveprogramme.com",
     "farmnation.ng",
-    "easysalesexportng.com"
+    "easysalesexportng.com",
+    "up.railway.app"
 ];
 
 async function addDomains() {

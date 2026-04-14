@@ -79,6 +79,11 @@ const authMiddleware = auth((req: any) => {
     // Security Headers are set by next.config.ts headers() — not here.
     // Middleware must not duplicate them (last-writer-wins causes conflicts).
     const response = NextResponse.next();
+    
+    // Attach an application version header to enable stale client recovery.
+    // The client frontend can monitor this header in fetch responses to instantly
+    // detect if their cached JS bundles are outdated and force a hard refresh.
+    response.headers.set("x-app-version", process.env.NEXT_PUBLIC_APP_VERSION || "1.0.0");
 
     // 1. Basic Bot Rejection (edge-safe, stateless)
     // Skip /api routes — Paystack webhooks, health checks, and CI pings use curl legitimately.

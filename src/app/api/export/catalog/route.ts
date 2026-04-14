@@ -28,14 +28,14 @@ export async function GET() {
 
         if (!snap.empty) {
             const products = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            return NextResponse.json({ success: true, products });
+            return NextResponse.json({ success: true, data: { products }, meta: null });
         }
 
         // Firestore catalog empty — seed from defaults and return them
-        return NextResponse.json({ success: true, products: DEFAULT_CATALOG, source: "default" });
+        return NextResponse.json({ success: true, data: { products: DEFAULT_CATALOG, source: "default" }, meta: null });
     } catch (error) {
         logger.error("GET /api/export/catalog error:", error);
-        return NextResponse.json({ success: true, products: DEFAULT_CATALOG, source: "default" });
+        return NextResponse.json({ success: true, data: { products: DEFAULT_CATALOG, source: "default" }, meta: null });
     }
 }
 
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
         const session = await auth();
         const isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
         if (!isAdmin) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+            return NextResponse.json({ success: false, data: null, error: "Unauthorized", meta: null }, { status: 403 });
         }
 
         const body = await req.json();
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
                 updatedAt: new Date(),
                 updatedBy: session!.user.id,
             }, { merge: true });
-            return NextResponse.json({ success: true, id: body.id });
+            return NextResponse.json({ success: true, data: { id: body.id }, meta: null });
         } else {
             // Create new
             const ref = await db.collection(COLLECTIONS.EXPORT_CATALOG).add({
@@ -67,11 +67,11 @@ export async function POST(req: Request) {
                 createdAt: new Date(),
                 createdBy: session!.user.id,
             });
-            return NextResponse.json({ success: true, id: ref.id });
+            return NextResponse.json({ success: true, data: { id: ref.id }, meta: null });
         }
     } catch (error) {
         logger.error("POST /api/export/catalog error:", error);
-        return NextResponse.json({ error: "Failed to save catalog item" }, { status: 500 });
+        return NextResponse.json({ success: false, data: null, error: "Failed to save catalog item", meta: null }, { status: 500 });
     }
 }
 
@@ -80,19 +80,19 @@ export async function DELETE(req: Request) {
         const session = await auth();
         const isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
         if (!isAdmin) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+            return NextResponse.json({ success: false, data: null, error: "Unauthorized", meta: null }, { status: 403 });
         }
 
         const { searchParams } = new URL(req.url);
         const id = searchParams.get("id");
-        if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+        if (!id) return NextResponse.json({ success: false, data: null, error: "Missing id", meta: null }, { status: 400 });
 
         const db = getAdminDb();
         await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id).update({ isActive: false, deletedAt: new Date() });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, data: null, meta: null });
     } catch (error) {
         logger.error("DELETE /api/export/catalog error:", error);
-        return NextResponse.json({ error: "Failed to delete item" }, { status: 500 });
+        return NextResponse.json({ success: false, data: null, error: "Failed to delete item", meta: null }, { status: 500 });
     }
 }

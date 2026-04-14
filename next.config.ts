@@ -6,8 +6,6 @@ const nextConfig: NextConfig = {
   // that are available natively in the Vercel runtime or unused server-side
   outputFileTracingExcludes: {
     '*': [
-      // Sharp is not used server-side (Next.js image optimization uses its own)
-      'node_modules/sharp/**',
       // SWC native binaries are only needed at build time, not runtime
       'node_modules/@next/swc-*/**',
       // Prisma (if accidentally installed)
@@ -27,6 +25,7 @@ const nextConfig: NextConfig = {
   // Experimental
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts'],
+    serverComponentsExternalPackages: ['firebase-admin'],
   },
 
   // Image optimization
