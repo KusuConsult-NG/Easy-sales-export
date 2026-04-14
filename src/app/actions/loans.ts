@@ -151,7 +151,7 @@ export async function submitLoanApplicationAction(formData: {
             },
         });
 
-        return { success: true, data: { applicationId: docRef.id } };
+        return { success: true, applicationId: docRef.id };
     } catch (error) {
         logger.error("Loan application error:", error);
         return { success: false, error: "Failed to submit loan application" };
@@ -677,7 +677,7 @@ export async function submitRepaymentAction(data: {
             linkText: "View Loan",
         });
 
-        return { success: true, data: { penalty: calculatedPenalty } };
+        return { success: true, penalty: calculatedPenalty };
     } catch (error: any) {
         logger.error("Repayment submission error:", error);
         return { success: false, error: error.message || "Failed to submit repayment" };
