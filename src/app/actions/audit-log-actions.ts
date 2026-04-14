@@ -217,7 +217,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
             .sort((a, b) => b.count - a.count)
             .slice(0, 10);
 
-        return { success: true, data: { stats } };
+        return { success: true, stats };
     } catch (error: any) {
         logger.error("Failed to fetch audit stats:", error);
         return { success: false, error: error.message || "Failed to fetch statistics" };
