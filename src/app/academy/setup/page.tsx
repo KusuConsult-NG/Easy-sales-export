@@ -56,14 +56,14 @@ export default function AcademyOnboardingPage() {
             try {
                 // Check payment status first
                 const pStatus = await checkAcademyPaymentStatusAction();
-                setPaymentStatus(pStatus);
+                setPaymentStatus(pStatus.data || "unpaid");
 
                 const status = await checkAcademyStatusAction();
-                setApplicationStatus(status);
+                setApplicationStatus(status.data || "none");
 
-                if (status === "approved") {
+                if (status.data === "approved") {
                     router.replace("/academy/dashboard");
-                } else if (status === "pending" || status === "rejected") {
+                } else if (status.data === "pending" || status.data === "rejected") {
                     setIsLoading(false);
                 } else {
                     // No application yet
@@ -82,8 +82,8 @@ export default function AcademyOnboardingPage() {
         setIsPaymentLoading(true);
         try {
             const result = await initiateAcademyPaymentAction(planName);
-            if (result.success && result.paymentUrl) {
-                window.location.href = result.paymentUrl;
+            if (result.success && result.data?.paymentUrl) {
+                window.location.href = result.data.paymentUrl;
             } else {
                 showToast(result.error || "Failed to initiate payment", "error");
                 setIsPaymentLoading(false);

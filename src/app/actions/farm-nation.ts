@@ -142,13 +142,12 @@ export async function getPropertiesAction(filters?: {
 
         return {
             success: true,
-            properties,
-            lastDocId: lastDoc?.id,
-            hasMore: snapshot.docs.length === pageSize
+            data: { properties },
+            meta: { cursor: lastDoc?.id || null, hasMore: snapshot.docs.length === pageSize }
         };
     } catch (error: any) {
         logger.error("Get properties error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -157,7 +156,7 @@ export async function approveFarmNationSellerAction(userId: string) {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false, data: null, error: "Unauthorized", meta: null };
 
         // Update user
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
@@ -167,10 +166,10 @@ export async function approveFarmNationSellerAction(userId: string) {
             roles: FieldValue.arrayUnion("farm-nation-seller")
         });
 
-        return { success: true, message: "Seller approved successfully" };
+        return { success: true, data: { message: "Seller approved successfully" }, meta: null };
     } catch (error: any) {
         logger.error("Approve seller error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -179,7 +178,7 @@ export async function rejectFarmNationSellerAction(userId: string, reason: strin
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false, data: null, error: "Unauthorized", meta: null };
 
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             "serviceRegistrations.farmNation.status": "rejected",
@@ -189,10 +188,10 @@ export async function rejectFarmNationSellerAction(userId: string, reason: strin
             roles: FieldValue.arrayRemove("farm-nation-seller"),
         });
 
-        return { success: true, message: "Seller application rejected" };
+        return { success: true, data: { message: "Seller application rejected" }, meta: null };
     } catch (error: any) {
         logger.error("Reject Farm Nation seller error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -205,7 +204,7 @@ export async function getPropertyByIdAction(propertyId: string) {
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
-            return { success: false, error: "Property not found" };
+            return { success: false, data: null, error: "Property not found", meta: null };
         }
 
         const data = propertyDoc.data()!;
@@ -222,10 +221,10 @@ export async function getPropertyByIdAction(propertyId: string) {
             updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
         } as Property;
 
-        return { success: true, property };
+        return { success: true, data: { property }, meta: null };
     } catch (error: any) {
         logger.error("Get property error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -240,7 +239,7 @@ export async function listPropertyAction(input: PropertyListingInput) {
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         // Check user tier (Premium required)
@@ -248,14 +247,16 @@ export async function listPropertyAction(input: PropertyListingInput) {
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
-            return { success: false, error: "User not found" };
+            return { success: false, data: null, error: "User not found", meta: null };
         }
 
         const userData = userDoc.data()!;
         if (!userData.cooperativeTier || userData.cooperativeTier === "Basic") {
             return {
                 success: false,
+                data: null,
                 error: "Premium tier required to list properties. Contribute at least ₦20,000.",
+                meta: null
             };
         }
 
@@ -266,7 +267,9 @@ export async function listPropertyAction(input: PropertyListingInput) {
         if (!validation.success) {
             return {
                 success: false,
+                data: null,
                 error: validation.error.issues[0]?.message || "Validation failed",
+                meta: null
             };
         }
 
@@ -274,10 +277,10 @@ export async function listPropertyAction(input: PropertyListingInput) {
 
         // Check State/LGA Validity after basic schema check
         if (!isValidState(validatedData.state)) {
-            return { success: false, error: `Invalid State: "${validatedData.state}"` };
+            return { success: false, data: null, error: `Invalid State: "${validatedData.state}"`, meta: null };
         }
         if (!isValidLGA(validatedData.state, validatedData.lga)) {
-            return { success: false, error: `Invalid LGA: "${validatedData.lga}" in ${validatedData.state}` };
+            return { success: false, data: null, error: `Invalid LGA: "${validatedData.lga}" in ${validatedData.state}`, meta: null };
         }
 
         // Create property
@@ -311,12 +314,12 @@ export async function listPropertyAction(input: PropertyListingInput) {
 
         return {
             success: true,
-            message: "Property listed successfully. Awaiting admin verification.",
-            propertyId: docRef.id,
+            data: { message: "Property listed successfully. Awaiting admin verification.", propertyId: docRef.id },
+            meta: null
         };
     } catch (error: any) {
         logger.error("List property error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -329,7 +332,7 @@ export async function getMyPropertiesAction() {
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         const snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
@@ -347,10 +350,10 @@ export async function getMyPropertiesAction() {
             };
         }) as Property[];
 
-        return { success: true, properties };
+        return { success: true, data: { properties }, meta: null };
     } catch (error: any) {
         logger.error("Get my properties error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -371,7 +374,7 @@ export async function initiatePropertyPurchaseAction(
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         // Verify property exists and is available
@@ -379,12 +382,12 @@ export async function initiatePropertyPurchaseAction(
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
-            return { success: false, error: "Property not found" };
+            return { success: false, data: null, error: "Property not found", meta: null };
         }
 
         const property = propertyDoc.data() as Property;
         if (property.status !== "available") {
-            return { success: false, error: "Property is no longer available" };
+            return { success: false, data: null, error: "Property is no longer available", meta: null };
         }
 
         // Check user tier
@@ -392,14 +395,16 @@ export async function initiatePropertyPurchaseAction(
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
-            return { success: false, error: "User not found" };
+            return { success: false, data: null, error: "User not found", meta: null };
         }
 
         const userData = userDoc.data()!;
         if (!userData.cooperativeTier || userData.cooperativeTier === "Basic") {
             return {
                 success: false,
+                data: null,
                 error: "Premium tier required. Contribute at least ₦20,000.",
+                meta: null
             };
         }
 
@@ -433,13 +438,12 @@ export async function initiatePropertyPurchaseAction(
 
         return {
             success: true,
-            message: "Purchase request created. Proceed to payment.",
-            requestId: requestRef.id,
-            amount: property.price,
+            data: { message: "Purchase request created. Proceed to payment.", requestId: requestRef.id, amount: property.price },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Initiate purchase error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -452,7 +456,7 @@ export async function getMyPurchaseRequestsAction() {
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         const snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
@@ -470,10 +474,10 @@ export async function getMyPurchaseRequestsAction() {
             };
         });
 
-        return { success: true, requests };
+        return { success: true, data: { requests }, meta: null };
     } catch (error: any) {
         logger.error("Get purchase requests error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -486,26 +490,26 @@ export async function cancelPurchaseRequestAction(requestId: string) {
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         const requestRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(requestId);
         const requestDoc = await requestRef.get();
 
         if (!requestDoc.exists) {
-            return { success: false, error: "Purchase request not found" };
+            return { success: false, data: null, error: "Purchase request not found", meta: null };
         }
 
         const requestData = requestDoc.data();
 
         // Verify user owns this request
         if (requestData?.buyerId !== session.user.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         // Can only cancel pending requests
         if (requestData?.status !== "pending_payment") {
-            return { success: false, error: "Can only cancel pending payment requests" };
+            return { success: false, data: null, error: "Can only cancel pending payment requests", meta: null };
         }
 
         // Update request status
@@ -526,11 +530,12 @@ export async function cancelPurchaseRequestAction(requestId: string) {
 
         return {
             success: true,
-            message: "Purchase request cancelled successfully",
+            data: { message: "Purchase request cancelled successfully" },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Cancel purchase request error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -543,21 +548,21 @@ export async function deletePropertyAction(propertyId: string) {
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
-            return { success: false, error: "Property not found" };
+            return { success: false, data: null, error: "Property not found", meta: null };
         }
 
         const property = propertyDoc.data();
 
         // Verify user owns this property
         if (property?.ownerId !== session.user.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         // Check for active purchase requests
@@ -569,7 +574,9 @@ export async function deletePropertyAction(propertyId: string) {
         if (!activeRequests.empty) {
             return {
                 success: false,
+                data: null,
                 error: "Cannot delete property with active purchase requests",
+                meta: null
             };
         }
 
@@ -582,11 +589,12 @@ export async function deletePropertyAction(propertyId: string) {
 
         return {
             success: true,
-            message: "Property deleted successfully",
+            data: { message: "Property deleted successfully" },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Delete property error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -599,21 +607,21 @@ export async function updatePropertyAction(propertyId: string, updates: Partial<
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
-            return { success: false, error: "Property not found" };
+            return { success: false, data: null, error: "Property not found", meta: null };
         }
 
         const property = propertyDoc.data();
 
         // Verify user owns this property
         if (property?.ownerId !== session.user.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         // Build update object
@@ -631,11 +639,11 @@ export async function updatePropertyAction(propertyId: string, updates: Partial<
             const newLGA = updates.lga ? normalizeLocation(updates.lga) : property?.lga;
 
             if (updates.state && !isValidState(newState)) {
-                return { success: false, error: `Invalid State: ${updates.state}` };
+                return { success: false, data: null, error: `Invalid State: ${updates.state}`, meta: null };
             }
             // If both present or one changing, re-validate pair
             if (!isValidLGA(newState, newLGA)) {
-                return { success: false, error: `Invalid LGA: ${newLGA} in ${newState}` };
+                return { success: false, data: null, error: `Invalid LGA: ${newLGA} in ${newState}`, meta: null };
             }
 
             if (updates.state) updateData.state = newState;
@@ -653,11 +661,12 @@ export async function updatePropertyAction(propertyId: string, updates: Partial<
 
         return {
             success: true,
-            message: "Property updated successfully",
+            data: { message: "Property updated successfully" },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Update property error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -703,7 +712,9 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         if (!session?.user?.id) {
             return {
                 success: false,
+                data: null,
                 error: "Not authenticated. Please login first.",
+                meta: null
             };
         }
 
@@ -716,13 +727,17 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         if (existingStatus === 'pending' || existingStatus === 'under_review') {
             return {
                 success: false,
-                error: "Your previous application is still being processed."
+                data: null,
+                error: "Your previous application is still being processed.",
+                meta: null
             };
         }
         if (existingStatus === 'approved') {
             return {
                 success: false,
-                error: "You are already registered for Farm Nation."
+                data: null,
+                error: "You are already registered for Farm Nation.",
+                meta: null
             };
         }
 
@@ -730,7 +745,9 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         if (!data.role || !data.profile || !data.terms) {
             return {
                 success: false,
+                data: null,
                 error: "Missing required onboarding data",
+                meta: null
             };
         }
 
@@ -738,7 +755,9 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         if (!data.terms.termsAccepted || !data.terms.privacyAccepted || !data.terms.feeDisclosureAccepted) {
             return {
                 success: false,
+                data: null,
                 error: "You must accept all terms to continue",
+                meta: null
             };
         }
 
@@ -795,12 +814,15 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
                 role: data.role,
                 userId,
             },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Error submitting Farm Nation onboarding:", error);
         return {
             success: false,
+            data: null,
             error: "An error occurred while processing your onboarding. Please try again.",
+            meta: null
         };
     }
 }
@@ -870,20 +892,20 @@ export async function uploadPropertyDocumentsAction(
         surveyPlan?: string;
         taxClearance?: string;
     }
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false, data: null, error: "Unauthorized", meta: null };
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
-        if (!propertyDoc.exists) return { success: false, error: "Property not found" };
+        if (!propertyDoc.exists) return { success: false, data: null, error: "Property not found", meta: null };
 
         const property = propertyDoc.data();
-        if (property?.ownerId !== session.user.id) return { success: false, error: "Unauthorized" };
+        if (property?.ownerId !== session.user.id) return { success: false, data: null, error: "Unauthorized", meta: null };
 
         // Merge documents
         const currentDocs = property?.documents || {};
@@ -906,20 +928,20 @@ export async function uploadPropertyDocumentsAction(
  * Verify Property (Admin Only)
  * Toggles the verified status of a property
  */
-export async function verifyPropertyAction(propertyId: string, verified: boolean): Promise<{ success: boolean; error?: string }> {
+export async function verifyPropertyAction(propertyId: string, verified: boolean) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         // Check admin role
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
-        if (!propertyDoc.exists) return { success: false, error: "Property not found" };
+        if (!propertyDoc.exists) return { success: false, data: null, error: "Property not found", meta: null };
 
         const property = propertyDoc.data() as Property;
 
@@ -929,7 +951,9 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
             if (!property.documents?.cOfO && !property.documents?.surveyPlan) {
                 return {
                     success: false,
-                    error: "Cannot verify property without documents (C of O or Survey Plan required)."
+                    data: null,
+                    error: "Cannot verify property without documents (C of O or Survey Plan required).",
+                    meta: null
                 };
             }
         }
@@ -952,10 +976,10 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
             metadata: { propertyId, verified }
         });
 
-        return { success: true };
+        return { success: true, data: null, meta: null };
     } catch (error: any) {
         logger.error("Verify property error:", error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }
 
@@ -966,17 +990,12 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
 /**
  * Fetch the current user's Farm Nation onboarding data for prefilling the edit form.
  */
-export async function getFarmNationApplicationAction(): Promise<{
-    success: boolean;
-    data?: any;
-    rejectionReason?: string;
-    error?: string;
-}> {
+export async function getFarmNationApplicationAction(): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: 'Unauthorized' };
+        if (!session?.user) return { success: false, data: null, error: 'Unauthorized', meta: null };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
@@ -985,17 +1004,17 @@ export async function getFarmNationApplicationAction(): Promise<{
         const registration = userData?.serviceRegistrations?.farmNation;
 
         if (!farmNation && !registration) {
-            return { success: false, error: 'No application found' };
+            return { success: false, data: null, error: 'No application found', meta: null };
         }
 
         return {
             success: true,
-            data: { ...farmNation, ...registration },
-            rejectionReason: registration?.rejectionReason,
+            data: { application: { ...farmNation, ...registration }, rejectionReason: registration?.rejectionReason },
+            meta: null
         };
     } catch (error) {
         logger.error('getFarmNationApplicationAction error:', error);
-        return { success: false, error: 'Failed to fetch application' };
+        return { success: false, data: null, error: 'Failed to fetch application', meta: null };
     }
 }
 
@@ -1004,12 +1023,12 @@ export async function getFarmNationApplicationAction(): Promise<{
  */
 export async function resubmitFarmNationApplicationAction(
     data: FarmNationOnboardingData
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+        if (!session?.user?.id) return { success: false, data: null, error: 'Unauthorized', meta: null };
 
         const userId = session.user.id;
 
@@ -1018,11 +1037,11 @@ export async function resubmitFarmNationApplicationAction(
         const allowedStatuses = ['pending', 'rejected', 'revision_required'];
 
         if (!allowedStatuses.includes(existingStatus || '')) {
-            return { success: false, error: 'Your application cannot be resubmitted at this time.' };
+            return { success: false, data: null, error: 'Your application cannot be resubmitted at this time.', meta: null };
         }
 
         if (!data.terms.termsAccepted || !data.terms.privacyAccepted || !data.terms.feeDisclosureAccepted) {
-            return { success: false, error: 'You must accept all terms to continue' };
+            return { success: false, data: null, error: 'You must accept all terms to continue', meta: null };
         }
 
         await db.collection(COLLECTIONS.USERS).doc(userId).set(
@@ -1057,10 +1076,10 @@ export async function resubmitFarmNationApplicationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true };
+        return { success: true, data: null, meta: null };
     } catch (error: any) {
         logger.error('resubmitFarmNationApplicationAction error:', error);
-        return { success: false, error: 'Failed to resubmit application' };
+        return { success: false, data: null, error: 'Failed to resubmit application', meta: null };
     }
 }
 
@@ -1105,16 +1124,12 @@ export interface FarmNationDashboardStats {
     role: string;
 }
 
-export async function getFarmNationDashboardStatsAction(): Promise<{
-    success: boolean;
-    stats?: FarmNationDashboardStats;
-    error?: string;
-}> {
+export async function getFarmNationDashboardStatsAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: 'Unauthorized' };
+        if (!sessionResult.session) return { success: false, data: null, error: 'Unauthorized', meta: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: 'Unauthorized' };
+        if (!session?.user?.id) return { success: false, data: null, error: 'Unauthorized', meta: null };
 
         const userId = session.user.id;
 
@@ -1176,19 +1191,22 @@ export async function getFarmNationDashboardStatsAction(): Promise<{
 
         return {
             success: true,
-            stats: {
-                totalHectares,
-                activeListings,
-                completedDeals,
-                portfolioValue,
-                pendingTransactions,
-                recentTransactions: transactions.slice(0, 5),
-                recentListings: properties.slice(0, 4),
-                role,
+            data: {
+                stats: {
+                    totalHectares,
+                    activeListings,
+                    completedDeals,
+                    portfolioValue,
+                    pendingTransactions,
+                    recentTransactions: transactions.slice(0, 5),
+                    recentListings: properties.slice(0, 4),
+                    role,
+                }
             },
+            meta: null
         };
     } catch (error: any) {
         logger.error('getFarmNationDashboardStatsAction error:', error);
-        return { success: false, error: error.message };
+        return { success: false, data: null, error: error.message, meta: null };
     }
 }

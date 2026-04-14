@@ -111,7 +111,7 @@ export default function CooperativeMembersPage() {
                     setApplications(data.members);
                 }
 
-                setHasMore(data.hasMore);
+                setHasMore(data.data?.hasMore);
                 setLastCreatedAt(data.lastCreatedAt);
             }
         } catch (error) {
@@ -134,8 +134,8 @@ export default function CooperativeMembersPage() {
     // Load Global Stats
     useEffect(() => {
         getCooperativeStatsAction().then(res => {
-            if (res.success && res.data) {
-                setStats(res.data);
+            if (res.success && res.data?.stats) {
+                setStats(res.data.data?.stats);
             }
         });
     }, []);
@@ -174,7 +174,7 @@ export default function CooperativeMembersPage() {
                 fetchApplications();
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(data.message || "Failed to approve membership", "error");
+                showToast(data.data?.message || "Failed to approve membership", "error");
             }
         } catch (error) {
             showToast("An error occurred while approving the membership", "error");
@@ -205,7 +205,7 @@ export default function CooperativeMembersPage() {
                 fetchApplications();
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(data.message || "Failed to reject membership", "error");
+                showToast(data.data?.message || "Failed to reject membership", "error");
             }
         } catch (error) {
             showToast("An error occurred while rejecting the membership", "error");

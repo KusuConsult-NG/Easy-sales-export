@@ -47,8 +47,8 @@ export default function ProductDetailPage() {
     async function loadProduct() {
         try {
             const result = await getProductByIdAction(productId);
-            if (result.success && result.product) {
-                setProduct(result.product);
+            if (result.success && result.data?.product) {
+                setProduct(result.data?.product);
             } else {
                 showToast("Product not found", "error");
                 router.push("/marketplace");

@@ -65,7 +65,7 @@ export default function AcademyApplicationPage() {
         const checkStatus = async () => {
             try {
                 const status = await checkAcademyStatusAction();
-                if (status === "pending" || status === "under_review") {
+                if (status.data === "pending" || status.data === "under_review") {
                     const params = new URLSearchParams(window.location.search);
                     const isEditParam = params.get("edit") === "true";
 
@@ -87,17 +87,17 @@ export default function AcademyApplicationPage() {
                         }
                         setIsEditMode(true);
                         const payStatus = await checkAcademyPaymentStatusAction();
-                        setPaymentStatus(payStatus);
+                        setPaymentStatus(payStatus.data || "unpaid");
                         setIsLoading(false);
                     } else {
                         // Stay on page — do NOT auto-redirect pending users
                         const payStatus = await checkAcademyPaymentStatusAction();
-                        setPaymentStatus(payStatus);
+                        setPaymentStatus(payStatus.data || "unpaid");
                         setIsLoading(false);
                     }
-                } else if (status === "approved" || status === "active") {
+                } else if (status.data === "approved" || status.data === "active") {
                     router.replace("/academy/dashboard");
-                } else if (status === "revision_required") {
+                } else if (status.data === "revision_required") {
                     // Pre-populate form with existing data
                     const result = await getAcademyApplicationAction();
                     if (result.success && result.data) {
@@ -113,17 +113,17 @@ export default function AcademyApplicationPage() {
                         }
                         if (d.education) setEducation((prev: any) => ({ ...prev, ...d.education }));
                         if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
+                        if (d.revisionNote) setRevisionNote(d.revisionNote);
                     }
-                    if (result.revisionNote) setRevisionNote(result.revisionNote);
                     setIsRevisionMode(true);
                     // Check payment status — user already paid previously
                     const payStatus = await checkAcademyPaymentStatusAction();
-                    setPaymentStatus(payStatus);
+                    setPaymentStatus(payStatus.data || "unpaid");
                     setIsLoading(false);
                 } else {
                     // Check payment status
                     const payStatus = await checkAcademyPaymentStatusAction();
-                    setPaymentStatus(payStatus);
+                    setPaymentStatus(payStatus.data || "unpaid");
                     setIsLoading(false);
                 }
             } catch (error) {
@@ -276,8 +276,8 @@ export default function AcademyApplicationPage() {
         setIsPaying(true);
         try {
             const result = await initiateAcademyPaymentAction();
-            if (result.success && result.paymentUrl) {
-                window.location.href = result.paymentUrl;
+            if (result.success && result.data?.paymentUrl) {
+                window.location.href = result.data.paymentUrl;
             } else {
                 showToast(result.error || "Failed to initiate payment", "error");
             }

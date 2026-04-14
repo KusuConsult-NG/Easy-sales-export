@@ -113,7 +113,7 @@ export default function AdminLoansPage() {
                 setIsDetailsModalOpen(false);
                 // onSnapshot auto-updates the list
             } else {
-                showToast(data.message || "Failed to approve loan", "error");
+                showToast(data.data?.message || "Failed to approve loan", "error");
             }
         } catch (error) {
             showToast("An error occurred", "error");
@@ -138,7 +138,7 @@ export default function AdminLoansPage() {
                 showToast("Loan application rejected", "success");
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(data.message || "Failed to reject loan", "error");
+                showToast(data.data?.message || "Failed to reject loan", "error");
             }
         } catch (error) {
             showToast("An error occurred", "error");

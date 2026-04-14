@@ -40,9 +40,9 @@ export default function CooperativeDashboardPage() {
                 // Single optimized call instead of two separate calls
                 const result = await getDashboardDataAction();
 
-                if (result.success && result.membership) {
-                    setMembership(result.membership);
-                    setTransactions(result.transactions);
+                if (result.success && result.data?.membership) {
+                    setMembership(result.data.membership);
+                    setTransactions(result.data.transactions);
                 } else if (result.error?.includes("No cooperative")) {
                     // Not a member - membership will be null
                     setMembership(null);

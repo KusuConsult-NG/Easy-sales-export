@@ -62,7 +62,7 @@ export default function AcademyDashboardPage() {
             if (data.success) {
                 setCourses(data.courses || []);
                 setCertificates(data.certificates || []);
-                setStats(data.stats || stats);
+                setStats(data.data?.stats || stats);
             }
         } catch (error) {
             logger.error("Failed to fetch dashboard data:", error);

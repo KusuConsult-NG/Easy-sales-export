@@ -410,7 +410,7 @@ export async function sendBroadcastAction(
             status,
         });
 
-        return { success: true, sent: successCount, failed: failCount, logId: logRef.id };
+        return { success: true, data: { sent: successCount, failed: failCount, logId: logRef.id } };
     } catch (error: any) {
         return { success: false, sent: 0, failed: 0, error: error.message };
     }

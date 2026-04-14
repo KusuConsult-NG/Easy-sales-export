@@ -49,15 +49,15 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
             setLoading(true);
             try {
-                const [courseData, progressData] = await Promise.all([
+                const [courseReq, progressReq] = await Promise.all([
                     getCourseByIdAction(courseId),
                     getUserProgressAction(session.user.id, courseId),
                 ]);
 
                 if (mounted) {
-                    if (courseData) {
-                        setCourse(courseData);
-                        setProgress(progressData);
+                    if (courseReq.data) {
+                        setCourse(courseReq.data);
+                        setProgress(progressReq.data || null);
                     } else {
                         // Handle not found
                     }
@@ -78,13 +78,13 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
     // Function to manually refresh data
     const loadCourse = useCallback(async () => {
         if (!session?.user) return;
-        const [courseData, progressData] = await Promise.all([
+        const [courseReq, progressReq] = await Promise.all([
             getCourseByIdAction(courseId),
             getUserProgressAction(session.user.id, courseId),
         ]);
-        if (courseData) {
-            setCourse(courseData);
-            setProgress(progressData);
+        if (courseReq.data) {
+            setCourse(courseReq.data);
+            setProgress(progressReq.data || null);
         }
     }, [courseId, session]);
 

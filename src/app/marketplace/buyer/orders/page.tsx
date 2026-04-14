@@ -46,10 +46,10 @@ export default function OrdersPage() {
                 status: filterStatus
             });
 
-            if (result.success && result.orders) {
-                setOrders(prev => isReset ? result.orders : [...prev, ...result.orders]);
-                setLastId(result.lastId);
-                setHasMore(!!result.hasMore);
+            if (result.success && result.data?.orders) {
+                setOrders(prev => isReset ? result.data?.orders : [...prev, ...result.data?.orders]);
+                setLastId(result.data?.lastId);
+                setHasMore(!!result.data?.hasMore);
             } else if (result.error) {
                 logger.error("Failed to load orders:", { error: result.error });
             }

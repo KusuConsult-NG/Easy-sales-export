@@ -16,6 +16,7 @@ function nairaToKobo(naira: number): number {
 export interface PaymentInitState {
     success: boolean;
     error?: string | null;
+    meta?: any;
     data?: {
         authorizationUrl: string;
         reference: string;
@@ -39,16 +40,16 @@ export async function initializeInvestmentPaymentAction(
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false, data: undefined, meta: null };
         }
 
         // Validate amount
         if (investmentAmount < 50000) {
-            return { error: "Minimum investment is ₦50,000", success: false };
+            return { error: "Minimum investment is ₦50,000", success: false, data: undefined, meta: null };
         }
 
         if (investmentAmount > 10000000) {
-            return { error: "Maximum investment is ₦10,000,000", success: false };
+            return { error: "Maximum investment is ₦10,000,000", success: false, data: undefined, meta: null };
         }
 
         // Check if export window exists and is open
@@ -56,16 +57,16 @@ export async function initializeInvestmentPaymentAction(
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
-            return { error: "Export window not found", success: false };
+            return { error: "Export window not found", success: false, data: undefined, meta: null };
         }
 
         const windowData = windowDoc.data();
         if (!windowData) {
-            return { error: "Export window data is corrupted", success: false };
+            return { error: "Export window data is corrupted", success: false, data: undefined, meta: null };
         }
 
         if (windowData.status !== "open" && windowData.status !== "active") {
-            return { error: "This export window is no longer accepting investments", success: false };
+            return { error: "This export window is no longer accepting investments", success: false, data: undefined, meta: null };
         }
 
         // Check if funding goal exceeded
@@ -75,7 +76,9 @@ export async function initializeInvestmentPaymentAction(
         if (currentFunding + investmentAmount > fundingGoal) {
             return {
                 error: `Investment exceeds available slots. Maximum available: ₦${(fundingGoal - currentFunding).toLocaleString()}`,
-                success: false
+                success: false,
+                data: undefined,
+                meta: null
             };
         }
 
@@ -120,12 +123,15 @@ export async function initializeInvestmentPaymentAction(
                 authorizationUrl,
                 reference,
             },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Investment payment initialization error:", error);
         return {
             success: false,
             error: error.message || "Failed to initialize investment payment. Please try again.",
+            data: undefined,
+            meta: null
         };
     }
 }
@@ -134,19 +140,14 @@ export async function initializeInvestmentPaymentAction(
  * Verify Export Investment Payment
  * Updates investment and portfolio after successful payment
  */
-export async function verifyInvestmentPaymentAction(reference: string): Promise<{
-    success: boolean;
-    error?: string;
-    message?: string;
-    investmentId?: string;
-}> {
+export async function verifyInvestmentPaymentAction(reference: string) {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false, data: null, meta: null };
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
@@ -156,7 +157,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         if (existingPayment.exists) {
             return {
                 error: "Payment has already been processed",
-                success: false
+                success: false, data: null, meta: null
             };
         }
 
@@ -166,7 +167,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
                 error: `Payment ${paymentData.data.status}. Please contact support if amount was debited.`,
-                success: false,
+                success: false, data: null, meta: null
             };
         }
 
@@ -179,17 +180,17 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
 
         // Verify user match
         if (userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false };
+            return { error: "Payment verification failed: User mismatch", success: false, data: null, meta: null };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
         if (amountInNaira < 50000 || amountInNaira > 10000000) {
-            return { error: "Invalid payment amount", success: false };
+            return { error: "Invalid payment amount", success: false, data: null, meta: null };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
         if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
-            return { error: "Payment amount mismatch", success: false };
+            return { error: "Payment amount mismatch", success: false, data: null, meta: null };
         }
 
         // Find investment record
@@ -199,7 +200,7 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
             .get();
 
         if (investmentQuery.empty) {
-            return { error: "Investment record not found", success: false };
+            return { error: "Investment record not found", success: false, data: null, meta: null };
         }
 
         const investmentDoc = investmentQuery.docs[0];
@@ -287,8 +288,11 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
 
         return {
             success: true,
-            message: `Investment successful! Your ₦${amountInNaira.toLocaleString()} investment in ${metadata.windowTitle} is now active.`,
-            investmentId: investmentDoc.id,
+            data: {
+                message: `Investment successful! Your ₦${amountInNaira.toLocaleString()} investment in ${metadata.windowTitle} is now active.`,
+                investmentId: investmentDoc.id,
+            },
+            meta: null
         };
     } catch (error: any) {
         // 🔒 SECURITY FIX #2: Sanitized error logging
@@ -300,6 +304,8 @@ export async function verifyInvestmentPaymentAction(reference: string): Promise<
 
         return {
             success: false,
+            data: null,
+            meta: null,
             error: "Failed to verify investment payment. Please contact support with your payment reference.",
         };
     }

@@ -34,13 +34,13 @@ export default function BuyerDashboard() {
                     getRecommendedProductsAction(3)
                 ]);
 
-                if (statsResult.success && statsResult.stats) {
-                    setStats(statsResult.stats);
+                if (statsResult.success && statsResult.data?.stats) {
+                    setStats(statsResult.data?.stats);
                 }
 
-                if (ordersResult.success && ordersResult.orders) {
+                if (ordersResult.success && ordersResult.data?.orders) {
                     // Sort by newest first and take top 5
-                    const sorted = ordersResult.orders.sort((a, b) => {
+                    const sorted = ordersResult.data?.orders.sort((a, b) => {
                         const dateA = a.createdAt instanceof Date ? a.createdAt : new Date((a.createdAt as unknown as { seconds: number }).seconds * 1000);
                         const dateB = b.createdAt instanceof Date ? b.createdAt : new Date((b.createdAt as unknown as { seconds: number }).seconds * 1000);
                         return dateB.getTime() - dateA.getTime();
@@ -48,9 +48,9 @@ export default function BuyerDashboard() {
                     setRecentOrders(sorted.slice(0, 5));
                 }
 
-                if (recommendedResult.success && recommendedResult.products) {
+                if (recommendedResult.success && recommendedResult.data?.products) {
                     // Transform to match expected format
-                    const transformed = recommendedResult.products.map(p => ({
+                    const transformed = recommendedResult.data?.products.map(p => ({
                         id: p.id,
                         name: p.title,
                         price: p.pricingTiers[0]?.price || 0,

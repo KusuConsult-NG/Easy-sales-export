@@ -38,10 +38,13 @@ export default function WaveEarningsPage() {
         setLoading(true);
         try {
             const result = await calculateEarningsAction(session.user.id);
-            setEarnings(result);
+            if (result.success && result.data) {
+                setEarnings(result.data);
+            } else {
+                setEarnings(null);
+                showToast(result.error || "Failed to load earnings data", "error");
+            }
         } catch (error) {
-            logger.error("Failed to load earnings:", error);
-            showToast("Failed to load earnings data", "error");
         } finally {
             setLoading(false);
         }

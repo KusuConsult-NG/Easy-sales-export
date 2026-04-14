@@ -55,9 +55,7 @@ export async function getUserProfileAction() {
 
         const nameSplit = splitName(userData.fullName || "");
 
-        return {
-            success: true,
-            profile: {
+        return { success: true, data: { profile: {
                 firstName: userData.firstName || nameSplit.first,
                 lastName: userData.lastName || nameSplit.last,
                 email: userData.email || "",
@@ -67,8 +65,7 @@ export async function getUserProfileAction() {
                 notifications: userData.notifications || {
                     email: true,
                     push: false,
-                    sms: true,
-                },
+                    sms: true, } },
             },
         };
     } catch (error: any) {

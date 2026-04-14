@@ -30,7 +30,7 @@ function PaymentCallbackContent() {
 
                 if (result.success) {
                     setStatus("success");
-                    setMessage(result.message || "Order payment successful!");
+                    setMessage(result.data?.message || "Order payment successful!");
                     setOrderId(result.orderId || null);
 
                     // Clear both user-scoped and legacy cart keys

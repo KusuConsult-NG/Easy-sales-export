@@ -19,10 +19,9 @@ export async function getFarmNationRegistrantsAction(options: {
     lastDocId?: string;
 } = {}): Promise<{
     success: boolean;
-    error?: string | null;
-    users?: any[];
-    hasMore?: boolean;
-    lastDocId?: string;
+    data?: any;
+    meta?: any;
+    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -90,15 +89,18 @@ export async function getFarmNationRegistrantsAction(options: {
 
         return {
             success: true,
-            users: paged,
-            hasMore,
-            lastDocId: hasMore ? String(page + 1) : undefined,
-            error: null,
+            data: { users: paged },
+            meta: {
+                hasMore,
+                cursor: hasMore ? String(page + 1) : null
+            }
         };
     } catch (error: any) {
         logger.error("getFarmNationRegistrantsAction error:", error);
         return {
             success: false,
+            data: null,
+            meta: null,
             error: "Failed to fetch farm nation registrants: " + error.message,
         };
     }

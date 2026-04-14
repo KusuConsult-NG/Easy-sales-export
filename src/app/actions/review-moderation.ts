@@ -343,7 +343,7 @@ export async function bulkApproveReviewsAction(
             }
         );
 
-        return { success: true, approved: approvedCount };
+        return { success: true, data: { approved: approvedCount } };
     } catch (error: any) {
         logger.error("Failed to bulk approve reviews:", error);
         return { success: false, approved: 0, error: error.message || "Failed to approve reviews" };

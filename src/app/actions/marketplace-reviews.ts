@@ -89,7 +89,7 @@ export async function submitProductReviewAction(data: {
         // Recalculate and denormalize product rating
         await _recalculateProductRating(data.productId);
 
-        return { success: true, reviewId: reviewRef.id };
+        return { success: true, data: { reviewId: reviewRef.id } };
     } catch (err: any) {
         logger.error("submitProductReviewAction error:", err);
         return { success: false, error: err.message || "Failed to submit review" };
@@ -154,7 +154,7 @@ export async function submitSellerReviewAction(data: {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true, reviewId: reviewRef.id };
+        return { success: true, data: { reviewId: reviewRef.id } };
     } catch (err: any) {
         logger.error("submitSellerReviewAction error:", err);
         return { success: false, error: err.message || "Failed to submit seller review" };

@@ -403,11 +403,12 @@ function LoanApplicationModal({
     onClose: () => void;
     onSuccess: () => void;
 }) {
-    const initialState = {
+    const initialState: Awaited<ReturnType<typeof applyForLoanAction>> = {
         error: "",
         success: false as const,
-        message: ""
-    } as unknown as Awaited<ReturnType<typeof applyForLoanAction>>;
+        data: null,
+        meta: null
+    };
 
     const [state, action, isPending] = useActionState(applyForLoanAction, initialState);
 

@@ -156,8 +156,8 @@ export default function AdminWaveTrainingPage() {
         setLoadingParticipants(true);
         try {
             const result = await getEventParticipantsAction(eventId);
-            if (result.success && result.participants) {
-                setParticipants(result.participants);
+            if (result.success && result.data?.participants) {
+                setParticipants(result.data.participants);
             } else {
                 showToast("Failed to load participants", "error");
             }

@@ -523,11 +523,8 @@ export async function createBankTransferOrderAction(
             });
         });
 
-        return {
-            success: true,
-            orderId,
-            orderReference,
-        };
+        return { success: true, data: { orderId,
+            orderReference, } };
     } catch (error: any) {
         logger.error("Bank transfer order creation error:", error);
         return {
@@ -545,7 +542,7 @@ export async function calculateDeliveryAction(items: CartItem[], location?: any)
     try {
         const fees = await getPlatformFees();
         const fee = calculateDeliveryFee(items, location, fees);
-        return { success: true, fee };
+        return { success: true, data: { fee } };
     } catch (error: any) {
         return { success: false, fee: 0, error: error.message };
     }
@@ -658,7 +655,7 @@ export async function createPaymentOnDeliveryOrderAction(
         }).catch((e) => logger.error("[POD] Notification error:", e));
 
         revalidatePath("/marketplace/buyer/orders");
-        return { success: true, orderId };
+        return { success: true, data: { orderId } };
     } catch (error: any) {
         logger.error("createPaymentOnDeliveryOrderAction error:", error);
         return { success: false, error: error.message || "Failed to create POD order" };

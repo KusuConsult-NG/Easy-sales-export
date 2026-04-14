@@ -24,7 +24,7 @@ export async function createResourceAction(data: {
     fileUrl: string;
     fileName: string;
     fileSize: number;
-}): Promise<{ success: boolean; error?: string; resourceId?: string }> {
+}): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -54,7 +54,7 @@ export async function createResourceAction(data: {
             targetId: resourceRef.id,
         });
 
-        return { success: true, resourceId: resourceRef.id };
+        return { success: true, data: { resourceId: resourceRef.id } };
     } catch (error) {
         logger.error("Create resource error:", error);
         return { success: false, error: "Failed to create resource" };
@@ -71,7 +71,7 @@ export async function updateResourceAction(
         fileName: string;
         fileSize: number;
     }>
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -107,7 +107,7 @@ export async function updateResourceAction(
 
 export async function deleteResourceAction(
     resourceId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -154,7 +154,7 @@ export async function createTrainingEventAction(data: {
     duration: string;
     maxParticipants: number;
     meetingLink?: string;
-}): Promise<{ success: boolean; error?: string; eventId?: string }> {
+}): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -184,7 +184,7 @@ export async function createTrainingEventAction(data: {
             targetId: eventRef.id,
         });
 
-        return { success: true, eventId: eventRef.id };
+        return { success: true, data: { eventId: eventRef.id } };
     } catch (error) {
         logger.error("Create event error:", error);
         return { success: false, error: "Failed to create event" };
@@ -203,7 +203,7 @@ export async function updateTrainingEventAction(
         meetingLink: string;
         status: "upcoming" | "ongoing" | "completed" | "cancelled";
     }>
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -237,11 +237,7 @@ export async function updateTrainingEventAction(
     }
 }
 
-export async function getEventParticipantsAction(eventId: string): Promise<{
-    success: boolean;
-    participants?: any[];
-    error?: string;
-}> {
+export async function getEventParticipantsAction(eventId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -256,7 +252,7 @@ export async function getEventParticipantsAction(eventId: string): Promise<{
 
         const participants = serializeDocs(snap.docs);
 
-        return { success: true, participants };
+        return { success: true, data: { participants } };
     } catch (error) {
         logger.error("Get participants error:", error);
         return { success: false, error: "Failed to fetch participants" };
@@ -267,11 +263,7 @@ export async function getEventParticipantsAction(eventId: string): Promise<{
 // APPLICATIONS MANAGEMENT
 // ============================================================================
 
-export async function getWaveApplicationsAction(): Promise<{
-    success: boolean;
-    applications?: any[];
-    error?: string;
-}> {
+export async function getWaveApplicationsAction(): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -289,7 +281,7 @@ export async function getWaveApplicationsAction(): Promise<{
         const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(1000).get();
         const applications = serializeDocs(snapshot.docs);
 
-        return { success: true, applications };
+        return { success: true, data: { applications } };
     } catch (error) {
         logger.error("Get applications error:", error);
         return { success: false, error: "Failed to fetch applications" };
@@ -298,7 +290,7 @@ export async function getWaveApplicationsAction(): Promise<{
 
 export async function approveWaveApplicationAction(
     applicationId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -377,7 +369,7 @@ export async function approveWaveApplicationAction(
 export async function rejectWaveApplicationAction(
     applicationId: string,
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;

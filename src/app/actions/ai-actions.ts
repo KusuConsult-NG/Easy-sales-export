@@ -103,12 +103,9 @@ export async function sendAIMessage(
             },
         });
 
-        return {
-            success: true,
-            response: aiResponse,
+        return { success: true, data: { response: aiResponse,
             chatId: chatRef.id,
-            userId: session.user.id,
-        };
+            userId: session.user.id, } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -151,10 +148,7 @@ export async function getAIChatHistory(maxMessages: number = 20) {
             } as AIChatMessage;
         }).reverse(); // Reverse to show oldest first
 
-        return {
-            success: true,
-            messages,
-        };
+        return { success: true, data: { messages, } };
     } catch (error) {
         return { success: false, error: "Failed to fetch chat history", messages: [] };
     }
@@ -171,10 +165,7 @@ export async function getAISuggestions(context: { currentPage: string; userRole:
     // Generate contextual suggestions based on page
     const suggestions = generateSuggestions(context.currentPage, context.userRole);
 
-    return {
-        success: true,
-        suggestions,
-    };
+    return { success: true, data: { suggestions, } };
 }
 
 /**

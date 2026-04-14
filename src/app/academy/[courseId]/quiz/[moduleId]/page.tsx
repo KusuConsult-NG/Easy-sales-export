@@ -56,12 +56,14 @@ export default function QuizPage(props: QuizPageProps) {
     async function loadQuiz() {
         setLoading(true);
 
-        const courseData = await getCourseByIdAction(courseId);
+        const courseReq = await getCourseByIdAction(courseId);
 
-        if (!courseData) {
+        if (!courseReq.success || !courseReq.data) {
             setLoading(false);
             return;
         }
+        
+        const courseData = courseReq.data;
 
         // Find module and quiz
         // eslint-disable-next-line @next/next/no-assign-module-variable
@@ -104,7 +106,7 @@ export default function QuizPage(props: QuizPageProps) {
         );
 
         if (result.success) {
-            setPassed(result.passed || false);
+            setPassed(result.data?.passed || false);
             setQuizCompleted(true);
         } else {
             showToast(result.error || "Failed to submit quiz", "error");

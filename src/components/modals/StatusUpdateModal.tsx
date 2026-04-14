@@ -9,10 +9,10 @@ import { useToast } from "@/contexts/ToastContext";
 import { updateExportStatusAction } from "@/app/actions/export-status";
 
 type UpdateExportStatusState =
-    | { error: string; success: false }
-    | { error: null; success: true; message: string };
+    | { error: string | null; success: false; data: null; meta: null }
+    | { error: null; success: true; data: { message: string }; meta: null };
 
-const initialState: UpdateExportStatusState = { error: "Initializing...", success: false };
+const initialState: UpdateExportStatusState = { error: "Initializing...", success: false, data: null, meta: null };
 
 type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
 
@@ -34,8 +34,8 @@ export default function StatusUpdateModal({
 
     // Handle success/error with toasts
     useEffect(() => {
-        if (state.success && !isPending && state.message) {
-            showToast(state.message, "success");
+        if (state.success && !isPending && state.data?.message) {
+            showToast(state.data.message, "success");
             setTimeout(() => {
                 onClose();
             }, 1500);
@@ -66,10 +66,10 @@ export default function StatusUpdateModal({
                 )}
 
                 {/* Success Display */}
-                {state.success && state.message && (
+                {state.success && state.data?.message && (
                     <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
                         <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
-                        <p className="text-green-300 text-sm font-medium">{state.message}</p>
+                        <p className="text-green-300 text-sm font-medium">{state.data.message}</p>
                     </div>
                 )}
 

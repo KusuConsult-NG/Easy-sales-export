@@ -32,9 +32,9 @@ export default function QuizEditorPage() {
     useEffect(() => {
         async function load() {
             const result = await getQuizAction(quizId);
-            if (result.success) {
-                setQuizTitle(result.title || "Module Quiz");
-                setQuestions((result.questions || []) as any);
+            if (result.success && result.data) {
+                setQuizTitle(result.data.title || "Module Quiz");
+                setQuestions((result.data.questions || []) as any);
             } else {
                 toast.error(result.error || "Failed to load quiz");
             }

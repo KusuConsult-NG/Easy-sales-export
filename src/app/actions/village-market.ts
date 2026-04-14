@@ -88,7 +88,7 @@ export async function createVillageMarketEventAction(data: {
             startTime,
         });
 
-        return { success: true, eventId: eventDoc.id };
+        return { success: true, data: { eventId: eventDoc.id } };
     } catch (err: any) {
         logger.error("createVillageMarketEventAction error:", err);
         return { success: false, error: err.message || "Failed to create event" };
@@ -232,7 +232,7 @@ export async function addFlashSaleProductAction(data: {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true, flashProductId: docRef.id };
+        return { success: true, data: { flashProductId: docRef.id } };
     } catch (err: any) {
         logger.error("addFlashSaleProductAction error:", err);
         return { success: false, error: err.message || "Failed to add product" };
@@ -266,7 +266,7 @@ export async function addExternalMerchantAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true, merchantId };
+        return { success: true, data: { merchantId } };
     } catch (err: any) {
         logger.error("addExternalMerchantAction error:", err);
         return { success: false, error: err.message || "Failed to add merchant" };

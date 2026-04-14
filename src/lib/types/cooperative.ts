@@ -207,30 +207,36 @@ export type CooperativeTransaction = {
 type ActionErrorState = {
     error: string;
     success: false;
+    data?: null;
+    meta?: null;
 };
 
 type JoinSuccessState = {
     error: null;
     success: true;
-    message: string;
+    data: { message: string };
+    meta?: null;
 };
 
 type ContributionSuccessState = {
     error: null;
     success: true;
-    message: string;
+    data: { message: string };
+    meta?: null;
 };
 
 type MembershipSuccessState = {
     error: null;
     success: true;
-    data: CooperativeMembership;
+    data: { membership: CooperativeMembership };
+    meta?: null;
 };
 
 type TransactionsSuccessState = {
     error: null;
     success: true;
-    data: CooperativeTransaction[];
+    data: { transactions: CooperativeTransaction[] };
+    meta?: null;
 };
 
 export type JoinCooperativeState = ActionErrorState | JoinSuccessState;
@@ -241,13 +247,13 @@ export type GetTransactionsState = ActionErrorState | TransactionsSuccessState;
 // Alias for modal compatibility
 export type ContributionActionState = MakeContributionState;
 export type WithdrawalActionState =
-    | { error: string; success: false }
-    | { error: null; success: true; message: string };
+    | { error: string; success: false; data?: null; meta?: null }
+    | { error: null; success: true; data: { message: string }; meta?: null };
 
 // New action states for Phase 2
 export type MembershipRegistrationState =
     | ActionErrorState
-    | { error: null; success: true; message: string; paymentUrl?: string };
+    | { error: null; success: true; data: { message: string; paymentUrl?: string }; meta?: null };
 
 export type FixedSavingsState = ActionErrorState | ContributionSuccessState;
 export type LoanApplicationState = ActionErrorState | ContributionSuccessState;

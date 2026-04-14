@@ -53,11 +53,8 @@ export async function submitLoanApplication(
             },
         });
 
-        return {
-            success: true,
-            loanId: loanRef.id,
-            userId: session.user.id,
-        };
+        return { success: true, data: { loanId: loanRef.id,
+            userId: session.user.id, } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -94,10 +91,7 @@ export async function getUserLoanApplications() {
             } as LoanApplication;
         });
 
-        return {
-            success: true,
-            loans,
-        };
+        return { success: true, data: { loans, } };
     } catch (error) {
         return { success: false, error: "Failed to fetch loan applications", loans: [] };
     }
@@ -134,10 +128,7 @@ export async function getLoanApplication(loanId: string) {
             approvedAt: data.approvedAt ? (data.approvedAt as Timestamp).toDate() : null,
         } as LoanApplication;
 
-        return {
-            success: true,
-            loan,
-        };
+        return { success: true, data: { loan, } };
     } catch (error) {
         return { success: false, error: "Failed to fetch loan application", loan: null };
     }
@@ -170,10 +161,7 @@ export async function getPendingLoanApplications() {
             } as LoanApplication;
         });
 
-        return {
-            success: true,
-            loans,
-        };
+        return { success: true, data: { loans, } };
     } catch (error) {
         return { success: false, error: "Failed to fetch pending loans", loans: [] };
     }
@@ -225,7 +213,7 @@ export async function approveLoanApplication(
             },
         });
 
-        return { success: true, userId: session.user.id };
+        return { success: true, data: { userId: session.user.id } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -270,7 +258,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
             },
         });
 
-        return { success: true, userId: session.user.id };
+        return { success: true, data: { userId: session.user.id } };
     } catch (error) {
         return { success: false, error: "Failed to disburse loan" };
     }
@@ -332,10 +320,7 @@ export async function getLoanStatistics() {
             }
         });
 
-        return {
-            success: true,
-            stats,
-        };
+        return { success: true, data: { stats, } };
     } catch (error) {
         return { success: false, error: "Failed to fetch loan statistics", stats: null };
     }

@@ -57,8 +57,8 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
 
             try {
                 const result = await getPropertiesAction();
-                if (result.success && result.properties) {
-                    const prop: any = result.properties.find(p => p.id === params.id);
+                if (result.success && result.data?.properties) {
+                    const prop: any = result.data.properties.find((p: any) => p.id === params.id);
                     if (prop) {
                         const location = typeof prop.location === 'string' ? { state: "", lga: "", address: prop.location } : prop.location;
                         setFormData({

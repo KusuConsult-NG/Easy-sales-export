@@ -23,8 +23,8 @@ export default function CooperativeHistoryPage() {
         async function loadData() {
             try {
                 const res = await getTransactionsAction();
-                if (res.success && res.data) {
-                    setTransactions(res.data);
+                if (res.success && res.data?.transactions) {
+                    setTransactions(res.data.transactions);
                 }
             } catch (error) {
                 logger.error("Failed to load history:", error);

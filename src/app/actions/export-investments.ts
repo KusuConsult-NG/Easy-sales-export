@@ -94,10 +94,10 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
 
             const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
-            return { success: true, data: opportunities, lastId: lastDocId };
+            return { success: true, data: opportunities, error: null, meta: { cursor: lastDocId, hasMore: !!lastDocId } };
         } catch (error: any) {
             logger.error("Error fetching export opportunities:", error);
-            return { success: false, error: error.message, lastId: null };
+            return { success: false, data: null, error: error.message, meta: null };
         }
     },
     [`export-opportunities-${limit}-${lastId || 'start'}`],
@@ -116,7 +116,7 @@ export async function getExportOpportunities(limit: number = 12, lastId?: string
  */
 export async function seedExportOpportunities() {
     // Legacy seeding function - discouraged now that we use real Export Windows
-    return { success: false, error: "Seeding is deprecated. Please create Export Windows from Admin Panel." };
+    return { success: false, data: null, error: "Seeding is deprecated. Please create Export Windows from Admin Panel.", meta: null };
 }
 
 /**
@@ -131,7 +131,7 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
             const snapshot = await docRef.get();
 
             if (!snapshot.exists) {
-                return { success: false, error: "Opportunity not found" };
+                return { success: false, data: null, error: "Opportunity not found", meta: null };
             }
 
             const data = snapshot.data() as ExportWindow;
@@ -161,10 +161,10 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
                 })) || [],
             };
 
-            return { success: true, data: opportunity };
+            return { success: true, data: opportunity, error: null, meta: null };
         } catch (error: any) {
             logger.error("Error fetching export opportunity:", error);
-            return { success: false, error: error.message };
+            return { success: false, data: null, error: error.message, meta: null };
         }
     },
     [`export-opportunity-${id}`],

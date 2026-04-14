@@ -62,7 +62,7 @@ export default function AdminWaveMembersPage() {
                     const data = doc.data();
                     if (data.status === "approved") {
                         docs.push({
-                            id: data.userId || doc.id,
+                            id: data.data?.userId || doc.id,
                             active: true,
                             enrolledAt: data.approvalTimestamp?.toDate() || data.reviewedAt?.toDate() || data.createdAt?.toDate() || new Date(),
                             applicationId: doc.id,

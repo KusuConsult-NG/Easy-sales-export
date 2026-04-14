@@ -8,10 +8,10 @@ import LoadingButton from "@/components/ui/LoadingButton";
 import { useToast } from "@/contexts/ToastContext";
 
 type JoinCooperativeState =
-    | { error: string; success: false }
-    | { error: null; success: true; message: string };
+    | { error: string; success: false; data?: null; }
+    | { error: null; success: true; data: { message: string } };
 
-const initialState: JoinCooperativeState = { error: "Initializing...", success: false };
+const initialState: JoinCooperativeState = { error: "Initializing...", success: false, data: null };
 
 interface JoinCooperativeModalProps {
     isOpen: boolean;
@@ -89,7 +89,7 @@ async function joinCooperativeWrapper(
         return {
             error: null,
             success: true,
-            message: "Successfully joined the cooperative!",
+            data: { message: "Successfully joined the cooperative!" },
         };
     } catch (error: any) {
         console.error("Join cooperative error:", error);
@@ -108,8 +108,8 @@ export default function JoinCooperativeModal({
 
     // Handle success/error with toasts
     useEffect(() => {
-        if (state.success && !isPending && state.message) {
-            showToast(state.message, "success");
+        if (state.success && !isPending && state.data?.message) {
+            showToast(state.data.message, "success");
             setTimeout(() => {
                 onClose();
             }, 1500);
@@ -133,10 +133,10 @@ export default function JoinCooperativeModal({
                 )}
 
                 {/* Success Display */}
-                {state.success && state.message && (
+                {state.success && state.data?.message && (
                     <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
                         <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
-                        <p className="text-green-300 text-sm font-medium">{state.message}</p>
+                        <p className="text-green-300 text-sm font-medium">{state.data.message}</p>
                     </div>
                 )}
 

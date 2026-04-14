@@ -55,7 +55,8 @@ export async function initiateCooperativePaymentAction(
     tier: "basic" | "premium"
 ): Promise<{
     success: boolean;
-    paymentUrl?: string;
+    meta?: any;
+    data?: any;
     error?: string;
 }> {
     try {
@@ -132,7 +133,8 @@ export async function initiateCooperativePaymentAction(
 
         return {
             success: true,
-            paymentUrl: paystackData.data.authorization_url,
+            data: { paymentUrl: paystackData.data.authorization_url },
+            meta: null
         };
 
     } catch (error) {
@@ -351,7 +353,8 @@ export async function registerCooperativeMemberAction(
         return {
             error: null,
             success: true,
-            message: "Application submitted successfully.",
+            data: { message: "Application submitted successfully." },
+            meta: null
         };
     } catch (error) {
         logger.error("Membership registration failed:", error);
@@ -440,7 +443,8 @@ export async function joinCooperativeAction(
         return {
             error: null,
             success: true,
-            message: "Successfully joined the cooperative"
+            data: { message: "Successfully joined the cooperative" },
+            meta: null
         };
     } catch (error) {
         logger.error("Join cooperative failed:", error);
@@ -538,7 +542,8 @@ export async function makeContributionAction(
         return {
             error: null,
             success: true,
-            message: `Successfully contributed ₦${amount.toLocaleString()}`
+            data: { message: `Successfully contributed ₦${amount.toLocaleString()}` },
+            meta: null
         };
     } catch (error) {
         logger.error("Contribution failed:", error);
@@ -585,7 +590,8 @@ export async function getMembershipAction(): Promise<GetMembershipState> {
         return {
             error: null,
             success: true,
-            data: membership
+            data: { membership },
+            meta: null
         };
     } catch (error) {
         logger.error("Failed to get membership:", error);
@@ -621,7 +627,8 @@ export async function getTransactionsAction(): Promise<GetTransactionsState> {
         return {
             error: null,
             success: true,
-            data: transactions
+            data: { transactions },
+            meta: null
         };
     } catch (error) {
         logger.error("Failed to get transactions:", error);
@@ -633,19 +640,23 @@ export async function getTransactionsAction(): Promise<GetTransactionsState> {
 }
 
 export async function getUserTierAction(): Promise<{
-    tier: "Basic" | "Premium" | null;
-    totalContributions: number;
+    success: boolean;
+    meta?: any;
+    data?: {
+        tier: "Basic" | "Premium" | null;
+        totalContributions: number;
+    }
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { tier: null, totalContributions: 0 };
+        if (!sessionResult.session) return { success: false, data: { tier: null, totalContributions: 0 } };
         const { session } = sessionResult;
 
         const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
         const membershipDoc = await membershipRef.get();
 
         if (!membershipDoc.exists) {
-            return { tier: null, totalContributions: 0 };
+            return { success: true, data: { tier: null, totalContributions: 0 } };
         }
 
         const data = membershipDoc.data();
@@ -657,10 +668,10 @@ export async function getUserTierAction(): Promise<{
         const { calculateUserTier } = await import("@/lib/cooperative-tiers");
         const tier = calculateUserTier(totalContributions);
 
-        return { tier, totalContributions };
+        return { success: true, data: { tier, totalContributions } };
     } catch (error) {
         logger.error("Failed to get user tier:", error);
-        return { tier: null, totalContributions: 0 };
+        return { success: false, data: { tier: null, totalContributions: 0 } };
     }
 }
 
@@ -822,7 +833,8 @@ export async function applyForLoanAction(
         return {
             error: null,
             success: true,
-            message: "Loan application submitted successfully. It is now under review."
+            data: { message: "Loan application submitted successfully. It is now under review." },
+            meta: null
         };
 
     } catch (error: any) {
@@ -913,7 +925,8 @@ export async function createFixedSavingsAction(
         return {
             error: null,
             success: true,
-            message: `Fixed savings plan of ₦${amount.toLocaleString()} created successfully.`
+            data: { message: `Fixed savings plan of ₦${amount.toLocaleString()} created successfully.` },
+            meta: null
         };
 
     } catch (error: any) {
@@ -978,7 +991,7 @@ export async function submitWithdrawalAction(
             });
         });
 
-        return { error: null, success: true, message: "Withdrawal request submitted for review. Funds have been reserved." };
+        return { error: null, success: true, data: { message: "Withdrawal request submitted for review. Funds have been reserved." }, meta: null };
     } catch (error: any) {
         logger.error("Withdrawal error:", error);
         return { error: error.message || "Failed to submit withdrawal", success: false };
@@ -991,7 +1004,8 @@ export async function submitWithdrawalAction(
 
 export async function getDirectoryMembersAction(): Promise<{
     success: boolean;
-    data?: any[];
+    meta?: any;
+    data?: any;
     error?: string;
 }> {
     try {
@@ -1020,7 +1034,7 @@ export async function getDirectoryMembersAction(): Promise<{
             };
         });
 
-        return { success: true, data: members };
+        return { success: true, data: { members }, meta: null };
     } catch (error) {
         logger.error("Failed to fetch directory:", error);
         return { error: "Failed to load directory", success: false };
@@ -1036,6 +1050,7 @@ export async function getDirectoryMembersAction(): Promise<{
  */
 export async function getCooperativeApplicationAction(): Promise<{
     success: boolean;
+    meta?: any;
     data?: any;
     revisionNote?: string;
     error?: string;
@@ -1055,7 +1070,7 @@ export async function getCooperativeApplicationAction(): Promise<{
         if (snap.empty) return { success: false, error: 'No application found' };
 
         const data = snap.docs[0].data();
-        return { success: true, data, revisionNote: data?.revisionNote };
+        return { success: true, data: { application: data, revisionNote: data?.revisionNote }, meta: null };
     } catch (error) {
         logger.error('getCooperativeApplicationAction error:', error);
         return { success: false, error: 'Failed to fetch application' };
@@ -1067,7 +1082,7 @@ export async function getCooperativeApplicationAction(): Promise<{
  */
 export async function resubmitCooperativeApplicationAction(
     formData: FormData
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -1138,7 +1153,7 @@ export async function resubmitCooperativeApplicationAction(
 
         await batch.commit();
 
-        return { success: true };
+        return { success: true, data: { message: "Application resubmitted successfully." }, meta: null };
     } catch (error) {
         logger.error('resubmitCooperativeApplicationAction error:', error);
         return { success: false, error: 'Failed to resubmit application' };
@@ -1169,6 +1184,7 @@ export type MemberIdCardData = {
  */
 export async function getCooperativeMemberIdCardAction(): Promise<{
     success: boolean;
+    meta?: any;
     data?: MemberIdCardData;
     error?: string;
     reason?: "payment_required" | "pending_approval" | "not_member";
@@ -1253,7 +1269,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<{
 export async function updatePassportPhotoAction(
     passportUrl: string,
     passportName: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: "Not authenticated" };
@@ -1277,7 +1293,7 @@ export async function updatePassportPhotoAction(
 
         revalidatePath("/cooperatives/id-card");
 
-        return { success: true };
+        return { success: true, data: { message: "Passport photo updated" }, meta: null };
     } catch (error) {
         logger.error("updatePassportPhotoAction error:", error);
         return { success: false, error: "Failed to update passport photo. Please try again." };
@@ -1290,7 +1306,7 @@ export async function updatePassportPhotoAction(
 
 export async function validateCooperativeInviteAction(
     token: string
-): Promise<{ success: boolean; data?: any; error?: string }> {
+): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         if (!token) return { success: false, error: "Invalid token" };
 
@@ -1311,7 +1327,8 @@ export async function validateCooperativeInviteAction(
             success: true,
             data: {
                 email: data.email,
-            }
+            },
+            meta: null
         };
 
     } catch (error: any) {

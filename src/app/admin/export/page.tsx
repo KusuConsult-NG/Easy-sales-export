@@ -45,7 +45,7 @@ export default function AdminExportPage() {
                 setExports(prev => [...prev, ...result.exports!]);
             }
 
-            setHasMore(result.hasMore || false);
+            setHasMore(result.data?.hasMore || false);
 
             // Set cursor for next page
             if (result.exports.length > 0) {

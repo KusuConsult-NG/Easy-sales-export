@@ -136,10 +136,7 @@ export async function createOrderAction(
 
             transaction.set(orderRef, orderData);
 
-            return {
-                success: true,
-                orderId,
-            };
+            return { success: true, data: { orderId, } };
         });
 
     } catch (error: any) {
@@ -177,7 +174,7 @@ export async function getOrderByIdAction(orderId: string) {
             return { success: false, error: "Unauthorized" };
         }
 
-        return { success: true, order };
+        return { success: true, data: { order } };
     } catch (error: any) {
         logger.error("Get order error:", error);
         return { success: false, error: error.message };

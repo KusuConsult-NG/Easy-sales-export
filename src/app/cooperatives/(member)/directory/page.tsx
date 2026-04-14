@@ -19,8 +19,8 @@ export default function CooperativeDirectoryPage() {
     useEffect(() => {
         async function fetchMembers() {
             const result = await getDirectoryMembersAction();
-            if (result.success && result.data) {
-                setMembers(result.data);
+            if (result.success && result.data?.members) {
+                setMembers(result.data.members);
             }
             setLoading(false);
         }

@@ -35,11 +35,11 @@ export default function CheckoutPage() {
     async function loadProperty() {
         try {
             const result = await getPropertyByIdAction(propertyId);
-            if (result.success && result.property) {
-                if (result.property.status !== "available") {
+            if (result.success && result.data?.property) {
+                if (result.data.property.status !== "available") {
                     setError("This property is no longer available");
                 } else {
-                    setProperty(result.property);
+                    setProperty(result.data.property);
                 }
             } else {
                 setError(result.error || "Property not found");
@@ -52,8 +52,9 @@ export default function CheckoutPage() {
 
     useEffect(() => {
         if (status === "authenticated") {
-            getUserTierAction().then(({ tier }) => {
-                setUserTier(tier);
+            getUserTierAction().then((res) => {
+                const tier = res.data?.tier;
+                setUserTier(tier || null);
                 if (tier !== "Premium") {
                     router.push(`/farm-nation/property/${propertyId}`);
                 }
@@ -107,7 +108,7 @@ export default function CheckoutPage() {
 
             if (result.success && result.data) {
                 // Redirect to Paystack for payment
-                window.location.href = result.data.authorizationUrl;
+                window.location.href = result.data.data?.authorizationUrl;
             } else {
                 setError(result.error || "Failed to initialize payment");
                 setSubmitting(false);

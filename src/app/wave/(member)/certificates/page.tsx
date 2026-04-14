@@ -21,7 +21,11 @@ export default function CertificatesPage() {
             setLoading(true);
             try {
                 const certs = await getCurrentUserCertificatesAction();
-                setCertificates(certs);
+                if (certs.success && certs.data) {
+                    setCertificates(certs.data);
+                } else {
+                    setCertificates([]);
+                }
             } catch (error) {
                 logger.error("Failed to load certificates:", error);
             } finally {

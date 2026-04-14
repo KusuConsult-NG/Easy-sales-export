@@ -71,7 +71,7 @@ export default function AdminChatbotPage() {
             } else {
                 setSessions(prev => [...prev, ...sessionsRes.sessions]);
             }
-            setHasMore(sessionsRes.hasMore);
+            setHasMore(sessionsRes.hasMore ?? false);
             if (sessionsRes.sessions.length > 0) {
                 setLastId(sessionsRes.sessions[sessionsRes.sessions.length - 1].id);
             }

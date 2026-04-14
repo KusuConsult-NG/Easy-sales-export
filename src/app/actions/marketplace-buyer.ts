@@ -72,7 +72,7 @@ export async function getProductsAction(filters?: ProductFilters) {
             products = products.filter(product => product.category === filters.category);
         }
 
-        return { success: true, products };
+        return { success: true, data: { products } };
     } catch (error: any) {
         logger.error("Get products error:", error);
         return { success: false, error: error.message, products: [] };
@@ -93,7 +93,7 @@ export async function getProductByIdAction(productId: string) {
 
         const product = productDoc.data() as Product;
 
-        return { success: true, product };
+        return { success: true, data: { product } };
     } catch (error: any) {
         logger.error("Get product error:", error);
         return { success: false, error: error.message };
@@ -113,7 +113,7 @@ export async function getFeaturedProductsAction() {
 
         const products = snapshot.docs.map(doc => doc.data() as Product);
 
-        return { success: true, products };
+        return { success: true, data: { products } };
     } catch (error: any) {
         logger.error("Get featured products error:", error);
         return { success: false, error: error.message, products: [] };
@@ -132,7 +132,7 @@ export async function getProductsByCategoryAction(category: string) {
 
         const products = snapshot.docs.map(doc => doc.data() as Product);
 
-        return { success: true, products };
+        return { success: true, data: { products } };
     } catch (error: any) {
         logger.error("Get products by category error:", error);
         return { success: false, error: error.message, products: [] };
@@ -170,7 +170,7 @@ export async function getBuyerOrdersAction() {
             };
         });
 
-        return { success: true, orders };
+        return { success: true, data: { orders } };
     } catch (error: any) {
         logger.error("Get buyer orders error:", error);
         return { success: false, error: error.message };

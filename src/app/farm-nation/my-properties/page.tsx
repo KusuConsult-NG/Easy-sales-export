@@ -27,8 +27,8 @@ export default function MyPropertiesPage() {
 
         try {
             const result = await getMyPropertiesAction();
-            if (result.success && result.properties) {
-                setProperties(result.properties);
+            if (result.success && result.data?.properties) {
+                setProperties(result.data.properties);
             }
         } catch (error) {
             logger.error("Failed to load properties:", error);
@@ -44,7 +44,7 @@ export default function MyPropertiesPage() {
         try {
             const result = await deletePropertyAction(propertyId);
             if (result.success) {
-                showToast(result.message || "Property deleted successfully", "success");
+                showToast(result.data?.message || "Property deleted successfully", "success");
                 loadProperties();
             } else {
                 showToast(result.error || "Failed to delete property", "error");

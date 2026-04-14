@@ -52,24 +52,26 @@ async function getAdminScope(userId: string, userRoles: string[]): Promise<strin
 
 export async function getCooperativeStatsAction(): Promise<{
     success: boolean;
+    meta?: any;
     data?: {
-        totalMembers: number;
-        activeMembers: number;
-        pendingMembers: number;
-        suspendedMembers: number;
-        totalContributions: number;
-        monthlyContributions: number;
-        totalLoans: number;
-        activeLoans: number;
-        pendingLoans: number;
-        totalSavings: number;
-        monthlyGrowth: number;
-        // Transaction stats
-        totalTransactions: number;
-        totalTransactionAmount: number;
-        completedTransactions: number;
-        pendingTransactions: number;
-        failedTransactions: number;
+        stats: {
+            totalMembers: number;
+            activeMembers: number;
+            pendingMembers: number;
+            suspendedMembers: number;
+            totalContributions: number;
+            monthlyContributions: number;
+            totalLoans: number;
+            activeLoans: number;
+            pendingLoans: number;
+            totalSavings: number;
+            monthlyGrowth: number;
+            totalTransactions: number;
+            totalTransactionAmount: number;
+            completedTransactions: number;
+            pendingTransactions: number;
+            failedTransactions: number;
+        }
     };
     error?: string;
 }> {
@@ -178,23 +180,26 @@ export async function getCooperativeStatsAction(): Promise<{
         return {
             success: true,
             data: {
-                totalMembers,
-                activeMembers,
-                pendingMembers,
-                suspendedMembers,
-                totalContributions,
-                monthlyContributions,
-                totalLoans,
-                activeLoans,
-                pendingLoans,
-                totalSavings,
-                monthlyGrowth,
-                totalTransactions,
-                totalTransactionAmount,
-                completedTransactions,
-                pendingTransactions,
-                failedTransactions,
+                stats: {
+                    totalMembers,
+                    activeMembers,
+                    pendingMembers,
+                    suspendedMembers,
+                    totalContributions,
+                    monthlyContributions,
+                    totalLoans,
+                    activeLoans,
+                    pendingLoans,
+                    totalSavings,
+                    monthlyGrowth,
+                    totalTransactions,
+                    totalTransactionAmount,
+                    completedTransactions,
+                    pendingTransactions,
+                    failedTransactions,
+                }
             },
+            meta: null
         };
     } catch (error) {
         logger.error("Get cooperative stats error:", error);
@@ -211,7 +216,8 @@ export async function getAllMembersAction(options?: {
     limit?: number;
 }): Promise<{
     success: boolean;
-    data?: any[];
+    meta?: any;
+    data?: { members: any[] };
     error?: string;
 }> {
     try {
@@ -250,7 +256,7 @@ export async function getAllMembersAction(options?: {
         // 🐛 FIX: Only return paid members in the list
         const members = allMembers.filter((m: any) => m.paymentStatus === "completed");
 
-        return { success: true, data: members };
+        return { success: true, data: { members }, meta: { hasMore: false, cursor: null } };
     } catch (error) {
         logger.error("Get all members error:", error);
         return { success: false, error: "Failed to fetch members" };
@@ -260,7 +266,7 @@ export async function getAllMembersAction(options?: {
 export async function updateMemberStatusAction(
     memberId: string,
     status: "active" | "suspended"
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -328,7 +334,7 @@ export async function updateMemberStatusAction(
 
         await batch.commit();
         
-        return { success: true };
+        return { success: true, data: { message: "Member status updated" }, meta: null };
     } catch (error) {
         logger.error("Update member status error:", error);
         return { success: false, error: "Failed to update member status" };
@@ -345,7 +351,8 @@ export async function getAllTransactionsAction(options?: {
     limit?: number;
 }): Promise<{
     success: boolean;
-    data?: Array<{
+    meta?: any;
+    data?: { transactions: Array<{
         id: string;
         userId: string;
         userName: string;
@@ -356,7 +363,7 @@ export async function getAllTransactionsAction(options?: {
         description?: string;
         reference?: string;
         metadata?: Record<string, unknown>;
-    }>;
+    }> };
     error?: string;
 }> {
     try {
@@ -452,7 +459,7 @@ export async function getAllTransactionsAction(options?: {
             }
         }
 
-        return { success: true, data: transactions };
+        return { success: true, data: { transactions }, meta: { hasMore: false, cursor: null } };
     } catch (error) {
         logger.error("Get all transactions error:", error);
         return { success: false, error: "Failed to fetch transactions" };
@@ -468,12 +475,15 @@ export async function getContributionReportsAction(options?: {
     year?: number;
 }): Promise<{
     success: boolean;
+    meta?: any;
     data?: {
-        totalContributions: number;
-        memberCount: number;
-        averageContribution: number;
-        topContributors: Array<{ userId: string; name: string; total: number }>;
-        monthlyTrend: Array<{ month: string; amount: number }>;
+        reports: {
+            totalContributions: number;
+            memberCount: number;
+            averageContribution: number;
+            topContributors: Array<{ userId: string; name: string; total: number }>;
+            monthlyTrend: Array<{ month: string; amount: number }>;
+        }
     };
     error?: string;
 }> {
@@ -556,12 +566,15 @@ export async function getContributionReportsAction(options?: {
         return {
             success: true,
             data: {
-                totalContributions,
-                memberCount,
-                averageContribution,
-                topContributors,
-                monthlyTrend,
+                reports: {
+                    totalContributions,
+                    memberCount,
+                    averageContribution,
+                    topContributors,
+                    monthlyTrend,
+                }
             },
+            meta: null
         };
     } catch (error) {
         logger.error("Get contribution reports error:", error);
@@ -575,12 +588,13 @@ export async function getContributionReportsAction(options?: {
 
 export async function getRecentActivityAction(): Promise<{
     success: boolean;
-    data?: Array<{
+    meta?: any;
+    data?: { activities: Array<{
         type: string;
         description: string;
         timestamp: Date;
         userId?: string;
-    }>;
+    }> };
     error?: string;
 }> {
     try {
@@ -619,7 +633,7 @@ export async function getRecentActivityAction(): Promise<{
             };
         });
 
-        return { success: true, data: activities };
+        return { success: true, data: { activities }, meta: null };
     } catch (error) {
         logger.error("Get recent activity error:", error);
         return { success: false, error: "Failed to fetch activity" };
@@ -638,7 +652,7 @@ export async function getRecentActivityAction(): Promise<{
  */
 export async function approveWithdrawalAction(
     withdrawalId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -739,7 +753,7 @@ export async function approveWithdrawalAction(
             }
         }
 
-        return { success: true };
+        return { success: true, data: { message: "Withdrawal approved" }, meta: null };
 
     } catch (error: any) {
         logger.error("Approve withdrawal error:", error);
@@ -755,7 +769,7 @@ export async function approveWithdrawalAction(
 export async function rejectWithdrawalAction(
     withdrawalId: string,
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -858,7 +872,7 @@ export async function rejectWithdrawalAction(
             }
         }
 
-        return { success: true };
+        return { success: true, data: { message: "Withdrawal rejected" }, meta: null };
 
     } catch (error: any) {
         logger.error("Reject withdrawal error:", error);
@@ -876,7 +890,7 @@ export async function rejectWithdrawalAction(
 export async function requestCooperativeRevisionAction(
     memberId: string,
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -943,7 +957,7 @@ export async function requestCooperativeRevisionAction(
             logger.error('Cooperative revision email failed (non-blocking):', emailError);
         }
 
-        return { success: true };
+        return { success: true, data: { message: "Revision requested" }, meta: null };
     } catch (error) {
         logger.error('requestCooperativeRevisionAction error:', error);
         return { success: false, error: 'Failed to request revision' };

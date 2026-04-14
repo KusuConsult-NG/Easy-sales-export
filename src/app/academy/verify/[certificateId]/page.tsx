@@ -39,7 +39,7 @@ export default function CertificateVerificationPage(props: CertificateVerificati
             if (data.success) {
                 setVerification(data.certificate);
             } else {
-                setError(data.message || "Certificate not found");
+                setError(data.data?.message || "Certificate not found");
             }
         } catch (error) {
             setError("Failed to verify certificate");

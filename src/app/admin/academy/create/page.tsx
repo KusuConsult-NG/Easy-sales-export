@@ -37,9 +37,9 @@ export default function CreateCoursePage() {
                 updatedAt: new Date(),
             });
 
-            if (result.success && result.id) {
+            if (result.success && result.data?.id) {
                 toast.success("Course created successfully!");
-                router.push(`/admin/academy/${result.id}`);
+                router.push(`/admin/academy/${result.data.id}`);
             } else {
                 toast.error(result.error || "Failed to create course");
             }

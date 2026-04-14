@@ -53,9 +53,12 @@ export default function AdminWaveResourcesPage() {
 
     useEffect(() => {
         async function loadResources() {
-            setLoading(true);
             const data = await getResourcesAction();
-            setResources(data);
+            if (data.success && data.data) {
+                setResources(data.data);
+            } else {
+                setResources([]);
+            }
             setLoading(false);
         }
 
@@ -95,7 +98,9 @@ export default function AdminWaveResourcesPage() {
 
             // Reload resources
             const updated = await getResourcesAction();
-            setResources(updated);
+            if (updated.success && updated.data) {
+                setResources(updated.data);
+            }
         } else {
             showToast(result.error || "Failed to upload resource", "error");
         }

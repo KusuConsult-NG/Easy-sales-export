@@ -33,15 +33,15 @@ export default function FarmNationLandingPage() {
             try {
                 // Load featured (verified) properties — filter in-memory after load
                 const result = await getPropertiesAction({ limit: 50 });
-                if (result.success && result.properties) {
+                if (result.success && result.data?.properties) {
                     // Only show verified properties on landing page
-                    const verified = result.properties.filter((p: any) => p.verified === true);
+                    const verified = result.data.properties.filter((p: any) => p.verified === true);
                     setFeaturedProperties(verified.slice(0, 3));
-                    setTotalCount(result.properties.length);
+                    setTotalCount(result.data.properties.length);
 
                     // Count properties by type/category
                     const counts: Record<string, number> = {};
-                    result.properties.forEach((p: any) => {
+                    result.data.properties.forEach((p: any) => {
                         const type = p.propertyType || p.type || "other";
                         counts[type] = (counts[type] || 0) + 1;
                     });

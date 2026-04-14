@@ -17,22 +17,18 @@ export interface CreateBookingData {
 /**
  * Create an export booking in Firestore
  */
-export async function createBookingAction(data: CreateBookingData): Promise<{
-    success: boolean;
-    bookingId?: string;
-    error?: string;
-}> {
+export async function createBookingAction(data: CreateBookingData) {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: 'Not authenticated' };
+            return { success: false, data: null, error: 'Not authenticated', meta: null };
         }
 
         // Validate input
         if (!data.exportWindowId || data.quantity <= 0 || data.totalPrice <= 0) {
-            return { success: false, error: 'Invalid booking data' };
+            return { success: false, data: null, error: 'Invalid booking data', meta: null };
         }
 
         // Check if export window exists and has availability
@@ -40,7 +36,7 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
-            return { success: false, error: 'Export window not found' };
+            return { success: false, data: null, error: 'Export window not found', meta: null };
         }
 
         const windowData = windowDoc.data()!;
@@ -49,7 +45,9 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
         if (data.quantity > availableVolume) {
             return {
                 success: false,
-                error: `Only ${availableVolume}kg available`
+                data: null,
+                error: `Only ${availableVolume}kg available`,
+                meta: null
             };
         }
 
@@ -72,13 +70,17 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
 
         return {
             success: true,
-            bookingId: bookingRef.id
+            data: { bookingId: bookingRef.id },
+            error: null,
+            meta: null
         };
     } catch (error) {
         logger.error('Create booking error:', error);
         return {
             success: false,
-            error: 'Failed to create booking'
+            data: null,
+            error: 'Failed to create booking',
+            meta: null
         };
     }
 }
@@ -86,17 +88,13 @@ export async function createBookingAction(data: CreateBookingData): Promise<{
 /**
  * Get user's bookings
  */
-export async function getUserBookingsAction(): Promise<{
-    success: boolean;
-    bookings?: any[];
-    error?: string;
-}> {
+export async function getUserBookingsAction() {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: 'Not authenticated' };
+            return { success: false, data: null, error: 'Not authenticated', meta: null };
         }
 
         const snapshot = await db.collection(COLLECTIONS.EXPORT_BOOKINGS)
@@ -106,9 +104,9 @@ export async function getUserBookingsAction(): Promise<{
 
         const bookings = serializeDocs(snapshot.docs);
 
-        return { success: true, bookings };
+        return { success: true, data: bookings, error: null, meta: null };
     } catch (error) {
         logger.error('Get bookings error:', error);
-        return { success: false, error: 'Failed to fetch bookings' };
+        return { success: false, data: null, error: 'Failed to fetch bookings', meta: null };
     }
 }

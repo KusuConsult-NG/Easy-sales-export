@@ -42,9 +42,9 @@ export default function SellerAnalyticsPage() {
         async function loadAnalytics() {
             try {
                 const result = await getSellerAnalyticsAction();
-                if (result.success && result.analytics) {
+                if (result.success && result.data?.analytics) {
                     const defaults = { prevMonthRevenue: 0, prevTotalSales: 0, prevActiveListings: 0 };
-                    setStats({ ...defaults, ...result.analytics });
+                    setStats({ ...defaults, ...result.data?.analytics });
                 }
             } catch (error) {
                 logger.error("Failed to load analytics:", error);
@@ -134,9 +134,6 @@ export default function SellerAnalyticsPage() {
                             <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
                                 <ShoppingBag className="w-6 h-6 text-purple-600" />
                             </div>
-                            <span className="flex items-center text-sm font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">
-                                0%
-                            </span>
                         </div>
                         <p className="text-sm text-slate-500 mb-1">Pending Orders</p>
                         <h3 className="text-2xl font-bold text-slate-900">
@@ -179,7 +176,11 @@ export default function SellerAnalyticsPage() {
                                     <TrendingUp className="w-5 h-5 text-green-600" />
                                     <span className="font-medium text-slate-900">Conversion Rate</span>
                                 </div>
-                                <span className="font-bold text-slate-900">{stats.conversionRate}%</span>
+                                <span className={`font-bold ${
+                                    stats.conversionRate > 0 ? 'text-green-700' : 'text-slate-400'
+                                }`}>
+                                    {stats.conversionRate > 0 ? `${stats.conversionRate}%` : 'N/A'}
+                                </span>
                             </div>
                             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                                 <div className="flex items-center gap-3">

@@ -58,13 +58,13 @@ export default function ExportWindowModal({ isOpen, onClose }: ExportWindowModal
                 )}
 
                 {/* Success Display */}
-                {state.success && state.message && (
+                {state.success && (state.data as any)?.message && (
                     <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-start gap-3">
                         <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-green-300 text-sm font-medium">{state.message}</p>
-                            {('orderId' in state) && (
-                                <p className="text-green-400 text-xs mt-1">Order ID: {state.orderId}</p>
+                            <p className="text-green-300 text-sm font-medium">{(state.data as any).message}</p>
+                            {(state.data && 'orderId' in (state.data as any)) && (
+                                <p className="text-green-400 text-xs mt-1">Order ID: {(state.data as any).orderId}</p>
                             )}
                         </div>
                     </div>

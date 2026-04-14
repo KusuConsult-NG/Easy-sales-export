@@ -20,6 +20,7 @@ export interface PaymentInitState {
         authorizationUrl: string;
         reference: string;
     };
+    meta?: any;
 }
 
 /**
@@ -108,7 +109,8 @@ export async function initializeEnrollmentPaymentAction(
 export async function verifyEnrollmentPaymentAction(reference: string): Promise<{
     success: boolean;
     error?: string;
-    message?: string;
+    data?: any;
+    meta?: any;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -205,7 +207,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
 
         return {
             success: true,
-            message: "Enrollment successful! Check your email for course access details.",
+            data: { message: "Enrollment successful! Check your email for course access details." },
         };
     } catch (error: any) {
         // 🔒 SECURITY FIX #2: Sanitized error logging

@@ -92,7 +92,7 @@ export async function createAnnouncementAction(data: {
             "announcement"
         );
 
-        return { success: true, announcementId: docRef.id };
+        return { success: true, data: { announcementId: docRef.id } };
     } catch (error) {
         logger.error("Announcement creation error:", error);
         return { success: false, error: "Failed to create announcement" };
@@ -226,7 +226,7 @@ export async function createBannerAction(data: {
             "banner"
         );
 
-        return { success: true, bannerId: docRef.id };
+        return { success: true, data: { bannerId: docRef.id } };
     } catch (error) {
         logger.error("Banner creation error:", error);
         return { success: false, error: "Failed to create banner" };

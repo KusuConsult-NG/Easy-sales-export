@@ -68,8 +68,9 @@ export default function CourseManagerPage() {
 
     async function loadCourse() {
         try {
-            const data = await getCourseByIdAction(courseId);
-            if (data) {
+            const dataReq = await getCourseByIdAction(courseId);
+            if (dataReq.success && dataReq.data) {
+                const data = dataReq.data;
                 setCourse(data);
                 // Cast the modules to include the optional UI state properties
                 const processedModules = (data.modules || []).map(m => ({ ...m, isExpanded: false })) as CourseModuleWithState[];

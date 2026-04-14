@@ -66,10 +66,7 @@ export async function getBankList(): Promise<{ success: boolean; banks?: Bank[];
             return { success: false, error: 'Failed to fetch bank list' };
         }
 
-        return {
-            success: true,
-            banks: data.data,
-        };
+        return { success: true, data: { banks: data.data, } };
     } catch (error) {
         logger.error('getBankList error:', error);
         return {
@@ -194,10 +191,7 @@ export async function verifyBankAccount(
             accountName: data.data.account_name
         });
 
-        return {
-            success: true,
-            accountName: data.data.account_name,
-        };
+        return { success: true, data: { accountName: data.data.account_name, } };
     } catch (error) {
         logger.error('verifyBankAccount: Unexpected error', error);
 

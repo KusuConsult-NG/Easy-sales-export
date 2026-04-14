@@ -122,7 +122,7 @@ export async function getPostLoginRedirect(email: string) {
             // by default, instead of the standard user dashboard.
             if (userRoles.includes('super_admin') || userRoles.includes('admin')) {
                 logger.info(`[getPostLoginRedirect] User ${email} is an admin, redirecting to /admin`);
-                return { success: true, redirectUrl: '/admin' };
+                return { success: true, data: { redirectUrl: '/admin' } };
             }
 
             // CRITICAL: Check application status and redirect accordingly
@@ -154,13 +154,13 @@ export async function getPostLoginRedirect(email: string) {
 
                 if (directDashboard) {
                     logger.info(`[getPostLoginRedirect] User ${email} approved for '${firstApprovedKey}', direct redirect to: ${directDashboard}`);
-                    return { success: true, redirectUrl: directDashboard };
+                    return { success: true, data: { redirectUrl: directDashboard } };
                 }
 
                 // Fallback for unknown modules: use role-based primary app
                 const primaryApp = getPrimaryApp(userRoles);
                 logger.info(`[getPostLoginRedirect] User ${email} has approved modules, role-based redirect to: ${primaryApp}`);
-                return { success: true, redirectUrl: primaryApp };
+                return { success: true, data: { redirectUrl: primaryApp } };
             }
 
             // 2. Check for pending applications
@@ -169,18 +169,12 @@ export async function getPostLoginRedirect(email: string) {
             // 
             // Fallback for pending users AND new users: route directly to the User Dashboard
             logger.info(`[getPostLoginRedirect] User ${email} has no active apps, directing to default dashboard`);
-            return {
-                success: true,
-                redirectUrl: '/dashboard'
-            };
+            return { success: true, data: { redirectUrl: '/dashboard' } };
         }
 
         // User has no applications yet — go to dashboard instead of /auth/get-started
         logger.info(`[getPostLoginRedirect] No applications found, redirecting to dashboard`, { email });
-        return {
-            success: true,
-            redirectUrl: '/dashboard'
-        };
+        return { success: true, data: { redirectUrl: '/dashboard' } };
     } catch (error: any) {
         logger.error('[getPostLoginRedirect] Error determining redirect', { email, error: error.message });
         return {
@@ -285,7 +279,7 @@ export async function registerAction(prevState: any, formData: FormData) {
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
         // Server-side signIn in Server Actions causes race conditions with cookies.
         // We return success, and the client component calls signIn() via NextAuth client SDK.
-        return { success: true, redirectUrl, error: "" };
+        return { success: true, data: { redirectUrl, error: "" } };
     } catch (error: any) {
         // Re-throw redirect errors to allow Next.js to handle navigation
         if (error && typeof error === 'object' && 'digest' in error &&

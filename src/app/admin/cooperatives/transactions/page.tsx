@@ -64,14 +64,14 @@ export default function AdminTransactionsPage() {
                 getCooperativeStatsAction()
             ]);
 
-            if (result.success && result.data) {
-                setTransactions(result.data);
+            if (result.success && result.data?.transactions) {
+                setTransactions(result.data.data?.transactions);
             } else {
                 toast.error(result.error || "Failed to load transactions");
             }
             
-            if (statsResult.success && statsResult.data) {
-                setGlobalStats(statsResult.data as any);
+            if (statsResult.success && statsResult.data?.stats) {
+                setGlobalStats(statsResult.data.data?.stats as any);
             }
         } catch (error) {
             logger.error("Failed to load transactions:", error);

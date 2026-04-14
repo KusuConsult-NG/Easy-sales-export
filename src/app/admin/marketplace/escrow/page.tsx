@@ -81,7 +81,7 @@ export default function AdminEscrowPage() {
                 statusFilter !== "all" ? { status: statusFilter } : undefined
             );
             if (result.success) {
-                setTransactions(result.transactions ?? []);
+                setTransactions(result.data?.transactions ?? []);
             } else {
                 showToast(result.error ?? "Failed to load transactions", "error");
             }

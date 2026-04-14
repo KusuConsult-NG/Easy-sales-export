@@ -151,7 +151,7 @@ export async function submitLoanApplicationAction(formData: {
             },
         });
 
-        return { success: true, applicationId: docRef.id };
+        return { success: true, data: { applicationId: docRef.id } };
     } catch (error) {
         logger.error("Loan application error:", error);
         return { success: false, error: "Failed to submit loan application" };
@@ -463,7 +463,7 @@ export async function getRepaymentScheduleAction(
             // Return existing schedule
             const schedule = serializeDocs<RepaymentInstallment>(scheduleSnapshot.docs);
 
-            return { success: true, schedule };
+            return { success: true, data: { schedule } };
         }
 
         // Generate schedule if not exists
@@ -509,7 +509,7 @@ export async function getRepaymentScheduleAction(
             });
         }
 
-        return { success: true, schedule: installments };
+        return { success: true, data: { schedule: installments } };
     } catch (error) {
         logger.error("Failed to fetch repayment schedule:", error);
         return { success: false, error: "Failed to fetch repayment schedule" };
@@ -677,7 +677,7 @@ export async function submitRepaymentAction(data: {
             linkText: "View Loan",
         });
 
-        return { success: true, penalty: calculatedPenalty };
+        return { success: true, data: { penalty: calculatedPenalty } };
     } catch (error: any) {
         logger.error("Repayment submission error:", error);
         return { success: false, error: error.message || "Failed to submit repayment" };
@@ -715,7 +715,7 @@ export async function getRepaymentHistoryAction(
 
         const payments = serializeDocs(paymentsSnapshot.docs);
 
-        return { success: true, payments };
+        return { success: true, data: { payments } };
     } catch (error) {
         logger.error("Failed to fetch repayment history:", error);
         return { success: false, error: "Failed to fetch repayment history" };

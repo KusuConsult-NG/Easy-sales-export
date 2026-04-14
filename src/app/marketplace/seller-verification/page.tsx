@@ -87,7 +87,7 @@ export default function SellerVerificationPage() {
                 setToast({ type: "success", message: "Verification submitted successfully! Our team will review your application." });
                 setTimeout(() => router.push("/marketplace/sell"), 2000);
             } else {
-                setToast({ type: "error", message: data.message || "Failed to submit verification" });
+                setToast({ type: "error", message: data.data?.message || "Failed to submit verification" });
             }
         } catch (error) {
             setToast({ type: "error", message: "An error occurred while submitting your verification. Please try again." });

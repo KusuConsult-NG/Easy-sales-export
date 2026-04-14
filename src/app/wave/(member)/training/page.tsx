@@ -38,7 +38,7 @@ export default function WaveTrainingPage() {
         try {
             // Check membership
             const membership = await checkWaveMembershipAction();
-            if (!membership.enrolled) {
+            if (!membership.data?.enrolled) {
                 router.push("/wave");
                 return;
             }
@@ -51,9 +51,9 @@ export default function WaveTrainingPage() {
 
             // Load user's registrations
             const regsResult = await getUserTrainingRegistrationsAction();
-            if (regsResult.success && regsResult.registrations) {
+            if (regsResult.success && regsResult.data?.registrations) {
                 const eventIds = new Set(
-                    regsResult.registrations.map((reg: any) => reg.eventId)
+                    regsResult.data.registrations.map((reg: any) => reg.eventId)
                 );
                 setRegisteredEventIds(eventIds);
             }

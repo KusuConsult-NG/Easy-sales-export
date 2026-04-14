@@ -43,9 +43,9 @@ export default function MyPurchasesPage() {
 
         try {
             const result = await getMyPurchaseRequestsAction();
-            if (result.success && result.requests) {
+            if (result.success && result.data?.requests) {
                 // Cast to PurchaseRequest[] as the action returns generic objects
-                setPurchases(result.requests as unknown as PurchaseRequest[]);
+                setPurchases(result.data.requests as unknown as PurchaseRequest[]);
             }
         } catch (error) {
             logger.error("Failed to load purchases:", error);
@@ -61,7 +61,7 @@ export default function MyPurchasesPage() {
         try {
             const result = await cancelPurchaseRequestAction(requestId);
             if (result.success) {
-                showToast(result.message || "Purchase cancelled successfully", "success");
+                showToast(result.data?.message || "Purchase cancelled successfully", "success");
                 loadPurchases();
             } else {
                 showToast(result.error || "Failed to cancel purchase", "error");

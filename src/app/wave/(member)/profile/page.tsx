@@ -40,17 +40,17 @@ export default function WaveProfilePage() {
         try {
             // Check membership
             const membership = await checkWaveMembershipAction();
-            if (!membership.enrolled) {
+            if (!membership.data?.enrolled) {
                 router.push("/wave");
                 return;
             }
 
-            setMemberData(membership.memberData);
+            setMemberData(membership.data?.memberData);
 
             // Load stats
             const statsResult = await getWaveMemberStatsAction();
-            if (statsResult.success && statsResult.stats) {
-                setStats(statsResult.stats);
+            if (statsResult.success && statsResult.data?.stats) {
+                setStats(statsResult.data.stats);
             }
         } catch (error) {
             logger.error("Profile load error:", error);

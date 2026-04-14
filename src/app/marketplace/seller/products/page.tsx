@@ -50,10 +50,10 @@ export default function SellerProductsPage() {
                 search: debouncedSearch
             });
 
-            if (result.success && result.products) {
-                setProducts(prev => isReset ? result.products : [...prev, ...result.products]);
-                setLastId(result.lastId);
-                setHasMore(!!result.hasMore);
+            if (result.success && result.data?.products) {
+                setProducts(prev => isReset ? result.data?.products : [...prev, ...result.data?.products]);
+                setLastId(result.data?.lastId);
+                setHasMore(!!result.data?.hasMore);
             } else if (result.error) {
                 logger.error("Failed to load products:", { error: result.error });
             }

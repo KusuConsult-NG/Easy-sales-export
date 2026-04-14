@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
         const session = await auth();
         if (!session?.user) {
             return NextResponse.json(
-                { success: false, message: "Unauthorized" },
+                { success: false, data: null, meta: null, error: "Unauthorized" },
                 { status: 401 }
             );
         }
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         if (!userDoc.exists) {
             return NextResponse.json(
-                { success: false, message: "User not found" },
+                { success: false, data: null, meta: null, error: "User not found" },
                 { status: 404 }
             );
         }
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         if (!title || !category || !description || !state || !lga || !address ||
             !size || !unit || !pricePerUnit || !totalPrice) {
             return NextResponse.json(
-                { success: false, message: "Missing required fields" },
+                { success: false, data: null, meta: null, error: "Missing required fields" },
                 { status: 400 }
             );
         }
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
         if (!documents.landTitle || !documents.surveyPlan) {
             return NextResponse.json(
-                { success: false, message: "Land title and survey plan are required" },
+                { success: false, data: null, meta: null, error: "Land title and survey plan are required" },
                 { status: 400 }
             );
         }
@@ -128,13 +128,13 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            message: "Land listing created successfully",
-            listingId: listingRef.id
+            data: { message: "Land listing created successfully", listingId: listingRef.id },
+            meta: null
         });
     } catch (error) {
         logger.error("Failed to create land listing:", error);
         return NextResponse.json(
-            { success: false, message: "Internal server error" },
+            { success: false, data: null, meta: null, error: "Internal server error" },
             { status: 500 }
         );
     }

@@ -52,7 +52,15 @@ export default function FarmNationSellersPage() {
         setData,
         refresh
     } = useAdminData<SellerProfile>({
-        fetchAction: getFarmNationRegistrantsAction,
+        fetchAction: async (params) => {
+            const result = await getFarmNationRegistrantsAction(params);
+            return {
+                ...result,
+                data: result.data?.users || [],
+                hasMore: result.meta?.hasMore,
+                lastDocId: result.meta?.cursor || undefined,
+            };
+        },
         limit: 20
     });
 

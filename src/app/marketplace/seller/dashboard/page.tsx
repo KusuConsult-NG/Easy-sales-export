@@ -36,13 +36,13 @@ export default function SellerDashboard() {
                     getSellerProductsAction()
                 ]);
 
-                if (analyticsRes.success && analyticsRes.analytics) {
-                    setStats(analyticsRes.analytics);
+                if (analyticsRes.success && analyticsRes.data?.analytics) {
+                    setStats(analyticsRes.data?.analytics);
                 }
 
-                if (ordersRes.success && ordersRes.orders) {
+                if (ordersRes.success && ordersRes.data?.orders) {
                     // Sort by date desc and take top 5
-                    const sortedOrders = ordersRes.orders
+                    const sortedOrders = ordersRes.data?.orders
                         .sort((a, b) => {
                             const dateA = a.createdAt instanceof Date ? a.createdAt : new Date((a.createdAt as unknown as { seconds: number }).seconds * 1000);
                             const dateB = b.createdAt instanceof Date ? b.createdAt : new Date((b.createdAt as unknown as { seconds: number }).seconds * 1000);
@@ -52,9 +52,9 @@ export default function SellerDashboard() {
                     setRecentOrders(sortedOrders);
                 }
 
-                if (productsRes.success && productsRes.products) {
+                if (productsRes.success && productsRes.data?.products) {
                     // Sort by sales (orders count) desc and take top 3
-                    const sortedProducts = productsRes.products
+                    const sortedProducts = productsRes.data?.products
                         .sort((a, b) => (b.orders || 0) - (a.orders || 0))
                         .slice(0, 3);
                     setTopProducts(sortedProducts);

@@ -221,7 +221,7 @@ export default function MessagesPage() {
                                             <div className="text-xs text-slate-400">
                                                 {typeof (conv.lastMessage.timestamp as any)?.toDate === 'function' ?
                                                     format((conv.lastMessage.timestamp as any).toDate(), "HH:mm") :
-                                                    format(new Date(conv.lastMessage.timestamp as any), "HH:mm")
+                                                    format(new Date(conv.lastMessage.timestamp as unknown as (string | number)), "HH:mm")
                                                 }
                                             </div>
                                         )}
@@ -292,7 +292,7 @@ export default function MessagesPage() {
                                                 {msg.timestamp ? (
                                                     typeof (msg.timestamp as any).toDate === 'function' ?
                                                         format((msg.timestamp as any).toDate(), "HH:mm") :
-                                                        format(new Date(msg.timestamp as any), "HH:mm")
+                                                        format(new Date(msg.timestamp as unknown as (string | number)), "HH:mm")
                                                 ) : "Now"}
                                             </div>
                                         </div>

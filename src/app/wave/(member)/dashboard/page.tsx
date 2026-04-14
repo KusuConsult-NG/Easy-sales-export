@@ -41,15 +41,15 @@ export default function WaveDashboardPage() {
         try {
             // Check membership
             const membership = await checkWaveMembershipAction();
-            if (!membership.enrolled) {
+            if (!membership.data?.enrolled) {
                 router.push("/wave");
                 return;
             }
 
             // Load stats
             const statsResult = await getWaveMemberStatsAction();
-            if (statsResult.success && statsResult.stats) {
-                setStats(statsResult.stats);
+            if (statsResult.success && statsResult.data?.stats) {
+                setStats(statsResult.data.stats);
             }
 
             // Load recent resources (limit 3)

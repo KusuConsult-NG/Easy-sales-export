@@ -55,7 +55,7 @@ export default function WaveResourcesPage() {
 
             const result = await checkWaveEligibilityAction(session.user.id);
 
-            if (!result.eligible) {
+            if (!result.success || !result.data?.eligible) {
                 router.push("/wave/access-denied");
                 return;
             }
@@ -73,8 +73,13 @@ export default function WaveResourcesPage() {
 
             setLoading(true);
             const data = await getResourcesAction();
-            setResources(data);
-            setFilteredResources(data);
+            if (data.success && data.data) {
+                setResources(data.data);
+                setFilteredResources(data.data);
+            } else {
+                setResources([]);
+                setFilteredResources([]);
+            }
             setLoading(false);
         }
 
@@ -111,9 +116,9 @@ export default function WaveResourcesPage() {
         setDownloading(resource.id);
         const result = await downloadResourceAction(resource.id);
 
-        if (result.success && result.url) {
+        if (result.success && result.data?.url) {
             // Open in new tab
-            window.open(result.url, "_blank");
+            window.open(result.data.url, "_blank");
 
             // Update local download count
             setResources((prev) =>

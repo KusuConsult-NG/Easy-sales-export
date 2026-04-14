@@ -33,8 +33,8 @@ export default function ExportWindowsPage() {
                 } else {
                     setExportWindows(prev => [...prev, ...result.data]);
                 }
-                setLastDocId(result.lastId || null);
-                setHasMore(!!result.lastId);
+                setLastDocId(result.meta?.cursor || null);
+                setHasMore(!!result.meta?.cursor);
             } else {
                 toast.error(result.error || "Failed to load export windows");
             }

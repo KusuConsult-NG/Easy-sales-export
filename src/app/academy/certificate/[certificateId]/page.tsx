@@ -33,14 +33,14 @@ export default function CertificatePage() {
 
             setLoading(true);
             try {
-                const [courseData, progressData] = await Promise.all([
+                const [courseReq, progressReq] = await Promise.all([
                     getCourseByIdAction(courseId),
                     getUserProgressAction(session.user.id, courseId),
                 ]);
 
                 if (mounted) {
-                    setCourse(courseData);
-                    setProgress(progressData);
+                    setCourse(courseReq.data || null);
+                    setProgress(progressReq.data || null);
                 }
             } catch (err) {
                 logger.error("Failed to load certificate data:", err);

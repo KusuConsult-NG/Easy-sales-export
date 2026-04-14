@@ -13,7 +13,7 @@ export default function MyCoursesPage() {
     useEffect(() => {
         getEnrolledCoursesWithDetailsAction()
             .then((result) => {
-                if (result.success) setCourses(result.courses);
+                if (result.success && result.data) setCourses(result.data.courses);
             })
             .finally(() => setLoading(false));
     }, []);

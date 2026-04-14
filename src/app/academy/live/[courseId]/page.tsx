@@ -31,9 +31,9 @@ export default function AcademyLiveClassPage(props: AcademyLiveClassPageProps) {
 
         async function loadCourse() {
             try {
-                const courseData = await getCourseByIdAction(courseId);
-                if (courseData) {
-                    setCourse(courseData);
+                const courseReq = await getCourseByIdAction(courseId);
+                if (courseReq.success && courseReq.data) {
+                    setCourse(courseReq.data);
                 } else {
                     // Fallback with courseId as title
                     setCourse({ id: courseId, title: courseId.replace(/-/g, " "), instructor: "Easy Sales Academy" });

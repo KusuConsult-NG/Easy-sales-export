@@ -44,7 +44,7 @@ export default function AdminWaveWithdrawalsPage() {
             const res = await fetch(`/api/admin/wave/withdrawals?status=${statusFilter}`);
             if (!res.ok) throw new Error("Failed to load withdrawals");
             const data = await res.json();
-            setWithdrawals(data.withdrawals || []);
+            setWithdrawals(data.data?.withdrawals || []);
         } catch (err: any) {
             setError(err.message || "Failed to fetch withdrawal requests");
         } finally {

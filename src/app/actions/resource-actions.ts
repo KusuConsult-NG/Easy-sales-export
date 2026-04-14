@@ -32,11 +32,7 @@ export interface WaveResource {
 /**
  * Upload a resource to Firebase Storage and create Firestore record
  */
-export async function uploadResourceAction(formData: FormData): Promise<{
-    success: boolean;
-    error?: string;
-    resourceId?: string;
-}> {
+export async function uploadResourceAction(formData: FormData): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -137,7 +133,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
             targetType: "wave_resource",
         });
 
-        return { success: true, resourceId: docRef.id };
+        return { success: true, data: { resourceId: docRef.id } };
     } catch (error: any) {
         logger.error("Resource upload error:", error);
         return { success: false, error: error.message || "Failed to upload resource" };
@@ -147,7 +143,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{
 /**
  * Get all active resources, optionally filtered by category
  */
-export async function getResourcesAction(category?: string): Promise<WaveResource[]> {
+export async function getResourcesAction(category?: string): Promise<{ success: boolean; data?: WaveResource[]; meta?: any; error?: string }> {
     try {
         let query = db.collection(COLLECTIONS.WAVE_RESOURCES)
             .where("isActive", "==", true)
@@ -159,21 +155,17 @@ export async function getResourcesAction(category?: string): Promise<WaveResourc
 
         const snapshot = await query.get();
 
-        return serializeDocs(snapshot.docs) as unknown as WaveResource[];
+        return { success: true, data: serializeDocs(snapshot.docs) as unknown as WaveResource[] };
     } catch (error) {
         logger.error("Failed to fetch resources:", error);
-        return [];
+        return { success: false, error: "Failed to fetch resources" };
     }
 }
 
 /**
  * Track download and return resource URL
  */
-export async function downloadResourceAction(resourceId: string): Promise<{
-    success: boolean;
-    url?: string;
-    error?: string;
-}> {
+export async function downloadResourceAction(resourceId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -206,7 +198,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{
             targetType: "wave_resource",
         });
 
-        return { success: true, url: resource.fileUrl };
+        return { success: true, data: { url: resource.fileUrl } };
     } catch (error: any) {
         logger.error("Download tracking error:", error);
         return { success: false, error: error.message || "Failed to track download" };
@@ -216,10 +208,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{
 /**
  * Soft delete a resource (admin only)
  */
-export async function deleteResourceAction(resourceId: string): Promise<{
-    success: boolean;
-    error?: string;
-}> {
+export async function deleteResourceAction(resourceId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;
@@ -270,10 +259,7 @@ export async function updateResourceAction(
     title: string,
     description: string,
     tags?: string
-): Promise<{
-    success: boolean;
-    error?: string;
-}> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return sessionResult.error;

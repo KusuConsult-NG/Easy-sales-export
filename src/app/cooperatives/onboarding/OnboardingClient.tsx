@@ -131,8 +131,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
                 if (isEditParam) {
                     const result = await getCooperativeApplicationAction();
-                    if (result.success && result.data) {
-                        const d = result.data;
+                    if (result.success && result.data?.application) {
+                        const d = result.data.application;
                         if (d.firstName || d.fullName) {
                             setPersonalInfo((prev: any) => ({
                                 ...prev,
@@ -165,8 +165,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             if (coopStatus === "revision_required" || coopStatus === "rejected") {
                 // Pre-populate form with existing data
                 const result = await getCooperativeApplicationAction();
-                if (result.success && result.data) {
-                    const d = result.data;
+                if (result.success && result.data?.application) {
+                    const d = result.data.application;
                     if (d.firstName || d.fullName) {
                         setPersonalInfo((prev: any) => ({
                             ...prev,
@@ -258,8 +258,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         setIsPaymentLoading(true);
         try {
             const result = await initiateCooperativePaymentAction("basic");
-            if (result.success && result.paymentUrl) {
-                window.location.href = result.paymentUrl;
+            if (result.success && result.data?.paymentUrl) {
+                window.location.href = result.data.paymentUrl;
             } else {
                 showToast(result.error || "Failed to initiate payment", "error");
                 setIsPaymentLoading(false);

@@ -171,9 +171,7 @@ export async function getVendorSettingsAction() {
         const vendorDoc = await db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId).get();
 
         if (!vendorDoc.exists) {
-            return {
-                success: true,
-                settings: {
+            return { success: true, data: { settings: {
                     storeInfo: null,
                     paymentConfig: null,
                     notifications: {
@@ -181,14 +179,13 @@ export async function getVendorSettingsAction() {
                         lowStock: true,
                         payments: true,
                         reviews: true,
-                        marketing: false,
-                    },
+                        marketing: false, } },
                     shipping: null,
                 },
             };
         }
 
-        return { success: true, settings: vendorDoc.data() };
+        return { success: true, data: { settings: vendorDoc.data() } };
     } catch (error: any) {
         return { success: false, error: error.message };
     }

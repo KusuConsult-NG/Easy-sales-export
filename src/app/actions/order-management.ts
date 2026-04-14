@@ -55,7 +55,7 @@ export async function getSellerOrdersAction(filters?: {
             };
         }) as Order[];
 
-        return { success: true, orders };
+        return { success: true, data: { orders } };
     } catch (error: any) {
         logger.error("Get seller orders error:", error);
         return { success: false, error: error.message };
@@ -204,7 +204,7 @@ export async function getBuyerOrdersAction(filters?: {
             };
         }) as Order[];
 
-        return { success: true, orders };
+        return { success: true, data: { orders } };
     } catch (error: any) {
         logger.error("Get buyer orders error:", error);
         return { success: false, error: error.message };
@@ -349,7 +349,7 @@ export async function getOrderByIdForSellerAction(orderId: string) {
             updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
         } as Order;
 
-        return { success: true, order };
+        return { success: true, data: { order } };
     } catch (error: any) {
         logger.error("Get seller order by ID error:", error);
         return { success: false, error: error.message };

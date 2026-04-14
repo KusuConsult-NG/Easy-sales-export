@@ -453,7 +453,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         // Silently skip — collection may not exist yet
     }
 
-    return { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions };
+    return { success: true, data: { totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions } };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

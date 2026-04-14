@@ -52,7 +52,7 @@ export async function createExportWindowAction(data: {
     endDate: string;
     destination: string;
     adminId: string;
-}): Promise<{ success: boolean; error?: string; windowId?: string }> {
+}) {
     try {
         const window: Omit<ExportWindow, "id"> = {
             title: data.title,
@@ -82,26 +82,27 @@ export async function createExportWindowAction(data: {
             },
         });
 
-        return { success: true, windowId: docRef.id };
+        return { success: true, data: { windowId: docRef.id }, meta: null };
     } catch (error) {
         logger.error("Export window creation error:", error);
-        return { success: false, error: "Failed to create export window" };
+        return { success: false, data: null, error: "Failed to create export window", meta: null };
     }
 }
 
 /**
  * Get active export windows
  */
-export async function getActiveExportWindowsAction(): Promise<ExportWindow[]> {
+export async function getActiveExportWindowsAction() {
     try {
         const q = db.collection(COLLECTIONS.EXPORT_WINDOWS).where("status", "==", "open");
 
         const snapshot = await q.get();
 
-        return serializeDocs(snapshot.docs) as unknown as ExportWindow[];
+        const windows = serializeDocs(snapshot.docs) as unknown as ExportWindow[];
+        return { success: true, data: windows, meta: null };
     } catch (error) {
         logger.error("Failed to fetch export windows:", error);
-        return [];
+        return { success: false, data: [], meta: null, error: "Failed to fetch" };
     }
 }
 
@@ -114,28 +115,30 @@ export async function bookExportSlotAction(data: {
     userEmail: string;
     fullName: string;
     volume: number;
-}): Promise<{ success: boolean; error?: string; slotId?: string }> {
+}) {
     try {
         const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId);
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
-            return { success: false, error: "Export window not found" };
+            return { success: false, data: null, error: "Export window not found", meta: null };
         }
 
         const windowData = windowDoc.data() as ExportWindow;
 
         if (windowData.status !== "open") {
-            return { success: false, error: "Export window is closed" };
+            return { success: false, data: null, error: "Export window is closed", meta: null };
         }
 
         if (new Date() > new Date(windowData.endDate)) {
-            return { success: false, error: "Export window has expired" };
+            return { success: false, data: null, error: "Export window has expired", meta: null };
         }
 
         if (windowData.currentVolume + data.volume > windowData.targetVolume) {
             return {
                 success: false,
+                data: null,
+                meta: null,
                 error: `Only ${windowData.targetVolume - windowData.currentVolume}kg available`,
             };
         }
@@ -173,26 +176,27 @@ export async function bookExportSlotAction(data: {
             },
         });
 
-        return { success: true, slotId: slotRef.id };
+        return { success: true, data: { slotId: slotRef.id }, meta: null };
     } catch (error) {
         logger.error("Slot booking error:", error);
-        return { success: false, error: "Failed to book export slot" };
+        return { success: false, data: null, error: "Failed to book export slot", meta: null };
     }
 }
 
 /**
  * Get user export slots
  */
-export async function getUserExportSlotsAction(userId: string): Promise<ExportSlot[]> {
+export async function getUserExportSlotsAction(userId: string) {
     try {
         const q = db.collection(COLLECTIONS.EXPORT_SLOTS).where("userId", "==", userId);
 
         const snapshot = await q.get();
 
-        return serializeDocs(snapshot.docs) as unknown as ExportSlot[];
+        const slots = serializeDocs(snapshot.docs) as unknown as ExportSlot[];
+        return { success: true, data: slots, meta: null };
     } catch (error) {
         logger.error("Failed to fetch export slots:", error);
-        return [];
+        return { success: false, data: [], error: "Fetch failed", meta: null };
     }
 }
 

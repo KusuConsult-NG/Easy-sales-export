@@ -36,13 +36,13 @@ export default function ProgressPage() {
 
             setLoading(true);
             try {
-                const [data, { streak }] = await Promise.all([
+                const [aggResult, streakResult] = await Promise.all([
                     getUserAggregateProgressAction(userId),
                     calculateStreakAction(userId),
                 ]);
                 setProgressData({
-                    ...data,
-                    currentStreak: streak,
+                    ...aggResult.data,
+                    currentStreak: streakResult.data?.streak || 0,
                 });
             } catch (error) {
                 logger.error("Failed to load progress:", error);

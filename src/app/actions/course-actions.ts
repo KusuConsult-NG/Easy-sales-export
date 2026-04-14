@@ -48,11 +48,8 @@ export async function updateLessonProgress(
         // Or auto-complete? The "Honor System" fix is about verification.
         // Let's keep it manual but verified.
 
-        return {
-            success: true,
-            userId: session.user.id,
-            completed: validated.progressPercent >= 95,
-        };
+        return { success: true, data: { userId: session.user.id,
+            completed: validated.progressPercent >= 95, } };
     } catch (error) {
         logger.error("Lesson progress error:", error);
         if (error instanceof z.ZodError) {
@@ -122,11 +119,8 @@ export async function enrollInCourse(
             },
         });
 
-        return {
-            success: true,
-            enrollmentId: enrollmentRef.id,
-            userId: session.user.id,
-        };
+        return { success: true, data: { enrollmentId: enrollmentRef.id,
+            userId: session.user.id, } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -154,17 +148,12 @@ export async function getCourseProgress(courseId: string) {
             .get();
 
         if (snapshot.empty) {
-            return {
-                success: true,
-                progress: null,
-            };
+            return { success: true, data: { progress: null, } };
         }
 
         const progressData = snapshot.docs[0].data();
 
-        return {
-            success: true,
-            progress: {
+        return { success: true, data: { progress: {
                 id: snapshot.docs[0].id,
                 userId: progressData.userId,
                 courseId: progressData.courseId,
@@ -172,8 +161,7 @@ export async function getCourseProgress(courseId: string) {
                 lastWatchedSecond: progressData.lastWatchedSecond,
                 completed: progressData.completed,
                 completedAt: progressData.completedAt?.toDate?.()?.toISOString() || null,
-                updatedAt: progressData.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-            } as CourseProgress,
+                updatedAt: progressData.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(), } } as CourseProgress,
         };
     } catch (error) {
         return { success: false, error: "Failed to fetch course progress", progress: null };
@@ -193,16 +181,13 @@ export async function getLessonProgress(lessonId: string) {
         const doc = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId).get();
 
         if (!doc.exists) {
-            return { success: true, progress: null };
+            return { success: true, data: { progress: null } };
         }
 
-        return {
-            success: true,
-            progress: doc.data() as {
+        return { success: true, data: { progress: doc.data() as {
                 progressPercent: number;
                 lastWatchedSecond: number;
-                completed: boolean;
-            },
+                completed: boolean; } },
         };
     } catch (error) {
         logger.error("Failed to fetch lesson progress:", error);
@@ -226,10 +211,7 @@ export async function getUserEnrolledCourses() {
 
         const enrollments = serializeDocs(snapshot.docs);
 
-        return {
-            success: true,
-            courses: enrollments,
-        };
+        return { success: true, data: { courses: enrollments, } };
     } catch (error) {
         return { success: false, error: "Failed to fetch enrolled courses", courses: [] };
     }
@@ -272,7 +254,7 @@ export async function completeCourse(courseId: string) {
             },
         });
 
-        return { success: true, userId: session.user.id };
+        return { success: true, data: { userId: session.user.id } };
     } catch (error) {
         return { success: false, error: "Failed to complete course" };
     }
@@ -310,11 +292,8 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         if (!certSnapshot.empty) {
             // Return existing certificate
             const existingCert = certSnapshot.docs[0];
-            return {
-                success: true,
-                certificateId: existingCert.id,
-                message: "Certificate already generated",
-            };
+            return { success: true, data: { certificateId: existingCert.id,
+                message: "Certificate already generated", } };
         }
 
         // Generate certificate
@@ -355,11 +334,8 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             },
         });
 
-        return {
-            success: true,
-            certificateId: certificateRef.id,
-            message: "Certificate generated successfully",
-        };
+        return { success: true, data: { certificateId: certificateRef.id,
+            message: "Certificate generated successfully", } };
     } catch (error) {
         logger.error("Certificate generation error:", error);
         return { success: false, error: "Failed to generate certificate" };
@@ -381,17 +357,12 @@ export async function getCourseCertificate(courseId: string) {
             .get();
 
         if (snapshot.empty) {
-            return {
-                success: true,
-                certificate: null,
-            };
+            return { success: true, data: { certificate: null, } };
         }
 
         const certData = snapshot.docs[0].data();
 
-        return {
-            success: true,
-            certificate: {
+        return { success: true, data: { certificate: {
                 id: snapshot.docs[0].id,
                 userId: certData.userId,
                 userName: certData.userName,
@@ -399,8 +370,7 @@ export async function getCourseCertificate(courseId: string) {
                 courseTitle: certData.courseTitle,
                 completedAt: certData.completedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
                 issuedAt: certData.issuedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-                certificateNumber: certData.certificateNumber,
-            },
+                certificateNumber: certData.certificateNumber, } },
         };
     } catch (error) {
         return { success: false, error: "Failed to fetch certificate", certificate: null };

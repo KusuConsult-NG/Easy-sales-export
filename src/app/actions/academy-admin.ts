@@ -14,8 +14,8 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
  */
 
 type ActionState =
-    | { error: string; success: false }
-    | { error: null; success: true; message: string };
+    | { error: string; success: false; data?: null; meta?: null }
+    | { error: null; success: true; data: { message: string }; meta?: null };
 
 /**
  * Approve Academy Learner Application
@@ -135,7 +135,7 @@ export async function approveAcademyApplicationAction(
         return {
             error: null,
             success: true,
-            message: "Academy application approved successfully"
+            data: { message: "Academy application approved successfully" }
         };
     } catch (error: any) {
         logger.error("Approve Academy application error:", error);
@@ -245,7 +245,7 @@ export async function rejectAcademyApplicationAction(
         return {
             error: null,
             success: true,
-            message: "Academy application rejected"
+            data: { message: "Academy application rejected" }
         };
     } catch (error: any) {
         logger.error("Reject Academy application error:", error);
@@ -257,9 +257,10 @@ export async function rejectAcademyApplicationAction(
  * Get Pending Academy Applications (Admin)
  */
 export async function getPendingAcademyApplicationsAction(): Promise<{
-    error: string | null;
+    error?: string;
     success: boolean;
-    data?: any[];
+    data?: any;
+    meta?: any;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -290,7 +291,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
         );
 
         return {
-            error: null,
+            error: undefined,
             success: true,
             data: applications,
         };

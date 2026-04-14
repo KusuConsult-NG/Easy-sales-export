@@ -26,9 +26,9 @@ export default function CooperativePaymentPage() {
             try {
                 const { getMembershipAction } = await import("@/app/actions/cooperative");
                 const response = await getMembershipAction();
-                if (response.success && response.data) {
-                    const status = response.data.membershipStatus;
-                    const paymentStatus = response.data.paymentStatus;
+                if (response.success && response.data && response.data.membership) {
+                    const status = response.data.membership.membershipStatus;
+                    const paymentStatus = response.data.membership.paymentStatus;
                     
                     if (status === "approved" || status === "active") {
                         showToast("You are already a cooperative member!", "info");
@@ -60,8 +60,8 @@ export default function CooperativePaymentPage() {
         try {
             const result = await initiateCooperativePaymentAction("basic");
 
-            if (result.success && result.paymentUrl) {
-                window.location.href = result.paymentUrl;
+            if (result.success && result.data?.paymentUrl) {
+                window.location.href = result.data.paymentUrl;
             } else {
                 showToast(result.error || "Failed to initiate payment", "error");
                 setIsSubmitting(false);

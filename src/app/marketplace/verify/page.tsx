@@ -53,8 +53,8 @@ export default function SellerVerificationPage() {
     useEffect(() => {
         async function checkVerification() {
             const result = await getSellerVerificationAction();
-            if (result.success && result.verification) {
-                setExistingVerification(result.verification);
+            if (result.success && result.data?.verification) {
+                setExistingVerification(result.data?.verification);
             }
             setLoading(false);
         }

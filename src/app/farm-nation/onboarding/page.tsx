@@ -79,8 +79,8 @@ export default function FarmNationOnboardingPage() {
 
                     if (isEditParam) {
                         const result = await getFarmNationApplicationAction();
-                        if (result.success && result.data) {
-                            setFormData((prev: any) => ({ ...prev, ...result.data }));
+                        if (result.success && result.data?.application) {
+                            setFormData((prev: any) => ({ ...prev, ...result.data!.application }));
                         }
                         setIsEditMode(true);
                         setIsLoading(false);
@@ -92,10 +92,10 @@ export default function FarmNationOnboardingPage() {
                     router.replace("/farm-nation/properties");
                 } else if (status === "rejected" || status === "revision_required") {
                     const result = await getFarmNationApplicationAction();
-                    if (result.success && result.data) {
-                        setFormData((prev: any) => ({ ...prev, ...result.data }));
+                    if (result.success && result.data?.application) {
+                        setFormData((prev: any) => ({ ...prev, ...result.data!.application }));
                     }
-                    if (result.rejectionReason) setRejectionReason(result.rejectionReason);
+                    if (result.data?.rejectionReason) setRejectionReason(result.data.rejectionReason);
                     setIsRevisionMode(true);
                     setIsLoading(false);
                 } else {

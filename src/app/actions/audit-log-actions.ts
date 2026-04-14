@@ -70,7 +70,7 @@ export async function getAuditLogsAction(filters: {
         // Apply limit if specified
         const limited = filters.limit ? logs.slice(0, filters.limit) : logs;
 
-        return { success: true, logs: limited };
+        return { success: true, data: { logs: limited } };
     } catch (error: any) {
         logger.error("Failed to fetch audit logs:", error);
         return { success: false, error: error.message || "Failed to fetch audit logs" };
@@ -138,7 +138,7 @@ export async function exportAuditLogsCSV(filters: {
             ),
         ].join("\n");
 
-        return { success: true, csv: csvContent };
+        return { success: true, data: { csv: csvContent } };
     } catch (error: any) {
         logger.error("Failed to export audit logs:", error);
         return { success: false, error: error.message || "Failed to export logs" };
@@ -217,7 +217,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
             .sort((a, b) => b.count - a.count)
             .slice(0, 10);
 
-        return { success: true, stats };
+        return { success: true, data: { stats } };
     } catch (error: any) {
         logger.error("Failed to fetch audit stats:", error);
         return { success: false, error: error.message || "Failed to fetch statistics" };

@@ -28,7 +28,7 @@ function PaymentCallbackContent() {
 
                 if (result.success) {
                     setStatus("success");
-                    setMessage(result.message || "Property purchase successful!");
+                    setMessage(result.data?.message || "Property purchase successful!");
                     setPropertyId(result.propertyId || null);
                 } else {
                     setStatus("error");

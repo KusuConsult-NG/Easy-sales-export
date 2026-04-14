@@ -47,19 +47,23 @@ type CreateExportSuccessState = {
     error: null;
     success: true;
     message: string;
-    orderId: string;
+    data: { orderId: string };
+    meta: null;
 };
 
 type UpdateStatusSuccessState = {
     error: null;
     success: true;
     message: string;
+    data: null;
+    meta: null;
 };
 
 type GetExportsSuccessState = {
     error: null;
     success: true;
     data: ExportWindow[];
+    meta: { cursor: string | null; hasMore: boolean } | null;
 };
 
 export type CreateExportActionState = ActionErrorState | CreateExportSuccessState;
@@ -172,7 +176,8 @@ export async function createExportWindowAction(
             error: null,
             success: true,
             message: `Export window created successfully! Order ID: ${finalOrderId}`,
-            orderId: finalOrderId,
+            data: { orderId: finalOrderId },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Create export window error:", error);
@@ -276,6 +281,8 @@ export async function updateExportStatusAction(
             error: null,
             success: true,
             message: `Status updated to ${newStatus}`,
+            data: null,
+            meta: null
         };
     } catch (error: any) {
         logger.error("Update export status error:", error);
@@ -291,18 +298,18 @@ export async function updateExportStatusAction(
 export async function updateExportWindowAction(
     exportId: string,
     updateData: Partial<ExportWindow>
-): Promise<{ error: string | null; success: boolean }> {
+) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false, data: null, meta: null };
         }
 
         // Verify Admin
         if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized access", success: false };
+            return { error: "Unauthorized access", success: false, data: null, meta: null };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
@@ -318,10 +325,10 @@ export async function updateExportWindowAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { error: null, success: true };
+        return { error: null, success: true, data: null, meta: null };
     } catch (error: any) {
         logger.error("Update export window error:", error);
-        return { error: "Failed to update export window", success: false };
+        return { error: "Failed to update export window", success: false, data: null, meta: null };
     }
 }
 
@@ -340,6 +347,7 @@ export async function getExportWindowsAction(
     success: boolean;
     data?: ExportWindow[];
     lastId?: string | null;
+    meta?: any;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -427,11 +435,11 @@ export async function getExportWindowsAction(
             error: null,
             success: true,
             data: exports,
-            lastId: lastDocId
+            meta: { cursor: lastDocId, hasMore: !!lastDocId }
         };
     } catch (error: any) {
         logger.error("Get export windows error:", error);
-        return { error: "Failed to fetch export windows", success: false };
+        return { error: "Failed to fetch export windows", success: false, data: undefined, meta: null };
     }
 }
 
@@ -518,7 +526,7 @@ import { uploadFileToStorage } from "@/lib/storage-admin";
 export async function submitExportOnboardingAction(
     prevState: any,
     formData: FormData
-): Promise<{ error: string | null; success: boolean; applicationId?: string }> {
+) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -536,13 +544,17 @@ export async function submitExportOnboardingAction(
         if (existingStatus === 'pending_approval' || existingStatus === 'under_review') {
             return {
                 success: false,
-                error: "Your previous application is still being processed."
+                data: undefined,
+                error: "Your previous application is still being processed.",
+                meta: null
             };
         }
         if (existingStatus === 'approved') {
             return {
                 success: false,
-                error: "You are already registered for Export."
+                data: undefined,
+                error: "You are already registered for Export.",
+                meta: null
             };
         }
 
@@ -611,11 +623,12 @@ export async function submitExportOnboardingAction(
         return {
             error: null,
             success: true,
-            applicationId,
+            data: { applicationId },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Submit export onboarding error:", error);
-        return { error: "Failed to submit onboarding application", success: false };
+        return { error: "Failed to submit onboarding application", success: false, data: undefined, meta: null };
     }
 }
 
@@ -629,6 +642,7 @@ export async function getUserExportInvestmentsAction(
 ): Promise<{
     error: string | null;
     success: boolean;
+    meta?: any;
     data?: Array<{
         id: string;
         commodity: string;
@@ -701,11 +715,11 @@ export async function getUserExportInvestmentsAction(
             error: null,
             success: true,
             data: investments,
-            lastId: lastDocId
+            meta: { cursor: lastDocId, hasMore: !!lastDocId }
         };
     } catch (error: any) {
         logger.error("Get user export investments error:", error);
-        return { error: "Failed to fetch investments", success: false };
+        return { error: "Failed to fetch investments", success: false, data: undefined, meta: null };
     }
 }
 
@@ -713,16 +727,7 @@ export async function getUserExportInvestmentsAction(
 // Get User Export Stats Action
 // ============================================
 
-export async function getUserExportStatsAction(): Promise<{
-    error: string | null;
-    success: boolean;
-    data?: {
-        totalInvested: number;
-        activeInvestments: number;
-        totalReturns: number;
-        pendingReturns: number;
-    };
-}> {
+export async function getUserExportStatsAction() {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -771,10 +776,11 @@ export async function getUserExportStatsAction(): Promise<{
                 totalReturns,
                 pendingReturns,
             },
+            meta: null
         };
     } catch (error: any) {
         logger.error("Get user export stats error:", error);
-        return { error: "Failed to fetch statistics", success: false };
+        return { error: "Failed to fetch statistics", success: false, data: undefined, meta: null };
     }
 }
 
@@ -890,7 +896,7 @@ export async function investInExportAction(
 // Verify Export Investment
 // ============================================
 
-export async function verifyExportInvestmentAction(reference: string): Promise<{ success: boolean; error?: string }> {
+export async function verifyExportInvestmentAction(reference: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -1091,7 +1097,7 @@ export async function getExportApplicationAction(): Promise<{
         if (snap.empty) return { success: false, error: 'No application found' };
 
         const data = snap.docs[0].data();
-        return { success: true, data, revisionNote: data?.revisionNote };
+        return { success: true, data: { data, revisionNote: data?.revisionNote } };
     } catch (error) {
         logger.error('getExportApplicationAction error:', error);
         return { success: false, error: 'Failed to fetch application' };
@@ -1104,7 +1110,7 @@ export async function getExportApplicationAction(): Promise<{
 export async function requestExportRevisionAction(
     applicationId: string,
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -1179,18 +1185,18 @@ export async function requestExportRevisionAction(
  */
 export async function approveExportApplicationAction(
     applicationId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
-            return { success: false, error: 'Admin access required' };
+            return { success: false, data: null, error: 'Admin access required', meta: null };
         }
 
         const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
-        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+        if (!appDoc.exists) return { success: false, data: null, error: 'Application not found', meta: null };
 
         const appData = appDoc.data();
         const userId = appData?.userId;
@@ -1241,10 +1247,10 @@ export async function approveExportApplicationAction(
             logger.error('Export approval email failed (non-blocking):', emailError);
         }
 
-        return { success: true };
+        return { success: true, data: null, meta: null };
     } catch (error) {
         logger.error('approveExportApplicationAction error:', error);
-        return { success: false, error: 'Failed to approve application' };
+        return { success: false, data: null, error: 'Failed to approve application', meta: null };
     }
 }
 
@@ -1257,12 +1263,12 @@ export async function approveExportApplicationAction(
  */
 export async function resubmitExportApplicationAction(
     fields: Record<string, any>
-): Promise<{ success: boolean; error?: string }> {
+) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: 'Unauthorized' };
+        if (!session?.user) return { success: false, data: null, error: 'Unauthorized', meta: null };
 
         const userId = session.user.id;
 
@@ -1270,7 +1276,7 @@ export async function resubmitExportApplicationAction(
         const existingStatus = userDoc.data()?.serviceRegistrations?.export?.status;
         const allowedStatuses = ['pending_approval', 'revision_required', 'rejected'];
         if (!allowedStatuses.includes(existingStatus || '')) {
-            return { success: false, error: 'Your application cannot be resubmitted at this time.' };
+            return { success: false, data: null, error: 'Your application cannot be resubmitted at this time.', meta: null };
         }
 
         const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
@@ -1278,7 +1284,7 @@ export async function resubmitExportApplicationAction(
             .limit(1)
             .get();
 
-        if (snap.empty) return { success: false, error: 'No existing application found' };
+        if (snap.empty) return { success: false, data: null, error: 'No existing application found', meta: null };
 
         const appRef = snap.docs[0].ref;
 
@@ -1298,9 +1304,9 @@ export async function resubmitExportApplicationAction(
 
         await batch.commit();
 
-        return { success: true };
+        return { success: true, data: null, meta: null };
     } catch (error) {
         logger.error('resubmitExportApplicationAction error:', error);
-        return { success: false, error: 'Failed to resubmit application' };
+        return { success: false, data: null, error: 'Failed to resubmit application', meta: null };
     }
 }

@@ -64,13 +64,16 @@ export default function LessonPage(props: LessonPageProps) {
             setLoading(true);
             try {
                 // Fetch Course, User Progress (Course-level), and Lesson Progress (Video-level)
-                const [courseData, progressData, lessonProgressData] = await Promise.all([
+                const [courseReq, progressReq, lessonProgressData] = await Promise.all([
                     getCourseByIdAction(courseId),
                     getUserProgressAction(session.user.id, courseId),
                     getLessonProgress(lessonId)
                 ]);
 
                 if (!mounted) return;
+                
+                const courseData = courseReq.data;
+                const progressData = progressReq.data;
 
                 if (!courseData) {
                     setLoading(false);
@@ -92,7 +95,7 @@ export default function LessonPage(props: LessonPageProps) {
 
                 if (mounted) {
                     setCourse(courseData);
-                    setProgress(progressData);
+                    setProgress(progressData || null);
                     setCurrentLesson(foundLesson);
                     setCurrentModule(foundModule);
 
@@ -118,10 +121,13 @@ export default function LessonPage(props: LessonPageProps) {
         if (!session?.user) return;
 
         try {
-            const [courseData, progressData] = await Promise.all([
+            const [courseReq, progressReq] = await Promise.all([
                 getCourseByIdAction(courseId),
                 getUserProgressAction(session.user.id, courseId),
             ]);
+            
+            const courseData = courseReq.data;
+            const progressData = progressReq.data;
 
             if (courseData) {
                 // Find current lesson and module
@@ -138,7 +144,7 @@ export default function LessonPage(props: LessonPageProps) {
                 }
 
                 setCourse(courseData);
-                setProgress(progressData);
+                setProgress(progressData || null);
                 setCurrentLesson(foundLesson);
                 setCurrentModule(foundModule);
             }

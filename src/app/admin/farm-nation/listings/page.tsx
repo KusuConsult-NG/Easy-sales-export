@@ -27,10 +27,13 @@ export default function FarmNationListingsPage() {
         setData
     } = useAdminData<Property>({
         fetchAction: async (params) => {
-            // Adapt params for getPropertiesAction
-            // Note: getPropertiesAction needs an update to support pagination/search if it doesn't already
-            // For now we pass standard params, assuming we will update action next
-            return await getPropertiesAction(params);
+            const result = await getPropertiesAction(params);
+            return {
+                ...result,
+                data: result.data?.properties || [],
+                hasMore: result.meta?.hasMore,
+                lastDocId: result.meta?.cursor || undefined,
+            };
         },
         limit: 20
     });

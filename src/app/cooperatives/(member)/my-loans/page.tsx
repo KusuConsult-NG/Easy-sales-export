@@ -40,11 +40,11 @@ export default function MyLoansPage() {
         setError(null);
         try {
             const result = await getMembershipAction();
-            if (result.success && result.data) {
-                setMembership(result.data);
+            if (result.success && result.data && result.data.membership) {
+                setMembership(result.data.membership);
 
                 // Fetch real loans from Firestore using membership.id (which is the User ID)
-                const loanApplications = await getUserLoanApplicationsAction(result.data.id);
+                const loanApplications = await getUserLoanApplicationsAction(result.data.membership.id);
 
                 // Only show disbursed loans (active loans with repayment schedules)
                 const disbursedLoans = loanApplications.filter(loan => loan.status === "disbursed");

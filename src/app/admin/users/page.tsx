@@ -100,7 +100,7 @@ export default function AdminUsersPage() {
 
         if (result.success) {
             setData(prev => prev.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u));
-            showToast(result.message, "success");
+            showToast(result.data?.message, "success");
         } else {
             showToast(result.error, "error");
         }
@@ -590,7 +590,7 @@ export default function AdminUsersPage() {
                                                                 const updatedUser = { ...selectedUserForModal, [verifyField]: !item.verified };
                                                                 setSelectedUserForModal(updatedUser as User);
                                                                 setData(prev => prev.map(u => u.id === selectedUserForModal.id ? updatedUser as User : u));
-                                                                showToast(result.message, "success");
+                                                                showToast(result.data?.message, "success");
                                                             } else {
                                                                 showToast(result.error, "error");
                                                             }

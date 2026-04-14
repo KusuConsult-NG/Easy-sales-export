@@ -25,13 +25,13 @@ export default function ProductDetailPage() {
 
             try {
                 const result = await getProductAction(productId);
-                if (result.success && result.product) {
-                    setProduct(result.product);
+                if (result.success && result.data?.product) {
+                    setProduct(result.data?.product);
 
                     // Load related products
                     const relatedResult = await getRelatedProductsAction(productId, 4);
                     if (relatedResult.success) {
-                        setRelatedProducts(relatedResult.products || []);
+                        setRelatedProducts(relatedResult.data?.products || []);
                     }
                 } else {
                     setError(result.error || "Product not found");

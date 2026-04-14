@@ -187,10 +187,7 @@ export async function submitSellerVerificationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return {
-            success: true,
-            verificationId,
-        };
+        return { success: true, data: { verificationId, } };
     } catch (error: any) {
         logger.error("Seller verification error:", error);
         return {
@@ -219,12 +216,12 @@ export async function getSellerVerificationAction() {
             .get();
 
         if (snapshot.empty) {
-            return { success: true, verification: null };
+            return { success: true, data: { verification: null } };
         }
 
         const verification = snapshot.docs[0].data() as SellerVerification;
 
-        return { success: true, verification };
+        return { success: true, data: { verification } };
     } catch (error: any) {
         logger.error("Get seller verification error:", error);
         return { success: false, error: error.message };
@@ -380,7 +377,7 @@ export async function submitMarketplaceOnboardingAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true, verificationId };
+        return { success: true, data: { verificationId } };
 
     } catch (error: any) {
         logger.error("Marketplace onboarding error:", error);
@@ -568,10 +565,7 @@ export async function createProductAction(
 
         await productRef.set(productData);
 
-        return {
-            success: true,
-            productId,
-        };
+        return { success: true, data: { productId, } };
     } catch (error: any) {
         logger.error("Create product error:", error);
         return {
@@ -667,7 +661,7 @@ export async function getSellerProductsAction(options: {
             newLastId = lastProduct.id;
         }
 
-        return { success: true, products, lastId: newLastId, hasMore };
+        return { success: true, data: { products, lastId: newLastId, hasMore } };
     } catch (error: any) {
         logger.error("Get seller products error:", { error });
         return { success: false, error: error.message };
@@ -741,7 +735,7 @@ export async function getSellerOrdersAction(options: {
             newLastId = snapshot.docs[snapshot.docs.length - 1].id;
         }
 
-        return { success: true, orders, lastId: newLastId, hasMore };
+        return { success: true, data: { orders, lastId: newLastId, hasMore } };
     } catch (error: any) {
         logger.error("Get seller orders error:", { error });
         return { success: false, error: error.message };
@@ -793,8 +787,13 @@ export async function getSellerAnalyticsAction() {
 
         const activeListings = products.filter(p => p.status === "active").length;
 
-        // Conversion rate placeholder (would need view tracking)
-        const conversionRate = 0;
+        // Conversion rate: completed orders ÷ total product views × 100
+        // Both `views` and `orders` are incremented fields on Product documents.
+        const totalProductViews = products.reduce((sum, p) => sum + (p.views || 0), 0);
+        const completedOrderCount = orders.filter(o => o.status !== "cancelled" && o.status !== "disputed").length;
+        const conversionRate = totalProductViews > 0
+            ? parseFloat(((completedOrderCount / totalProductViews) * 100).toFixed(1))
+            : 0;
 
         // Average Rating
         const averageRating = products.length > 0
@@ -823,9 +822,7 @@ export async function getSellerAnalyticsAction() {
         // we return 0 so badge is hidden rather than fabricated.
         const prevActiveListings = 0;
 
-        return {
-            success: true,
-            analytics: {
+        return { success: true, data: { analytics: {
                 totalSales,
                 activeListings,
                 pendingOrders,
@@ -834,8 +831,7 @@ export async function getSellerAnalyticsAction() {
                 averageRating,
                 prevMonthRevenue,
                 prevTotalSales,
-                prevActiveListings,
-            }
+                prevActiveListings, } }
         };
     } catch (error: any) {
         logger.error("Get seller analytics error:", error);
@@ -892,7 +888,7 @@ export async function getBuyerOrdersAction(options: {
             newLastId = snapshot.docs[snapshot.docs.length - 1].id;
         }
 
-        return { success: true, orders, lastId: newLastId, hasMore };
+        return { success: true, data: { orders, lastId: newLastId, hasMore } };
     } catch (error: any) {
         logger.error("Get buyer orders error:", { error });
         return { success: false, error: error.message };
@@ -927,14 +923,11 @@ export async function getBuyerStatsAction() {
         const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const savedSellers: number = buyerDoc.data()?.savedSellersCount ?? 0;
 
-        return {
-            success: true,
-            stats: {
+        return { success: true, data: { stats: {
                 activeOrders,
                 completedOrders,
                 totalSpent,
-                savedSellers
-            }
+                savedSellers } }
         };
     } catch (error: any) {
         logger.error("Get buyer stats error:", error);
@@ -967,7 +960,7 @@ const getCachedProduct = (productId: string) => unstable_cache(
                 }
             }
 
-            return { success: true, product: { ...product, sellerName } };
+            return { success: true, data: { product: { ...product, sellerName } } };
         } catch (error: any) {
             logger.error("Get product error:", error);
             return { success: false, error: error.message };
@@ -1025,7 +1018,7 @@ const getCachedRecommendedProducts = unstable_cache(
                 })
             );
 
-            return { success: true, products: productsWithSellers };
+            return { success: true, data: { products: productsWithSellers } };
         } catch (error: any) {
             logger.error("Get recommended products error:", error);
             return { success: false, error: error.message, products: [] };
@@ -1141,7 +1134,7 @@ const getCachedRelatedProducts = (productId: string, limit: number) => unstable_
                 products = [...products, ...randomProducts].slice(0, limit);
             }
 
-            return { success: true, products: products.slice(0, limit) };
+            return { success: true, data: { products: products.slice(0, limit) } };
         } catch (error: any) {
             logger.error("Get related products error:", error);
             return { success: false, error: error.message, products: [] };
@@ -1258,12 +1251,9 @@ export async function searchProductsAction(params: {
             );
         }
 
-        return {
-            success: true,
-            products: finalProducts,
+        return { success: true, data: { products: finalProducts,
             lastId: lastVisible ? lastVisible.id : undefined,
-            hasMore: snapshot.docs.length === limit
-        };
+            hasMore: snapshot.docs.length === limit } };
 
     } catch (error: any) {
         logger.error("Search products error:", error);

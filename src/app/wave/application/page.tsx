@@ -244,7 +244,8 @@ export default function WaveApplicationPage() {
     const checkApplicationStatus = async (isEditParam: boolean) => {
         try {
             const { checkWaveStatusAction } = await import("@/app/actions/wave");
-            const waveStatus = await checkWaveStatusAction();
+            const statusResult = await checkWaveStatusAction();
+            const waveStatus = statusResult.success ? statusResult.data : null;
 
             if (waveStatus === "pending" || waveStatus === "under_review") {
                 if (isEditParam) {
@@ -266,8 +267,8 @@ export default function WaveApplicationPage() {
                     setFormData((prev: any) => ({ ...prev, ...result.data }));
                     setCurrentStep(0); // Start from beginning so user can review all steps
                 }
-                if (result.revisionNote) {
-                    setRevisionNote(result.revisionNote);
+                if (result.meta?.revisionNote) {
+                    setRevisionNote(result.meta.revisionNote);
                 }
                 setIsRevisionMode(true);
             } else if (waveStatus === "rejected") {

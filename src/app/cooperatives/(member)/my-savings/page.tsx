@@ -34,8 +34,8 @@ export default function MySavingsPage() {
                 fetch("/api/cooperative/fixed-savings"),
             ]);
 
-            if (membershipResult.success && membershipResult.data) {
-                setMembership(membershipResult.data);
+            if (membershipResult.success && membershipResult.data?.membership) {
+                setMembership(membershipResult.data.membership);
             }
 
             if (savingsResponse.ok) {

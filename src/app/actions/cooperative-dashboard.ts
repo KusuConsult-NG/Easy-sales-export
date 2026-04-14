@@ -22,8 +22,6 @@ export async function getDashboardDataAction() {
             return {
                 success: false,
                 error: "Not authenticated",
-                membership: null,
-                transactions: []
             };
         }
 
@@ -49,8 +47,6 @@ export async function getDashboardDataAction() {
             return {
                 success: false,
                 error: "No cooperative membership found",
-                membership: null,
-                transactions: []
             };
         }
 
@@ -61,8 +57,8 @@ export async function getDashboardDataAction() {
 
         return {
             success: true,
-            membership,
-            transactions,
+            data: { membership, transactions },
+            meta: null,
             error: null
         };
 
@@ -71,8 +67,6 @@ export async function getDashboardDataAction() {
         return {
             success: false,
             error: error instanceof Error ? error.message : "Failed to load dashboard data",
-            membership: null,
-            transactions: []
         };
     }
 }

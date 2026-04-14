@@ -77,8 +77,8 @@ export default function ExportPortfolioPage() {
                 } else {
                     setInvestments(prev => [...prev, ...mappedInvestments]);
                 }
-                setLastId(result.lastId || null);
-                setHasMore(!!result.lastId);
+                setLastId(result.meta?.cursor || null);
+                setHasMore(!!result.meta?.cursor);
             } else {
                 toast.error(result.error || "Failed to load investments");
             }

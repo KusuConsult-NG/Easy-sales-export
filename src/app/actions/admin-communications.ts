@@ -178,10 +178,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
             error: hasError ? lastError : null
         });
 
-        return {
-            success: true,
-            recipientCount: emails.length
-        };
+        return { success: true, data: { recipientCount: emails.length } };
     } catch (error: any) {
         logger.error('Failed to send bulk email:', error);
         return {
@@ -223,10 +220,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
             updatedAt: FieldValue.serverTimestamp()
         });
 
-        return {
-            success: true,
-            id: announcementRef.id
-        };
+        return { success: true, data: { id: announcementRef.id } };
     } catch (error) {
         logger.error('Failed to create announcement:', error);
         return {
@@ -262,7 +256,7 @@ export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
 
         const history = serializeDocs(snapshot.docs) as any[];
 
-        return { success: true, history };
+        return { success: true, data: { history } };
     } catch (error) {
         logger.error('Failed to fetch email history:', error);
         return { success: false, error: 'Failed to load email history' };

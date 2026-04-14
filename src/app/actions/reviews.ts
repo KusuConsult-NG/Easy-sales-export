@@ -133,7 +133,7 @@ export async function getProductReviewsAction(
             ? reviews.filter((r) => r.verified === filters.verified)
             : reviews;
 
-        return { success: true, reviews: filteredReviews };
+        return { success: true, data: { reviews: filteredReviews } };
     } catch (error: any) {
         logger.error("Get product reviews error:", error);
         return { success: false, error: error.message };
@@ -157,7 +157,7 @@ export async function getUserReviewsAction() {
 
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
-        return { success: true, reviews };
+        return { success: true, data: { reviews } };
     } catch (error: any) {
         logger.error("Get user reviews error:", error);
         return { success: false, error: error.message };
@@ -292,12 +292,10 @@ export async function getSellerRatingAction(sellerId: string) {
         const reviews: ProductReview[] = snapshot.docs.map((doc) => doc.data()) as ProductReview[];
 
         if (reviews.length === 0) {
-            return {
-                success: true,
-                stats: {
+            return { success: true, data: { stats: {
                     averageRating: 0,
                     totalReviews: 0,
-                    distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+                    distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
                 },
             };
         }
@@ -315,13 +313,10 @@ export async function getSellerRatingAction(sellerId: string) {
             1: reviews.filter((r) => r.rating === 1).length,
         };
 
-        return {
-            success: true,
-            stats: {
+        return { success: true, data: { stats: {
                 averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
                 totalReviews: reviews.length,
-                distribution,
-            },
+                distribution, } },
         };
     } catch (error: any) {
         logger.error("Get seller rating error:", error);
@@ -360,7 +355,7 @@ export async function getAdminReviewsAction(statusFilter?: "pending" | "approved
         const snapshot = await query.get();
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
-        return { success: true, reviews };
+        return { success: true, data: { reviews } };
     } catch (error: any) {
         logger.error("Get admin reviews error:", error);
         return { success: false, error: error.message };

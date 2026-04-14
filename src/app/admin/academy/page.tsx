@@ -28,14 +28,14 @@ export default function AcademyAdminPage() {
             const currentLastDoc = reset ? undefined : lastDocId || undefined;
             const result = await getCoursesAction(12, currentLastDoc);
 
-            if (result) {
+            if (result.success && result.data) {
                 if (reset) {
-                    setCourses(result.courses);
+                    setCourses(result.data);
                 } else {
-                    setCourses(prev => [...prev, ...result.courses]);
+                    setCourses(prev => [...prev, ...result.data!]);
                 }
-                setLastDocId(result.lastDocId);
-                setHasMore(!!result.lastDocId);
+                setLastDocId(result.meta?.lastDocId || null);
+                setHasMore(!!result.meta?.lastDocId);
             } else {
                 toast.error("Failed to load courses");
             }
