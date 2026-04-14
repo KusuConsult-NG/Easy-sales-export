@@ -161,7 +161,8 @@ export async function getCourseProgress(courseId: string) {
                 lastWatchedSecond: progressData.lastWatchedSecond,
                 completed: progressData.completed,
                 completedAt: progressData.completedAt?.toDate?.()?.toISOString() || null,
-                updatedAt: progressData.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(), } } as CourseProgress,
+                updatedAt: progressData.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            } },
         };
     } catch (error) {
         return { success: false, error: "Failed to fetch course progress", progress: null };
