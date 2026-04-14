@@ -173,7 +173,7 @@ export async function getLandListing(listingId: string) {
             verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate() : null,
         } as unknown as LandListing;
 
-        return { success: true, data: { listing, } };
+        return { success: true, listing };
     } catch (error) {
         return { success: false, error: "Failed to fetch listing", listing: null };
     }
