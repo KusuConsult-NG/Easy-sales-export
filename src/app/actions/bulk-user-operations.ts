@@ -128,8 +128,8 @@ export async function bulkSuspendUsersAction(
             }
         );
 
-        return { success: true, data: { suspended: suspendedCount,
-            failed: failedIds, } };
+        return { success: true, suspended: suspendedCount,
+            failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk suspend users:", error);
         return {
@@ -226,8 +226,8 @@ export async function bulkActivateUsersAction(
             }
         );
 
-        return { success: true, data: { activated: activatedCount,
-            failed: failedIds, } };
+        return { success: true, activated: activatedCount,
+            failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk activate users:", error);
         return {
@@ -339,8 +339,8 @@ export async function bulkAssignRolesAction(
             }
         );
 
-        return { success: true, data: { updated: updatedCount,
-            failed: failedIds, } };
+        return { success: true, updated: updatedCount,
+            failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk assign roles:", error);
         return {
@@ -463,8 +463,8 @@ export async function bulkDeleteUsersAction(
             }
         );
 
-        return { success: true, data: { deleted: deletedCount,
-            failed: failedIds, } };
+        return { success: true, deleted: deletedCount,
+            failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk delete users:", error);
         return {
@@ -561,8 +561,8 @@ export async function createImpersonationTokenAction(
             }
         );
 
-        return { success: true, data: { token: impersonationRef.id,
-            expiresAt: expiresAt.toISOString(), } };
+        return { success: true, token: impersonationRef.id,
+            expiresAt: expiresAt.toISOString() };
     } catch (error: any) {
         logger.error("Failed to create impersonation token:", error);
         return {
