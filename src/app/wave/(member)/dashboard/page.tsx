@@ -53,12 +53,16 @@ export default function WaveDashboardPage() {
             }
 
             // Load recent resources (limit 3)
-            const resources = await getWaveResourcesAction();
-            setRecentResources(resources.slice(0, 3));
+            const resourcesResult = await getWaveResourcesAction();
+            if (resourcesResult.success && resourcesResult.data) {
+                setRecentResources(resourcesResult.data.slice(0, 3));
+            }
 
             // Load upcoming events (limit 3)
-            const events = await getWaveTrainingEventsAction();
-            setUpcomingEvents(events.slice(0, 3));
+            const eventsResult = await getWaveTrainingEventsAction();
+            if (eventsResult.success && eventsResult.data) {
+                setUpcomingEvents(eventsResult.data.slice(0, 3));
+            }
         } catch (error) {
             logger.error("Dashboard load error:", error);
         } finally {

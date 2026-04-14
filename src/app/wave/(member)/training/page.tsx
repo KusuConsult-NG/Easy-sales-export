@@ -44,8 +44,10 @@ export default function WaveTrainingPage() {
             }
 
             // Load events
-            const eventsData = await getWaveTrainingEventsAction();
-            setEvents(eventsData);
+            const eventsResult = await getWaveTrainingEventsAction();
+            if (eventsResult.success && eventsResult.data) {
+                setEvents(eventsResult.data);
+            }
 
             // Load user's registrations
             const regsResult = await getUserTrainingRegistrationsAction();
