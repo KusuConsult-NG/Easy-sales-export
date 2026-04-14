@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { SoilQuality, type LandListing } from "@/types/strict";
-import { getVerifiedLandListings } from "@/app/actions/land";
 import { logger } from '@/lib/logger';
 
 //Dynamically import LandMap to prevent SSR issues with leaflet
@@ -28,9 +27,19 @@ export default function LandMapPage() {
 
     useEffect(() => {
         async function loadListings() {
-            const data = await getVerifiedLandListings();
-            setListings(data);
-            setLoading(false);
+            try {
+                const res = await fetch("/api/farm-nation/listings");
+                const payload = await res.json();
+                if (payload.success && payload.data?.listings) {
+                    setListings(payload.data.listings);
+                } else {
+                    logger.error("Failed to load listings:", payload.error);
+                }
+            } catch (err) {
+                logger.error("Network error loading land listings:", err);
+            } finally {
+                setLoading(false);
+            }
         }
         loadListings();
     }, []);

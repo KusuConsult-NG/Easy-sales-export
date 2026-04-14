@@ -25,8 +25,10 @@ const nextConfig: NextConfig = {
   // Experimental
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts'],
-    serverComponentsExternalPackages: ['firebase-admin'],
   },
+  
+  // Exclude native binaries and packages causing build issues
+  serverExternalPackages: ['firebase-admin'],
 
   // Image optimization
   images: {
