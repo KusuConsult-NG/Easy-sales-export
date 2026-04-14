@@ -38,11 +38,11 @@ export async function diagnoseBroadcastAction(): Promise<{
         const countSnap = await db.collection(collectionName).count().get();
         const totalCount = countSnap.data().count;
 
-        return { success: true, data: { projectId: process.env.FIREBASE_PROJECT_ID || "(not set)",
+        return { success: true, projectId: process.env.FIREBASE_PROJECT_ID || "(not set)",
             usersCollectionName: collectionName,
             totalUserDocs: totalCount,
             usersWithEmail,
-            sampleFields, } };
+            sampleFields };
     } catch (error: any) {
         return {
             success: false,
