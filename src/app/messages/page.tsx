@@ -221,7 +221,7 @@ export default function MessagesPage() {
                                             <div className="text-xs text-slate-400">
                                                 {typeof (conv.lastMessage.timestamp as any)?.toDate === 'function' ?
                                                     format((conv.lastMessage.timestamp as any).toDate(), "HH:mm") :
-                                                    format(new Date(conv.lastMessage.timestamp), "HH:mm")
+                                                    format(new Date(conv.lastMessage.timestamp as any), "HH:mm")
                                                 }
                                             </div>
                                         )}
