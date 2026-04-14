@@ -85,7 +85,7 @@ export default function ProductDetailPage() {
         try {
             const result = await startConversationAction(product.sellerId, product.id);
 
-            if (result.conversationId) {
+            if ('conversationId' in result && result.conversationId) {
                 router.push(`/messages?conversation=${result.conversationId}`);
             } else {
                 showToast(result.error || "Failed to start conversation", "error");
