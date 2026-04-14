@@ -330,7 +330,7 @@ export async function runForensicScanAction(): Promise<{ success: boolean; resul
             results.push({ module: "Academy", check: "Enrollment Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
-        return { success: true, data: { results } };
+        return { success: true, results };
 
     } catch (error: any) {
         logger.error("Forensic scan failed:", error);
