@@ -100,8 +100,8 @@ export default function LessonPage(props: LessonPageProps) {
                     setCurrentModule(foundModule);
 
                     // Set initial video progress if exists
-                    if (lessonProgressData.success && lessonProgressData.progress) {
-                        setInitialVideoProgress(lessonProgressData.progress.progressPercent);
+                    if (lessonProgressData.success && lessonProgressData.data?.progress) {
+                        setInitialVideoProgress(lessonProgressData.data.progress.progressPercent);
                     }
                 }
             } catch (error) {
