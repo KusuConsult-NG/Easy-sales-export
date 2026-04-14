@@ -60,16 +60,15 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
         setUploadStates(prev => ({ ...prev, [field]: { uploading: true, progress: 10 } }));
 
         try {
-            const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = () => reject(new Error('Failed to read file'));
-                reader.readAsDataURL(file);
-            });
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("fileName", file.name);
+            formData.append("mimeType", file.type);
+            formData.append("documentType", field);
 
             setUploadStates(prev => ({ ...prev, [field]: { uploading: true, progress: 40 } }));
 
-            const result = await uploadDocumentAction(base64, file.name, file.type, field);
+            const result = await uploadDocumentAction(formData);
 
             if (!result.success || !result.url) {
                 throw new Error(result.error || 'Upload failed');
