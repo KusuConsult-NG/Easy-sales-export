@@ -1580,7 +1580,7 @@ export async function updateUserRolesAction(
             ...serviceUpdates,
         });
 
-        await logAuditAction("user_role_update", userId, "user", {
+        await logAuditAction("user_role_change", userId, "user", {
             roles,
             adminId: session.user.id,
             serviceRegistrationsUpdated: Object.keys(serviceUpdates).length > 0,
