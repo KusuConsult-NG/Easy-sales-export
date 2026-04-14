@@ -292,7 +292,7 @@ export default function MessagesPage() {
                                                 {msg.timestamp ? (
                                                     typeof (msg.timestamp as any).toDate === 'function' ?
                                                         format((msg.timestamp as any).toDate(), "HH:mm") :
-                                                        format(new Date(msg.timestamp), "HH:mm")
+                                                        format(new Date(msg.timestamp as any), "HH:mm")
                                                 ) : "Now"}
                                             </div>
                                         </div>
