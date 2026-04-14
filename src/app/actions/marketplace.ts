@@ -187,7 +187,7 @@ export async function submitSellerVerificationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true, data: { verificationId, } };
+        return { success: true, verificationId, };
     } catch (error: any) {
         logger.error("Seller verification error:", error);
         return {

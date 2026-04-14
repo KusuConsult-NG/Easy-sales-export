@@ -63,7 +63,7 @@ export async function getWalletAction(): Promise<{
         const userId = sessionResult.session.user.id;
 
         const wallet = await _getOrCreateWallet(userId);
-        return { success: true, data: { wallet } };
+        return { success: true, wallet };
     } catch (err: any) {
         logger.error("getWalletAction error:", err);
         return { success: false, error: err.message || "Failed to retrieve wallet" };
@@ -133,8 +133,8 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true, data: { authorizationUrl: paystackData.data.authorization_url,
-            reference, } };
+        return { success: true, authorizationUrl: paystackData.data.authorization_url,
+            reference, };
     } catch (err: any) {
         logger.error("fundWalletViaPaystackAction error:", err);
         return { success: false, error: err.message || "Failed to initiate wallet funding" };
@@ -210,7 +210,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<{
             return updatedBalance;
         });
 
-        return { success: true, data: { newBalance } };
+        return { success: true, newBalance };
     } catch (err: any) {
         logger.error("confirmWalletFundingAction error:", err);
         return { success: false, error: err.message || "Failed to confirm funding" };
@@ -273,7 +273,7 @@ export async function walletCheckoutAction(
             return updatedBalance;
         });
 
-        return { success: true, data: { newBalance } };
+        return { success: true, newBalance };
     } catch (err: any) {
         logger.error("walletCheckoutAction error:", err);
         return { success: false, error: err.message || "Wallet checkout failed" };
@@ -355,7 +355,7 @@ export async function withdrawFromWalletAction(
         });
         if (adminIds.length > 0) await notifBatch.commit();
 
-        return { success: true, data: { withdrawalId: txnRef.id } };
+        return { success: true, withdrawalId: txnRef.id };
     } catch (err: any) {
         logger.error("withdrawFromWalletAction error:", err);
         return { success: false, error: err.message || "Withdrawal request failed" };
@@ -398,7 +398,7 @@ export async function getWalletTransactionsAction(options?: {
         const docs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
 
         const transactions = serializeDocs<WalletTransaction>(docs);
-        return { success: true, data: { transactions, hasMore } };
+        return { success: true, transactions, hasMore };
     } catch (err: any) {
         logger.error("getWalletTransactionsAction error:", err);
         return { success: false, error: err.message || "Failed to fetch transactions" };

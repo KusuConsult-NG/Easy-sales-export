@@ -542,7 +542,7 @@ export async function calculateDeliveryAction(items: CartItem[], location?: any)
     try {
         const fees = await getPlatformFees();
         const fee = calculateDeliveryFee(items, location, fees);
-        return { success: true, data: { fee } };
+        return { success: true, fee };
     } catch (error: any) {
         return { success: false, fee: 0, error: error.message };
     }
@@ -655,7 +655,7 @@ export async function createPaymentOnDeliveryOrderAction(
         }).catch((e) => logger.error("[POD] Notification error:", e));
 
         revalidatePath("/marketplace/buyer/orders");
-        return { success: true, data: { orderId } };
+        return { success: true, orderId };
     } catch (error: any) {
         logger.error("createPaymentOnDeliveryOrderAction error:", error);
         return { success: false, error: error.message || "Failed to create POD order" };

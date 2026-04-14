@@ -313,7 +313,7 @@ export async function sendInAppBroadcastAction(
             status: "done",
         });
 
-        return { success: true, data: { delivered, logId: logRef.id } };
+        return { success: true, delivered, logId: logRef.id };
     } catch (error: any) {
         return { success: false, delivered: 0, error: error.message };
     }

@@ -61,7 +61,7 @@ export async function getUserEscrowTransactions(): Promise<{ success: boolean; t
             } as EscrowTransaction;
         });
 
-        return { success: true, data: { transactions } };
+        return { success: true, transactions };
     } catch (error: any) {
         logger.error("Get escrow transactions error:", error);
         return { success: false, error: error.message };
@@ -121,7 +121,7 @@ export async function getAllEscrowTransactionsAdmin(filters?: {
             } as EscrowTransaction;
         });
 
-        return { success: true, data: { transactions } };
+        return { success: true, transactions };
     } catch (error: any) {
         logger.error("Get all escrow transactions admin error:", error);
         return { success: false, error: error.message };

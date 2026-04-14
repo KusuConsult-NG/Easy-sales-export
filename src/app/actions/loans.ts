@@ -463,7 +463,7 @@ export async function getRepaymentScheduleAction(
             // Return existing schedule
             const schedule = serializeDocs<RepaymentInstallment>(scheduleSnapshot.docs);
 
-            return { success: true, data: { schedule } };
+            return { success: true, schedule };
         }
 
         // Generate schedule if not exists
@@ -509,7 +509,7 @@ export async function getRepaymentScheduleAction(
             });
         }
 
-        return { success: true, data: { schedule: installments } };
+        return { success: true, schedule: installments };
     } catch (error) {
         logger.error("Failed to fetch repayment schedule:", error);
         return { success: false, error: "Failed to fetch repayment schedule" };
@@ -715,7 +715,7 @@ export async function getRepaymentHistoryAction(
 
         const payments = serializeDocs(paymentsSnapshot.docs);
 
-        return { success: true, data: { payments } };
+        return { success: true, payments };
     } catch (error) {
         logger.error("Failed to fetch repayment history:", error);
         return { success: false, error: "Failed to fetch repayment history" };

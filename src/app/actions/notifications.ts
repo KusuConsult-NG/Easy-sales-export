@@ -42,7 +42,7 @@ export async function createNotificationAction(data: {
 
         const docRef = await db.collection(COLLECTIONS.NOTIFICATIONS).add(notification);
 
-        return { success: true, data: { notificationId: docRef.id } };
+        return { success: true, notificationId: docRef.id };
     } catch (error) {
         logger.error("Notification creation error:", error);
         return { success: false, error: "Failed to create notification" };
@@ -72,7 +72,7 @@ export async function createBulkNotificationsAction(
 
         await batch.commit();
 
-        return { success: true, data: { count: userIds.length } };
+        return { success: true, count: userIds.length };
     } catch (error) {
         logger.error("Bulk notification creation error:", error);
         return { success: false, error: "Failed to create notifications" };

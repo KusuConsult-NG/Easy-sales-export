@@ -85,9 +85,8 @@ export async function getBriefingRegistrationsAction(
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true, data: { data,
-            meta: { cursor: nextCursor, hasMore } },
-        };
+        return { success: true, data,
+            meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("getBriefingRegistrationsAction error:", error);
         return { success: false, error: "Failed to fetch registrations", meta: { cursor: null, hasMore: false } };

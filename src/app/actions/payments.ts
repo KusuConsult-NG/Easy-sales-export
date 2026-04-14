@@ -67,7 +67,7 @@ export async function createPaymentRecordAction(data: {
             },
         });
 
-        return { success: true, data: { paymentId: docRef.id } };
+        return { success: true, paymentId: docRef.id };
     } catch (error) {
         logger.error("Payment record creation error:", error);
         return { success: false, error: "Failed to create payment record" };

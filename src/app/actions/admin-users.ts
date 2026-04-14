@@ -47,7 +47,7 @@ export async function getAdminUsersAction(): Promise<{
             });
         }
 
-        return { success: true, data: { admins } };
+        return { success: true, admins };
     } catch (error: any) {
         return { success: false, error: error.message };
     }

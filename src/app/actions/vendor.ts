@@ -89,7 +89,7 @@ export async function getVendorOrdersAction(filters?: {
             };
         }) as VendorOrder[];
 
-        return { success: true, data: { orders } };
+        return { success: true, orders };
     } catch (error: any) {
         logger.error("Get vendor orders error:", error);
         return { success: false, error: error.message };
@@ -176,7 +176,7 @@ export async function getVendorProductsAction(filters?: {
             };
         }) as VendorProduct[];
 
-        return { success: true, data: { products } };
+        return { success: true, products };
     } catch (error: any) {
         logger.error("Get vendor products error:", error);
         return { success: false, error: error.message };
@@ -238,7 +238,7 @@ export async function updateVendorProductInventoryAction(
             metadata: { operation, stockChange, newStock },
         });
 
-        return { success: true, data: { newStock } };
+        return { success: true, newStock };
     } catch (error: any) {
         logger.error("Update inventory error:", error);
         return { success: false, error: error.message };
@@ -274,7 +274,7 @@ export async function toggleVendorProductStatusAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true, data: { newStatus } };
+        return { success: true, newStatus };
     } catch (error: any) {
         logger.error("Toggle product status error:", error);
         return { success: false, error: error.message };

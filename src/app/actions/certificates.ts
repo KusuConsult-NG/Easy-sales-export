@@ -93,7 +93,7 @@ export async function uploadCertificateAction(
             },
         });
 
-        return { success: true, data: { certificateId: docRef.id } };
+        return { success: true, certificateId: docRef.id };
     } catch (error) {
         logger.error("Certificate upload error:", error);
         return { success: false, error: "Failed to upload certificate" };

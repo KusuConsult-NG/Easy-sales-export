@@ -134,7 +134,7 @@ export async function createEscrowAction(data: {
             linkText: "View Escrow",
         }).catch((e) => logger.error("[createEscrowAction] Seller notification failed:", e));
 
-        return { success: true, data: { escrowId: docRef.id } };
+        return { success: true, escrowId: docRef.id };
     } catch (error) {
         logger.error("Escrow creation error:", error);
         return { success: false, error: "Failed to create escrow transaction" };
@@ -503,7 +503,7 @@ export async function createDisputeAction(data: {
             }).catch((e) => logger.error("[createDisputeAction] Initiator notification failed:", e));
         }
 
-        return { success: true, data: { disputeId: disputeRef.id } };
+        return { success: true, disputeId: disputeRef.id };
     } catch (error: any) {
         logger.error("Dispute creation error:", error);
         return { success: false, error: error.message || "Failed to create dispute" };

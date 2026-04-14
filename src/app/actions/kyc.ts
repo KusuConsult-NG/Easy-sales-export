@@ -92,15 +92,15 @@ export async function verifyBVNAction(payload: {
         }
 
         if (!result.isMatch) {
-            return { success: true, data: { isMatch: false,
-                error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.', } };
+            return { success: true, isMatch: false,
+                error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.' };
         }
 
         // Update overall KYC status if BVN now verified
         await updateOverallKYCStatus(userId);
 
         logger.info('BVN verified successfully', { userId });
-        return { success: true, data: { isMatch: true } };
+        return { success: true, isMatch: true };
     } catch (error: any) {
         logger.error('BVN verification action error', error);
         return { success: false, error: error?.message || 'An unexpected error occurred' };
@@ -165,15 +165,15 @@ export async function verifyNINAction(payload: {
         }
 
         if (!result.isMatch) {
-            return { success: true, data: { isMatch: false,
-                error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.', } };
+            return { success: true, isMatch: false,
+                error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.' };
         }
 
         // Update overall KYC status if NIN now verified
         await updateOverallKYCStatus(userId);
 
         logger.info('NIN verified successfully', { userId });
-        return { success: true, data: { isMatch: true } };
+        return { success: true, isMatch: true };
     } catch (error: any) {
         logger.error('NIN verification action error', error);
         return { success: false, error: error?.message || 'An unexpected error occurred' };
@@ -231,7 +231,7 @@ export async function verifyVotersCardAction(payload: {
         logger.info("Voter's Card allowed and bypassed for manual review", { userId });
         
         // Return 100% success to the frontend so KYCForm lets them proceed
-        return { success: true, data: { isMatch: true } };
+        return { success: true, isMatch: true };
     } catch (error: any) {
         logger.error("Voter's Card verification action error", error);
         return { success: false, error: error?.message || 'An unexpected error occurred' };

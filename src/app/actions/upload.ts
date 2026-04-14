@@ -114,7 +114,7 @@ export async function uploadDocumentAction(
         const url: string = result.secure_url;
 
         logger.info(`[uploadDocumentAction] Uploaded to Cloudinary: ${documentType} for user ${userId}`);
-        return { success: true, data: { url } };
+        return { success: true, url };
 
     } catch (error) {
         logger.error("[uploadDocumentAction] Unexpected error:", error);

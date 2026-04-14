@@ -24,7 +24,7 @@ export async function cleanupAbandonedDraftsAction(): Promise<{ success: boolean
             .get();
 
         if (snapshot.empty) {
-            return { success: true, data: { count: 0 } };
+            return { success: true, count: 0 };
         }
 
         const batch = db.batch();
@@ -43,7 +43,7 @@ export async function cleanupAbandonedDraftsAction(): Promise<{ success: boolean
 
         logger.info(`Cleaned up ${snapshot.size} abandoned draft listings.`);
 
-        return { success: true, data: { count: snapshot.size } };
+        return { success: true, count: snapshot.size };
     } catch (error: any) {
         logger.error("Cleanup drafts error:", error);
         return { success: false, error: error.message };

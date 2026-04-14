@@ -66,7 +66,7 @@ export async function getBankList(): Promise<{ success: boolean; banks?: Bank[];
             return { success: false, error: 'Failed to fetch bank list' };
         }
 
-        return { success: true, data: { banks: data.data, } };
+        return { success: true, banks: data.data, };
     } catch (error) {
         logger.error('getBankList error:', error);
         return {

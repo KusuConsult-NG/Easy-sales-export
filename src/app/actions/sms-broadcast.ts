@@ -429,7 +429,7 @@ export async function sendSmsBroadcastAction(
             status: failed === 0 ? "done" : sent === 0 ? "failed" : "partial",
         });
 
-        return { success: true, data: { sent, failed, skipped, logId: logRef.id } };
+        return { success: true, sent, failed, skipped, logId: logRef.id };
     } catch (error: any) {
         return { success: false, sent: 0, failed: 0, skipped: 0, error: error.message };
     }

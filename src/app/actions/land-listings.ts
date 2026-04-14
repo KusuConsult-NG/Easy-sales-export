@@ -80,7 +80,7 @@ export async function createLandListingAction(data: {
             targetType: "land_listing_creation",
         });
 
-        return { success: true, data: { listingId: docRef.id } };
+        return { success: true, listingId: docRef.id };
     } catch (error) {
         logger.error("Land listing creation error:", error);
         return { success: false, error: "Failed to create land listing" };
@@ -398,7 +398,7 @@ export async function submitLandListingAction(data: {
             linkText: "View Listings",
         });
 
-        return { success: true, data: { listingId: docRef.id } };
+        return { success: true, listingId: docRef.id };
     } catch (error: any) {
         logger.error("Land listing submission error:", error);
         return { success: false, error: error.message || "Failed to submit land listing" };
@@ -490,7 +490,7 @@ export async function getLandInquiriesAction(userId: string): Promise<{ success:
             .orderBy("createdAt", "desc")
             .get();
         const inquiries = serializeDocs(snapshot.docs);
-        return { success: true, data: { inquiries } };
+        return { success: true, inquiries };
     } catch (error: any) {
         logger.error("Get inquiries error:", error);
         return { success: false, error: error.message };
@@ -506,7 +506,7 @@ export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ suc
         const docSnap = await docRef.get();
 
         if (docSnap.exists) {
-            return { success: true, data: { inquiry: { id: docSnap.id, ...docSnap.data() } } };
+            return { success: true, inquiry: { id: docSnap.id, ...docSnap.data() } };
         } else {
             return { success: false, error: "Inquiry not found" };
         }

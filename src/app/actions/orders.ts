@@ -136,7 +136,7 @@ export async function createOrderAction(
 
             transaction.set(orderRef, orderData);
 
-            return { success: true, data: { orderId, } };
+            return { success: true, orderId, };
         });
 
     } catch (error: any) {

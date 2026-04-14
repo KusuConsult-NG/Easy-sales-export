@@ -54,7 +54,7 @@ export async function addEscalationNoteAction(
             metadata: { noteAdded: true, noteId: noteRef.id },
         });
 
-        return { success: true, data: { noteId: noteRef.id } };
+        return { success: true, noteId: noteRef.id };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
@@ -82,7 +82,7 @@ export async function getEscalationNotesAction(
             ...(doc.data() as Omit<EscalationNote, "id">),
         }));
 
-        return { success: true, data: { notes } };
+        return { success: true, notes };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
