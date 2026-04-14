@@ -729,7 +729,7 @@ export async function getLiveSessionsAction(courseId?: string): Promise<{ succes
                 scheduledAt: d.scheduledAt?.toDate?.() ?? d.scheduledAt ?? null,
             };
         }) as unknown as LiveSession[];
-        return { success: true, data: { data } };
+        return { success: true, data };
     } catch (error: any) {
         logger.error("Failed to fetch live sessions:", error);
         return { success: false, data: [], error: error.message };
