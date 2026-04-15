@@ -35,7 +35,7 @@ export default function AdminDisputesPage() {
         try {
             const result = await getAdminDisputesAction();
             if (result.success) {
-                setDisputes(result.data?.disputes || []);
+                setDisputes(result.disputes || []);
             } else {
                 showToast(result.error || "Failed to load disputes", "error");
             }

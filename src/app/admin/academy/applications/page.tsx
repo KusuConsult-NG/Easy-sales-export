@@ -117,13 +117,14 @@ export default function AdminAcademyApplicationsPage() {
         });
     }, [appDocs, paymentDocs, enrolledUsers]);
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
+    const [paymentFilter, setPaymentFilter] = useState<"all" | "completed" | "pending">("all");
     const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
 
     // ── Real-time listener 1: academy_applications (form/review flow)
     useEffect(() => {
-        const q = query(collection(db, "academy_applications"), limit(500));
+        const q = query(collection(db, "academy_applications"));
         const unsub = onSnapshot(q, (snap) => {
             const apps: AcademyApplication[] = snap.docs.map(doc => {
                 const d = doc.data();
@@ -164,8 +165,7 @@ export default function AdminAcademyApplicationsPage() {
     useEffect(() => {
         const q = query(
             collection(db, "processedPayments"),
-            where("type", "==", "academy_registration"),
-            limit(500)
+            where("type", "==", "academy_registration")
         );
         const unsub = onSnapshot(q, (snap) => {
             const apps: AcademyApplication[] = snap.docs.map(doc => {
@@ -198,8 +198,7 @@ export default function AdminAcademyApplicationsPage() {
     useEffect(() => {
         const q = query(
             collection(db, "users"),
-            where("roles", "array-contains", "academy_participant"),
-            limit(500)
+            where("roles", "array-contains", "academy_participant")
         );
         const unsub = onSnapshot(q, (snap) => {
             const apps: AcademyApplication[] = snap.docs.map(doc => {
@@ -284,6 +283,11 @@ export default function AdminAcademyApplicationsPage() {
     const filtered = applications
         .filter(a => statusFilter === "all" || a.status === statusFilter)
         .filter(a => {
+            if (paymentFilter === "all") return true;
+            if (paymentFilter === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
+            return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
+        })
+        .filter(a => {
             const q = search.trim().toLowerCase();
             if (!q) return true;
             return (
@@ -350,6 +354,19 @@ export default function AdminAcademyApplicationsPage() {
                         <option value="under_review">Under Review</option>
                         <option value="approved">Approved</option>
                         <option value="rejected">Rejected</option>
+                    </select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-slate-500" />
+                    <select
+                        value={paymentFilter}
+                        onChange={e => setPaymentFilter(e.target.value as any)}
+                        className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm"
+                    >
+                        <option value="all">Any Payment Status</option>
+                        <option value="completed">Paid</option>
+                        <option value="pending">Unpaid</option>
                     </select>
                 </div>
                 <div className="relative flex-1 max-w-sm">

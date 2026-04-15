@@ -26,8 +26,8 @@ export default function AdminContributionsPage() {
         setLoading(true);
         try {
             const result = await getContributionReportsAction();
-            if (result.success && result.data?.reports) {
-                setReports(result.data.reports);
+            if (result.success && result.reports) {
+                setReports(result.reports);
             }
         } catch (error) {
             logger.error("Failed to load reports:", error);

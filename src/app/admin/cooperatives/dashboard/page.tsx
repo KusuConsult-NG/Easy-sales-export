@@ -43,16 +43,16 @@ export default function AdminCooperativeDashboardPage() {
                 getRecentActivityAction(),
             ]);
 
-            if (statsRes.success && statsRes.data?.stats) {
-                setStats(statsRes.data.stats);
+            if (statsRes.success && statsRes.stats) {
+                setStats(statsRes.stats);
             }
 
-            if (reportsRes.success && reportsRes.data?.reports) {
-                setReports(reportsRes.data.reports);
+            if (reportsRes.success && reportsRes.reports) {
+                setReports(reportsRes.reports);
             }
 
-            if (activityRes.success && activityRes.data?.activities) {
-                setActivities(activityRes.data.activities);
+            if (activityRes.success && activityRes.activities) {
+                setActivities(activityRes.activities);
             }
         } catch (error) {
             logger.error("Failed to load dashboard:", error);
