@@ -678,7 +678,6 @@ export default function CooperativeMembersPage() {
             >
                 {selectedApplication && (
                     <div className="space-y-6">
-                        </div>
 
                         {/* Actions */}
                         {/* Audit Note when in Edit mode */}
