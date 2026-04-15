@@ -119,24 +119,10 @@ export default function AdminExportApplicationsPage() {
     const [revisionNote, setRevisionNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
 
-    useEffect(() => {
-        if (unsubscribeRef.current) unsubscribeRef.current();
-
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+    const fetchData = async () => {
         setIsLoading(true);
         setError(null);
-
         try {
-            const col = collection(db, "export_onboarding_applications");
-            const constraints: any[] = [];
-
-            if (statusFilter !== "all") {
-                // Handle pending — could be stored as "pending" or "pending_review"
-                if (statusFilter === "pending_review") {
-                    constraints.push(where("status", "in", ["pending_review", "pending"]));
-                } else {
-                    constraints.push(where("status", "==", statusFilter));
-                }
             const result = await getStandardExportApplicationsAction(statusFilter);
             if (result.success) {
                 setApplications(result.data || []);
@@ -152,6 +138,7 @@ export default function AdminExportApplicationsPage() {
 
     useEffect(() => {
         fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statusFilter]);
 
     const handleApprove = async (app: StandardPendingForm<ExportApplication>) => {

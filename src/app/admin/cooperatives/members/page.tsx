@@ -566,39 +566,6 @@ export default function CooperativeMembersPage() {
                                 </thead>
                                 <tbody className="divide-y divide-slate-200">
                                     {filteredApplications.map((app) => (
-                                        <tr key={app.id} className="hover:bg-slate-50">
-                                            <td className="px-6 py-4">
-                                                <div>
-                                                    <p className="font-semibold text-slate-900">
-                                                        {app.firstName || app.lastName
-                                                            ? `${app.firstName} ${app.lastName}`.trim()
-                                                            : <span className="text-amber-600 italic">Incomplete registration</span>}
-                                                    </p>
-                                                    <p className="text-sm text-slate-500">
-                                                        {new Date(app.createdAt).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div>
-                                                    <p className="text-sm text-slate-900">{app.email || "—"}</p>
-                                                    <p className="text-sm text-slate-500">{app.phone || "—"}</p>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 capitalize">
-                                                    {app.membershipTier}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div>
-                                                    <p className="font-semibold text-slate-900">
-                                                        ₦{(app.registrationFee || 0).toLocaleString()}
-                                                    </p>
-                                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${app.paymentStatus === "completed"
-                                                        ? "bg-green-100 text-green-700"
-                                                        : "bg-yellow-100 text-yellow-700"
-                                                        } `}>
                                         <tr
                                             key={app.id}
                                             className="hover:bg-slate-50 transition cursor-pointer"
