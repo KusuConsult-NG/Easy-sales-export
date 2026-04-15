@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Get all users who have submitted a Farm Nation registration.

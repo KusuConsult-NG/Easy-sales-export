@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { hasAdminPermission } from "@/lib/admin-permissions";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Academy Admin Actions - Application Approval/Rejection
