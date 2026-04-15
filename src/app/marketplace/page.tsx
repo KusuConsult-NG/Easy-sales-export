@@ -21,8 +21,8 @@ export const metadata: Metadata = {
 
 
 
-// Removed force-dynamic to allow static rendering
-
+// Force dynamic rendering to prevent Firebase Admin initialization crashing during SSG builds
+export const dynamic = 'force-dynamic';
 export default async function MarketplaceLandingPage() {
     // Fetch real products (wrapped in try-catch to handle build-time errors gracefully)
     let products: any[] = [];
