@@ -5,7 +5,7 @@ import { ZodError } from "zod";
 import { db, adminAuth } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -2002,7 +2002,7 @@ export async function getStandardExportApplicationsAction(statusFilter?: "pendin
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
             if (chunk.length > 0) {
-                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldValue.documentId(), "in", chunk).get();
+                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get();
                 userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
             }
         }
@@ -2976,7 +2976,7 @@ export async function getStandardSellerVerificationsAction(statusFilter?: "pendi
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
             if (chunk.length > 0) {
-                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldValue.documentId(), "in", chunk).get();
+                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get();
                 userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
             }
         }

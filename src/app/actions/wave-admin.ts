@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 
 // ============================================================================
@@ -453,7 +453,7 @@ export async function getStandardWaveApplicationsAction(statusFilter?: "pending"
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
             if (chunk.length > 0) {
-                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldValue.documentId(), "in", chunk).get();
+                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get();
                 userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
             }
         }

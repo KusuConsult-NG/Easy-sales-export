@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -331,7 +331,7 @@ export async function getStandardAcademyApplicationsAction(statusFilter?: "pendi
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
             if (chunk.length > 0) {
-                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldValue.documentId(), "in", chunk).get();
+                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get();
                 userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
             }
         }
